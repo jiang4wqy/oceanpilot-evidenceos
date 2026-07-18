@@ -56,11 +56,15 @@ EXPECTED_COMMANDS = {
 def test_allowed_commands_are_exact_and_externally_immutable() -> None:
     assert isinstance(ALLOWED_COMMANDS, MappingProxyType)
     assert dict(ALLOWED_COMMANDS) == EXPECTED_COMMANDS
+    assert all(isinstance(commands, frozenset) for commands in ALLOWED_COMMANDS.values())
 
     with pytest.raises(TypeError):
         ALLOWED_COMMANDS[CaseStatus.NEW] = frozenset({CaseCommand.DIAGNOSE})
     with pytest.raises(TypeError):
         del ALLOWED_COMMANDS[CaseStatus.NEED_INFO]
+    for commands in ALLOWED_COMMANDS.values():
+        with pytest.raises(AttributeError):
+            commands.add(CaseCommand.DIAGNOSE)
 
 
 @pytest.mark.parametrize(
