@@ -186,7 +186,6 @@ def build_active_evidence_view(
 ) -> ActiveEvidenceView: ...
 
 def assess_readiness(
-    case: MerchantSuccessCase,
     view: ActiveEvidenceView,
 ) -> ReadinessAssessment: ...
 ```
@@ -960,7 +959,7 @@ def test_same_value_uses_quality_then_lowest_id(evidence_factory) -> None:
     assert selected.selected_evidence.evidence_id == high_a.evidence_id
 ```
 
-Readiness tests must cover: the exact 1→7 priority order, core slots 1–4 requiring AVAILABLE observations, `integration.type=PLUGIN` activating two conditional slots, confirmed-unavailable non-core slots counting as answered, stable `completion_ratio`, `known_unknown_fields`, and same input producing the same result. A conflicting slot counts as answered but never as usable rule evidence; when every core slot has at least one AVAILABLE observation and any slot conflicts, readiness permits `Diagnose` so the engine can create a no-hypothesis `CONFLICTING_EVIDENCE` human-review snapshot. A core slot with only `CONFIRMED_UNAVAILABLE` remains not ready.
+Readiness tests must cover: the exact 1→7 priority order, core slots 1–4 requiring AVAILABLE observations, `integration.type=PLUGIN` activating two conditional slots, confirmed-unavailable non-core slots counting as answered, stable `completion_ratio`, `known_unknown_fields`, and same input producing the same result. A conflicting slot counts as answered and AVAILABLE for readiness, but never as usable rule evidence; when every core slot has at least one AVAILABLE observation and any slot conflicts, readiness permits `Diagnose` so the engine can create a no-hypothesis `CONFLICTING_EVIDENCE` human-review snapshot. A core slot with only `CONFIRMED_UNAVAILABLE` remains not ready.
 
 - [ ] **Step 2: Run tests and confirm the policy functions are missing**
 
@@ -971,6 +970,102 @@ Readiness tests must cover: the exact 1→7 priority order, core slots 1–4 req
 Expected: collection or calls fail because policy functions are not implemented.
 
 - [ ] **Step 3: Implement the field catalog, canonical hash, fold, and priority table**
+
+#### Task 3 contract locks
+
+These locks remove implementation choices from the technical track. They refine the approved specification without expanding the MVP. Task 2's `FrozenDomainModel` contract remains shallow assignment freezing; Task 3 must not reopen Task 2 models or claim deep immutability for their nested dictionaries.
+
+**Field catalog.** `FIELD_CATALOG` is an externally immutable mapping with exactly the 16 `EvidenceCode` members in enum declaration order. Validation is case-sensitive, regex validators require a full-string match, and no validator performs trimming or case-folding. The rows are:
+
+| Evidence code | Value type | Exact MVP validator |
+|---|---|---|
+| `context.environment` | `STRING` | one of `PROD`, `SANDBOX` |
+| `transaction.reference` | `STRING` | `[A-Za-z0-9_.-]{1,64}` |
+| `transaction.occurred_at` | `DATETIME` | timezone-aware `datetime` |
+| `transaction.country` | `COUNTRY` | member of frozen `ISO_COUNTRY_ALPHA2` below |
+| `transaction.currency` | `CURRENCY` | member of frozen `ISO_CURRENCY_ALPHA3` below |
+| `payment.method` | `STRING` | one of `CARD`, `APPLE_PAY`, `GOOGLE_PAY`, `KLARNA`, `LOCAL_PAYMENT`, `OTHER` |
+| `integration.type` | `STRING` | one of `API`, `PLUGIN` |
+| `integration.platform` | `STRING` | one of `SHOPIFY`, `WOOCOMMERCE`, `MAGENTO`, `CUSTOM` |
+| `integration.plugin_version` | `STRING` | `[A-Za-z0-9][A-Za-z0-9._+-]{0,31}` |
+| `symptom.status` | `STRING` | one of `PENDING`, `FAILED`, `SUCCEEDED`, `DECLINED`, `UNKNOWN` |
+| `symptom.error_code` | `STRING` | `[A-Za-z0-9_.-]{1,64}` |
+| `authentication.status` | `STRING` | one of `REQUIRED`, `CHALLENGE_PENDING`, `AUTHENTICATED`, `FAILED`, `UNKNOWN` |
+| `authentication.result_code` | `STRING` | `[A-Za-z0-9_.-]{1,64}` |
+| `callback.delivery_status` | `STRING` | one of `NOT_RECEIVED`, `DELIVERED`, `FAILED`, `UNKNOWN` |
+| `risk.decision_code` | `STRING` | `[A-Za-z0-9_.-]{1,64}` |
+| `configuration.check_result` | `STRING` | one of `MERCHANT_SIDE_MISMATCH`, `PSP_PROFILE_MISMATCH`, `NO_MISMATCH`, `UNKNOWN` |
+
+There is no `BOOLEAN` catalog row in MVP. The ISO membership data is frozen in `evidence_policy.py`; validation performs no runtime network access and adds no package dependency. The 2026-07-18 snapshot is cross-checked against the [ISO 3166 maintenance page](https://www.iso.org/iso-3166-country-codes.html), the [SIX ISO 4217 Maintenance Agency List One](https://www.six-group.com/en/products-services/financial-information/market-reference-data/data-standards.html), and `pycountry==26.2.16`'s current Debian `pkg-isocodes` copy. Implement these exact sets:
+
+```python
+ISO_COUNTRY_ALPHA2 = frozenset(
+    "AD AE AF AG AI AL AM AO AQ AR AS AT AU AW AX AZ BA BB BD BE BF BG BH BI "
+    "BJ BL BM BN BO BQ BR BS BT BV BW BY BZ CA CC CD CF CG CH CI CK CL CM CN "
+    "CO CR CU CV CW CX CY CZ DE DJ DK DM DO DZ EC EE EG EH ER ES ET FI FJ FK "
+    "FM FO FR GA GB GD GE GF GG GH GI GL GM GN GP GQ GR GS GT GU GW GY HK HM "
+    "HN HR HT HU ID IE IL IM IN IO IQ IR IS IT JE JM JO JP KE KG KH KI KM KN "
+    "KP KR KW KY KZ LA LB LC LI LK LR LS LT LU LV LY MA MC MD ME MF MG MH MK "
+    "ML MM MN MO MP MQ MR MS MT MU MV MW MX MY MZ NA NC NE NF NG NI NL NO NP "
+    "NR NU NZ OM PA PE PF PG PH PK PL PM PN PR PS PT PW PY QA RE RO RS RU RW "
+    "SA SB SC SD SE SG SH SI SJ SK SL SM SN SO SR SS ST SV SX SY SZ TC TD TF "
+    "TG TH TJ TK TL TM TN TO TR TT TV TW TZ UA UG UM US UY UZ VA VC VE VG VI "
+    "VN VU WF WS YE YT ZA ZM ZW".split()
+)
+ISO_CURRENCY_ALPHA3 = frozenset(
+    "AED AFN ALL AMD AOA ARS AUD AWG AZN BAM BBD BDT BHD BIF BMD BND BOB BOV "
+    "BRL BSD BTN BWP BYN BZD CAD CDF CHE CHF CHW CLF CLP CNY COP COU CRC CUP "
+    "CVE CZK DJF DKK DOP DZD EGP ERN ETB EUR FJD FKP GBP GEL GHS GIP GMD GNF "
+    "GTQ GYD HKD HNL HTG HUF IDR ILS INR IQD IRR ISK JMD JOD JPY KES KGS KHR "
+    "KMF KPW KRW KWD KYD KZT LAK LBP LKR LRD LSL LYD MAD MDL MGA MKD MMK MNT "
+    "MOP MRU MUR MVR MWK MXN MXV MYR MZN NAD NGN NIO NOK NPR NZD OMR PAB PEN "
+    "PGK PHP PKR PLN PYG QAR RON RSD RUB RWF SAR SBD SCR SDG SEK SGD SHP SLE "
+    "SOS SRD SSP STN SVC SYP SZL THB TJS TMT TND TOP TRY TTD TWD TZS UAH UGX "
+    "USD USN UYI UYU UYW UZS VED VES VND VUV WST XAD XAF XAG XAU XBA XBB XBC "
+    "XBD XCD XCG XDR XOF XPD XPF XPT XSU XTS XUA XXX YER ZAR ZMW ZWG".split()
+)
+```
+
+Tests pin `len(ISO_COUNTRY_ALPHA2) == 249` and SHA-256 `e1c950d24ceb933ac49eaa44de8d1a7ffb6bf40bfe519a5a99d791cb50332197` for the UTF-8, space-joined, lexically sorted country codes. They pin `len(ISO_CURRENCY_ALPHA3) == 178` and SHA-256 `62185bf8d74197e249d7a609a697f81820def9ca894cc3e9121c82497358f453` for currencies. Representative membership tests accept `CN`, `US`, `EUR`, `USD`, `XAD`, `XCG`, and `ZWG`; reject reserved/nonmembers `ZZ`, `XK`, `ZZZ`, and the withdrawn `BGN`/`ZWL`. This is a prototype validation snapshot, not a promise of automatic ISO updates; a future data refresh must intentionally update both digests and tests.
+
+`AVAILABLE` requires a non-null value of the catalog type; `CONFIRMED_UNAVAILABLE` requires `typed_value=None`. `create_evidence_item()` sets `schema_version=EVIDENCE_SCHEMA_VERSION`, where `EVIDENCE_SCHEMA_VERSION = "1"`, and derives `value_type` only from the catalog.
+
+**Canonical hash.** The hash payload remains the exact nine-key dictionary shown below: no schema version, `collected_at`, or computed hash is added. Strings are Unicode NFC but are not trimmed or case-folded. Both `observed_at` and a DATETIME `typed_value` are normalized to UTC with literal `Z` and exactly six fractional digits; equivalent timezone offsets and canonically equivalent Unicode therefore hash identically. `None` and booleans remain JSON `null` and booleans. Tests must pin this golden vector:
+
+```text
+request = evidence_id 00000000-0000-4000-8000-000000000011,
+          context.environment, AVAILABLE, typed_value PROD,
+          observed_at 2026-07-18T12:00:00+08:00,
+          source_ref synthetic:fixture
+origin  = SYNTHETIC_ADAPTER / SYNTHETIC_TEST / synthetic true
+canonical observed_at = 2026-07-18T04:00:00.000000Z
+sha256 = a178af8643b1b7b495070d92ccdd0edad9d9bbdd51c5c54cbbb9425aaeb2558d
+```
+
+In addition to the golden digest, tests lock offset equivalence, composed/decomposed Unicode equivalence, and the exclusion of `collected_at` from `content_hash`.
+
+**Active evidence fold.** `build_active_evidence_view()` always returns all 16 slots in `EvidenceCode` declaration order and is invariant to input permutation. Each slot has exactly these outcomes:
+
+| Inputs for one code | `selected_evidence` | `known_unknown` | `conflicting` |
+|---|---|---:|---:|
+| none | `None` | `False` | `False` |
+| only `CONFIRMED_UNAVAILABLE` | `None` | `True` | `False` |
+| one normalized AVAILABLE value, with or without unavailable history | deterministic selected item | `False` | `False` |
+| two or more unequal normalized AVAILABLE values | `None` | `False` | `True` |
+
+For equal normalized AVAILABLE values, choose reliability in this exact descending order: `SYSTEM_OF_RECORD > VERIFIED_DOCUMENT > SYNTHETIC_TEST > OPERATOR_CONFIRMED > USER_REPORTED`; break a remaining tie by lexical ascending UUID string. String equality uses NFC without trimming/case-folding, DATETIME equality uses the UTC instant, and boolean equality is exact. AVAILABLE always beats unavailable history. A conflict adds only `ReviewReason.CONFLICTING_EVIDENCE` to the view-level reasons. Folding trusts already-created `EvidenceItem.content_hash`; it does not recompute or verify hashes.
+
+**Readiness.** `assess_readiness()` accepts only `ActiveEvidenceView`. Passing `MerchantSuccessCase` would create a construction cycle because a case already requires `readiness`; do not restore that parameter. The immutable seven-row priority table uses the exact slot identifiers, `MERCHANT_TECH` target, and Chinese reason strings from §5.4: `定位同一笔交易`, `对齐订单、回调和风控时间线`, `区分配置与凭据环境`, `确认可观察症状`, `决定后续条件槽位`, `确定插件上下文`, `排查版本差异`.
+
+The derived `symptom.signal` reads exactly `symptom.status`, `symptom.error_code`, `authentication.status`, `authentication.result_code`, `callback.delivery_status`, `risk.decision_code`, and `configuration.check_result`. Its precedence is: any selected or conflicting member means AVAILABLE; otherwise all seven members being `known_unknown` means confirmed unknown; otherwise missing. A partial mixture of known-unknown and missing members remains missing, because another symptom source can still answer the composite question. For every non-composite readiness row, selected/conflict means AVAILABLE, `known_unknown` means confirmed unknown, and neither means missing.
+
+Rows 1–5 are always active. Rows 6–7 activate only when `integration.type` has a nonconflicting selected value equal to `PLUGIN`; a conflict, unavailable value, missing value, or `API` does not activate them. A conflicting row counts as answered and AVAILABLE for readiness, while remaining unusable by Task 4 rules. Pre-supplied evidence for an inactive plugin row does not affect completion, missing/known-unknown fields, or question selection.
+
+`next_question` is the unanswered active row's slot identifier, selected by priority 1→7; its reason and target are the frozen row values. `missing_fields` and `known_unknown_fields` are lexically sorted tuples. Core confirmed-unknown rows 1–4 appear in `missing_fields`; confirmed-unknown non-core rows appear in `known_unknown_fields`. If no active row is unanswered, all three question fields are `None`, even when a core row is confirmed unknown.
+
+`completion_ratio = answered active rows / active rows`, quantized to four decimal places with `ROUND_HALF_UP` (for example, `5/7 = Decimal("0.7143")`). Stop precedence is: any unanswered active row → `NEED_MORE_EVIDENCE`; otherwise any core confirmed unknown → `CONFIRMED_UNKNOWN`; otherwise → `READY`. `ready` is true only for `READY`. `UNSUPPORTED` and `SECURITY_BLOCKED` are reserved for outer policies and are not emitted here.
+
+The minimum test matrix is: empty view; each progressive priority step; plugin activation at 5/7; all-answered plugin context; all seven symptom members unavailable; one symptom member unavailable while the rest remain missing; core confirmed unknown with no next question; core conflict; integration conflict with plugin rows inactive; inactive pre-supplied plugin evidence; AVAILABLE plus unavailable history; all reliability/UUID ties; normalized DATETIME and Unicode equality; unequal-value conflict; and input permutations producing identical view/readiness results.
 
 The canonical hash payload contains exactly:
 
@@ -995,9 +1090,9 @@ encoded = json.dumps(
 return sha256(unicodedata.normalize("NFC", encoded.decode()).encode()).hexdigest()
 ```
 
-`FIELD_CATALOG` must contain the exact value types and allowed values/regexes from §5.3. `CONFIRMED_UNAVAILABLE` rejects a non-null `typed_value`; AVAILABLE requires it. `build_active_evidence_view()` is the only selection function used later: AVAILABLE beats unavailable, normalized equal values choose highest source quality then lexical lowest UUID, unequal available values produce a conflicting slot, and no value is overwritten.
+`FIELD_CATALOG` must implement the exact locked value types and validators above. `CONFIRMED_UNAVAILABLE` rejects a non-null `typed_value`; AVAILABLE requires it. `build_active_evidence_view()` is the only selection function used later: AVAILABLE beats unavailable, normalized equal values choose highest source quality then lexical lowest UUID, unequal available values produce a conflicting slot, and no value is overwritten.
 
-Readiness uses an immutable seven-row table matching §5.4. The derived `symptom.signal` is satisfied by any AVAILABLE status/error/authentication/callback/risk/config evidence. The function computes active slots first, then answered slots, then exact `missing_fields`, `known_unknown_fields`, next question, target role, ratio, and stop reason. Conflicts are answered-for-collaboration but unusable-for-rules and take the explicit human-review path described above. The function must never consult insertion time or list order.
+Readiness uses the locked immutable seven-row table above. The function computes active slots first, then answered slots, then exact `missing_fields`, `known_unknown_fields`, next question, target role, ratio, and stop reason. Conflicts are answered-for-collaboration and AVAILABLE-for-readiness but unusable-for-rules, and take the explicit human-review path described above. The function must never consult insertion time or list order.
 
 - [ ] **Step 4: Verify all catalog and readiness branches**
 
@@ -1073,7 +1168,7 @@ CONFIG_MISMATCH_MERCHANT_V1
 CONFIG_MISMATCH_PSP_V1
 ```
 
-Also assert: no matching rule yields empty hypotheses plus `POLICY_GAP`; two matching rules yield `CONFLICTING_EVIDENCE` with no routing/ticket; risk always adds `RISK_DECISION`; every hypothesis references every decisive predicate evidence ID.
+Also assert: no matching rule yields empty hypotheses plus `POLICY_GAP`; any input view already carrying `CONFLICTING_EVIDENCE` short-circuits before rule matching to empty hypotheses/routing/ticket with `requires_human=true`, including a fixture whose nonconflicting selected values would otherwise match a rule; two matching rules independently yield the same conflict-only result; risk always adds `RISK_DECISION`; every hypothesis references every decisive predicate evidence ID.
 
 - [ ] **Step 2: Run tests and verify missing state/engine failures**
 
@@ -1124,7 +1219,7 @@ SOURCE_QUALITY: Final = {
 
 Review comparisons use `raw < Decimal("0.90")` and `minimum_source_quality < Decimal("0.75")`.
 
-`rules.py` defines a frozen `RuleDefinition` tuple with the four rows and exact route, priority, cause code, next action, and required predicates from §9.1. `evaluate()` reads only `ActiveEvidenceView`, emits `HypothesisDraft` without random IDs/time, and constructs routing/ticket drafts only when responsibility is unambiguous.
+`rules.py` defines a frozen `RuleDefinition` tuple with the four rows and exact route, priority, cause code, next action, and required predicates from §9.1. `evaluate()` reads only `ActiveEvidenceView`. Before evaluating any predicate or confidence, `ReviewReason.CONFLICTING_EVIDENCE` in `view.review_reasons` returns `DiagnosisDraft(hypotheses=(), routing_decision=None, ticket_draft=None, requires_human=True, review_reasons=frozenset({ReviewReason.CONFLICTING_EVIDENCE}))`. Otherwise it emits `HypothesisDraft` without random IDs/time and constructs routing/ticket drafts only when responsibility is unambiguous; two or more matched rule IDs produce the same conflict-only draft.
 
 - [ ] **Step 4: Run Gate 1 behavior tests and deterministic replay check**
 
@@ -1876,7 +1971,7 @@ with self._store_factory() as store:
     # all loads and atomic writes for this command use this store
 ```
 
-`create_case()` performs: validate enabled case type and synthetic flag → scan strings → create case with revision `1/0` → empty ActiveEvidenceView → readiness/status → one `CASE_CREATED` audit → `create_case_atomic()`.
+`create_case()` performs: validate enabled case type and synthetic flag → scan strings → build an empty ActiveEvidenceView → compute readiness and creation status → instantiate the case with revisions `1/0` plus that readiness/status → build one `CASE_CREATED` audit → `create_case_atomic()`.
 
 `add_evidence()` performs, within the same session and at most three CAS attempts:
 
