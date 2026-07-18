@@ -214,10 +214,18 @@ tests/
 
 状态机用小型、表驱动的允许列表实现，未列出的迁移一律拒绝；不引入 `transitions` 等运行时依赖。
 
+MVP 的领域与持久化 ID 统一使用 UUIDv4，避免引入 ULID 或其他生成依赖：
+
+- `case_id`、`diagnosis_id`、`hypothesis_id`、`event_id`、`trace_id/request_id` 和未来 A2A 的 `correlation_id` 均由服务端使用 Python 标准库 `uuid.uuid4()` 生成；
+- JSON、领域模型与数据库一律保存规范小写、带连字符的字符串形式；
+- `evidence_id` 是唯一例外，由调用端生成并在 `EvidenceCreateRequest` 中提交，以支持稳定重放；边界必须验证 UUID 版本为 v4，并在哈希与持久化前规范化；
+- 无效格式或非 v4 UUID 返回 `422 VALIDATION_FAILED`；大小写等价的合法 UUIDv4 规范化后视为同一 ID；
+- `merchant_ref`、`source_ref`、`rule_id`、`cause_code` 和 `evidence_code` 是业务引用或闭合代码，不按 UUID 解析。
+
 ### 5.2 MerchantSuccessCase
 
 ```text
-case_id                 服务端生成的 UUID/ULID
+case_id                 服务端生成的 UUIDv4
 case_type               PAYMENT_INCIDENT（MVP 唯一启用类型）
 status                  NEW | NEED_INFO | EVIDENCE_READY | DIAGNOSED | HUMAN_REVIEW
 schema_version          领域结构版本
@@ -240,7 +248,7 @@ readiness               服务端计算，客户端不得写入
 
 ```text
 case_id
-evidence_id             客户端生成的稳定 ID
+evidence_id             客户端生成的稳定 UUIDv4
 schema_version
 evidence_code           闭合枚举
 availability            AVAILABLE | CONFIRMED_UNAVAILABLE
@@ -404,12 +412,15 @@ score = 0.50 × required_evidence_coverage
       + 0.20 × consistency
 ```
 
-- 三项均限制在 `0..1`，最终结果四舍五入至两位。
+- 三项均限制在 `0..1`；人工审核门使用未舍入结果判断，持久化与响应中的 `confidence_score` 四舍五入至两位。
 - `required_evidence_coverage` 是该规则要求证据的覆盖率。
 - `source_quality` 取决定性证据中最低的来源质量；`HEURISTIC_V1` 映射固定为：`SYSTEM_OF_RECORD=1.00`、`VERIFIED_DOCUMENT=0.90`、`SYNTHETIC_TEST=0.80`、`OPERATOR_CONFIRMED=0.75`、`USER_REPORTED=0.55`。
 - 存在互相矛盾的证据时 `consistency = 0`，并强制人工审核。
 - 不存在矛盾时 `consistency = 1`；MVP 不使用主观的中间值。
 - 只有覆盖率达到该规则阈值才允许输出假设。
+- `HUMAN_REVIEW_SCORE_THRESHOLD=0.90`：任一假设的未舍入分数低于该值，增加 `LOW_CONFIDENCE` 并进入人工审核。
+- `HUMAN_REVIEW_SOURCE_QUALITY_THRESHOLD=0.75`：决定性证据的最低来源质量低于该值，增加 `INSUFFICIENT_SOURCE_QUALITY` 并进入人工审核。
+- 因此完整、一致但全部为 `USER_REPORTED` 的证据得到 `0.865`（对外 `0.87`），同时触发上述两个原因；`SYNTHETIC_TEST` 得到 `0.94`，不会触发低可信或来源不足。风险、冲突等独立闸门仍照常生效。
 
 强制人工审核原因：
 
@@ -423,9 +434,9 @@ POLICY_GAP
 INSUFFICIENT_SOURCE_QUALITY
 ```
 
-任一假设分数低于 `0.80`、出现风险拒绝、冲突证据、安全信号、资金动作建议或规则空白时，案件进入 `HUMAN_REVIEW`。
+任一假设命中上述分数门或来源质量门，或出现风险拒绝、冲突证据、安全信号、资金动作建议或规则空白时，案件进入 `HUMAN_REVIEW`。
 
-`0.80` 只是演示期人工审核门槛，不表示“80% 诊断准确率”；权重和阈值须在取得企业允许的脱敏历史案件后校准，报名材料不得把该数值当作业务效果。
+`0.90/0.75` 只是演示期人工审核门槛，不表示“90% 诊断准确率”或“75% 来源准确率”；权重和阈值须在取得企业允许的脱敏历史案件后校准，报名材料不得把数值当作业务效果。
 
 诊断快照的内容创建后不可修改；只有生命周期字段允许从 `CURRENT` 单向变为 `SUPERSEDED`。路由与工单草稿作为快照子对象不单独更新。
 
@@ -599,10 +610,10 @@ POST /api/v1/cases/{case_id}/diagnose
   "title": "Case is not ready for diagnosis",
   "status": 409,
   "detail": "Provide the listed evidence before retrying diagnosis.",
-  "instance": "urn:oceanpilot:trace:trace_demo",
+  "instance": "urn:oceanpilot:trace:2f4a7a0e-31e9-4bf3-8d13-799a2e6b07cf",
   "code": "CASE_NOT_READY",
-  "trace_id": "trace_demo",
-  "case_id": "case_demo",
+  "trace_id": "2f4a7a0e-31e9-4bf3-8d13-799a2e6b07cf",
+  "case_id": "b69b3b0c-4144-4ed8-9c02-a6f972ac620f",
   "missing_fields": ["context.environment", "transaction.reference"],
   "current_revision": 2
 }
@@ -813,7 +824,7 @@ sanitized_metadata
 
 ### 11.1 领域单元测试
 
-- 严格类型、未知字段、无时区时间、NaN/Infinity 均拒绝；
+- 严格类型、未知字段、无时区时间、NaN/Infinity 均拒绝；所有实体与追踪 ID 遵循 UUIDv4 策略，`EvidenceCreateRequest` 拒绝非 v4 UUID；
 - 基础与条件证据缺口、下一问题、目标角色和完成度确定；
 - 插件条件槽位只在 PLUGIN 时激活；CONFIRMED_UNAVAILABLE 不增加规则覆盖；
 - 同码同值按质量/ID稳定归并，同码异值触发冲突且不采用“最新值”；
@@ -821,10 +832,10 @@ sanitized_metadata
 - 每条合法/非法状态迁移；
 - 诊断后补证会失效旧快照并重开；
 - 假设必须有证据引用；
-- 冲突、低可信、风险和规则空白进入人工审核；
+- 冲突、低可信、来源质量不足、风险和规则空白进入人工审核；完整 `USER_REPORTED` 证据固定得到 `0.865 → 0.87` 并同时产生两个相应原因码；
 - 无规则命中时不产生伪假设；
 - POLICY_GAP/冲突时路由和草稿为空，配置结果的两种责任域映射唯一；
-- 三条规则决策表的每个触发值、排除值、优先级与必需证据引用均参数化测试；
+- 四个 `rule_id`（对应三个合成场景）的每个触发值、排除值、优先级与必需证据引用均参数化测试；
 - 同输入、同政策的诊断完全确定。
 
 ### 11.2 Repository 集成测试
