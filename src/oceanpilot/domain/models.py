@@ -73,6 +73,7 @@ SchemaVersion = Annotated[StrictStr, Field(min_length=1, max_length=32)]
 ReferenceText = Annotated[StrictStr, Field(min_length=1, max_length=128)]
 SummaryText = Annotated[StrictStr, Field(min_length=1, max_length=500)]
 ContentHash = Annotated[StrictStr, Field(pattern=r"^[0-9a-f]{64}$")]
+NonEmptyEvidenceRefs = Annotated[tuple[UUID4Str, ...], Field(min_length=1)]
 
 
 class DomainModel(BaseModel):
@@ -172,7 +173,7 @@ class ActiveEvidenceView(FrozenDomainModel):
 class HypothesisDraft(FrozenDomainModel):
     cause_code: NonEmptyText
     explanation: NonEmptyText
-    evidence_refs: tuple[UUID4Str, ...]
+    evidence_refs: NonEmptyEvidenceRefs
     confidence_score: ConfidenceScore
     confidence_method: Literal["HEURISTIC_V1"]
     next_verification_action: NonEmptyText
@@ -211,7 +212,7 @@ class Hypothesis(FrozenDomainModel):
     hypothesis_id: UUID4Str
     cause_code: NonEmptyText
     explanation: NonEmptyText
-    evidence_refs: tuple[UUID4Str, ...]
+    evidence_refs: NonEmptyEvidenceRefs
     confidence_score: ConfidenceScore
     confidence_method: Literal["HEURISTIC_V1"]
     next_verification_action: NonEmptyText

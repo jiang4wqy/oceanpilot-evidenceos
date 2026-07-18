@@ -404,6 +404,37 @@ def test_confidence_is_bounded(value: Decimal) -> None:
         )
 
 
+@pytest.mark.parametrize(("model", "extra_fields"), [
+    (HypothesisDraft, {}),
+    (Hypothesis, {"hypothesis_id": "00000000-0000-4000-8000-000000000030"}),
+])
+def test_hypothesis_requires_at_least_one_evidence_ref(
+    model: type,
+    extra_fields: dict[str, object],
+) -> None:
+    with pytest.raises(ValidationError):
+        model(
+            cause_code="TEST_CAUSE",
+            explanation="Synthetic explanation",
+            evidence_refs=(),
+            confidence_score=Decimal("0.50"),
+            confidence_method="HEURISTIC_V1",
+            next_verification_action="Collect evidence",
+            rule_id="TEST_RULE_V1",
+            **extra_fields,
+        )
+
+
+def test_diagnosis_draft_allows_no_hypotheses() -> None:
+    draft = DiagnosisDraft(
+        hypotheses=(),
+        requires_human=True,
+        review_reasons=frozenset({ReviewReason.POLICY_GAP}),
+    )
+
+    assert draft.hypotheses == ()
+
+
 def test_evidence_schema_forbids_additional_properties() -> None:
     assert EvidenceItem.model_json_schema()["additionalProperties"] is False
 

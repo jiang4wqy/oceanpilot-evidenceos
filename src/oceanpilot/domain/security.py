@@ -10,7 +10,7 @@ _AUTHORIZATION_PATTERN = re.compile(
     re.IGNORECASE,
 )
 _ASSIGNMENT_PATTERN = re.compile(
-    r"(?<![A-Za-z0-9])(?:"
+    r"(?<![$A-Za-z0-9_.-])(?:"
     r"(?P<quote>['\"])(?P<quoted_key>[^'\"]+)(?P=quote)"
     r"|(?P<plain_key>[$A-Za-z_][$A-Za-z0-9_.-]*))"
     r"\s*[:=](?=\s*\S)"
@@ -34,7 +34,7 @@ _SENSITIVE_COMPACT_KEYS = frozenset(
 )
 _SAFE_METADATA_SUFFIXES = frozenset({"count", "length", "present", "status", "type"})
 _CARD_CANDIDATE_PATTERN = re.compile(
-    r"(?<!\d)(?<!\d[ -])(?:\d[ -]?){12,18}\d(?!\d)(?![ -]\d)"
+    r"(?<!\d)(?<!\d[ \t\u00a0-])(?:\d[ \t\u00a0-]?){12,18}\d(?!\d)(?![ \t\u00a0-]\d)"
 )
 
 
@@ -59,9 +59,18 @@ def _is_sensitive_key(value: str) -> bool:
     tokens = tuple(token.lower() for token in _KEY_TOKEN_PATTERN.findall(normalized))
     if not tokens or tokens[-1] in _SAFE_METADATA_SUFFIXES:
         return False
-    return bool(_SENSITIVE_KEY_TOKENS.intersection(tokens)) or "".join(
-        tokens
-    ) in _SENSITIVE_COMPACT_KEYS
+    singular_tokens = tuple(
+        token[:-1]
+        if token.endswith("s") and token[:-1] in _SENSITIVE_KEY_TOKENS
+        else token
+        for token in tokens
+    )
+    compact_key = "".join(tokens)
+    if compact_key.endswith("s"):
+        compact_key = compact_key[:-1]
+    return bool(_SENSITIVE_KEY_TOKENS.intersection(singular_tokens)) or (
+        compact_key in _SENSITIVE_COMPACT_KEYS
+    )
 
 
 def _contains_sensitive_value(value: object, visited: set[int]) -> bool:
