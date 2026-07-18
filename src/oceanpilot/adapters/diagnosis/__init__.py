@@ -1,0 +1,1 @@
+"""OceanPilot diagnosis adapters."""
