@@ -1170,6 +1170,14 @@ CONFIG_MISMATCH_PSP_V1
 
 Also assert: no matching rule yields empty hypotheses plus `POLICY_GAP`; any input view already carrying `CONFLICTING_EVIDENCE` short-circuits before rule matching to empty hypotheses/routing/ticket with `requires_human=true`, including a fixture whose nonconflicting selected values would otherwise match a rule; two matching rules independently yield the same conflict-only result; risk always adds `RISK_DECISION`; every hypothesis references every decisive predicate evidence ID.
 
+State tests cover both readiness outcomes from every AddEvidence-capable status. In particular, start from `DIAGNOSED` and `HUMAN_REVIEW` with a ready snapshot, add nonconflicting `integration.type=PLUGIN`, and prove that newly missing `integration.platform/plugin_version` makes `status_after_evidence()` return `NEED_INFO`, not `EVIDENCE_READY`. Reopening still supersedes the old snapshot and clears its pointer in later service/store tasks; Task 4 only freezes the target-status calculation.
+
+Confidence tests additionally require a nonempty decisive-evidence sequence; parameterize all five source qualities and prove mixed inputs use the minimum. At coverage/consistency `1`, lock `SYSTEM_OF_RECORD → 1.000/1.00`, `VERIFIED_DOCUMENT → 0.970/0.97`, `SYNTHETIC_TEST → 0.940/0.94`, `OPERATOR_CONFIRMED → 0.925/0.93`, and `USER_REPORTED → 0.865/0.87`; only the final row carries both confidence reasons. `required_coverage` must be a finite `Decimal` in `[0, 1]`; `consistency` must be a finite `Decimal` exactly equal to `0` or `1`. Empty evidence, non-Decimal input, NaN, infinities, values outside the coverage interval, and intermediate consistency values all raise exactly `ValueError("invalid confidence inputs")` without echoing the value. Lock these boundaries using the unrounded score: synthetic quality plus coverage `0.92` yields raw exactly `0.900` and is not low confidence; coverage `0.91` yields raw `0.895`/display `0.90` but remains low confidence; minimum source quality exactly `0.75` does not trigger insufficient quality.
+
+Freeze the complete result matrix in tests: conflict view → empty/none/none/human/conflict-only; zero rules → empty/none/none/human/policy-gap-only; two or more rules → conflict-only with no extra risk/confidence reasons; exactly one rule → hypothesis confidence equals `display_score`, reasons are confidence reasons union forced rule reasons, and `requires_human=bool(reasons)`. A single matched rule always retains its unambiguous route and TicketDraft even when low confidence or risk-gated, and the routing human flag/reasons equal the parent draft. Assert synthetic non-risk `0.94` without human review, user-reported non-risk `0.87` with both confidence reasons and retained route/ticket, and user-reported risk with those two reasons plus `RISK_DECISION` and retained RISK route/ticket. Confidence consumes exactly the decisive refs; unrelated low-quality evidence cannot alter the output.
+
+Each rule test pins the fixed `explanation`, `routing_reason`, and `ticket_title` from spec §9.1. For all four rows, assert the exact `RoutingDecision.responsible_team/priority`, `TicketDraft.next_action/responsible_team/synthetic`, `ticket.summary=explanation`, `missing_material=()`, `ticket.hypotheses=(emitted_hypothesis,)`, and `evidence_summary` in predicate declaration order as safe `code=value` strings; route and ticket teams are identical and `ticket.synthetic == case.synthetic is True`. Hypothesis and route refs are all and only decisive IDs, deduplicated and sorted by canonical UUID text. Keeping the same view/policy while changing case ID, summary, merchant reference, status, and revisions must not change evaluation; the case and view must remain unmodified.
+
 - [ ] **Step 2: Run tests and verify missing state/engine failures**
 
 ```powershell
@@ -1192,11 +1200,19 @@ ALLOWED_COMMANDS: Final = {
 }
 ```
 
-Creation is handled by `status_after_creation()`. Diagnose in DIAGNOSED/HUMAN_REVIEW is allowed only for version replay at the service/store layer. `status_after_evidence()` always returns EVIDENCE_READY when reopening a diagnosed/review case; otherwise it follows readiness. Unlisted transitions raise `InvalidTransition` without mutation.
+Creation is handled by `status_after_creation()`. Diagnose in DIAGNOSED/HUMAN_REVIEW is allowed only for version replay at the service/store layer. For every AddEvidence-capable current state, `status_after_evidence()` follows the newly computed readiness: ready → `EVIDENCE_READY`, otherwise → `NEED_INFO`. Reopening a diagnosed/review case still invalidates the old snapshot at the service/store layer, but never bypasses newly activated missing slots. Unlisted transitions raise `InvalidTransition` without mutation.
 
-Confidence uses:
+Confidence uses an externally immutable mapping (not a `Final`-annotated mutable dict):
 
 ```python
+SOURCE_QUALITY: Final[Mapping[SourceReliability, Decimal]] = MappingProxyType({
+    SourceReliability.SYSTEM_OF_RECORD: Decimal("1.00"),
+    SourceReliability.VERIFIED_DOCUMENT: Decimal("0.90"),
+    SourceReliability.SYNTHETIC_TEST: Decimal("0.80"),
+    SourceReliability.OPERATOR_CONFIRMED: Decimal("0.75"),
+    SourceReliability.USER_REPORTED: Decimal("0.55"),
+})
+
 raw = (
     Decimal("0.50") * required_coverage
     + Decimal("0.30") * minimum_source_quality
@@ -1205,21 +1221,13 @@ raw = (
 display = raw.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 ```
 
-The immutable source-quality map is exact:
-
-```python
-SOURCE_QUALITY: Final = {
-    SourceReliability.SYSTEM_OF_RECORD: Decimal("1.00"),
-    SourceReliability.VERIFIED_DOCUMENT: Decimal("0.90"),
-    SourceReliability.SYNTHETIC_TEST: Decimal("0.80"),
-    SourceReliability.OPERATOR_CONFIRMED: Decimal("0.75"),
-    SourceReliability.USER_REPORTED: Decimal("0.55"),
-}
-```
-
 Review comparisons use `raw < Decimal("0.90")` and `minimum_source_quality < Decimal("0.75")`.
 
-`rules.py` defines a frozen `RuleDefinition` tuple with the four rows and exact route, priority, cause code, next action, and required predicates from §9.1. `evaluate()` reads only `ActiveEvidenceView`. Before evaluating any predicate or confidence, `ReviewReason.CONFLICTING_EVIDENCE` in `view.review_reasons` returns `DiagnosisDraft(hypotheses=(), routing_decision=None, ticket_draft=None, requires_human=True, review_reasons=frozenset({ReviewReason.CONFLICTING_EVIDENCE}))`. Otherwise it emits `HypothesisDraft` without random IDs/time and constructs routing/ticket drafts only when responsibility is unambiguous; two or more matched rule IDs produce the same conflict-only draft.
+Before applying the formula, `calculate_confidence()` validates the frozen input domain: `decisive_evidence` is nonempty; `required_coverage` is a finite `Decimal` in `[0, 1]`; `consistency` is a finite `Decimal` and one of `{Decimal("0"), Decimal("1")}`. Every violation raises `ValueError("invalid confidence inputs")`; the message never includes input values. Source quality is the minimum across exactly the decisive evidence sequence.
+
+`rules.py` defines a frozen `RuleDefinition` tuple with the four rows and exact route, priority, cause code, next action, required predicates, `explanation`, `routing_reason`, and `ticket_title` from spec §9.1; allowed predicate values and forced reasons are `frozenset`s. Tests prove the source-quality map cannot be assigned/deleted and the rules tuple/definitions cannot be mutated. `evaluate()` reads rule facts only from `ActiveEvidenceView`; case metadata must not affect output, and neither input is mutated. Before evaluating any predicate or confidence, `ReviewReason.CONFLICTING_EVIDENCE` in `view.review_reasons` returns `DiagnosisDraft(hypotheses=(), routing_decision=None, ticket_draft=None, requires_human=True, review_reasons=frozenset({ReviewReason.CONFLICTING_EVIDENCE}))`. Zero matches returns the analogous `POLICY_GAP`-only draft. Two or more matched rule IDs produce the same conflict-only draft without additional reasons.
+
+For exactly one match, decisive evidence consists of all and only the selected items satisfying the rule predicates. Hypothesis and route refs are deduplicated canonical UUID strings in lexical order; confidence uses that same sequence. `HypothesisDraft.confidence_score=display_score`; its fixed text comes from the rule. The draft reasons are `confidence.review_reasons | rule.forced_review_reasons`, and `requires_human=bool(review_reasons)`. Because responsibility is unambiguous, always construct both route and TicketDraft even for low confidence, insufficient source quality, and `RISK_DECISION`; `RoutingDecision.requires_human/review_reasons` exactly equal the parent. `ticket.summary=rule.explanation`, `missing_material=()`, `hypotheses=(hypothesis,)`, `next_action=rule.next_verification_action`, `responsible_team=route.responsible_team`, `synthetic=case.synthetic`, and `evidence_summary` uses predicate declaration order as `evidence_code=value`. No random IDs or timestamps are generated in Task 4.
 
 - [ ] **Step 4: Run Gate 1 behavior tests and deterministic replay check**
 
@@ -1313,6 +1321,21 @@ class DiagnoseCaseCommand(FrozenDomainModel):
 ```
 
 Stable application errors are separate classes with fixed safe messages: `CaseNotFound`, `CaseTypeNotEnabled`, `CaseNotReady`, `EvidenceConflict`, `ConcurrentCaseWrite`, `DiagnosisInputStale`, `DatabaseUnavailable`, and `PersistenceInvariantViolation`. They never wrap raw SQL or input values in `str(error)`.
+
+`CaseNotReady` has the frozen constructor contract:
+
+```python
+class CaseNotReady(ApplicationError):
+    def __init__(
+        self,
+        *,
+        case_id: UUID4Str,
+        missing_fields: Sequence[str],
+        current_revision: Revision,
+    ) -> None: ...
+```
+
+It exposes read-only `case_id: UUID4Str`, `missing_fields: tuple[str, ...]`, and `current_revision: Revision`. Construction tuple-copies `missing_fields`, so later caller mutation cannot alter the error. The element type is deliberately `str`, not `EvidenceCode`, because readiness can contain the derived slot `symptom.signal`; `current_revision` means case revision, not evidence revision. Attribute reassignment is rejected, and `str(error)` is exactly `case is not ready for diagnosis`, with no ID, field, revision, SQL, or input value. Tests lock the signature/type hints, list-to-tuple anti-aliasing, read-only attributes, acceptance of `symptom.signal`, and fixed safe string.
 
 Implement only the Store protocol signatures from Frozen Cross-Task Interfaces. `AddEvidenceCommand.origin` is an internal, frozen value: the HTTP mapper always constructs `MERCHANT/USER_REPORTED`, while the internal synthetic adapter constructs `SYNTHETIC_ADAPTER/SYNTHETIC_TEST`. No request DTO exposes origin fields. This command boundary is the independent internal ingress described by approved spec §5.3; no application protocol may import a demo-only `SyntheticScenario` type from an adapter.
 
@@ -1701,7 +1724,8 @@ decode_sqlite_bool rejects 2, "1", null, and any non-exact INTEGER 0/1 as Persis
 same evidence_id + same content_hash returns REPLAY with no revision/audit increase
 same evidence_id + different content_hash raises EvidenceConflict
 new evidence increments case_revision and evidence_revision exactly once
-append after DIAGNOSED/HUMAN_REVIEW supersedes CURRENT snapshot and clears current_diagnosis_id
+new evidence after DIAGNOSED/HUMAN_REVIEW supersedes CURRENT snapshot and clears current_diagnosis_id whether recomputed target is NEED_INFO or EVIDENCE_READY; evidence REPLAY does neither
+adding integration.type=PLUGIN to a previously ready diagnosed/review case atomically persists NEED_INFO readiness, supersedes the snapshot, clears the pointer, and emits the matching transition audit
 audit trigger failure rolls back evidence, state, both revisions, and snapshot lifecycle
 two connections adding the same evidence persist one row
 two different evidence writes from the same expected revision yield one success and one ConcurrentCaseWrite; Store itself never guesses a recomputation
@@ -1826,7 +1850,7 @@ Expected: failures for missing `find_diagnosis`/`commit_diagnosis_atomic`.
 
 - [ ] **Step 3: Implement the exact two-phase commit semantics**
 
-`find_diagnosis()` reads by the frozen unique key and reconstructs immutable hypotheses, evidence refs, route, and draft. Before any mutation, `commit_diagnosis_atomic()` requires `target_status=HUMAN_REVIEW` exactly when `snapshot.requires_human` is true, otherwise `target_status=DIAGNOSED`; a mismatch raises `PersistenceInvariantViolation`. After loading current state, the same `validate_audit_batch()` requires the same case ID/request/trace pair, post revisions `(expected_case_revision + 1, expected_evidence_revision)`, and `from_status=current.status/to_status=target_status`. Required types are exactly `DIAGNOSIS_CREATED`, `ROUTING_PROPOSED` iff `snapshot.routing_decision` exists, and `STATE_TRANSITIONED` iff status changes, each once. Any inconsistency rolls back. It then performs:
+`find_diagnosis()` reads by the frozen unique key and reconstructs immutable hypotheses, evidence refs, route, and draft. Hypothesis evidence-reference rows are always reconstructed with SQL `ORDER BY evidence_id`; repository row or insertion order must not affect the immutable tuple. Before any mutation, `commit_diagnosis_atomic()` requires `target_status=HUMAN_REVIEW` exactly when `snapshot.requires_human` is true, otherwise `target_status=DIAGNOSED`; a mismatch raises `PersistenceInvariantViolation`. After loading current state, the same `validate_audit_batch()` requires the same case ID/request/trace pair, post revisions `(expected_case_revision + 1, expected_evidence_revision)`, and `from_status=current.status/to_status=target_status`. Required types are exactly `DIAGNOSIS_CREATED`, `ROUTING_PROPOSED` iff `snapshot.routing_decision` exists, and `STATE_TRANSITIONED` iff status changes, each once. Any inconsistency rolls back. It then performs:
 
 ```text
 BEGIN IMMEDIATE
@@ -1943,9 +1967,10 @@ create starts case_revision=1 and evidence_revision=0
 unsupported ONBOARDING_RECOMMENDATION raises CaseTypeNotEnabled with no Store call
 create/add call assert_no_sensitive_data before persistence
 new evidence recomputes ActiveEvidenceView and Readiness before atomic append
+adding integration.type=PLUGIN to a ready DIAGNOSED/HUMAN_REVIEW snapshot yields NEED_INFO, supersedes the snapshot, clears the current pointer, and emits DIAGNOSIS_SUPERSEDED plus the actual STATE_TRANSITIONED
 ConcurrentCaseWrite reloads and recomputes within the same Store session, at most three attempts
 same evidence replay preserves revisions and audit count
-diagnose NEED_INFO raises CaseNotReady before engine evaluation
+diagnose NEED_INFO raises CaseNotReady(case_id, lexical missing_fields, current case_revision) before engine evaluation; derived symptom.signal is preserved
 existing diagnosis unique key replays before engine evaluation
 new diagnosis evaluates outside Store transaction and materializes stable UUID/time fields
 DiagnosisInputStale is returned, not silently recalculated from newer evidence
@@ -1992,7 +2017,7 @@ On `ConcurrentCaseWrite`, reload and recompute; after three failed CAS attempts 
 ```text
 load CaseInputSnapshot
 → if current state is DIAGNOSED/HUMAN_REVIEW, find same-version snapshot and replay
-→ require EVIDENCE_READY
+→ require EVIDENCE_READY; otherwise raise CaseNotReady(case_id=snapshot.case.case_id, missing_fields=snapshot.case.readiness.missing_fields, current_revision=snapshot.case.case_revision)
 → find same unique diagnosis key and replay if present
 → build ActiveEvidenceView
 → evaluate RuleDiagnosisEngine outside any transaction
@@ -2112,6 +2137,7 @@ unknown path 404 and POST /health 405 are application/problem+json
 a test-only route raising RuntimeError returns safe 500 without exception text
 SensitiveDataRejected maps to 422 SENSITIVE_DATA_REJECTED, never 500
 every error has type,title,status,detail,instance,code,trace_id
+CaseNotReady serializes exactly the whitelisted extensions case_id, missing_fields, and current_revision; no other error includes them and no handler exposes exception __dict__, args, private, or arbitrary attributes
 body status equals HTTP status and X-Trace-ID equals body trace_id
 overrides are empty after fixture exit, including a failing test path
 ```
@@ -2145,6 +2171,8 @@ class Settings:
 
 `RequestContext` contains server-generated UUIDv4 `trace_id` and `request_id`. HTTP middleware creates both, stores the context in `request.state`, records duration/result without reading the request body, and sets `X-Trace-ID` on successful and ordinarily handled responses. Every Problem Details handler also explicitly reads the same context and sets `headers={"X-Trace-ID": trace_id}`; this is mandatory for the unexpected-500 path because Starlette's outer `ServerErrorMiddleware` can otherwise return the exception handler response without the function-middleware header mutation.
 
+`ProblemDetails` declares the common required fields plus optional strict extensions `case_id: UUID4Str | None`, `missing_fields: tuple[StrictStr, ...] | None`, and `current_revision: Revision | None`. Those three properties appear in its JSON Schema but are not required. Handlers always serialize with `exclude_none=True`: ordinary problems omit them, while only `CASE_NOT_READY` sets all three. This keeps the runtime response and shared OpenAPI schema aligned without allowing arbitrary extension dictionaries.
+
 `create_app(settings: Settings | None = None) -> FastAPI` builds a new app each call, immediately assigns `app.state.settings` and the factory objects without opening a connection, and lets lifespan own initialization. Its `asynccontextmanager` lifespan calls `initialize_schema()`, opens a Store session, performs read-only `healthcheck()`, closes it, and then yields. A startup self-check failure aborts startup before the app listens; `/health` maps a database failure occurring after successful startup to safe 503. The 503 adapter test therefore starts with a valid DB, enters `TestClient`, then monkeypatches `sqlite3.connect` to raise `OperationalError("DB-SENTINEL")` while leaving the real `get_store_factory` dependency in place; `/health` must return 503 `DATABASE_UNAVAILABLE` without the sentinel. A separate dependency-override test may still prove override cleanup. The app registers only `health` at this task; case routes arrive in Task 13. It must contain no `@on_event` and no import-time DB access.
 
 `RequestValidationError` conversion iterates `exc.errors()` but copies only mapped `type` values and a sanitized location. Client-controlled unknown keys must never be converted with `str(part)`:
@@ -2176,7 +2204,7 @@ for error in exc.errors():
     safe_errors.append({"field": safe_error_location(error), "reason": reason})
 ```
 
-It never copies `msg`, `input`, `ctx`, `url`, a client-controlled unknown location segment, or the original error mapping. Tests use Bearer/password sentinels as unknown field names and nested keys and assert neither appears. Handlers are registered for `RequestValidationError`, `SensitiveDataRejected` (exactly HTTP 422 and code `SENSITIVE_DATA_REJECTED`), stable application/domain errors, Starlette `HTTPException`, and unexpected `Exception`. The HTTPException handler may copy only a syntactically safe `Allow` header for 405; it drops all other upstream headers unless separately specified by the contract. No handler uses `str(exc)` in body or logs. Every response explicitly sets `media_type="application/problem+json"` and the matching `X-Trace-ID`; tests assert body/header identity separately for 404, 405, 422, 500, and 503.
+It never copies `msg`, `input`, `ctx`, `url`, a client-controlled unknown location segment, or the original error mapping. Tests use Bearer/password sentinels as unknown field names and nested keys and assert neither appears. Handlers are registered for `RequestValidationError`, `SensitiveDataRejected` (exactly HTTP 422 and code `SENSITIVE_DATA_REJECTED`), stable application/domain errors, Starlette `HTTPException`, and unexpected `Exception`. The `CaseNotReady` handler reads only its three declared properties and emits exactly `case_id`, `missing_fields`, and `current_revision` as extensions; it never serializes `exception.__dict__`, `args`, private fields, or arbitrary attributes. All other error types omit these extensions, and the approved detail remains fixed. The HTTPException handler may copy only a syntactically safe `Allow` header for 405; it drops all other upstream headers unless separately specified by the contract. No handler uses `str(exc)` in body or logs. Every response explicitly sets `media_type="application/problem+json"` and the matching `X-Trace-ID`; tests assert body/header identity separately for 404, 405, 422, 500, and 503.
 
 - [ ] **Step 4: Verify lifecycle and all 404/405/500/503 paths**
 
@@ -2239,13 +2267,14 @@ synthetic=true is accepted; synthetic=1, false, and "true" are each 422
 each card/token/password sentinel is 422 SENSITIVE_DATA_REJECTED with body/header trace identity and no sentinel echo
 diagnosis creation → 201; same input/policy replay → 200
 diagnose with no body succeeds; any body field is 422 and its name/value is not echoed
-NEED_INFO diagnosis → 409 CASE_NOT_READY with missing_fields/current_revision
+NEED_INFO diagnosis → 409 CASE_NOT_READY with exactly case_id, lexically ordered missing_fields, and current_revision equal to case_revision; derived symptom.signal is preserved and no exception-internal field is exposed
 stale diagnosis → 409 DIAGNOSIS_INPUT_STALE
 ONBOARDING_RECOMMENDATION → 409 CASE_TYPE_NOT_ENABLED
 unknown fields/source reliability/client status/versions/routes are rejected with 422
 OpenAPI contains exactly the five approved application paths and no delete/patch/refund/retry route
 OpenAPI documents evidence/diagnose 200 replay and 201 creation separately
 OpenAPI documents create 201 Location header
+OpenAPI ProblemDetails schema contains optional, non-required case_id/missing_fields/current_revision properties, and the runtime diagnose 409 sets all three
 every documented 422, business 404/409, and health/storage 503 uses only application/problem+json with the ProblemDetails schema, not FastAPI's default application/json HTTPValidationError
 ```
 

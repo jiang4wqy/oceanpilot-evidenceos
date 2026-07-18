@@ -422,6 +422,8 @@ score = 0.50 × required_evidence_coverage
 - `HUMAN_REVIEW_SOURCE_QUALITY_THRESHOLD=0.75`：决定性证据的最低来源质量低于该值，增加 `INSUFFICIENT_SOURCE_QUALITY` 并进入人工审核。
 - 因此完整、一致但全部为 `USER_REPORTED` 的证据得到 `0.865`（对外 `0.87`），同时触发上述两个原因；`SYNTHETIC_TEST` 得到 `0.94`，不会触发低可信或来源不足。风险、冲突等独立闸门仍照常生效。
 
+`calculate_confidence()` 只接受非空的决定性证据集合。`required_evidence_coverage` 必须是有限 `Decimal` 且位于闭区间 `0..1`；`consistency` 必须是有限 `Decimal` 且在 MVP 中只能取 `0` 或 `1`。空序列、非 Decimal、NaN、Infinity、越界值或中间一致性值统一抛出不含输入值的 `ValueError("invalid confidence inputs")`，不得计算或输出一个看似合法的分数。
+
 强制人工审核原因：
 
 ```text
@@ -435,6 +437,15 @@ INSUFFICIENT_SOURCE_QUALITY
 ```
 
 任一假设命中上述分数门或来源质量门，或出现风险拒绝、冲突证据、安全信号、资金动作建议或规则空白时，案件进入 `HUMAN_REVIEW`。
+
+诊断输出矩阵固定如下：
+
+- `ActiveEvidenceView` 已带 `CONFLICTING_EVIDENCE`：不执行规则或可信度计算，返回空假设、空路由、空草稿，`requires_human=true`，且原因只有 `CONFLICTING_EVIDENCE`。
+- 命中零条规则：返回空假设、空路由、空草稿，`requires_human=true`，且原因只有 `POLICY_GAP`。
+- 命中两条及以上规则：返回与证据冲突相同的 conflict-only 结果，不附加风险或可信度原因。
+- 恰好命中一条规则：`Hypothesis.confidence_score` 使用两位的 `display_score`；快照原因等于可信度原因与该规则强制原因的并集，`requires_human = bool(review_reasons)`。责任域已经明确，因此即使低可信、来源不足或命中 `RISK_DECISION`，仍保留该规则的路由与审核型工单草稿；`RoutingDecision` 的 `requires_human/review_reasons` 必须与父诊断完全一致。
+
+可信度只读取该规则全部且仅有的决定性 `evidence_refs`，无关的低质量证据不得降低分数。完整一致的合成非风险规则输出 `0.94` 且无需人审；完整一致的用户上报非风险规则输出 `0.87`、同时带 `LOW_CONFIDENCE` 与 `INSUFFICIENT_SOURCE_QUALITY`，但仍保留路由/草稿；用户上报风险规则再并入 `RISK_DECISION`，同样保留 `RISK` 路由/草稿。
 
 `0.90/0.75` 只是演示期人工审核门槛，不表示“90% 诊断准确率”或“75% 来源准确率”；权重和阈值须在取得企业允许的脱敏历史案件后校准，报名材料不得把数值当作业务效果。
 
@@ -480,6 +491,8 @@ synthetic
 它只是草稿。MVP 不会把案件标为 `ASSIGNED`，也不会调用真实工单系统。
 
 当规则空白或冲突使系统无法安全确定责任域时，`routing_decision` 与 `ticket_draft` 均为空，只生成带 `POLICY_GAP` 或 `CONFLICTING_EVIDENCE` 的人工审核快照。风险拒绝虽进入人工审核，但责任域明确，因此仍可生成 `RISK` 路由和审核型草稿。
+
+恰好命中一条规则时，假设和路由的 `evidence_refs` 必须是全部且仅有的决定性证据 ID，去重后按规范 UUID 字符串升序。`TicketDraft.summary = Hypothesis.explanation`，`missing_material=()`，`hypotheses` 只含本次发出的假设，`next_action` 等于该规则的 `next_verification_action`，责任团队与路由一致，`synthetic` 继承案件；`evidence_summary` 按规则 predicate 声明顺序输出安全的 `evidence_code=value`，不得包含 `source_ref`、商户引用或其他非决定性字段。相同 `ActiveEvidenceView` 与策略版本必须产生相同草稿；改变 `case_id`、`summary`、`merchant_ref`、案件状态或 revision 不得改变规则输出，求值过程不得修改案件或 view。
 
 所有派生对象（诊断、路由、草稿和审计安全元数据）继承案件的 `synthetic=true`，禁止把合成证据经过一次推断后误标成真实结果。
 
@@ -528,10 +541,14 @@ stateDiagram-v2
     NEW --> EVIDENCE_READY: 基础证据完整
     NEED_INFO --> NEED_INFO: 新证据仍不足
     NEED_INFO --> EVIDENCE_READY: 达到最低条件
+    EVIDENCE_READY --> NEED_INFO: 新证据激活缺失条件
+    EVIDENCE_READY --> EVIDENCE_READY: 新证据后仍就绪
     EVIDENCE_READY --> DIAGNOSED: 可支持结论且无需人审
     EVIDENCE_READY --> HUMAN_REVIEW: 低可信/冲突/风险/规则空白
-    DIAGNOSED --> EVIDENCE_READY: 新证据，旧快照失效
-    HUMAN_REVIEW --> EVIDENCE_READY: 新证据，旧快照失效
+    DIAGNOSED --> NEED_INFO: 新证据激活缺失条件，旧快照失效
+    DIAGNOSED --> EVIDENCE_READY: 新证据后仍就绪，旧快照失效
+    HUMAN_REVIEW --> NEED_INFO: 新证据激活缺失条件，旧快照失效
+    HUMAN_REVIEW --> EVIDENCE_READY: 新证据后仍就绪，旧快照失效
 ```
 
 迁移规则：
@@ -539,8 +556,7 @@ stateDiagram-v2
 | 命令 | 允许状态 | 结果 |
 |---|---|---|
 | `CreateCase` | 无 | 原子创建并计算 `NEED_INFO` 或 `EVIDENCE_READY` |
-| `AddEvidence` | `NEED_INFO`、`EVIDENCE_READY` | 重新计算 readiness |
-| `AddEvidence` | `DIAGNOSED`、`HUMAN_REVIEW` | 仅将旧诊断快照标记 `SUPERSEDED`，清空当前诊断指针并进入 `EVIDENCE_READY`；其路由/草稿作为不可变子对象继承父快照生命周期 |
+| `AddEvidence` | `NEED_INFO`、`EVIDENCE_READY`、`DIAGNOSED`、`HUMAN_REVIEW` | 首次持久化新证据后重新计算 readiness；`ready=true` 进入 `EVIDENCE_READY`，否则进入 `NEED_INFO`，结果不依赖原状态。若原状态为 `DIAGNOSED` 或 `HUMAN_REVIEW`，同一原子写入将旧诊断快照标记 `SUPERSEDED` 并清空当前诊断指针；其路由/草稿继承父快照生命周期。证据级 REPLAY 不改变状态、readiness、快照、版本或审计 |
 | `Diagnose` | `EVIDENCE_READY` | 生成新快照，进入 `DIAGNOSED` 或 `HUMAN_REVIEW` |
 | `Diagnose` | `DIAGNOSED`、`HUMAN_REVIEW` 且版本未变 | 返回原快照，不产生新写入 |
 | `Diagnose` | `NEED_INFO` | `409 CASE_NOT_READY` |
@@ -603,6 +619,8 @@ POST /api/v1/cases/{case_id}/diagnose
 ### 7.6 错误格式
 
 所有 4xx/5xx 使用 RFC 9457 `application/problem+json`：
+
+领域异常 `CaseNotReady` 固定携带只读的 `case_id: UUID4Str`、`missing_fields: tuple[str, ...]` 与 `current_revision: Revision`。`missing_fields` 使用字符串是因为其中可能包含派生槽位 `symptom.signal`，不能收窄为 `EvidenceCode`。构造时复制为 tuple，`str(error)` 是不回显字段或输入值的固定安全文本；服务与 API 只能将这三个白名单字段序列化为下方扩展成员。共享 `ProblemDetails` Schema 将三者声明为可选且非 required，序列化时排除 `None`；只有 `CASE_NOT_READY` 运行时响应设置三者，其他错误全部省略。
 
 ```json
 {
@@ -719,6 +737,15 @@ COMMIT
 | `RISK_DECLINE_V1` / `RISK_DECLINE_REQUIRES_REVIEW` | `symptom.status ∈ {DECLINED, FAILED}`；`risk.decision_code = RISK_DECLINE` | `RISK` | `HIGH` | `RISK_DECISION` | 由风控人员复核决策依据，不自动放行 |
 | `CONFIG_MISMATCH_MERCHANT_V1` / `PAYMENT_CONFIGURATION_MISMATCH` | `symptom.status ∈ {PENDING, FAILED}`；`context.environment ∈ {PROD, SANDBOX}`；`payment.method` 为允许枚举；`configuration.check_result = MERCHANT_SIDE_MISMATCH` | `TECHNICAL_SUPPORT` | `MEDIUM` | 无；仍服从全局规则 | 生成商户侧环境/方式配置核对清单，不自动修改配置 |
 | `CONFIG_MISMATCH_PSP_V1` / `PAYMENT_CONFIGURATION_MISMATCH` | `symptom.status ∈ {PENDING, FAILED}`；`context.environment ∈ {PROD, SANDBOX}`；`payment.method` 为允许枚举；`configuration.check_result = PSP_PROFILE_MISMATCH` | `PSP_SUPPORT` | `MEDIUM` | 无；仍服从全局规则 | 生成 PSP 资料核对草稿，不触发生产变更 |
+
+每条规则的确定性文案固定如下，不在运行时自由生成：
+
+| rule_id | explanation | routing_reason | ticket_title |
+|---|---|---|---|
+| `THREEDS_INCOMPLETE_V1` | 交易状态、认证状态与回调状态同时命中未完成规则，需核对认证与回调链路。 | 认证或回调链路需要技术支持复核。 | 复核 3DS 认证与回调链路 |
+| `RISK_DECLINE_V1` | 交易状态与 RISK_DECLINE 决策码同时命中风险复核规则。 | 风险拒绝需要风控团队人工复核。 | 复核风险拒绝决策 |
+| `CONFIG_MISMATCH_MERCHANT_V1` | 环境、支付方式与配置检查结果命中商户侧配置不匹配规则。 | 商户侧支付配置需要技术支持核对。 | 核对商户侧支付配置 |
+| `CONFIG_MISMATCH_PSP_V1` | 环境、支付方式与配置检查结果命中 PSP 侧资料配置不匹配规则。 | PSP 侧资料配置需要支持团队核对。 | 核对 PSP 侧资料配置 |
 
 每个假设的 `evidence_refs` 必须引用满足该行每个 predicate 的规范证据。`AUTHENTICATED + DELIVERED`、`NO_MISMATCH`、`UNKNOWN` 或未列出的风险码均不命中对应规则。命中两个及以上 rule_id 时视为 `CONFLICTING_EVIDENCE`，直接人工审核且路由/草稿为空；无规则命中时假设列表为空，使用 `POLICY_GAP`，不得生成“可能是网络问题”等无证据文本。
 
