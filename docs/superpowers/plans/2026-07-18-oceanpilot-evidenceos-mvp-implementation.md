@@ -1382,7 +1382,7 @@ Expected: clean status. Send the commit SHA and full Gate 1 command outputs to t
 
 **Files:**
 - Create on PASS: `docs/reviews/gate-1-domain.md`
-- Read only: `src/oceanpilot/domain/**`, `src/oceanpilot/application/{commands,errors,ports}.py`, `tests/domain/**`
+- Read only: `pyproject.toml`, `src/oceanpilot/domain/**`, `src/oceanpilot/application/{commands,errors,ports}.py`, `src/oceanpilot/adapters/diagnosis/rules.py`, `tests/domain/**`
 
 **Interfaces:**
 - Produces: an evidence-backed PASS report or blocking findings.
@@ -1393,39 +1393,140 @@ Expected: clean status. Send the commit SHA and full Gate 1 command outputs to t
 Run:
 
 ```powershell
-git status --short
-git log -1 --oneline
-git diff 78e7064..HEAD -- src tests pyproject.toml .gitignore
+$task5Sha = "94192a0a548d4e568c9a08b70312397230036930"
+$expectedParent = "fcf21d6aeb9385e30ff48108fa0e91bca22c778a"
+
+if ((git status --short).Count -ne 0) {
+    throw "working tree is not clean"
+}
+
+$actualParent = (git rev-parse "${task5Sha}^").Trim()
+if ($actualParent -ne $expectedParent) {
+    throw "unexpected Task 5 parent: $actualParent"
+}
+
+$subject = (git show -s --format=%s $task5Sha).Trim()
+if ($subject -ne "feat: freeze application and store contracts") {
+    throw "unexpected Task 5 subject: $subject"
+}
+
+$expectedFiles = @(
+    "A`tsrc/oceanpilot/application/commands.py"
+    "A`tsrc/oceanpilot/application/errors.py"
+    "A`tsrc/oceanpilot/application/ports.py"
+    "A`ttests/domain/test_application_contracts.py"
+    "A`ttests/domain/test_import_boundaries.py"
+) | Sort-Object
+$actualFiles = @(git diff-tree --no-commit-id --name-status -r $task5Sha) | Sort-Object
+if (Compare-Object $expectedFiles $actualFiles) {
+    throw "Task 5 file scope mismatch"
+}
+
+git show --check --oneline $task5Sha
+if ($LASTEXITCODE -ne 0) { throw "Task 5 patch check failed" }
+
+git merge-base --is-ancestor $task5Sha HEAD
+if ($LASTEXITCODE -ne 0) {
+    throw "Task 5 is not an ancestor of Gate-contract HEAD"
+}
+
+git diff --quiet "${task5Sha}..HEAD" -- src tests pyproject.toml .gitignore .github examples
+if ($LASTEXITCODE -ne 0) {
+    throw "technical files changed after Task 5 handoff"
+}
+
+$specBlob = (git rev-parse "HEAD:docs/superpowers/specs/2026-07-18-oceanpilot-evidenceos-design.md").Trim()
+if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($specBlob)) {
+    throw "cannot resolve the Gate-contract spec blob"
+}
+$planBlob = (git rev-parse "HEAD:docs/superpowers/plans/2026-07-18-oceanpilot-evidenceos-mvp-implementation.md").Trim()
+if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($planBlob)) {
+    throw "cannot resolve the Gate-contract plan blob"
+}
+
+"Task5=$task5Sha"
+"GateContractHEAD=$(git rev-parse HEAD)"
+"SpecBlob=$specBlob"
+"PlanBlob=$planBlob"
 ```
 
-Expected: status is empty; the last commit SHA equals the technical-track handoff; diff touches only technical-owned paths.
+Expected: status is empty; the reviewed Task 5 commit has the exact parent, subject, and five-file scope; its patch is clean; and no technical file changed between that commit and the current Gate-contract HEAD. Record both SHAs and both document blob IDs instead of presenting a later docs-only HEAD as the technical handoff.
 
 - [ ] **Step 2: Run the complete Gate 1 evidence commands**
 
 ```powershell
+.\.venv\Scripts\python.exe -m pytest tests/domain/test_application_contracts.py tests/domain/test_import_boundaries.py -q
+if ($LASTEXITCODE -ne 0) { throw "Task 5 contract tests failed" }
 .\.venv\Scripts\python.exe -m pytest tests/domain -q
+if ($LASTEXITCODE -ne 0) { throw "domain suite failed" }
+.\.venv\Scripts\python.exe -m pytest -q
+if ($LASTEXITCODE -ne 0) { throw "full suite failed" }
 .\.venv\Scripts\python.exe -m ruff check src tests/domain
+if ($LASTEXITCODE -ne 0) { throw "Ruff failed" }
 .\.venv\Scripts\python.exe -m compileall -q src tests/domain
-rg -n "^(from|import) (fastapi|sqlite3|oceanpilot\.api|oceanpilot\.adapters)" src/oceanpilot/domain
-git diff --check
+if ($LASTEXITCODE -ne 0) { throw "compileall failed" }
+
+$previousHashSeed = [Environment]::GetEnvironmentVariable("PYTHONHASHSEED", "Process")
+try {
+    foreach ($seed in @("1", "777")) {
+        [Environment]::SetEnvironmentVariable("PYTHONHASHSEED", $seed, "Process")
+        .\.venv\Scripts\python.exe -m pytest tests/domain/test_evidence_policy.py tests/domain/test_readiness.py tests/domain/test_diagnosis_rules.py -q
+        if ($LASTEXITCODE -ne 0) {
+            throw "determinism replay failed with PYTHONHASHSEED=$seed"
+        }
+    }
+}
+finally {
+    [Environment]::SetEnvironmentVariable("PYTHONHASHSEED", $previousHashSeed, "Process")
+}
+
+function Assert-NoMatch {
+    param([string]$Label, [string]$Pattern, [string[]]$Paths)
+    $hits = & rg -n --glob "*.py" -- $Pattern @Paths
+    $code = $LASTEXITCODE
+    if ($code -eq 0) {
+        $hits
+        throw "$Label found forbidden matches"
+    }
+    if ($code -ne 1) { throw "$Label rg failed with exit $code" }
+}
+
+Assert-NoMatch "domain dependency boundary" '^(from|import)\s+(fastapi|sqlite3|oceanpilot\.(api|application|adapters))(\.|\s|$)' @("src/oceanpilot/domain")
+Assert-NoMatch "application dependency boundary" '^(from|import)\s+(fastapi|sqlite3|oceanpilot\.(api|adapters))(\.|\s|$)' @("src/oceanpilot/application")
+Assert-NoMatch "Task 5 outer protocol aliases" '\b(DiagnosisEngine|EvidenceSource|SyntheticScenario)\b' @("src/oceanpilot/application/commands.py", "src/oceanpilot/application/errors.py", "src/oceanpilot/application/ports.py")
+Assert-NoMatch "domain nondeterminism" '\b(uuid4|random|secrets|requests|httpx|getenv)\b|datetime\.(now|utcnow)|time\.time|os\.environ' @("src/oceanpilot/domain/evidence_policy.py", "src/oceanpilot/domain/state_machine.py", "src/oceanpilot/domain/diagnosis.py", "src/oceanpilot/adapters/diagnosis/rules.py")
+
+$engineDefinitions = @(rg -n '^class DiagnosisEngine\b' src/oceanpilot)
+if ($LASTEXITCODE -ne 0 -or $engineDefinitions.Count -ne 1) {
+    $engineDefinitions
+    throw "DiagnosisEngine must have exactly one definition"
+}
+
+git diff --check 78e7064..HEAD
+if ($LASTEXITCODE -ne 0) { throw "historical diff check failed" }
 ```
 
-Expected: pytest, Ruff, compileall, and diff check exit `0`; `rg` returns no matches. A nonzero pytest/Ruff/compile/diff result is a Gate failure; `rg` exit `1` with no output is the expected clean result.
+Expected: focused contracts, domain suite, full suite, Ruff, compileall, both deterministic replays, historical diff check, AST boundary tests, and independent static probes all pass. Each `Assert-NoMatch` must receive `rg` exit `1` with no output; any match or tool error fails the Gate.
 
-- [ ] **Step 3: Inspect the four non-negotiable domain invariants**
+- [ ] **Step 3: Inspect the non-negotiable Gate 1 invariants**
 
 Confirm from code and tests:
 
-1. Readiness and rules only consume `ActiveEvidenceView`.
-2. `EvidenceItem` is frozen and no Evidence UPDATE/DELETE port exists.
-3. `USER_REPORTED` is exactly `0.865 → 0.87` with two reasons; `SYNTHETIC_TEST` is `0.94`; comparisons use unrounded Decimal.
-4. The immutable table contains exactly four rule IDs and every emitted hypothesis carries decisive evidence references.
+1. `assess_readiness()` only accepts `ActiveEvidenceView`; rule matching, decisive evidence, and confidence facts also read only from that view. Case ID, status, summary, merchant reference, case revision, and evidence revision cannot affect rule choice or output; `synthetic=true` is the sole tested case-field propagation.
+2. `EvidenceItem` is frozen and append-only; no Evidence UPDATE/DELETE method, generic save method, or raw SQLite connection exists in application ports.
+3. All five source-quality scores, raw-score thresholds, minimum-source behavior, invalid Decimal inputs, and unrounded comparisons are directly test-backed. In particular, USER_REPORTED is `0.865 → 0.87` with exactly two confidence reasons and SYNTHETIC_TEST is `0.940 → 0.94`.
+4. The immutable rule table contains exactly four rule IDs. Every accepted, excluded, missing, and `CONFIRMED_UNAVAILABLE` predicate path is independently tested. A single rule emits all-and-only decisive refs; zero, multiple, and conflicting matches emit no hypothesis.
+5. Fixed explanations describe rule matches and required verification rather than asserting an unverified cause as fact. Ticket output remains a draft, contains no `source_ref` or `merchant_ref`, and preserves `synthetic=true`.
+6. Commands have exact fields, required/no-default keyword-only constructors, frozen nested inputs, and safe Pydantic configuration. Stable application errors reject arbitrary payloads and cannot leak through `args` or instance-message shadowing; `CaseNotReady` is the sole structured exception.
+7. `CaseStoreSession` and `CaseStoreFactory` have exactly the frozen signatures. Task 5 application modules neither define/import/re-export `DiagnosisEngine` nor expose `EvidenceSource` or `SyntheticScenario`.
+8. Domain and application dependency direction is enforced for absolute, relative, aliased, and aggregate imports. No UUID/time generation or runtime randomness, environment, or network access enters the deterministic domain/rule path; FastAPI and SQLite remain outside it. Parsing and normalizing evidence timestamps is allowed.
+9. Tests use independently frozen expected values rather than deriving expectations from `RULES`, `SOURCE_QUALITY`, `FIELD_CATALOG`, or actual output.
 
-If any invariant is not directly test-backed, send a blocking finding to the technical track and do not create a PASS report.
+If any behavioral invariant is not directly test-backed, any dependency/determinism invariant is neither directly test-backed nor independently static-probe-backed, or a test oracle is tautological, record a blocking finding and do not create a PASS report.
 
 - [ ] **Step 4: Record the Gate report with actual evidence**
 
-On PASS, create `docs/reviews/gate-1-domain.md` using `apply_patch`. The report must contain: reviewed commit SHA from `git rev-parse HEAD`, timestamp, every command above, actual exit status/test count, reviewed invariants, residual limitations, reviewer verdict `PASS`, and the sentence “Gate 2 SQLite work is now allowed.” Do not invent counts or copy expected output as actual output.
+On PASS, create `docs/reviews/gate-1-domain.md` using `apply_patch`. The report must contain: the reviewed Task 5 SHA, current Gate-contract HEAD, spec and plan blob IDs, timestamp, every command above, actual exit status/test count, the direct test names and/or independent static probes supporting each invariant, both `PYTHONHASHSEED` results, reviewed invariants, residual limitations, reviewer verdict `PASS`, and the sentence “Gate 2 SQLite work is now allowed.” Residual limitations must state that the MVP still uses synthetic data, rule thresholds are not calibrated on Oceanpayment history, and CaseService/SQLite/API/real Feishu or Oceanpayment integrations are not yet implemented. Do not invent counts or copy expected output as actual output.
 
 - [ ] **Step 5: Commit the review report and release the write lock**
 
@@ -2792,7 +2893,7 @@ The final report identifies the artifact it tested; the post-commit `ls-remote` 
 | Gate | Required task range | Required evidence | Stop condition |
 |---|---:|---|---|
 | Registration preflight | 0 | tracked approved plan, exact 262/572 copy, clean write handoff | untracked plan; count drift; future capability presented as current |
-| Gate 1 | 1–6 | domain tests, import boundary, four rules, score math, review report | any rule without refs; any unreachable promised review path; forbidden import |
+| Gate 1 | 1–6 | domain/application-contract tests, absolute and relative import boundaries, four rules, raw score math, safe errors, deterministic replay, review report | rule without all-and-only refs; inference presented as fact; synthetic or sensitive-value leak; mutable/CRUD port; forbidden import; promised path without an independent test |
 | Gate 2 | 7–10 | real-file SQLite tests, rollback, FK, dedupe, CAS, concurrency, report | lost update; leaked sqlite error; non-atomic audit; cross-case ref |
 | API checkpoint | 11–14 | five paths, lifespan, Problem Details, OpenAPI, adversarial review | unsafe 422/500; missing trace header; extra endpoint; override leak; API domain logic |
 | Gate 3 | 11–17 | API checkpoint plus internal/HTTP E2E, audit trace, five-surface security, formal report | sentinel leak; dead synthetic path; false source/score claim; unreferenced diagnosis |
