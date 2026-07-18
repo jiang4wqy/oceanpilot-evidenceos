@@ -1553,8 +1553,11 @@ Expected: clean status. Notify the technical track that Task 7 may begin.
 - Modify: `tests/conftest.py`
 
 **Interfaces:**
-- Produces: `initialize_schema(path)`, `connect_sqlite(path)`, `immediate_transaction(connection)`, `SqliteCaseStoreFactory` skeleton.
+- Produces from `schema.py`: `SCHEMA_SQL` and immutable `REQUIRED_TABLES`.
+- Produces from `sqlite.py`: `initialize_schema(path)`, `connect_sqlite(path)`, `immediate_transaction(connection)`, `SqliteCaseStoreSession` with `healthcheck()`, and the context-managed `SqliteCaseStoreFactory`.
 - Consumes: Task 5 ports and domain models.
+
+The Task 7 Session/Factory is intentionally a tested persistence-lifetime skeleton: the Session owns one connection and exposes `healthcheck()` only at this task; the Factory opens a fresh connection per context and always closes it. Tasks 8 and 9 add the remaining six business methods to that same Session. Do not add `NotImplemented` methods, generic CRUD, or raw-connection access, and do not claim full structural conformance to `CaseStoreSession` before Task 9.
 
 - [ ] **Step 1: Write failing real-file schema and connection tests**
 
@@ -1568,6 +1571,14 @@ from pathlib import Path
 def db_path(tmp_path: Path) -> Path:
     return tmp_path / "oceanpilot.db"
 ```
+
+All schema expectations in the tests are hard-coded test-local oracles. Tests must not import `SCHEMA_SQL` or `REQUIRED_TABLES` to derive expected table names, columns, keys, indexes, foreign keys, deferred clauses, or CHECK constraints. They must additionally prove:
+
+1. `PRAGMA database_list` resolves the `main` database to `db_path.resolve()`, the file exists, and no connection uses `:memory:`.
+2. A fresh initialized live connection reports `PRAGMA journal_mode = delete`, and a completed write followed by close leaves no `-wal`/`-shm` artifacts. A database deliberately pre-seeded in WAL mode is rejected with safe `DatabaseUnavailable`; checking only whether those files remain after close is insufficient because they may disappear while the persisted mode remains `wal`.
+3. Fresh initialization creates exactly the six hard-coded table names. Test-local `PRAGMA table_info`, `index_list`/`index_info`, `foreign_key_list`, normalized `sqlite_schema.sql`, and invalid inserts independently lock the primary keys, UNIQUE keys, composite foreign keys, deferred clauses, and critical CHECK constraints from the DDL below.
+4. `healthcheck()` rejects each missing required business table and a controlled `PRAGMA foreign_key_check` violation. Both paths expose only `DatabaseUnavailable()` and never the SQLite sentinel.
+5. Each Factory context receives a distinct real connection. Normal exit and an exception raised inside the context both close the connection; executing SQL on each captured connection afterwards raises `sqlite3.ProgrammingError`.
 
 They must assert:
 
@@ -1591,6 +1602,24 @@ def test_connect_error_is_mapped_without_sqlite_message(db_path, monkeypatch) ->
         connect_sqlite(db_path)
     assert str(caught.value) == "database is unavailable"
     assert "SENTINEL" not in str(caught.value)
+
+
+def test_successful_transaction_uses_begin_immediate_and_persists(db_path) -> None:
+    connection = connect_sqlite(db_path)
+    connection.execute("CREATE TABLE tx_probe (value TEXT NOT NULL)")
+    traced: list[str] = []
+    connection.set_trace_callback(traced.append)
+    with immediate_transaction(connection):
+        connection.execute("INSERT INTO tx_probe(value) VALUES (?)", ("demo",))
+    connection.close()
+
+    reopened = connect_sqlite(db_path)
+    try:
+        assert reopened.execute("SELECT value FROM tx_probe").fetchone()[0] == "demo"
+    finally:
+        reopened.close()
+    assert "BEGIN IMMEDIATE" in traced
+    assert "COMMIT" in traced
 
 
 def test_failed_transaction_rolls_back_every_write(db_path) -> None:
@@ -1623,7 +1652,7 @@ def test_commit_time_foreign_key_failure_rolls_back(db_path) -> None:
     connection.close()
 ```
 
-Also assert the exact six table names, absence of `-wal`/`-shm` files, and that a deliberately invalid foreign key insert fails. After initialization, `healthcheck()` passes; against a connection whose required `cases` table is absent, it raises fixed `DatabaseUnavailable` without the raw sqlite message. A controlled foreign-key violation inserted with enforcement temporarily disabled is detected by `PRAGMA foreign_key_check` and maps to the same safe error.
+Also test PRAGMA execution failure and a `foreign_keys` read-back of `0` after a real connection has been obtained; both paths must close that connection and raise fixed `DatabaseUnavailable` without a cause or raw SQLite sentinel. `initialize_schema()` must close its connection after success and after controlled DDL/self-check failure. Corrupt-file, controlled `Path.mkdir` `PermissionError`, and controlled schema-error tests all map to the same safe error without a chained sentinel.
 
 - [ ] **Step 2: Run tests and confirm persistence modules are absent**
 
@@ -1631,7 +1660,7 @@ Also assert the exact six table names, absence of `-wal`/`-shm` files, and that 
 .\.venv\Scripts\python.exe -m pytest tests/repository/test_sqlite_schema.py tests/repository/test_sqlite_connection.py -q
 ```
 
-Expected: import/collection failure for the persistence adapter.
+Expected: collection fails specifically because `oceanpilot.adapters.persistence.schema` and/or `.sqlite` is missing. Run Ruff and compileall on the two new test files before accepting RED so syntax, fixture, or collection mistakes cannot masquerade as the required `ModuleNotFoundError`.
 
 - [ ] **Step 3: Implement connection safety and the exact six-table schema**
 
@@ -1650,8 +1679,14 @@ def connect_sqlite(path: Path) -> sqlite3.Connection:
         connection.row_factory = sqlite3.Row
         connection.execute("PRAGMA foreign_keys=ON")
         connection.execute("PRAGMA busy_timeout=5000")
-        enabled = connection.execute("PRAGMA foreign_keys").fetchone()[0]
-        if enabled != 1:
+        foreign_keys_row = connection.execute("PRAGMA foreign_keys").fetchone()
+        journal_mode_row = connection.execute("PRAGMA journal_mode").fetchone()
+        if (
+            foreign_keys_row is None
+            or foreign_keys_row[0] != 1
+            or journal_mode_row is None
+            or journal_mode_row[0] != "delete"
+        ):
             connection.close()
             raise DatabaseUnavailable()
         return connection
@@ -1661,7 +1696,7 @@ def connect_sqlite(path: Path) -> sqlite3.Connection:
         raise DatabaseUnavailable() from None
 ```
 
-The fixed message is identical for open, permission, corruption, and PRAGMA failures; no raw sqlite message is chained or logged.
+The live `journal_mode` read is mandatory: it both rejects a persisted WAL database and forces SQLite to inspect a corrupt file before returning the connection. The fixed message is identical for open, permission, corruption, foreign-key, journal-mode, and PRAGMA failures; no raw sqlite message is chained or logged. Tests use a trackable real connection or wrapper to prove that every failure after connect closes it.
 
 `immediate_transaction()` begins and ends transactions explicitly:
 
@@ -1789,26 +1824,66 @@ CREATE TABLE IF NOT EXISTS audit_events (
 );
 ```
 
-`initialize_schema()` creates the parent directory, opens one connection, calls `executescript(SCHEMA_SQL)` only for initialization, performs a read-only table/foreign-key self-check, and closes in `finally`. Business methods never call `executescript()`.
+`schema.py` owns only `SCHEMA_SQL` and `REQUIRED_TABLES`; `sqlite.py` imports those constants and owns `initialize_schema()`, connection, transaction, Session, and Factory lifetimes. This direction avoids a schema/connection import cycle. `initialize_schema()` creates the parent directory, opens one connection, calls `executescript(SCHEMA_SQL)` only for initialization, requires the fresh table set to equal `REQUIRED_TABLES`, performs `PRAGMA foreign_key_check`, and closes in `finally`. A parent-directory `OSError` or any SQLite DDL/self-check error is raised as `DatabaseUnavailable() from None`. Business methods never call `executescript()`.
 
-`SqliteCaseStoreSession.healthcheck()` must prove the initialized schema is usable, not merely execute `SELECT 1`: it runs `SELECT case_id FROM cases LIMIT 0`, then `PRAGMA foreign_key_check`; a missing table, sqlite error, or any foreign-key-check row maps to fixed `DatabaseUnavailable`.
+`SqliteCaseStoreSession.healthcheck()` must prove the initialized schema is usable, not merely execute `SELECT 1`: it requires every member of `REQUIRED_TABLES` to exist, runs `SELECT case_id FROM cases LIMIT 0`, then `PRAGMA foreign_key_check`; a missing required table, sqlite error, or any foreign-key-check row maps to fixed `DatabaseUnavailable() from None`. Extra non-business tables do not make an otherwise healthy initialized database fail.
+
+Task 7 implements and tests the Factory lifetime now, using the same shape retained by Tasks 8 and 9:
+
+```python
+class SqliteCaseStoreSession:
+    def __init__(self, connection: sqlite3.Connection) -> None:
+        self._connection = connection
+
+    def healthcheck(self) -> None:
+        ...
+
+
+class SqliteCaseStoreFactory:
+    def __init__(self, path: Path) -> None:
+        self._path = path
+
+    @contextmanager
+    def __call__(self) -> Iterator[SqliteCaseStoreSession]:
+        connection = connect_sqlite(self._path)
+        try:
+            yield SqliteCaseStoreSession(connection)
+        finally:
+            connection.close()
+```
 
 - [ ] **Step 4: Run schema, rollback, and PRAGMA tests**
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest tests/repository/test_sqlite_schema.py tests/repository/test_sqlite_connection.py -q
-.\.venv\Scripts\python.exe -m ruff check src/oceanpilot/adapters/persistence tests/repository
+.\.venv\Scripts\python.exe -m pytest tests/domain -q
+.\.venv\Scripts\python.exe -m pytest -q
+.\.venv\Scripts\python.exe -m ruff check src tests
+.\.venv\Scripts\python.exe -m compileall -q src tests
+rg -n ":memory:" src/oceanpilot/adapters/persistence tests/repository
+rg -ni "pragma\s+journal_mode\s*=\s*wal" src/oceanpilot/adapters/persistence
+git diff --check
 ```
 
-Expected: all pass; every test DB is a real file; no WAL artifacts exist.
+Expected: focused, domain, full, Ruff, compileall, and diff checks pass. Both `rg` commands return exit `1` with no output. Every test DB is a real file; a live fresh connection reports `delete`; pre-seeded WAL is safely rejected; no production code enables WAL.
 
 - [ ] **Step 5: Commit the persistence foundation**
 
 ```powershell
-git add -- src/oceanpilot/adapters/persistence tests/repository/test_sqlite_schema.py tests/repository/test_sqlite_connection.py
+git add -- `
+  src/oceanpilot/adapters/persistence/schema.py `
+  src/oceanpilot/adapters/persistence/sqlite.py `
+  tests/repository/test_sqlite_schema.py `
+  tests/repository/test_sqlite_connection.py `
+  tests/conftest.py
 git diff --cached --check
+git diff --cached --name-status
 git commit -m "feat: add SQLite schema and transaction primitive"
+git show --check --oneline HEAD
+git status --short
 ```
+
+Before committing, compare the cached name-status against the exact five paths above and require no unstaged tracked diff. After committing, require the parent to equal the exact Task 7 handoff SHA recorded in `.superpowers/sdd/task-7-brief.md`, the exact subject above, the exact five-file scope, `git show --check` success, and clean status.
 
 ---
 
@@ -1823,7 +1898,7 @@ git commit -m "feat: add SQLite schema and transaction primitive"
 - Create: `tests/repository/test_evidence_concurrency.py`
 
 **Interfaces:**
-- Produces: `SqliteCaseStoreFactory`, `create_case_atomic`, `get_case_view`, `load_case_snapshot`, `append_evidence_atomic`.
+- Produces: completes the existing Task 7 `SqliteCaseStoreSession` with `create_case_atomic`, `get_case_view`, `load_case_snapshot`, and `append_evidence_atomic`; the tested `SqliteCaseStoreFactory` lifetime remains unchanged.
 - Consumes: Task 7 connection/transaction and Task 5 atomic ports.
 
 - [ ] **Step 1: Write failing create, replay, conflict, reopen, rollback, and concurrent-CAS tests**
@@ -1864,9 +1939,9 @@ END;
 
 Expected: failures for missing Store methods.
 
-- [ ] **Step 3: Implement a per-command session with no generic save**
+- [ ] **Step 3: Add atomic business methods to the existing per-command session with no generic save**
 
-Factory lifetime:
+Factory lifetime was implemented and tested in Task 7 and remains exactly:
 
 ```python
 class SqliteCaseStoreFactory:

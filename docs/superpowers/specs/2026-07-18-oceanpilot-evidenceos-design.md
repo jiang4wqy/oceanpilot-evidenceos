@@ -680,7 +680,7 @@ audit_events
 - `hypothesis_evidence_refs` 使用复合外键同时引用假设和 `(case_id, evidence_id)`，数据库层禁止跨案件引用；
 - `confidence_score CHECK (confidence_score >= 0 AND confidence_score <= 1)`；
 - `synthetic CHECK (synthetic = 1)`（MVP）；
-- 所有外键非空且启用 `PRAGMA foreign_keys=ON`；
+- 除 `cases.current_diagnosis_id` 在未诊断或重开时允许 `NULL` 外，其余构成外键的业务引用列均为 `NOT NULL`；所有连接启用并验证 `PRAGMA foreign_keys=ON`；
 - 不实现 Evidence 的 UPDATE/DELETE 仓储方法。
 
 本地设置：
