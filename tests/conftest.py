@@ -1,4 +1,5 @@
 from datetime import datetime
+from pathlib import Path
 
 import pytest
 
@@ -11,6 +12,11 @@ from oceanpilot.domain.enums import (
 )
 from oceanpilot.domain.evidence_policy import create_evidence_item
 from oceanpilot.domain.models import EvidenceCreate, EvidenceItem, EvidenceOrigin
+
+
+@pytest.fixture
+def db_path(tmp_path: Path) -> Path:
+    return tmp_path / "oceanpilot.db"
 
 
 @pytest.fixture
