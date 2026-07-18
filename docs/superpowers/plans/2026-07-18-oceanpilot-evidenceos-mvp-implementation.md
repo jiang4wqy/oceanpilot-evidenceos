@@ -1262,7 +1262,7 @@ git commit -m "feat: add deterministic incident diagnosis rules"
 
 **Interfaces:**
 - Produces: the exact `CaseStoreSession` and `CaseStoreFactory` protocols plus frozen commands/errors used by all later tasks.
-- Consumes: Task 2–4 domain types and imports the one `DiagnosisEngine` definition from `domain/diagnosis.py`; `application/ports.py` must not define, alias, or re-export another engine protocol.
+- Consumes: Task 2–4 domain value types only. Task 5 production modules neither import nor re-export `DiagnosisEngine`; its contract test imports the sole protocol directly from `domain/diagnosis.py`, and Task 11 `CaseService` must do the same. `application/ports.py` must not define, alias, import, or re-export another engine protocol.
 
 - [ ] **Step 1: Write failing signature and import-boundary tests**
 
@@ -1320,7 +1320,20 @@ class DiagnoseCaseCommand(FrozenDomainModel):
     trace_id: UUID4Str
 ```
 
-Stable application errors are separate classes with fixed safe messages: `CaseNotFound`, `CaseTypeNotEnabled`, `CaseNotReady`, `EvidenceConflict`, `ConcurrentCaseWrite`, `DiagnosisInputStale`, `DatabaseUnavailable`, and `PersistenceInvariantViolation`. They never wrap raw SQL or input values in `str(error)`.
+Stable application errors are separate classes with these exact fixed safe messages:
+
+| Error | Safe message |
+|---|---|
+| `CaseNotFound` | `case was not found` |
+| `CaseTypeNotEnabled` | `case type is not enabled` |
+| `CaseNotReady` | `case is not ready for diagnosis` |
+| `EvidenceConflict` | `evidence id conflicts with existing content` |
+| `ConcurrentCaseWrite` | `case changed during write` |
+| `DiagnosisInputStale` | `diagnosis input is stale` |
+| `DatabaseUnavailable` | `database is unavailable` |
+| `PersistenceInvariantViolation` | `persistence invariant was violated` |
+
+`ApplicationError` owns a no-argument constructor and a class-level message. Its `__str__()` returns `type(self).message`, never `args`, instance attributes, raw SQL, exception chaining, or input values. The seven ordinary subclasses add no constructor and therefore reject every positional or keyword payload. Tests pass a sentinel to each constructor and require `TypeError`; after valid construction they mutate `error.args` and shadow `error.message` on the instance, yet `str(error)` must remain the exact class-owned safe message. `CaseNotReady` is the sole structured exception and accepts only the keyword-only whitelist below; its fixed `__str__()` follows the same rule.
 
 `CaseNotReady` has the frozen constructor contract:
 
@@ -1539,12 +1552,12 @@ def connect_sqlite(path: Path) -> sqlite3.Connection:
         enabled = connection.execute("PRAGMA foreign_keys").fetchone()[0]
         if enabled != 1:
             connection.close()
-            raise DatabaseUnavailable("database is unavailable")
+            raise DatabaseUnavailable()
         return connection
     except sqlite3.Error:
         if connection is not None:
             connection.close()
-        raise DatabaseUnavailable("database is unavailable") from None
+        raise DatabaseUnavailable() from None
 ```
 
 The fixed message is identical for open, permission, corruption, and PRAGMA failures; no raw sqlite message is chained or logged.
@@ -1970,7 +1983,7 @@ new evidence recomputes ActiveEvidenceView and Readiness before atomic append
 adding integration.type=PLUGIN to a ready DIAGNOSED/HUMAN_REVIEW snapshot yields NEED_INFO, supersedes the snapshot, clears the current pointer, and emits DIAGNOSIS_SUPERSEDED plus the actual STATE_TRANSITIONED
 ConcurrentCaseWrite reloads and recomputes within the same Store session, at most three attempts
 same evidence replay preserves revisions and audit count
-diagnose NEED_INFO raises CaseNotReady(case_id, lexical missing_fields, current case_revision) before engine evaluation; derived symptom.signal is preserved
+diagnose NEED_INFO raises CaseNotReady(case_id=case_id, missing_fields=lexical_missing_fields, current_revision=current_case_revision) before engine evaluation; derived symptom.signal is preserved
 existing diagnosis unique key replays before engine evaluation
 new diagnosis evaluates outside Store transaction and materializes stable UUID/time fields
 DiagnosisInputStale is returned, not silently recalculated from newer evidence

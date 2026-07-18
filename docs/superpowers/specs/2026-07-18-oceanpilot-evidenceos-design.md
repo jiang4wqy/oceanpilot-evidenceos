@@ -124,17 +124,19 @@ flowchart LR
 flowchart LR
     Client["API / 未来飞书 Agent"] --> API["FastAPI HTTP Adapter"]
     API --> Service["CaseService 应用编排"]
+    Synthetic["MVP 合成只读适配器"] --> Ingress["AddEvidenceCommand\n内部写入入口"]
+    Ingress --> Service
     Service --> Domain["案件聚合、证据策略、状态机"]
     Service --> Diagnosis["DiagnosisEngine Port"]
-    Service --> Source["EvidenceSource Port"]
-    Service --> Repo["CaseRepository Port"]
+    Service --> Store["CaseStore Port"]
     Diagnosis --> Rules["MVP 确定性规则引擎"]
-    Source --> Synthetic["MVP 合成只读适配器"]
-    Repo --> SQLite["SQLite 规范化存储"]
+    Store --> SQLite["SQLite 规范化存储"]
     Service --> Output["RoutingDecision + TicketDraft"]
     FutureAI["未来飞书 AI"] -.替换.-> Rules
     FutureMCP["未来只读 MCP"] -.替换.-> Synthetic
 ```
+
+`EvidenceSource` 不是应用层 Port。MVP 合成适配器与未来只读 MCP 都在外层把来源数据映射为冻结的 `AddEvidenceCommand`，再经同一内部入口调用 `CaseService`；它们不能绕过应用服务直接写 Store，也不能把演示场景类型泄漏到内层。
 
 ### 4.3 分层约束
 
@@ -321,7 +323,7 @@ observed_at
 source_ref
 ```
 
-HTTP 来源由服务端固定为 `source_type=MERCHANT`、`source_reliability=USER_REPORTED`、`synthetic=true`；客户端不能自称 `SYSTEM_OF_RECORD`。`collected_at`、`content_hash` 和 Schema 版本也由服务端生成。内部合成适配器通过独立应用端口写入 `SYNTHETIC_ADAPTER/SYNTHETIC_TEST`；未来只有经过认证和授权的内部适配器才能声明 `SYSTEM_OF_RECORD`。
+HTTP 来源由服务端固定为 `source_type=MERCHANT`、`source_reliability=USER_REPORTED`、`synthetic=true`；客户端不能自称 `SYSTEM_OF_RECORD`。`collected_at`、`content_hash` 和 Schema 版本也由服务端生成。内部合成适配器构造来源固定为 `SYNTHETIC_ADAPTER/SYNTHETIC_TEST` 的冻结 `AddEvidenceCommand`，并经 `CaseService` 的同一内部入口写入；未来只有经过认证和授权的内部适配器才能声明 `SYSTEM_OF_RECORD`。
 
 `transaction.occurred_at.typed_value` 是交易发生时间的唯一业务事实槽位；EvidenceItem 元数据的 `observed_at` 只描述该条观测在来源侧的时间，不能替代交易发生时间。
 
@@ -620,7 +622,7 @@ POST /api/v1/cases/{case_id}/diagnose
 
 所有 4xx/5xx 使用 RFC 9457 `application/problem+json`：
 
-领域异常 `CaseNotReady` 固定携带只读的 `case_id: UUID4Str`、`missing_fields: tuple[str, ...]` 与 `current_revision: Revision`。`missing_fields` 使用字符串是因为其中可能包含派生槽位 `symptom.signal`，不能收窄为 `EvidenceCode`。构造时复制为 tuple，`str(error)` 是不回显字段或输入值的固定安全文本；服务与 API 只能将这三个白名单字段序列化为下方扩展成员。共享 `ProblemDetails` Schema 将三者声明为可选且非 required，序列化时排除 `None`；只有 `CASE_NOT_READY` 运行时响应设置三者，其他错误全部省略。
+应用异常 `CaseNotReady` 固定携带只读的 `case_id: UUID4Str`、`missing_fields: tuple[str, ...]` 与 `current_revision: Revision`。`missing_fields` 使用字符串是因为其中可能包含派生槽位 `symptom.signal`，不能收窄为 `EvidenceCode`。构造时复制为 tuple，`str(error)` 是不回显字段或输入值的固定安全文本；服务与 API 只能将这三个白名单字段序列化为下方扩展成员。共享 `ProblemDetails` Schema 将三者声明为可选且非 required，序列化时排除 `None`；只有 `CASE_NOT_READY` 运行时响应设置三者，其他错误全部省略。
 
 ```json
 {
@@ -654,7 +656,7 @@ INTERNAL_ERROR                500
 DATABASE_UNAVAILABLE          503
 ```
 
-FastAPI 默认校验错误处理必须被替换：响应只能包含安全错误码和字段路径，不得返回 Pydantic 错误对象中的原始 `input`。应用必须同时注册 `RequestValidationError`、领域异常、HTTP 异常（含 404/405）和未预期异常 500 的全局处理器，保证所有 4xx/5xx 都返回安全的 Problem Details；禁止直接序列化原始 `exc.errors()` 或异常文本。
+FastAPI 默认校验错误处理必须被替换：响应只能包含安全错误码和字段路径，不得返回 Pydantic 错误对象中的原始 `input`。应用必须同时注册 `RequestValidationError`、应用异常、领域异常、HTTP 异常（含 404/405）和未预期异常 500 的全局处理器，保证所有 4xx/5xx 都返回安全的 Problem Details；禁止直接序列化原始 `exc.errors()` 或异常文本。
 
 ## 8. 持久化与事务
 
