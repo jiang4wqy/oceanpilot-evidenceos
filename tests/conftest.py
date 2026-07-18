@@ -9,7 +9,8 @@ from oceanpilot.domain.enums import (
     SourceReliability,
     SourceType,
 )
-from oceanpilot.domain.models import EvidenceItem
+from oceanpilot.domain.evidence_policy import create_evidence_item
+from oceanpilot.domain.models import EvidenceCreate, EvidenceItem, EvidenceOrigin
 
 
 @pytest.fixture
@@ -31,3 +32,38 @@ def valid_evidence_item() -> EvidenceItem:
         synthetic=True,
         content_hash="0" * 64,
     )
+
+
+@pytest.fixture
+def evidence_factory():
+    def make(
+        *,
+        code: str = "context.environment",
+        value: str | bool | datetime = "PROD",
+        evidence_id: str = "00000000-0000-4000-8000-000000000011",
+        reliability: SourceReliability = SourceReliability.SYNTHETIC_TEST,
+        availability: EvidenceAvailability = EvidenceAvailability.AVAILABLE,
+    ) -> EvidenceItem:
+        request = EvidenceCreate(
+            evidence_id=evidence_id,
+            evidence_code=EvidenceCode(code),
+            availability=availability,
+            typed_value=(
+                value if availability is EvidenceAvailability.AVAILABLE else None
+            ),
+            observed_at=datetime.fromisoformat("2026-07-18T12:00:00+08:00"),
+            source_ref="synthetic:fixture",
+        )
+        origin = EvidenceOrigin(
+            source_type=SourceType.SYNTHETIC_ADAPTER,
+            source_reliability=reliability,
+            synthetic=True,
+        )
+        return create_evidence_item(
+            request,
+            case_id="00000000-0000-4000-8000-000000000010",
+            origin=origin,
+            collected_at=datetime.fromisoformat("2026-07-18T12:00:01+08:00"),
+        )
+
+    return make
