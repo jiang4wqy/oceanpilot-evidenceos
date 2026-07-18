@@ -1719,7 +1719,7 @@ def immediate_transaction(connection: sqlite3.Connection) -> Iterator[None]:
 
 ```sql
 CREATE TABLE IF NOT EXISTS cases (
-    case_id TEXT PRIMARY KEY,
+    case_id TEXT NOT NULL PRIMARY KEY,
     case_type TEXT NOT NULL CHECK (case_type = 'PAYMENT_INCIDENT'),
     status TEXT NOT NULL CHECK (status IN ('NEW','NEED_INFO','EVIDENCE_READY','DIAGNOSED','HUMAN_REVIEW')),
     schema_version TEXT NOT NULL,
