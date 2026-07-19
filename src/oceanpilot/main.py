@@ -9,6 +9,7 @@ from oceanpilot.adapters.persistence.sqlite import (
     SqliteCaseStoreFactory,
     initialize_schema,
 )
+from oceanpilot.api.cases import router as cases_router
 from oceanpilot.api.errors import register_exception_handlers
 from oceanpilot.api.health import router as health_router
 from oceanpilot.application.case_service import CaseService
@@ -38,4 +39,5 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.case_service = case_service
     register_exception_handlers(app)
     app.include_router(health_router)
+    app.include_router(cases_router)
     return app
