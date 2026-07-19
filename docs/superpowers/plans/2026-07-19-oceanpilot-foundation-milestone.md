@@ -751,11 +751,19 @@ Expected: first two searches find all required labels; the prohibited-claim sear
 .\.venv\Scripts\python.exe -m ruff check src tests
 .\.venv\Scripts\python.exe -m ruff format --check src tests
 .\.venv\Scripts\python.exe -m compileall -q src tests
+git diff --name-only 6ebcaa22a1d21a7073dc228a770c37e5db25460a -- "*.py"
 git diff --check
 git status --short
 ```
 
-Expected: Python `3.12.x`; all tests including the original 641 pass; Ruff/format/compileall/diff exit `0`; before staging, only the four Task 4 documentation/demo files are untracked.
+Expected: Python `3.12.x`; all tests including the original 641 pass; Ruff check,
+compileall, and diff check exit `0`; before staging, only the four Task 4
+documentation/demo files are untracked. The repository-wide Ruff format audit is
+still executed, but its known exit `1` on 19 previously committed Python files is
+recorded as non-blocking baseline debt for this documentation-only task. The
+Python diff command must print nothing, proving Task 4 adds no formatting drift or
+Python changes. Do not format those 19 files inside Task 4; that would expand the
+approved four-file scope and obscure the functional milestone diff.
 
 - [ ] **Step 6: Commit exact Task 4 scope and stop**
 
