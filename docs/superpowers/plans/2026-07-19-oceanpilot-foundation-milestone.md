@@ -452,6 +452,8 @@ git status --short
 
 Create `tests/foundation/test_foundation_api.py` using real `tmp_path` SQLite and `with TestClient(app)`:
 
+Define test-local helpers before the tests: `post_case(client, **changes)` merges changes into the canonical case payload shown below; `post_evidence(client, case_id, **changes)` merges changes into the canonical evidence payload shown below; `post_environment(client, case_id, value)` calls `post_evidence(..., typed_value=value)` with the stable evidence ID; and `post_sensitive_legal_field(client, field, sentinel)` creates a case first when necessary, then places the sentinel only in the named legal `summary`, `source_ref`, or string `typed_value` field. Helpers must send real HTTP requests and must not call production DTOs/services directly.
+
 ```python
 def test_case_and_evidence_happy_path(client):
     created = client.post("/api/v1/cases", json={
@@ -461,6 +463,8 @@ def test_case_and_evidence_happy_path(client):
         "synthetic": True,
     })
     assert created.status_code == 201
+    assert created.headers["Location"].startswith("/api/v1/cases/")
+    created_view = CaseView.model_validate_json(created.content)
     case_id = created.json()["case"]["case_id"]
     evidence = client.post(f"/api/v1/cases/{case_id}/evidence", json={
         "evidence_id": "00000000-0000-4000-8000-000000000011",
@@ -471,20 +475,31 @@ def test_case_and_evidence_happy_path(client):
         "source_ref": "synthetic:demo",
     })
     assert evidence.status_code == 201
+    evidence_view = CaseView.model_validate_json(evidence.content)
+    assert evidence_view.evidence[0].source_type is SourceType.MERCHANT
+    assert evidence_view.evidence[0].source_reliability is SourceReliability.USER_REPORTED
+    assert evidence_view.evidence[0].synthetic is True
     loaded = client.get(f"/api/v1/cases/{case_id}")
     assert loaded.status_code == 200
-    assert loaded.json()["case"]["evidence_revision"] == 1
-    assert len(loaded.json()["evidence"]) == 1
+    loaded_view = CaseView.model_validate_json(loaded.content)
+    assert created_view.case.case_revision == 1
+    assert loaded_view.case.evidence_revision == 1
+    assert len(loaded_view.evidence) == 1
 
 
 def test_evidence_replay_is_200_and_conflict_is_409(client, created_case):
     first = post_environment(client, created_case, "PROD")
+    first_view = CaseView.model_validate_json(first.content)
     replay = post_environment(client, created_case, "PROD")
+    replay_view = CaseView.model_validate_json(replay.content)
     conflict = post_environment(client, created_case, "SANDBOX")
     assert first.status_code == 201
     assert replay.status_code == 200
+    assert replay_view == first_view
     assert conflict.status_code == 409
     assert conflict.json()["code"] == "EVIDENCE_CONFLICT"
+    after_conflict = client.get(f"/api/v1/cases/{created_case}")
+    assert CaseView.model_validate_json(after_conflict.content) == first_view
 
 
 def test_diagnosis_is_explicitly_deferred(client, created_case):
@@ -497,30 +512,70 @@ def test_diagnosis_is_explicitly_deferred(client, created_case):
     }
 
 
-def test_unknown_or_sensitive_input_is_not_echoed(client):
-    sentinel = "authorization=Bearer-SECRET-SENTINEL"
-    response = client.post("/api/v1/cases", json={"unknown": sentinel})
+@pytest.mark.parametrize("synthetic", [False, "true", 1])
+def test_synthetic_must_be_exact_true(client, synthetic):
+    response = post_case(client, synthetic=synthetic)
     assert response.status_code == 422
+    assert response.json()["code"] == "INVALID_REQUEST"
+
+
+@pytest.mark.parametrize("typed_value", [1, 1.5, {"value": "PROD"}])
+def test_evidence_typed_value_is_closed_and_strict(client, created_case, typed_value):
+    response = post_evidence(client, created_case, typed_value=typed_value)
+    assert response.status_code == 422
+    assert response.json()["code"] == "INVALID_REQUEST"
+
+
+@pytest.mark.parametrize("field", ["summary", "source_ref", "typed_value"])
+def test_sensitive_value_in_legal_field_is_rejected_without_echo(client, field):
+    sentinel = "authorization=Bearer-SECRET-SENTINEL"
+    response = post_sensitive_legal_field(client, field, sentinel)
+    assert response.status_code == 422
+    assert response.json()["code"] == "SENSITIVE_DATA_REJECTED"
+    assert sentinel not in response.text
+
+
+def test_unknown_source_fields_are_rejected_without_echo(client, created_case):
+    sentinel = "SYSTEM_OF_RECORD-SENTINEL"
+    response = post_evidence(
+        client,
+        created_case,
+        source_type=sentinel,
+        source_reliability=sentinel,
+    )
+    assert response.status_code == 422
+    assert response.json()["code"] == "INVALID_REQUEST"
     assert sentinel not in response.text
 
 
 def test_openapi_has_exact_foundation_paths(app):
-    assert set(app.openapi()["paths"]) == {
+    paths = app.openapi()["paths"]
+    assert set(paths) == {
         "/health",
         "/api/v1/cases",
         "/api/v1/cases/{case_id}",
         "/api/v1/cases/{case_id}/evidence",
         "/api/v1/cases/{case_id}/diagnose",
     }
+    assert {path: set(item) for path, item in paths.items()} == {
+        "/health": {"get"},
+        "/api/v1/cases": {"post"},
+        "/api/v1/cases/{case_id}": {"get"},
+        "/api/v1/cases/{case_id}/evidence": {"post"},
+        "/api/v1/cases/{case_id}/diagnose": {"post"},
+    }
 ```
+
+Add parameterized path/DTO cases for malformed and non-v4 case/evidence UUIDs. Add `_parse_rfc3339` tests that accept `2026-07-18T04:00:00Z` and `2026-07-18T12:00:00+08:00`, while rejecting naive timestamps, space-separated timestamps, basic ISO forms, ISO week dates, missing seconds, numeric Unix timestamps, offsets without a colon, and offsets with seconds.
 
 - [ ] **Step 2: Run RED and verify routes are absent**
 
 ```powershell
+.\.venv\Scripts\python.exe -m pytest tests/foundation/test_app_foundation.py -q --basetemp .superpowers/sdd/pytest-foundation-task3-baseline
 .\.venv\Scripts\python.exe -m pytest tests/foundation/test_foundation_api.py -q --basetemp .superpowers/sdd/pytest-foundation-task3-red
 ```
 
-Expected: approved case requests return `404`; health continues to pass.
+Expected: the first command exits `0`. The new Task 3 test module must not import the not-yet-existing `schemas.py` or `cases.py`; its first behavioral RED is create returning `404` instead of `201`, and OpenAPI contains only `/health`. The second command exits non-zero for those missing routes, not for collection/import errors.
 
 - [ ] **Step 3: Implement strict DTOs**
 
@@ -545,7 +600,9 @@ class EvidenceCreateRequest(FoundationRequest):
     source_ref: Annotated[StrictStr, Field(min_length=1, max_length=128)]
 ```
 
-`CreateCaseRequest.to_command(request_id: UUID4Str, trace_id: UUID4Str) -> CreateCaseCommand` accepts server-created request/trace UUIDs. `EvidenceCreateRequest.to_command(case_id: UUID4Str, request_id: UUID4Str, trace_id: UUID4Str) -> AddEvidenceCommand` parses `observed_at` only with `datetime.fromisoformat(value.replace("Z", "+00:00"))` and requires timezone; when `evidence_code` is `TRANSACTION_OCCURRED_AT`, it parses the string `typed_value` the same way. It constructs the server-owned origin exactly as `MERCHANT`, `USER_REPORTED`, `synthetic=True`. Any parse failure raises `ValueError` and is mapped to the fixed 422 response.
+Add one private `_parse_rfc3339(value: str) -> datetime` in `schemas.py`. It first requires a full regular-expression match for exact `YYYY-MM-DDTHH:MM:SS[.fraction](Z|±HH:MM)`, then calls `datetime.fromisoformat(value.replace("Z", "+00:00"))`, and finally requires an aware result. Do not rely on `fromisoformat()` alone because it accepts non-RFC3339 ISO variants.
+
+`CreateCaseRequest.to_command(request_id: UUID4Str, trace_id: UUID4Str) -> CreateCaseCommand` accepts server-created request/trace UUIDs. `EvidenceCreateRequest.to_command(case_id: UUID4Str, request_id: UUID4Str, trace_id: UUID4Str) -> AddEvidenceCommand` parses `observed_at` only through `_parse_rfc3339()`; when `evidence_code` is `TRANSACTION_OCCURRED_AT`, it parses the string `typed_value` through the same helper. It constructs the server-owned origin exactly as `MERCHANT`, `USER_REPORTED`, `synthetic=True`. Any parse failure raises `ValueError` and is mapped to the fixed 422 response.
 
 - [ ] **Step 4: Implement thin routes and register the router**
 
