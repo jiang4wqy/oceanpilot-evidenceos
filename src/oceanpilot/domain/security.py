@@ -36,6 +36,24 @@ _SAFE_METADATA_SUFFIXES = frozenset({"count", "length", "present", "status", "ty
 _CARD_CANDIDATE_PATTERN = re.compile(
     r"(?<!\d)(?<!\d[ \t\u00a0-])(?:\d[ \t\u00a0-]?){12,18}\d(?!\d)(?![ \t\u00a0-]\d)"
 )
+_UUID_IDENTIFIER_FIELDS = frozenset(
+    {
+        "case_id",
+        "evidence_id",
+        "diagnosis_id",
+        "current_diagnosis_id",
+        "hypothesis_id",
+        "event_id",
+        "request_id",
+        "trace_id",
+        "correlation_id",
+    }
+)
+_UUID4_IDENTIFIER_PATTERN = re.compile(
+    r"[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}",
+    re.IGNORECASE,
+)
+_CONTENT_HASH_PATTERN = re.compile(r"[0-9a-f]{64}")
 
 
 def _passes_luhn(candidate: str) -> bool:
@@ -73,6 +91,17 @@ def _is_sensitive_key(value: str) -> bool:
     )
 
 
+def _is_trusted_derived_value(key: object, value: object) -> bool:
+    if not isinstance(key, str) or not isinstance(value, str):
+        return False
+    return (
+        key in _UUID_IDENTIFIER_FIELDS
+        and _UUID4_IDENTIFIER_PATTERN.fullmatch(value) is not None
+    ) or (
+        key == "content_hash" and _CONTENT_HASH_PATTERN.fullmatch(value) is not None
+    )
+
+
 def _contains_sensitive_value(value: object, visited: set[int]) -> bool:
     if isinstance(value, str):
         return _contains_sensitive_data(value)
@@ -88,9 +117,11 @@ def _contains_sensitive_value(value: object, visited: set[int]) -> bool:
         for key, item in value.items():
             if isinstance(key, str) and _is_sensitive_key(key):
                 return True
-            if _contains_sensitive_value(key, visited) or _contains_sensitive_value(
-                item, visited
-            ):
+            if _contains_sensitive_value(key, visited):
+                return True
+            if _is_trusted_derived_value(key, item):
+                continue
+            if _contains_sensitive_value(item, visited):
                 return True
         return False
 

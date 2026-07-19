@@ -6,6 +6,70 @@ from pydantic import BaseModel
 
 from oceanpilot.domain.security import SensitiveDataRejected, assert_no_sensitive_data
 
+LUHN_POSITIVE_UUID4 = "86d04718-3389-4697-b1d0-2994f69ecf10"
+LUHN_POSITIVE_CONTENT_HASH = (
+    "34062e342d32203ba4c5ba7b43efc412512995804412fc2a1893712cef76cf54"
+)
+TRUSTED_UUID_IDENTIFIER_FIELDS = (
+    "case_id",
+    "evidence_id",
+    "diagnosis_id",
+    "current_diagnosis_id",
+    "hypothesis_id",
+    "event_id",
+    "request_id",
+    "trace_id",
+    "correlation_id",
+)
+
+
+@pytest.mark.parametrize("field", TRUSTED_UUID_IDENTIFIER_FIELDS)
+@pytest.mark.parametrize("value", [LUHN_POSITIVE_UUID4, LUHN_POSITIVE_UUID4.upper()])
+def test_typed_uuid4_identifiers_are_not_treated_as_card_numbers(
+    field: str,
+    value: str,
+) -> None:
+    assert assert_no_sensitive_data({field: value}) is None
+
+
+def test_luhn_positive_uuid4_outside_identifier_field_is_rejected() -> None:
+    with pytest.raises(SensitiveDataRejected):
+        assert_no_sensitive_data({"summary": LUHN_POSITIVE_UUID4})
+
+
+@pytest.mark.parametrize("field", ["request_id", "case_id", "evidence_id"])
+def test_card_number_in_identifier_field_is_still_rejected(field: str) -> None:
+    with pytest.raises(SensitiveDataRejected):
+        assert_no_sensitive_data({field: "4242424242424242"})
+
+
+def test_uuid4_embedded_in_arbitrary_identifier_text_is_still_rejected() -> None:
+    with pytest.raises(SensitiveDataRejected):
+        assert_no_sensitive_data({"request_id": f"prefix:{LUHN_POSITIVE_UUID4}"})
+
+
+def test_sensitive_value_in_other_field_is_still_rejected() -> None:
+    with pytest.raises(SensitiveDataRejected):
+        assert_no_sensitive_data({"summary": "authorization=Bearer-SECRET-SENTINEL"})
+
+
+def test_typed_content_hash_is_not_treated_as_card_number() -> None:
+    assert assert_no_sensitive_data({"content_hash": LUHN_POSITIVE_CONTENT_HASH}) is None
+
+
+def test_luhn_positive_content_hash_outside_derived_field_is_rejected() -> None:
+    with pytest.raises(SensitiveDataRejected):
+        assert_no_sensitive_data({"summary": LUHN_POSITIVE_CONTENT_HASH})
+
+
+@pytest.mark.parametrize(
+    "value",
+    ["4242424242424242", LUHN_POSITIVE_CONTENT_HASH.upper()],
+)
+def test_noncanonical_content_hash_value_is_still_rejected(value: str) -> None:
+    with pytest.raises(SensitiveDataRejected):
+        assert_no_sensitive_data({"content_hash": value})
+
 
 @pytest.mark.parametrize("sentinel", [
     "Bearer secret-demo-token",
