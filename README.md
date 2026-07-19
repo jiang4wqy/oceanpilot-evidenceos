@@ -31,6 +31,26 @@ OceanPilot EvidenceOS 是一个面向跨境支付异常协作的独立参赛原�
 
 公开 HTTP 输入必须使用规范 UUIDv4，`synthetic` 必须是布尔值 `true`。HTTP 层固定证据来源为 `MERCHANT / USER_REPORTED / synthetic=true`，调用方不能注入来源可信度、状态、revision 或路由结论。
 
+## 证据先行闭环
+
+![证据先行：先补齐事实，再给出判断](docs/assets/submission/fig-01-evidence-loop.png)
+
+OceanPilot 的核心不是增加一个信息入口，而是让 AI、确定性规则与人工共同遵守同一套案件证据口径：资料不足先定位缺口，达到门槛后才输出带引用的候选原因，高风险动作始终由人工确认。
+
+> 图例边界：绿色实线为当前基础原型，海洋蓝虚线为离线规则资产，浅灰虚线与琥珀色节点为完整方案的规划路径。
+
+## 一个合成支付异常如何进入协作案件
+
+![一个支付异常如何变成可追溯的协作案件](docs/assets/submission/fig-03-case-walkthrough.png)
+
+> 合成支付异常的完整方案交互示意；绿色为当前基础原型，灰色为规划能力。飞书 Agent、真实数据适配、诊断与 Workflow 尚未接入，因此本图不代表当前端到端运行结果。
+
+## 当前原型与完整方案
+
+![当前可验证原型与入围后完整方案的分层架构](docs/assets/submission/fig-02-layered-architecture.png)
+
+> **事实边界：** 诊断请求进入 API 后固定返回 `HTTP 501 FEATURE_DEFERRED`；离线规则当前未接入主链。图中左侧深蓝折线仅标示停止边界，不表示 501 反向调用 FastAPI。右侧灰色模块均为入围后规划接入。
+
 ## Architecture
 
 当前运行链路保持单向依赖：
