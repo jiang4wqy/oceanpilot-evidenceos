@@ -245,12 +245,12 @@ Expected cached paths: exactly the two files above; post-commit tracked status i
 
 **Files:**
 - Create: `src/oceanpilot/config.py`
-- Create: `src/oceanpilot/api/__init__.py`
 - Create: `src/oceanpilot/api/errors.py`
 - Create: `src/oceanpilot/api/dependencies.py`
 - Create: `src/oceanpilot/api/health.py`
 - Create: `src/oceanpilot/main.py`
 - Create: `tests/foundation/test_app_foundation.py`
+- Existing and unchanged: `src/oceanpilot/api/__init__.py`
 
 **Interfaces:**
 - Consumes: Task 1 `CaseService` and existing SQLite factory/schema initializer.
@@ -281,6 +281,17 @@ def test_unknown_path_uses_fixed_safe_error(tmp_path):
     }
 
 
+def test_wrong_health_method_uses_fixed_safe_error(tmp_path):
+    with TestClient(create_app(Settings(db_path=tmp_path / "foundation.db"))) as client:
+        response = client.post("/health")
+    assert response.status_code == 405
+    assert response.json() == {
+        "status": 405,
+        "code": "HTTP_ERROR",
+        "detail": "request could not be completed",
+    }
+
+
 def test_unexpected_exception_does_not_echo_sentinel(tmp_path):
     app = create_app(Settings(db_path=tmp_path / "foundation.db"))
     app.get("/boom")(lambda: (_ for _ in ()).throw(RuntimeError("SECRET-SENTINEL")))
@@ -288,10 +299,27 @@ def test_unexpected_exception_does_not_echo_sentinel(tmp_path):
         response = client.get("/boom")
     assert response.status_code == 500
     assert "SECRET-SENTINEL" not in response.text
-    assert response.json()["code"] == "INTERNAL_ERROR"
+    assert response.json() == {
+        "status": 500,
+        "code": "INTERNAL_ERROR",
+        "detail": "internal server error",
+    }
+
+
+def test_sensitive_error_has_priority_over_value_error(tmp_path):
+    app = create_app(Settings(db_path=tmp_path / "foundation.db"))
+    app.get("/sensitive")(lambda: (_ for _ in ()).throw(SensitiveDataRejected()))
+    with TestClient(app, raise_server_exceptions=False) as client:
+        response = client.get("/sensitive")
+    assert response.status_code == 422
+    assert response.json() == {
+        "status": 422,
+        "code": "SENSITIVE_DATA_REJECTED",
+        "detail": "request contains disallowed sensitive data",
+    }
 ```
 
-Also assert `POST /health` returns the fixed safe 405 body. Do not test routes from Task 3 yet.
+Do not test routes from Task 3 yet. Every lifespan test uses `with TestClient(app)`; only the two deliberate exception probes set `raise_server_exceptions=False`.
 
 - [ ] **Step 2: Run RED and verify app modules are absent**
 
@@ -299,7 +327,7 @@ Also assert `POST /health` returns the fixed safe 405 body. Do not test routes f
 .\.venv\Scripts\python.exe -m pytest tests/foundation/test_app_foundation.py -q --basetemp .superpowers/sdd/pytest-foundation-task2-red
 ```
 
-Expected: collection fails for missing `oceanpilot.config` or `oceanpilot.main`.
+Import `Settings` from `oceanpilot.config` before importing `create_app` in the test module. Expected: collection exits non-zero with exactly `ModuleNotFoundError: No module named 'oceanpilot.config'`; no test body runs. Any different failure requires diagnosis before production code.
 
 - [ ] **Step 3: Implement settings and composition root**
 
@@ -321,16 +349,31 @@ class Settings:
         return cls(db_path=Path(os.getenv("OCEANPILOT_DB_PATH", "work/oceanpilot.db")))
 ```
 
-Create `src/oceanpilot/api/dependencies.py` with `get_store_factory(request)` and `get_case_service(request)` returning the exact objects stored on `request.app.state`.
+Create `src/oceanpilot/api/dependencies.py` with explicit request annotations so FastAPI does not interpret `request` as a query parameter:
 
-Create `src/oceanpilot/api/health.py` with a synchronous `/health` route that opens one Store session, calls `healthcheck()`, closes it, and returns `{"status": "ok"}`.
+```python
+from fastapi import Request
+
+from oceanpilot.application.case_service import CaseService
+from oceanpilot.application.ports import CaseStoreFactory
+
+
+def get_store_factory(request: Request) -> CaseStoreFactory:
+    return request.app.state.store_factory
+
+
+def get_case_service(request: Request) -> CaseService:
+    return request.app.state.case_service
+```
+
+Create `src/oceanpilot/api/health.py` with a synchronous `/health` route that injects `Annotated[CaseStoreFactory, Depends(get_store_factory)]`, opens it with `with store_factory() as store:`, calls `store.healthcheck()`, closes it, and returns `{"status": "ok"}`.
 
 Create `src/oceanpilot/main.py` so `create_app(settings: Settings | None = None) -> FastAPI`:
 
 1. resolves settings without opening SQLite;
 2. constructs `store_factory = SqliteCaseStoreFactory(resolved.db_path)` and `CaseService(store_factory, clock=lambda: datetime.now(UTC), uuid_factory=lambda: str(uuid4()))`;
 3. assigns settings/factory/service to `app.state` immediately;
-4. uses only an `asynccontextmanager` lifespan to call `initialize_schema()`, open a session, call `healthcheck()`, close it, then yield;
+4. imports standalone `initialize_schema` from `oceanpilot.adapters.persistence.sqlite` and uses only an `asynccontextmanager` lifespan to call `initialize_schema(resolved.db_path)`, then `with store_factory() as store: store.healthcheck()`, then yield;
 5. registers safe handlers and the health router;
 6. contains no `@on_event`, import-time connection, or global app singleton.
 
@@ -353,7 +396,7 @@ class FeatureDeferred(Exception):
     pass
 ```
 
-Add `register_exception_handlers(app)` with fixed mappings:
+Add `register_exception_handlers(app)` with direct registrations for every named application/domain exception, `RequestValidationError`, `ValueError`, `starlette.exceptions.HTTPException`, and `Exception`. Register `SensitiveDataRejected` explicitly even though it subclasses `ValueError`; register Starlette's HTTP exception so router-generated 404/405 are covered. Fixed mappings:
 
 ```text
 CaseNotFound -> 404 CASE_NOT_FOUND / "case was not found"
@@ -368,7 +411,7 @@ Starlette HTTPException -> original status, HTTP_ERROR / "request could not be c
 all remaining Exception -> 500 INTERNAL_ERROR / "internal server error"
 ```
 
-Every handler returns only `ProblemResponse(...).model_dump()` via `JSONResponse`. All details are fixed phrases; never use `str(exc)`, `exc.errors()`, `exc.__dict__`, or request body values.
+Every handler constructs a new `ProblemResponse` from constants and returns exactly `ProblemResponse(...).model_dump()` via `JSONResponse`. Never delegate to FastAPI's default validation/HTTP handlers. All details are fixed phrases; never use `str(exc)`, `exc.errors()`, `exc.__dict__`, or request body values.
 
 - [ ] **Step 5: Run GREEN and Task 2 verification**
 
@@ -383,7 +426,7 @@ Expected: tests/Ruff/compileall exit `0`; `rg` exits `1` with no output.
 
 - [ ] **Step 6: Commit exact Task 2 scope**
 
-Stage only the six production files and `tests/foundation/test_app_foundation.py`, verify the cached name list, then:
+Stage exactly these six changed paths and no others: `src/oceanpilot/config.py`, `src/oceanpilot/api/errors.py`, `src/oceanpilot/api/dependencies.py`, `src/oceanpilot/api/health.py`, `src/oceanpilot/main.py`, and `tests/foundation/test_app_foundation.py`. Do not touch the existing `src/oceanpilot/api/__init__.py`. Verify the cached name list, then:
 
 ```powershell
 git commit -m "feat: add foundation FastAPI lifecycle"
