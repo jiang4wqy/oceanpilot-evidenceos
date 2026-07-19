@@ -65,6 +65,15 @@ HTTP / OpenAPI
 
 API 只负责严格输入映射、状态码和安全错误；readiness、状态变化和证据规范化由领域层负责；SQL、事务、revision 条件更新和审计落库由 Store 负责。诊断路由不会绕过这些边界生成临时结果。完整组件和数据流见 [docs/architecture.md](docs/architecture.md)。
 
+## 提交材料索引
+
+- [报名表 Part 1 / Part 2 可粘贴文本](docs/submission/registration-copy.md)
+- [两页开题报告补充材料（PDF）](artifacts/OceanPilot-开题报告补充材料.pdf)
+- [外部研究与事实边界](docs/submission/sources.md)
+- [当前未完成能力与后续路线](docs/roadmap/incomplete-work.md)
+
+> 公共仓库仅供比赛评审；未授予复用许可。当前原型仅使用合成数据，完整飞书协作链为入围后规划。
+
 ## Quick Start
 
 要求 Windows PowerShell 与 Python 3.12。以下命令只在 `127.0.0.1` 启动本地服务：
