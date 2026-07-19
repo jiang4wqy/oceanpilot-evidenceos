@@ -16,7 +16,6 @@ from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfgen import canvas as pdfcanvas
 from reportlab.platypus import Paragraph
 
-
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 OUTPUT_PDF = ROOT / "artifacts" / "OceanPilot-开题报告补充材料.pdf"
 FIGURE_1 = ROOT / "docs" / "assets" / "submission" / "fig-01-evidence-loop.png"
@@ -45,9 +44,7 @@ def register_fonts() -> tuple[str, str]:
 
     registered = set(pdfmetrics.getRegisteredFontNames())
     if FONT_REGULAR not in registered:
-        pdfmetrics.registerFont(
-            TTFont(FONT_REGULAR, str(FONT_REGULAR_PATH), subfontIndex=0)
-        )
+        pdfmetrics.registerFont(TTFont(FONT_REGULAR, str(FONT_REGULAR_PATH), subfontIndex=0))
     if FONT_BOLD not in registered:
         pdfmetrics.registerFont(TTFont(FONT_BOLD, str(FONT_BOLD_PATH), subfontIndex=0))
     return FONT_REGULAR, FONT_BOLD
@@ -408,9 +405,7 @@ def build_pdf(output_path: pathlib.Path = OUTPUT_PDF) -> pathlib.Path:
 
     draw_paragraph(
         pdf,
-        html.escape(
-            "绿色实线为当前基础原型，蓝色虚线为离线规则资产，灰色与琥珀色为完整方案路径。"
-        ),
+        html.escape("绿色实线为当前基础原型，蓝色虚线为离线规则资产，灰色与琥珀色为完整方案路径。"),
         margin,
         111,
         figure_1_width,
