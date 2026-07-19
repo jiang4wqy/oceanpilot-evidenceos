@@ -1898,8 +1898,8 @@ Before committing, compare the cached name-status against the exact five paths a
 - Create: `tests/repository/test_evidence_concurrency.py`
 
 **Interfaces:**
-- Produces: completes the existing Task 7 `SqliteCaseStoreSession` with `create_case_atomic`, `get_case_view`, `load_case_snapshot`, and `append_evidence_atomic`; the tested `SqliteCaseStoreFactory` lifetime remains unchanged.
-- Consumes: Task 7 connection/transaction and Task 5 atomic ports.
+- Produces: completes the existing Task 7 `SqliteCaseStoreSession` with `create_case_atomic`, `get_case_view`, `load_case_snapshot`, and `append_evidence_atomic`; the tested `SqliteCaseStoreFactory` lifetime remains unchanged. Task 8 also owns the private deterministic SQLite codecs, `_load_case_graph()`, and `_load_diagnosis_snapshot_by_id()` needed to return a complete `current_diagnosis`; Task 9 reuses them and adds only the public unique-key diagnosis query plus diagnosis writes.
+- Consumes: Task 7 connection/transaction, Task 5 atomic ports, and the existing Task 3 evidence folding/readiness/canonicalization functions. Task 8 must not add `find_diagnosis`, `commit_diagnosis_atomic`, or any diagnosis write.
 
 - [ ] **Step 1: Write failing create, replay, conflict, reopen, rollback, and concurrent-CAS tests**
 
@@ -1907,19 +1907,35 @@ Required tests:
 
 ```text
 create writes case + readiness + audit in one transaction
+create requires PAYMENT_INCIDENT, revisions 1/0, readiness equal to the empty evidence view, status_after_creation(readiness), current_diagnosis_id=None, and created_at=updated_at
 create rejects an audit with another case_id, wrong post-revision, wrong status, or event type and writes zero rows
-case/evidence/audit round-trip converts SQLite synthetic INTEGER 1 to Python True before strict domain validation
-decode_sqlite_bool rejects 2, "1", null, and any non-exact INTEGER 0/1 as PersistenceInvariantViolation
-same evidence_id + same content_hash returns REPLAY with no revision/audit increase
-same evidence_id + different content_hash raises EvidenceConflict
-new evidence increments case_revision and evidence_revision exactly once
+duplicate case_id is never a create replay: it raises safe PersistenceInvariantViolation and preserves the original case/audit rows
+case/evidence/current-diagnosis round-trip through public reads performs strict domain validation and deterministically orders evidence/hypotheses/refs
+audit write encoding is verified by raw SQL: synthetic has SQLite typeof integer and value 1; sanitized_metadata_json independently decodes equal to the input; no audit read API or test-only decoder is added
+public multi-table reads use one short deferred read transaction and cannot return a case/evidence/diagnosis mixed-version graph
+decode_sqlite_bool rejects 2, "1", null, True/False, 1.0, and every non-exact INTEGER 0/1 as PersistenceInvariantViolation
+RFC3339 datetimes, enums, DATETIME typed_value_json, JSON booleans, and stable JSON objects round-trip; malformed JSON, an unknown enum, a naive/invalid datetime, or an unexpected row shape raises safe PersistenceInvariantViolation
+incoming and stored EvidenceItem values are independently re-canonicalized with create_evidence_item before their hashes may drive replay/conflict; wrong value_type, availability/value pairing, schema version, or hash is rejected with zero side effects
+persisted readiness must equal assess_readiness(build_active_evidence_view(stored evidence)); evidence_revision equals the evidence row count and aggregate status/pointer invariants hold
+raw-SQL tampering with malformed JSON, noncanonical UUID, BLOB/TEXT type mismatch, unknown enum, or sensitive persisted summary/source_ref returns no partial graph and raises fixed PersistenceInvariantViolation without a cause
+same evidence_id + same canonical content returns REPLAY even with stale expected revisions and audit_events=(); no revision, updated_at, snapshot, or audit change occurs
+same evidence_id + different canonical content raises EvidenceConflict before revision/target/audit validation, including with audit_events=()
+new evidence with audit_events=() is rejected as PersistenceInvariantViolation
+new evidence increments case_revision and evidence_revision exactly once and sets updated_at=max(current.updated_at,evidence.collected_at) without reading a Store wall clock
+stale expected revisions are detected before target/audit validation and always raise ConcurrentCaseWrite, including when the winner changed status
 new evidence after DIAGNOSED/HUMAN_REVIEW supersedes CURRENT snapshot and clears current_diagnosis_id whether recomputed target is NEED_INFO or EVIDENCE_READY; evidence REPLAY does neither
-adding integration.type=PLUGIN to a previously ready diagnosed/review case atomically persists NEED_INFO readiness, supersedes the snapshot, clears the pointer, and emits the matching transition audit
-audit trigger failure rolls back evidence, state, both revisions, and snapshot lifecycle
+reopening requires a non-null same-case CURRENT pointer whose snapshot evidence_revision matches the case; open states require a null pointer; missing/superseded/stale pointers raise PersistenceInvariantViolation with zero writes
+adding AVAILABLE integration.type=PLUGIN to a previously ready diagnosed/review case whose prior integration.type is CONFIRMED_UNAVAILABLE atomically persists NEED_INFO readiness, supersedes the snapshot, clears the pointer, and emits the matching transition audit
+adding PLUGIN after an AVAILABLE API value remains a CONFLICTING_EVIDENCE fold and must not be misrepresented as the plugin-readiness regression
+audit trigger failure during both create and append maps safely and rolls back every case/evidence/audit write, both revisions, pointer, and snapshot lifecycle
 two connections adding the same evidence persist one row
 two different evidence writes from the same expected revision yield one success and one ConcurrentCaseWrite; Store itself never guesses a recomputation
 append with target_status inconsistent with status_after_evidence(current_status, readiness) is rejected and rolls back
 append rejects an audit batch with mixed request/trace IDs, wrong case/revisions/statuses, duplicate/missing event types, or an unexpected event and rolls back
+sensitive sentinels in every caller payload are rejected before any replay/conflict branch or SQL mutation and never appear in business rows or the SQLite file; a forged same-hash replay input cannot bypass the scan
+hard-coded test-owned raw SQL/JSON oracles validate encoded columns and locally seeded rows validate hydration; writer and reader codecs are not allowed to prove each other
+SQL-injection-shaped values remain inert and every business execute/executemany first argument is literal SQL whose values use placeholders
+IntegrityError, OperationalError, invalid JSON/domain rows, and explicit business conflicts each map to their frozen safe error category without a raw message or chained sentinel
 ```
 
 Use a SQLite test trigger to force rollback instead of adding a production-only failure hook:
@@ -1934,10 +1950,12 @@ END;
 - [ ] **Step 2: Run the tests and confirm atomic methods are missing**
 
 ```powershell
+.\.venv\Scripts\python.exe -m ruff check tests/repository/test_case_store.py tests/repository/test_evidence_store.py tests/repository/test_evidence_concurrency.py
+.\.venv\Scripts\python.exe -m compileall -q tests/repository/test_case_store.py tests/repository/test_evidence_store.py tests/repository/test_evidence_concurrency.py
 .\.venv\Scripts\python.exe -m pytest tests/repository/test_case_store.py tests/repository/test_evidence_store.py tests/repository/test_evidence_concurrency.py -q
 ```
 
-Expected: failures for missing Store methods.
+Expected: Ruff and compileall pass first; pytest failures are specifically the absent Task 8 Store methods/codec surface, not syntax, fixture, import-typo, or unrelated assertion failures. Do not edit `sqlite.py` before recording this exact RED.
 
 - [ ] **Step 3: Add atomic business methods to the existing per-command session with no generic save**
 
@@ -1957,42 +1975,71 @@ class SqliteCaseStoreFactory:
             connection.close()
 ```
 
-`create_case_atomic()` has no separate readiness parameter: it persists `case.readiness` as the single authority. Before mutation it validates exactly one `CASE_CREATED` event with the same `case_id`, post revisions `1/0`, `from_status=None`, `to_status=case.status`, and a single request/trace pair; then it performs `BEGIN IMMEDIATE → sensitive scan → case insert → audit insert → COMMIT`.
+`create_case_atomic()` has no separate readiness parameter: it persists `case.readiness` as the single authority. Its first operation scans the complete caller-owned case/audit payload with `assert_no_sensitive_data()` before starting a transaction or taking any replay/error branch. It then validates exactly one `CASE_CREATED` event with the same `case_id`, post revisions `1/0`, `from_status=None`, `to_status=case.status`, and a single request/trace pair; the write sequence is `BEGIN IMMEDIATE → aggregate/audit validation → case insert → audit insert → in-transaction reload → COMMIT`.
 
-`append_evidence_atomic()` first requires `target_status == status_after_evidence(current.status, readiness)`; a mismatch raises `PersistenceInvariantViolation`. Its shared `validate_audit_batch()` requires every event to use the command case ID, one request/trace pair, post revisions `(expected_case_revision + 1, expected_evidence_revision + 1)`, and `from_status=current.status/to_status=target_status`. The allowed type set is exactly: `EVIDENCE_ADDED`; plus `DIAGNOSIS_SUPERSEDED` iff a current diagnosis is reopened; plus `STATE_TRANSITIONED` iff status changes. Each required type appears once and no other type is accepted. Validation occurs inside the transaction after loading current state but before the first mutation. It then performs this order:
+Before that transaction writes anything, creation additionally requires `case.case_type=PAYMENT_INCIDENT`, `case_revision/evidence_revision=1/0`, `current_diagnosis_id=None`, `created_at=updated_at`, and `case.readiness == assess_readiness(build_active_evidence_view(()))`; `case.status` must equal `status_after_creation(case.readiness)`. A duplicate `case_id` is not network-level idempotency and maps to `PersistenceInvariantViolation() from None`. The freshly loaded result is built inside the same transaction before commit, so a decode/invariant failure rolls the whole command back. A forced audit trigger is tested after the case insert and must leave every business table empty.
+
+Public `get_case_view()` and `load_case_snapshot()` run `_load_case_graph()` inside one short deferred read transaction, not `BEGIN IMMEDIATE`. The private read context executes `BEGIN`, yields, and keeps `COMMIT` inside `try`; on any `BaseException` it explicitly `ROLLBACK`s when `connection.in_transaction`, then re-raises. Private loads invoked from an existing write transaction reuse it and never nest `BEGIN`. Tests trace successful `BEGIN/COMMIT`, force a decode failure to prove `ROLLBACK` and `in_transaction is False`, and then reuse the same session successfully. The graph loader reads evidence with `ORDER BY evidence_id` and, when the pointer is non-null, calls the private `_load_diagnosis_snapshot_by_id()` to fully reconstruct the CURRENT snapshot, hypotheses (`ORDER BY hypothesis_id`), evidence refs (`ORDER BY evidence_id`), route, and ticket. Task 9 reuses this hydrator rather than adding a second codec. Public reads prove their transaction trace and a controlled two-connection test proves they cannot mix a pre-write case row with post-write evidence. Append reconstructs its fresh `CaseView` inside the write transaction and saves the value before `COMMIT`; it never commits and then performs a fallible graph read.
+
+Every hydrated aggregate enforces: canonical stored EvidenceItems; `evidence_revision == evidence row count`; `case_revision >= evidence_revision + 1`; persisted readiness equals a fresh fold/assessment of those rows; `NEW` is not a persisted status; `NEED_INFO/EVIDENCE_READY` have a null diagnosis pointer and the status implied by readiness; `DIAGNOSED/HUMAN_REVIEW` have ready evidence and a non-null same-case CURRENT snapshot at the same evidence revision; and snapshot `requires_human` agrees with the case status. After hydration, the complete persisted graph is recursively scanned; a sensitive stored summary/source reference is treated as persisted corruption and mapped to `PersistenceInvariantViolation`, not returned and not exposed as an input-domain error. Any violation yields no partial object or silently omitted diagnosis.
+
+`append_evidence_atomic()` first recursively scans the entire evidence/readiness/target/audit payload before any SQL query, replay, conflict, canonicalization, or generic `ValueError` mapping. It then re-creates the incoming item using `EvidenceCreate`, `EvidenceOrigin`, and `create_evidence_item()` and requires structural equality. This validates the field catalog, availability/value pairing, `value_type`, schema version, and canonical content hash before the hash is trusted. Stored evidence is subjected to the same check while hydrating. Inside `BEGIN IMMEDIATE`, replay/conflict precedence is frozen before revision, target, or audit validation: same ID plus same canonical hash returns the current graph with `REPLAY` even when expected revisions are stale and `audit_events=()`; same ID plus a different canonical hash raises `EvidenceConflict`, also without requiring audit events. Only a genuinely new evidence ID continues.
+
+For a new evidence ID, load current state and immediately compare both current revisions with the two expected revisions. A mismatch raises `ConcurrentCaseWrite` before checking target status or stale audit fields, so Task 11 can reload/recompute. Only after that check does the Store recompute readiness from `current evidence + incoming evidence` and require exact equality with the caller-provided value; it validates `target_status == status_after_evidence(current.status, readiness)` and then validates the audit batch. The Store uses recomputation only as an integrity comparison and never substitutes a newer result after a stale revision.
+
+The shared `validate_audit_batch()` requires every event to use the command case ID, one request/trace pair, post revisions `(expected_case_revision + 1, expected_evidence_revision + 1)`, and `from_status=current.status/to_status=target_status`. The allowed type set is exactly: `EVIDENCE_ADDED`; plus `DIAGNOSIS_SUPERSEDED` iff a current diagnosis is reopened; plus `STATE_TRANSITIONED` iff status changes. Each required type appears once and no other type is accepted. Validation occurs before the first mutation. It then performs this order:
 
 ```text
-1. SELECT existing evidence by (case_id, evidence_id).
-2. Same hash: return REPLAY immediately without audit/version writes.
-3. Different hash: raise EvidenceConflict and roll back.
+1. Canonicalize incoming; SELECT and canonicalize existing evidence by `(case_id, evidence_id)`; return REPLAY or raise EvidenceConflict when applicable.
+2. Load the case graph; if either revision differs from expected, raise ConcurrentCaseWrite immediately.
+3. Recompute/compare readiness; validate state, pointer lifecycle, target status, and the exact audit batch.
 4. INSERT evidence.
-5. If reopening, CURRENT diagnosis → SUPERSEDED.
-6. CAS UPDATE cases WHERE case_revision=? AND evidence_revision=?;
-   set readiness_json, target status, both revisions +1, updated_at,
-   and current_diagnosis_id=NULL when reopening.
-7. Require rowcount == 1, otherwise raise ConcurrentCaseWrite.
+5. If reopening, require a pointer to a same-case CURRENT snapshot at the case evidence revision; update exactly that `(case_id, diagnosis_id, status='CURRENT')` row to SUPERSEDED and require rowcount `1`.
+6. CAS UPDATE cases WHERE case_revision=? AND evidence_revision=?; set readiness JSON, target status, both revisions `+1`, `updated_at=max(current.updated_at,evidence.collected_at)`, and `current_diagnosis_id=NULL` when reopening.
+7. Require rowcount `1`, otherwise raise ConcurrentCaseWrite.
 8. INSERT every audit event.
-9. COMMIT and return a freshly loaded CaseView with outcome CREATED.
+9. Rebuild the complete CaseView inside the transaction, then COMMIT and return outcome CREATED.
 ```
 
-All SQL values use `?` placeholders. SQLite boolean columns are never passed directly into strict Pydantic models and never decoded with `bool(raw)`. A single `decode_sqlite_bool(name, raw)` requires `type(raw) is int` and `raw in (0, 1)`, then returns `raw == 1`; every `synthetic` field additionally requires the decoded value to be true. Any other shape raises safe `PersistenceInvariantViolation`. JSON booleans remain JSON booleans. Every `sqlite3.IntegrityError`, `OperationalError`, and unexpected row shape is converted to a stable application error without including the raw SQLite message. Repository entry points run `assert_no_sensitive_data()` on serializable domain payloads before writes.
+All SQL values use `?` placeholders. An AST test requires every new business `execute`/`executemany` first argument to be a literal SQL string and rejects interpolation/f-strings; SQL-injection-shaped evidence stays data and the six business tables remain present. Writer tests inspect hard-coded raw columns/JSON, while hydration tests seed hard-coded rows independently, so the codec cannot self-certify. The Store never calls a wall clock, UUID/random source, or SQLite `CURRENT_TIMESTAMP`. Enums are written with `.value`. Every UUID column is read as TEXT and must already equal its normalized lowercase UUIDv4 form; the hydrator must not silently accept Pydantic's normalization of uppercase or otherwise noncanonical stored IDs. Scalar datetimes are written as UTC RFC3339 and explicitly parsed to aware `datetime` before strict Python-mode model validation. `typed_value_json` is decoded by `value_type`; a DATETIME string must not fall through the `StrictStr` union branch. `CONFIRMED_UNAVAILABLE` stores SQL `NULL`, not JSON `"null"`. Readiness, route, ticket, review reasons, and sanitized metadata use one deterministic UTF-8 JSON codec with sorted keys, compact separators, and `allow_nan=False`. JSON booleans remain exact Python booleans; no currently invalid BOOLEAN EvidenceCode is invented merely to test this.
+
+SQLite boolean columns are never passed directly into strict Pydantic models and never decoded with `bool(raw)`. A single `decode_sqlite_bool(name, raw)` requires `type(raw) is int` and `raw in (0, 1)`, then returns `raw == 1`; every `synthetic` field additionally requires the decoded value to be true. `bool`, float, string, null, `2`, malformed JSON, unknown enums, invalid/naive times, missing columns, strict Pydantic failures, and every unexpected rowcount are safe persistence-invariant failures.
+
+Error precedence and mapping are exact: explicit `CaseNotFound`, `EvidenceConflict`, and `ConcurrentCaseWrite` remain themselves; caller-input `SensitiveDataRejected` remains the fixed domain error and is caught/re-raised before any generic `ValueError` handler. `sqlite3.IntegrityError` (including triggers and unexpected unique/FK/CHECK failures), `DataError`, `ProgrammingError`, `InterfaceError`, and `NotSupportedError` represent violated data/program contracts and become `PersistenceInvariantViolation() from None`, never a misleading 503. `sqlite3.OperationalError`, `InternalError`, and other runtime `DatabaseError` failures become `DatabaseUnavailable() from None`; any otherwise-unclassified base `sqlite3.Error` maps conservatively to `PersistenceInvariantViolation() from None`. JSON/codec/model/row-shape/state-machine failures and sensitive data discovered in persisted rows become `PersistenceInvariantViolation() from None`. No safe error includes or chains a raw SQLite, JSON, Pydantic, path, ID, evidence, or sentinel value. Representative Integrity/Operational/Programming probes lock the categories. Tests scan raw rows and database bytes to prove rejected caller sentinels were never persisted.
 
 - [ ] **Step 4: Verify idempotency, rollback, and two-connection behavior**
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest tests/repository/test_case_store.py tests/repository/test_evidence_store.py tests/repository/test_evidence_concurrency.py -q
-.\.venv\Scripts\python.exe -m ruff check src/oceanpilot/adapters/persistence tests/repository
+.\.venv\Scripts\python.exe -m pytest tests/repository -q
+.\.venv\Scripts\python.exe -m pytest tests/domain -q
+.\.venv\Scripts\python.exe -m pytest -q
+.\.venv\Scripts\python.exe -m ruff check src tests
+.\.venv\Scripts\python.exe -m compileall -q src tests
+rg -n ":memory:" src/oceanpilot/adapters/persistence tests/repository
+rg -ni "pragma\s+journal_mode\s*=\s*wal" src/oceanpilot/adapters/persistence
+rg -ni "datetime\.now|datetime\.utcnow|uuid4|random|secrets|current_timestamp" src/oceanpilot/adapters/persistence/sqlite.py
+git diff --check
 ```
 
-Expected: all tests pass; replay leaves row/revision/audit counts unchanged; conflict and forced audit failure leave all business rows, statuses, revisions, snapshot lifecycle, and audit counts unchanged.
+Expected: focused, repository, domain, full, Ruff, compileall, and diff gates pass; all three `rg` commands return exit `1` with no output. Replay leaves row/revision/updated-at/snapshot/audit counts unchanged; conflict, stale revision, invalid aggregate rows, sensitive input, and forced audit failures leave all business rows, statuses, revisions, pointers, snapshot lifecycle, and audit counts unchanged. Concurrency tests use two threads, each opening its own Factory connection inside the thread, synchronize the start with a `Barrier`, use no timing-only sleeps, and assert exact outcome multisets: same evidence is `{CREATED, REPLAY}`; different evidence is one `CREATED` plus one `ConcurrentCaseWrite`.
 
 - [ ] **Step 5: Commit atomic case/evidence persistence**
 
 ```powershell
-git add -- src/oceanpilot/adapters/persistence/sqlite.py tests/repository
+git add -- `
+  src/oceanpilot/adapters/persistence/sqlite.py `
+  tests/repository/test_case_store.py `
+  tests/repository/test_evidence_store.py `
+  tests/repository/test_evidence_concurrency.py
 git diff --cached --check
+git diff --cached --name-status
 git commit -m "feat: add atomic case and evidence persistence"
+git show --check --oneline HEAD
+git status --short
 ```
+
+Before commit, compare the cached scope with the exact four paths above and require no unstaged tracked diff; do not modify Task 7 tests, `tests/conftest.py`, domain/application modules, schema, dependencies, or docs. Record the exact handoff parent, TDD RED/GREEN, targeted concurrency/rollback/mutation evidence, full gates, and independent pre-commit review in ignored `.superpowers/sdd/task-8-report.md`. After commit require the parent to equal the Task 8 handoff SHA in `.superpowers/sdd/task-8-brief.md`, exact subject/scope, `git show --check` success, and a clean tracked/unignored tree. Stop before Task 9.
 
 ---
 
@@ -2008,7 +2055,7 @@ git commit -m "feat: add atomic case and evidence persistence"
 
 **Interfaces:**
 - Produces: `find_diagnosis` and `commit_diagnosis_atomic` with unique replay and stale-input detection.
-- Consumes: Task 8 session and Task 4 snapshot models.
+- Consumes: Task 8 session, deterministic codecs, and private `_load_diagnosis_snapshot_by_id()` plus Task 4 snapshot models. Task 9 must reuse the Task 8 hydrator rather than duplicate or drift the current-diagnosis codec.
 
 - [ ] **Step 1: Write failing tests for the two diagnosis races and composite foreign keys**
 
@@ -2018,6 +2065,7 @@ Tests must prove:
 same (case_id,evidence_revision,policy_version) returns the original snapshot
 diagnosis/requires_human/synthetic round-trip decodes exact SQLite 0/1 before strict model validation
 two concurrent identical diagnosis commits persist one snapshot and one audit set
+new diagnosis sets cases.updated_at=max(current.updated_at,snapshot.created_at); replay and every rejected/stale path preserve updated_at
 evidence added after read causes commit to raise DiagnosisInputStale
 an old unique snapshot plus a now-advanced evidence_revision is stale, not a replay
 cross-case hypothesis_evidence_ref is rejected by SQLite
@@ -2026,7 +2074,11 @@ risk review persists a RISK route and review-only TicketDraft
 any hypothesis/ref/audit failure rolls back the entire diagnosis and case state
 snapshot.requires_human=true with target_status other than HUMAN_REVIEW is rejected and rolls back
 snapshot.requires_human=false with target_status other than DIAGNOSED is rejected and rolls back
+snapshot.evidence_revision different from expected_evidence_revision is rejected before unique-key lookup and writes zero rows
+snapshot.status other than CURRENT is rejected before unique-key lookup and writes zero rows
 diagnosis rejects an audit batch with wrong case/revisions/statuses, mixed request/trace IDs, missing/extra/duplicate event types, or ROUTING_PROPOSED inconsistent with route presence
+diagnosis/replay scans snapshot, hypotheses, route, ticket, target, and audit payloads before any lookup or mutation; sensitive sentinels are rejected with zero side effects
+an AFTER INSERT test trigger that corrupts a just-written snapshot JSON field makes the in-transaction hydrator fail and rolls back the snapshot, hypotheses, refs, case state, and audits
 ```
 
 - [ ] **Step 2: Run focused repository tests and confirm diagnosis methods are missing**
@@ -2039,7 +2091,7 @@ Expected: failures for missing `find_diagnosis`/`commit_diagnosis_atomic`.
 
 - [ ] **Step 3: Implement the exact two-phase commit semantics**
 
-`find_diagnosis()` reads by the frozen unique key and reconstructs immutable hypotheses, evidence refs, route, and draft. Hypothesis evidence-reference rows are always reconstructed with SQL `ORDER BY evidence_id`; repository row or insertion order must not affect the immutable tuple. Before any mutation, `commit_diagnosis_atomic()` requires `target_status=HUMAN_REVIEW` exactly when `snapshot.requires_human` is true, otherwise `target_status=DIAGNOSED`; a mismatch raises `PersistenceInvariantViolation`. After loading current state, the same `validate_audit_batch()` requires the same case ID/request/trace pair, post revisions `(expected_case_revision + 1, expected_evidence_revision)`, and `from_status=current.status/to_status=target_status`. Required types are exactly `DIAGNOSIS_CREATED`, `ROUTING_PROPOSED` iff `snapshot.routing_decision` exists, and `STATE_TRANSITIONED` iff status changes, each once. Any inconsistency rolls back. It then performs:
+`find_diagnosis()` runs in one short deferred read transaction, locates the diagnosis ID by the frozen unique key, and delegates complete reconstruction to Task 8's `_load_diagnosis_snapshot_by_id()`; it must not implement a second codec or perform fallible hydration after committing the read. If invoked inside an existing transaction it reuses it without nesting `BEGIN`. Hypothesis evidence-reference rows remain SQL `ORDER BY evidence_id`, so repository row or insertion order cannot affect the immutable tuple. As the first operation of `commit_diagnosis_atomic()`, recursively scan the snapshot/hypotheses/route/ticket/target/audit caller payload before a unique-key replay lookup or any mutation; `SensitiveDataRejected` has the same precedence as Task 8 and cannot be swallowed by codec `ValueError` mapping. Before that lookup, require `snapshot.evidence_revision == expected_evidence_revision` and `snapshot.status == CURRENT`; either mismatch is `PersistenceInvariantViolation` with zero writes, and the unique lookup key is constructed only from the already-validated expected revision. Then require `target_status=HUMAN_REVIEW` exactly when `snapshot.requires_human` is true, otherwise `target_status=DIAGNOSED`; a mismatch raises `PersistenceInvariantViolation`. After loading current state, the same `validate_audit_batch()` requires the same case ID/request/trace pair, post revisions `(expected_case_revision + 1, expected_evidence_revision)`, and `from_status=current.status/to_status=target_status`. Required types are exactly `DIAGNOSIS_CREATED`, `ROUTING_PROPOSED` iff `snapshot.routing_decision` exists, and `STATE_TRANSITIONED` iff status changes, each once. Any inconsistency rolls back. It then performs:
 
 ```text
 BEGIN IMMEDIATE
@@ -2050,12 +2102,13 @@ BEGIN IMMEDIATE
 → insert diagnosis snapshot
 → insert hypotheses
 → insert every same-case hypothesis_evidence_ref
-→ CAS update case status/current_diagnosis_id/case_revision
+→ CAS update case status/current_diagnosis_id/case_revision and updated_at=max(current.updated_at,snapshot.created_at)
 → insert audit events
+→ reload the complete diagnosis and case graph with the Task 8 hydrators while the transaction is still open
 → COMMIT
 ```
 
-If the unique key appeared during a same-input race, load and return it even though the first diagnosis legitimately increased `case_revision`. If `evidence_revision` changed at any point, raise `DiagnosisInputStale`; do not replay or retry with the old draft. Any other unexpected `case_revision` change raises `ConcurrentCaseWrite`. Never execute rule evaluation from this method.
+The method returns only the decoded values produced by that in-transaction reload, never the caller objects or a post-COMMIT query. A controlled AFTER INSERT trigger corrupts `review_reasons_json`; the hydrator must raise safe `PersistenceInvariantViolation` and the transaction must roll back every diagnosis/hypothesis/ref/case/audit write. If the unique key appeared during a same-input race, load and return it even though the first diagnosis legitimately increased `case_revision`. If `evidence_revision` changed at any point, raise `DiagnosisInputStale`; do not replay or retry with the old draft. Any other unexpected `case_revision` change raises `ConcurrentCaseWrite`. A replay or rejected/stale path never changes `updated_at`; the Store never reads a wall clock. Never execute rule evaluation from this method.
 
 - [ ] **Step 4: Run all repository tests and schema integrity checks**
 
@@ -2157,6 +2210,7 @@ unsupported ONBOARDING_RECOMMENDATION raises CaseTypeNotEnabled with no Store ca
 create/add call assert_no_sensitive_data before persistence
 new evidence recomputes ActiveEvidenceView and Readiness before atomic append
 adding integration.type=PLUGIN to a ready DIAGNOSED/HUMAN_REVIEW snapshot yields NEED_INFO, supersedes the snapshot, clears the current pointer, and emits DIAGNOSIS_SUPERSEDED plus the actual STATE_TRANSITIONED
+the PLUGIN regression starts from integration.type=CONFIRMED_UNAVAILABLE; an existing AVAILABLE API plus PLUGIN is separately preserved as conflicting evidence and is not used to fake the regression
 ConcurrentCaseWrite reloads and recomputes within the same Store session, at most three attempts
 same evidence replay preserves revisions and audit count
 diagnose NEED_INFO raises CaseNotReady(case_id=case_id, missing_fields=lexical_missing_fields, current_revision=current_case_revision) before engine evaluation; derived symptom.signal is preserved
@@ -2166,7 +2220,7 @@ DiagnosisInputStale is returned, not silently recalculated from newer evidence
 HTTP-style MERCHANT/USER_REPORTED origin and internal SYNTHETIC_ADAPTER/SYNTHETIC_TEST origin are both preserved exactly; callers cannot mutate nested EvidenceCreate after command construction
 ```
 
-Use a fixed aware UTC clock and a deterministic UUID iterator. Verify UUID call count so replay paths do not consume IDs or create audit records.
+Use a fixed aware UTC clock and a deterministic UUID iterator. A replay/conflict already visible in the loaded snapshot is checked before constructing audit events and calls `append_evidence_atomic(..., audit_events=())` only to obtain the Store's final atomic REPLAY/CONFLICT decision, so this ordinary path consumes no event UUID/time and creates no audit. If the evidence ID was absent at load time but another request wins the race after audit materialization, the Store may return REPLAY; those preallocated values are discarded and never persisted. UUID call-count assertions distinguish these two paths instead of claiming that an unavoidable race performs no local allocation.
 
 - [ ] **Step 2: Run service tests and confirm CaseService is absent**
 
@@ -2192,6 +2246,7 @@ with self._store_factory() as store:
 ```text
 load current CaseInputSnapshot
 → construct the EvidenceItem from command.evidence plus the server-created command.origin
+→ if the evidence_id is already present, compare canonical content and call Store with audit_events=() for atomic REPLAY/CONFLICT; do not allocate audit UUID/time
 → append to the snapshot in memory
 → rebuild ActiveEvidenceView and Readiness
 → compute target status with status_after_evidence
@@ -2199,7 +2254,7 @@ load current CaseInputSnapshot
 → append_evidence_atomic with expected revisions
 ```
 
-On `ConcurrentCaseWrite`, reload and recompute; after three failed CAS attempts raise the stable error. Evidence replay/conflict outcomes come from the Store and are never converted to a new write.
+On `ConcurrentCaseWrite`, reload and recompute; after three failed CAS attempts raise the stable error. Evidence replay/conflict outcomes come from the Store and are never converted to a new write. The PLUGIN readiness regression uses a previously ready snapshot whose `integration.type` was `CONFIRMED_UNAVAILABLE`; adding AVAILABLE `PLUGIN` activates platform/version gaps. A separate AVAILABLE `API` plus `PLUGIN` test remains a conflict and must not be coerced into that regression.
 
 `diagnose()` performs in this order:
 
