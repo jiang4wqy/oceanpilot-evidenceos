@@ -18,22 +18,20 @@ def test_unknown_path_uses_fixed_safe_error(tmp_path):
     with TestClient(create_app(Settings(db_path=tmp_path / "foundation.db"))) as client:
         response = client.get("/unknown")
     assert response.status_code == 404
-    assert response.json() == {
-        "status": 404,
-        "code": "HTTP_ERROR",
-        "detail": "request could not be completed",
-    }
+    assert response.headers["content-type"].startswith("application/problem+json")
+    assert response.headers["X-Trace-ID"] == response.json()["trace_id"]
+    assert response.json()["code"] == "HTTP_ERROR"
+    assert response.json()["detail"] == "request could not be completed"
 
 
 def test_wrong_health_method_uses_fixed_safe_error(tmp_path):
     with TestClient(create_app(Settings(db_path=tmp_path / "foundation.db"))) as client:
         response = client.post("/health")
     assert response.status_code == 405
-    assert response.json() == {
-        "status": 405,
-        "code": "HTTP_ERROR",
-        "detail": "request could not be completed",
-    }
+    assert response.headers["content-type"].startswith("application/problem+json")
+    assert response.headers["X-Trace-ID"] == response.json()["trace_id"]
+    assert response.headers["Allow"] == "GET"
+    assert response.json()["code"] == "HTTP_ERROR"
 
 
 def test_unexpected_exception_does_not_echo_sentinel(tmp_path):
@@ -43,11 +41,10 @@ def test_unexpected_exception_does_not_echo_sentinel(tmp_path):
         response = client.get("/boom")
     assert response.status_code == 500
     assert "SECRET-SENTINEL" not in response.text
-    assert response.json() == {
-        "status": 500,
-        "code": "INTERNAL_ERROR",
-        "detail": "internal server error",
-    }
+    assert response.headers["content-type"].startswith("application/problem+json")
+    assert response.headers["X-Trace-ID"] == response.json()["trace_id"]
+    assert response.json()["code"] == "INTERNAL_ERROR"
+    assert response.json()["detail"] == "internal server error"
 
 
 def test_sensitive_error_has_priority_over_value_error(tmp_path):
@@ -56,8 +53,7 @@ def test_sensitive_error_has_priority_over_value_error(tmp_path):
     with TestClient(app, raise_server_exceptions=False) as client:
         response = client.get("/sensitive")
     assert response.status_code == 422
-    assert response.json() == {
-        "status": 422,
-        "code": "SENSITIVE_DATA_REJECTED",
-        "detail": "request contains disallowed sensitive data",
-    }
+    assert response.headers["content-type"].startswith("application/problem+json")
+    assert response.headers["X-Trace-ID"] == response.json()["trace_id"]
+    assert response.json()["code"] == "SENSITIVE_DATA_REJECTED"
+    assert response.json()["detail"] == "request contains disallowed sensitive data"

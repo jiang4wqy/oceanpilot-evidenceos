@@ -6,15 +6,21 @@ from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictStr
 
 from oceanpilot.application.commands import AddEvidenceCommand, CreateCaseCommand
 from oceanpilot.domain.enums import (
+    CaseStatus,
     CaseType,
     EvidenceAvailability,
     EvidenceCode,
     SourceReliability,
     SourceType,
+    WriteOutcome,
 )
 from oceanpilot.domain.models import (
+    CommandResult,
+    DiagnosisSnapshot,
+    DiagnosisView,
     EvidenceCreate,
     EvidenceOrigin,
+    Revision,
     SyntheticTrue,
     UUID4Str,
 )
@@ -44,6 +50,52 @@ class FoundationRequest(BaseModel):
         hide_input_in_errors=True,
         allow_inf_nan=False,
     )
+
+
+class DiagnoseCaseRequest(FoundationRequest):
+    pass
+
+
+class DiagnosisAuditReference(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    case_id: UUID4Str
+    diagnosis_id: UUID4Str
+    case_revision: Revision
+    evidence_revision: Revision
+
+
+class DiagnosisResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    outcome: WriteOutcome
+    case_id: UUID4Str
+    case_status: CaseStatus
+    case_revision: Revision
+    evidence_revision: Revision
+    diagnosis: DiagnosisSnapshot
+    audit_reference: DiagnosisAuditReference
+
+    @classmethod
+    def from_result(
+        cls,
+        result: CommandResult[DiagnosisView],
+    ) -> "DiagnosisResponse":
+        view = result.value
+        return cls(
+            outcome=result.outcome,
+            case_id=view.case_id,
+            case_status=view.case_status,
+            case_revision=view.case_revision,
+            evidence_revision=view.evidence_revision,
+            diagnosis=view.diagnosis,
+            audit_reference=DiagnosisAuditReference(
+                case_id=view.case_id,
+                diagnosis_id=view.diagnosis.diagnosis_id,
+                case_revision=view.case_revision,
+                evidence_revision=view.evidence_revision,
+            ),
+        )
 
 
 class CreateCaseRequest(FoundationRequest):
