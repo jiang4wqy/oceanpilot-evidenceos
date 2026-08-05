@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 
 import pytest
 
+from oceanpilot.adapters.diagnosis.rules import RuleDiagnosisEngine
 from oceanpilot.application.case_service import CaseService
 from oceanpilot.application.commands import AddEvidenceCommand, CreateCaseCommand
 from oceanpilot.application.errors import (
@@ -264,7 +265,12 @@ def make_service(
 ) -> tuple[CaseService, _FakeStore, _IdFactory]:
     fake = _FakeStore(case_view=case_view, append_error=append_error)
     ids = _IdFactory()
-    service = CaseService(fake.factory, clock=lambda: NOW, uuid_factory=ids)
+    service = CaseService(
+        fake.factory,
+        RuleDiagnosisEngine(),
+        clock=lambda: NOW,
+        uuid_factory=ids,
+    )
     return service, fake, ids
 
 
