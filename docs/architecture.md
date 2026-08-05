@@ -2,18 +2,21 @@
 
 ## 1. Scope
 
-当前系统是一个使用合成数据的本地支付异常协作基础原型。它只启用 `PAYMENT_INCIDENT`，提供健康检查、案件创建/读取和证据追加。诊断入口存在，但固定返回 `501 FEATURE_DEFERRED`；没有真实 Oceanpayment、飞书 Agent、A2A、MCP、工单或支付系统连接。
+当前系统是一个使用合成数据的本地支付异常协作原型。它只启用 `PAYMENT_INCIDENT`，提供健康检查、案件创建/读取、证据追加、确定性诊断，以及一条经签名校验的飞书事件/卡片回调链路（建案 → 补问 → 达标诊断 → 人工确认审计）。诊断主链已接入并持久化（诊断入口不再返回 `501`）。仍然没有真实 Oceanpayment 数据、A2A、MCP、工单或支付系统连接；飞书回调只对合成案件生效，人工确认只写审计、不改变案件状态、不执行任何业务动作。
 
 ## 2. Current Runtime Shape
 
 ```mermaid
 flowchart LR
     Client["Local client / OpenAPI"] --> API["FastAPI routes and strict DTOs"]
-    API --> Service["CaseService"]
-    Service --> Domain["Evidence policy and state machine"]
+    Feishu["Feishu events / card actions"] --> Verify["Signature + token verify, idempotent claim"]
+    Verify --> Orchestrator["FeishuOrchestrator"]
+    Orchestrator --> Service["CaseService"]
+    API --> Service
+    Service --> Domain["Evidence policy, state machine, DiagnosisEngine"]
     Service --> Port["CaseStoreSession port"]
     Port --> SQLite["Local SQLite store"]
-    API -. "diagnose returns fixed HTTP 501" .-> Deferred["Diagnosis persistence and orchestration deferred"]
+    Orchestrator --> FeishuStore["Feishu callback SQLite (separate file)"]
 ```
 
 依赖方向由外向内。领域层不知道 FastAPI 或 SQLite；应用服务依赖领域模型和 Store port；SQLite adapter 实现 port；API 只把 HTTP 请求映射为应用命令。
@@ -89,19 +92,20 @@ strict EvidenceCreateRequest
 
 ### Diagnose
 
-诊断 schema 和 domain rule assets 的存在不等于运行时诊断链已经完成。当前缺少 Task 9 的诊断 snapshot CAS/去重/引用事务，以及 Task 11 的 `CaseService.diagnose()` 编排。若现在执行规则后丢弃结果，或写入内存假 snapshot，都会破坏 replay、revision 与审计语义。因此路由不调用规则或 Store，只抛出 `FeatureDeferred`，由统一 handler 返回：
+诊断主链已接入。`CaseService.diagnose()` 载入当前证据视图，强制 readiness，调用 `DiagnosisEngine`，并把诊断快照、假设、证据引用、责任路由与审计原子提交。诊断身份为 `(case_id, evidence_revision, policy_version)`：相同身份 replay 已持久化的快照，不新增 case revision、诊断记录或审计；证据 revision 用 compare-and-swap，stale 输入在重试预算耗尽后返回稳定冲突；跨案件证据引用回滚整个事务。新证据只让旧诊断历史化，不原地修改。
 
-```json
-{
-  "status": 501,
-  "code": "FEATURE_DEFERRED",
-  "detail": "diagnosis is deferred in the foundation milestone"
-}
+```text
+POST /api/v1/cases/{case_id}/diagnose
+  -> 首次诊断 201 CREATED
+  -> 相同 (evidence_revision, policy_version) 200 REPLAYED
+  -> 严格 DiagnosisResponse（候选、置信度、复核原因、责任路由、证据引用、审计引用）
 ```
+
+低置信度、冲突证据、风险决策、低来源质量和无规则结果进入人工复核。飞书提交的证据固定为 `USER_REPORTED`（低来源质量），因此其诊断始终要求人工复核。
 
 ## 7. Storage Boundary
 
-SQLite schema 当前包含六张表：`cases`、`evidence_items`、`diagnosis_snapshots`、`hypotheses`、`hypothesis_evidence_refs` 和 `audit_events`。Foundation 运行路径实际写入案件、证据和相应审计；诊断相关表为后续契约基础，当前 API 不写入它们。
+核心案件库的 SQLite schema 包含六张表：`cases`、`evidence_items`、`diagnosis_snapshots`、`hypotheses`、`hypothesis_evidence_refs` 和 `audit_events`。运行路径写入案件、证据、诊断快照及相应审计。飞书回调状态（事件/动作回执、chat↔case 绑定、确认审批审计）保存在一个**独立**的 SQLite 文件（`OCEANPILOT_FEISHU_DB_PATH`），不与核心案件库混表。
 
 案件聚合和审计在同一事务中提交。证据追加使用预期 case/evidence revisions 做条件写入，避免静默覆盖；Store 从不调用规则或外部服务。schema 初始化不启用 WAL，也没有文件上传、WORM、JCS 或哈希链声明。
 
@@ -113,14 +117,16 @@ SQLite schema 当前包含六张表：`cases`、`evidence_items`、`diagnosis_sn
 | `POST /api/v1/cases` | synthetic payment incident 创建成功时 `201` 和 `Location` |
 | `GET /api/v1/cases/{case_id}` | 读取成功 `200` |
 | `POST /api/v1/cases/{case_id}/evidence` | 首次写入 `201`；replay `200`；conflict `409` |
-| `POST /api/v1/cases/{case_id}/diagnose` | 固定 `501 FEATURE_DEFERRED` |
+| `POST /api/v1/cases/{case_id}/diagnose` | 首次 `201`；相同身份 replay `200`；stale `409`；未达标 `409 CASE_NOT_READY` |
+| `POST /api/v1/integrations/feishu/events` | 校验后处理消息事件；固定安全响应；未配置飞书返回 `503` |
+| `POST /api/v1/integrations/feishu/card-actions` | 校验后处理证据/确认卡片动作；固定安全响应；未配置飞书返回 `503` |
 
 请求模型拒绝未知字段、非 UUIDv4 ID、非严格 `true` 的 synthetic 值、NaN/Infinity、非闭合 typed value 和无时区/非精确 RFC3339 时间。可疑敏感输入在领域边界再次扫描。当前错误体固定为 `status`、`code`、`detail`，不复制原始验证输入、异常文本或 SQL。
 
-这只是基础安全边界。完整 RFC 9457 media type、trace header、鉴权、限流、生产日志和五表面泄漏回归均在后续任务中。
+RFC 9457 `application/problem+json`、request/trace 关联头和跨表面敏感数据回归已接入。鉴权、限流、生产日志与指标仍属后续生产化工作。
 
 ## 9. Deferred Extension Order
 
-后续必须沿现有边界依次扩展：诊断持久化 Task 9 → Persistence Gate 2 → 完整服务编排 Task 11 → API 安全合同 Tasks 12–14 → 三个 synthetic E2E 场景 Task 15 → security/CI 与 Gate 3 Tasks 16–17 → 最终事实审计和 release Task 18。
+诊断持久化、服务编排、完整 API 安全合同、三个 synthetic E2E 场景、安全 sentinel 与 Python 3.12 CI、以及飞书事件/卡片回调链路均已接入（PR1–PR5）。剩余为入围后的生产化工作：真实 Oceanpayment / A2A / MCP / 工单接入、鉴权限流与生产日志、公网 HTTPS 部署与飞书真机联调、以及容器与云数据库运维。在这些完成前，不声明真实系统集成、自动派单、业务效果或生产就绪性。
 
-具体文件所有权、影响与每条可运行验收命令见 [roadmap/incomplete-work.md](roadmap/incomplete-work.md)。在这些门完成前，不声明真实系统集成、自动派单、业务效果或生产就绪性。
+各里程碑的文件所有权、影响与可运行验收命令见 [roadmap/incomplete-work.md](roadmap/incomplete-work.md)；飞书控制台配置见 [feishu-setup.md](feishu-setup.md)，本地演示见 [demo.md](demo.md)。

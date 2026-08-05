@@ -1,5 +1,15 @@
 # OceanPilot Deferred Work Register
 
+> **状态更新（竞赛演示分支）：** Task 9–17 已在 `feat/diagnosis-persistence`、
+> `feat/diagnosis-service-api`、`feat/synthetic-e2e-demo`、`feat/feishu-demo` 与
+> `chore/competition-release` 上完成：诊断 snapshot CAS 持久化与 Gate 2、
+> `CaseService.diagnose()` 编排、真实诊断 API 与 RFC 9457 合同、三个 synthetic
+> E2E 场景、跨表面敏感数据 sentinel、Python 3.12 GitHub Actions，以及经签名校验的
+> 飞书事件/卡片回调链路（建案 → 补问 → 达标诊断 → 人工确认审计）。诊断入口不再返回
+> `501`。剩余为入围后的生产化工作：真实 Oceanpayment/A2A/MCP/工单接入、鉴权限流与
+> 生产日志、公网 HTTPS 部署与飞书真机联调（Task 18 的远程发布证据需用户明确授权）。
+> 下表保留原始计划口径作为里程碑记录。
+
 本清单记录 Foundation 里程碑有意留下的工作。每一行都可单独交给一个技术轨或审查轨，但必须按依赖顺序执行；“当前已有”不表示整条能力已启用。优先级是当前建议顺序：P0 阻断诊断主链，P1 补齐演示与自动化证据，P2 负责最终发布。
 
 | 模块 | 正式任务 | 优先级 | 当前已有 | 未完成内容 | 不完成的用户影响 | 后续依赖 | 预计改动文件 | 可独立分工工作轨 | 可执行完成验收 |
