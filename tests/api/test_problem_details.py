@@ -80,9 +80,7 @@ def test_validation_problem_exposes_only_safe_location_and_reason(tmp_path):
         )
 
     assert response.status_code == 422
-    assert response.json()["errors"] == [
-        {"field": "body.<extra>", "reason": "extra_field"}
-    ]
+    assert response.json()["errors"] == [{"field": "body.<extra>", "reason": "extra_field"}]
     assert sentinel not in response.text
     assert "SECRET-UNKNOWN-VALUE" not in response.text
 

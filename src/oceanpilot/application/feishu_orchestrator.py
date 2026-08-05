@@ -74,9 +74,7 @@ class FeishuOrchestrator:
                 kind=FeishuOutcomeKind.ALREADY_DIAGNOSED,
                 diagnosis_view=self._diagnosis_view(case_view),
             )
-        return OrchestrationOutcome(
-            kind=FeishuOutcomeKind.NEED_INFO, case_view=case_view
-        )
+        return OrchestrationOutcome(kind=FeishuOutcomeKind.NEED_INFO, case_view=case_view)
 
     def _require_bound_case(
         self,

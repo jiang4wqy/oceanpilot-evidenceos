@@ -101,14 +101,16 @@ RULES: Final[tuple[RuleDefinition, ...]] = (
             ),
             EvidencePredicate(
                 EvidenceCode.PAYMENT_METHOD,
-                frozenset({
-                    "CARD",
-                    "APPLE_PAY",
-                    "GOOGLE_PAY",
-                    "KLARNA",
-                    "LOCAL_PAYMENT",
-                    "OTHER",
-                }),
+                frozenset(
+                    {
+                        "CARD",
+                        "APPLE_PAY",
+                        "GOOGLE_PAY",
+                        "KLARNA",
+                        "LOCAL_PAYMENT",
+                        "OTHER",
+                    }
+                ),
             ),
             EvidencePredicate(
                 EvidenceCode.CONFIGURATION_CHECK_RESULT,
@@ -137,14 +139,16 @@ RULES: Final[tuple[RuleDefinition, ...]] = (
             ),
             EvidencePredicate(
                 EvidenceCode.PAYMENT_METHOD,
-                frozenset({
-                    "CARD",
-                    "APPLE_PAY",
-                    "GOOGLE_PAY",
-                    "KLARNA",
-                    "LOCAL_PAYMENT",
-                    "OTHER",
-                }),
+                frozenset(
+                    {
+                        "CARD",
+                        "APPLE_PAY",
+                        "GOOGLE_PAY",
+                        "KLARNA",
+                        "LOCAL_PAYMENT",
+                        "OTHER",
+                    }
+                ),
             ),
             EvidencePredicate(
                 EvidenceCode.CONFIGURATION_CHECK_RESULT,

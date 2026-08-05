@@ -360,9 +360,7 @@ def test_commit_diagnosis_replays_the_existing_unique_revision_and_policy(
         }
     )
     replay_audits = tuple(
-        event.model_copy(
-            update={"event_id": f"00000000-0000-4000-8000-{2100 + index:012d}"}
-        )
+        event.model_copy(update={"event_id": f"00000000-0000-4000-8000-{2100 + index:012d}"})
         for index, event in enumerate(_diagnosis_audits())
     )
     with factory() as store:
@@ -456,9 +454,7 @@ def test_commit_diagnosis_canonicalizes_evidence_reference_order(db_path: Path) 
     _prepare_ready_case(factory)
     original = _diagnosis_snapshot()
     reversed_refs = tuple(reversed(original.hypotheses[0].evidence_refs))
-    hypothesis = original.hypotheses[0].model_copy(
-        update={"evidence_refs": reversed_refs}
-    )
+    hypothesis = original.hypotheses[0].model_copy(update={"evidence_refs": reversed_refs})
     route = original.routing_decision
     ticket = original.ticket_draft
     assert route is not None
@@ -470,9 +466,7 @@ def test_commit_diagnosis_canonicalizes_evidence_reference_order(db_path: Path) 
             "ticket_draft": ticket.model_copy(
                 update={
                     "hypotheses": (
-                        ticket.hypotheses[0].model_copy(
-                            update={"evidence_refs": reversed_refs}
-                        ),
+                        ticket.hypotheses[0].model_copy(update={"evidence_refs": reversed_refs}),
                     )
                 }
             ),
@@ -494,8 +488,7 @@ def test_commit_diagnosis_canonicalizes_evidence_reference_order(db_path: Path) 
     assert persisted.routing_decision.evidence_refs == original.hypotheses[0].evidence_refs
     assert persisted.ticket_draft is not None
     assert (
-        persisted.ticket_draft.hypotheses[0].evidence_refs
-        == original.hypotheses[0].evidence_refs
+        persisted.ticket_draft.hypotheses[0].evidence_refs == original.hypotheses[0].evidence_refs
     )
 
 
@@ -656,9 +649,7 @@ def _assert_commit_diagnosis_rejects_evidence_owned_by_another_case_atomically(
             "routing_decision": route.model_copy(update={"evidence_refs": refs}),
             "ticket_draft": ticket.model_copy(
                 update={
-                    "hypotheses": (
-                        ticket.hypotheses[0].model_copy(update={"evidence_refs": refs}),
-                    )
+                    "hypotheses": (ticket.hypotheses[0].model_copy(update={"evidence_refs": refs}),)
                 }
             ),
         }
@@ -847,9 +838,7 @@ def test_human_review_route_and_ticket_round_trip_strict_flags(db_path: Path) ->
                     "review_reasons": reasons,
                 }
             ),
-            "ticket_draft": ticket.model_copy(
-                update={"responsible_team": ResponsibleTeam.RISK}
-            ),
+            "ticket_draft": ticket.model_copy(update={"responsible_team": ResponsibleTeam.RISK}),
             "requires_human": True,
             "review_reasons": reasons,
         }
@@ -904,9 +893,7 @@ def _assert_concurrent_different_policy_loser_gets_case_revision_conflict(
         }
     )
     second_audits = tuple(
-        event.model_copy(
-            update={"event_id": f"00000000-0000-4000-8000-{2300 + index:012d}"}
-        )
+        event.model_copy(update={"event_id": f"00000000-0000-4000-8000-{2300 + index:012d}"})
         for index, event in enumerate(_diagnosis_audits())
     )
     barrier = Barrier(2)
@@ -1111,9 +1098,7 @@ def test_routing_audit_presence_must_match_snapshot_route(
     audits = tuple(_diagnosis_audits())
     if route_contract == "missing":
         audits = tuple(
-            event
-            for event in audits
-            if event.event_type is not AuditEventType.ROUTING_PROPOSED
+            event for event in audits if event.event_type is not AuditEventType.ROUTING_PROPOSED
         )
     else:
         snapshot = snapshot.model_copy(
@@ -1126,9 +1111,7 @@ def test_routing_audit_presence_must_match_snapshot_route(
             }
         )
         target = CaseStatus.HUMAN_REVIEW
-        audits = tuple(
-            event.model_copy(update={"to_status": target}) for event in audits
-        )
+        audits = tuple(event.model_copy(update={"to_status": target}) for event in audits)
     with factory() as store:
         with pytest.raises(PersistenceInvariantViolation):
             store.commit_diagnosis_atomic(
@@ -1181,13 +1164,9 @@ def test_invalid_diagnosis_audit_batch_rolls_back_the_whole_commit(
             )
         )
     elif invalid_audit == "duplicate_type":
-        audits[1] = audits[1].model_copy(
-            update={"event_type": AuditEventType.DIAGNOSIS_CREATED}
-        )
+        audits[1] = audits[1].model_copy(update={"event_type": AuditEventType.DIAGNOSIS_CREATED})
     elif invalid_audit == "wrong_case":
-        audits[0] = audits[0].model_copy(
-            update={"case_id": "00000000-0000-4000-8000-000000000020"}
-        )
+        audits[0] = audits[0].model_copy(update={"case_id": "00000000-0000-4000-8000-000000000020"})
     elif invalid_audit == "wrong_revision":
         audits[0] = audits[0].model_copy(update={"case_revision": 8})
     elif invalid_audit == "wrong_evidence_revision":
@@ -1318,9 +1297,7 @@ def test_review_reason_json_is_persisted_in_deterministic_order(db_path: Path) -
                     "review_reasons": reasons,
                 }
             ),
-            "ticket_draft": ticket.model_copy(
-                update={"responsible_team": ResponsibleTeam.RISK}
-            ),
+            "ticket_draft": ticket.model_copy(update={"responsible_team": ResponsibleTeam.RISK}),
             "requires_human": True,
             "review_reasons": reasons,
         }
@@ -1431,11 +1408,14 @@ def test_find_diagnosis_commits_or_rolls_back_its_short_read_transaction(
         store = SqliteCaseStoreSession(connection)
         statements: list[str] = []
         connection.set_trace_callback(statements.append)
-        assert store.find_diagnosis(
-            case_id=CASE_ID,
-            evidence_revision=5,
-            policy_version="POLICY_V1",
-        ) == _diagnosis_snapshot()
+        assert (
+            store.find_diagnosis(
+                case_id=CASE_ID,
+                evidence_revision=5,
+                policy_version="POLICY_V1",
+            )
+            == _diagnosis_snapshot()
+        )
         normalized = tuple(statement.strip().upper() for statement in statements)
         assert "BEGIN" in normalized
         assert "COMMIT" in normalized

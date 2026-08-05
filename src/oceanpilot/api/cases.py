@@ -22,9 +22,7 @@ router = APIRouter(prefix="/api/v1/cases")
 
 PROBLEM_RESPONSE = {
     "content": {
-        "application/problem+json": {
-            "schema": {"$ref": "#/components/schemas/ProblemDetails"}
-        }
+        "application/problem+json": {"schema": {"$ref": "#/components/schemas/ProblemDetails"}}
     }
 }
 COMMON_PROBLEMS = {
@@ -94,13 +92,9 @@ def add_evidence(
     service: Annotated[CaseService, Depends(get_case_service)],
     context: Annotated[RequestContext, Depends(get_request_context)],
 ) -> CaseView:
-    result = service.add_evidence(
-        payload.to_command(case_id, context.request_id, context.trace_id)
-    )
+    result = service.add_evidence(payload.to_command(case_id, context.request_id, context.trace_id))
     response.status_code = (
-        status.HTTP_201_CREATED
-        if result.outcome is WriteOutcome.CREATED
-        else status.HTTP_200_OK
+        status.HTTP_201_CREATED if result.outcome is WriteOutcome.CREATED else status.HTTP_200_OK
     )
     return result.case_view
 
@@ -132,8 +126,6 @@ def diagnose(
         )
     )
     response.status_code = (
-        status.HTTP_201_CREATED
-        if result.outcome is WriteOutcome.CREATED
-        else status.HTTP_200_OK
+        status.HTTP_201_CREATED if result.outcome is WriteOutcome.CREATED else status.HTTP_200_OK
     )
     return DiagnosisResponse.from_result(result)

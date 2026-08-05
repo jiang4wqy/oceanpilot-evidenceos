@@ -423,18 +423,14 @@ def test_diagnose_creates_snapshot_and_exact_audits() -> None:
         "find_diagnosis",
         "commit_diagnosis_atomic",
     ]
-    expected_case_revision, expected_evidence_revision, snapshot, target, audits = (
-        store.commits[0]
-    )
+    expected_case_revision, expected_evidence_revision, snapshot, target, audits = store.commits[0]
     assert (expected_case_revision, expected_evidence_revision) == (6, 1)
     assert snapshot == result.value.diagnosis
     assert snapshot.policy_version == POLICY_VERSION
     assert snapshot.engine_version == ENGINE_VERSION
     assert snapshot.status is DiagnosisStatus.CURRENT
     assert snapshot.created_at == NOW
-    assert snapshot.hypotheses[0].hypothesis_id == (
-        "00000000-0000-4000-8000-000000001002"
-    )
+    assert snapshot.hypotheses[0].hypothesis_id == ("00000000-0000-4000-8000-000000001002")
     assert target is CaseStatus.DIAGNOSED
     assert tuple(event.event_type for event in audits) == (
         AuditEventType.DIAGNOSIS_CREATED,
@@ -537,9 +533,7 @@ def test_diagnose_rejects_sensitive_command_before_opening_store() -> None:
         [_case_input(status=CaseStatus.EVIDENCE_READY, case_revision=6, evidence_revision=1)]
     )
     service, engine, clock, ids = _service(store)
-    command = _command().model_copy(
-        update={"case_id": "Authorization: Bearer synthetic-secret"}
-    )
+    command = _command().model_copy(update={"case_id": "Authorization: Bearer synthetic-secret"})
 
     with pytest.raises(SensitiveDataRejected):
         service.diagnose(command)

@@ -105,28 +105,27 @@ def render_diagnosis_card(view: DiagnosisView) -> dict[str, object]:
         {"tag": "markdown", "content": _candidate_markdown(view)},
         {
             "tag": "markdown",
-            "content": (
-                f"**责任域** `{responsible_team}`\n\n"
-                f"**下一动作**\n{next_action}"
-            ),
+            "content": (f"**责任域** `{responsible_team}`\n\n**下一动作**\n{next_action}"),
         },
     ]
     if diagnosis.requires_human:
-        elements.append({
-            "tag": "action",
-            "actions": [
-                {
-                    "tag": "button",
-                    "type": "primary",
-                    "text": {"tag": "plain_text", "content": "确认人工复核"},
-                    "value": {
-                        "action": "confirm_review",
-                        "case_id": view.case_id,
-                        "diagnosis_id": diagnosis.diagnosis_id,
-                    },
-                }
-            ],
-        })
+        elements.append(
+            {
+                "tag": "action",
+                "actions": [
+                    {
+                        "tag": "button",
+                        "type": "primary",
+                        "text": {"tag": "plain_text", "content": "确认人工复核"},
+                        "value": {
+                            "action": "confirm_review",
+                            "case_id": view.case_id,
+                            "diagnosis_id": diagnosis.diagnosis_id,
+                        },
+                    }
+                ],
+            }
+        )
     return {
         "schema": "2.0",
         "config": {"update_multi": True},

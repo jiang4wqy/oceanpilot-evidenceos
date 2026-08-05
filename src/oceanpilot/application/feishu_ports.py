@@ -20,9 +20,7 @@ class CaseCommandPort(Protocol):
 
     def add_evidence(self, command: AddEvidenceCommand) -> AppendEvidenceResult: ...
 
-    def diagnose(
-        self, command: DiagnoseCaseCommand
-    ) -> CommandResult[DiagnosisView]: ...
+    def diagnose(self, command: DiagnoseCaseCommand) -> CommandResult[DiagnosisView]: ...
 
 
 class FeishuBindingPort(Protocol):

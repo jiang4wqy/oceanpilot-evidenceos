@@ -276,9 +276,7 @@ def test_commit_time_foreign_key_failure_rolls_back(db_path: Path) -> None:
 
 
 @pytest.mark.parametrize("missing_table", _REQUIRED_TABLE_NAMES)
-def test_healthcheck_rejects_each_missing_required_table(
-    db_path: Path, missing_table: str
-) -> None:
+def test_healthcheck_rejects_each_missing_required_table(db_path: Path, missing_table: str) -> None:
     initialize_schema(db_path)
     raw_connection = sqlite3.connect(db_path)
     raw_connection.execute(f'DROP TABLE "{missing_table}"')

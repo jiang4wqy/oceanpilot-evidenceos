@@ -60,9 +60,7 @@ def test_full_message_to_confirmation_flow(tmp_path):
             client,
             EVENTS_PATH,
             to_bytes(
-                message_payload(
-                    event_id="evt-msg-1", chat_id=CHAT_ID, text="回调一直没有收到"
-                )
+                message_payload(event_id="evt-msg-1", chat_id=CHAT_ID, text="回调一直没有收到")
             ),
         )
         assert message.status_code == 200
@@ -133,9 +131,7 @@ def test_bot_message_creates_no_case(tmp_path):
     transport = RecordingTransport()
     app = make_app(tmp_path, transport)
     raw = to_bytes(
-        message_payload(
-            event_id="evt-bot", chat_id=CHAT_ID, text="loop", sender_type="app"
-        )
+        message_payload(event_id="evt-bot", chat_id=CHAT_ID, text="loop", sender_type="app")
     )
     with TestClient(app, raise_server_exceptions=False) as client:
         response = _post(client, EVENTS_PATH, raw)

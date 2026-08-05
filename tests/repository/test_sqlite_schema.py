@@ -120,9 +120,7 @@ _EXPECTED_UNIQUE_INDEXES = {
             ("case_id", "diagnosis_id", "rule_id"),
         }
     ),
-    "hypothesis_evidence_refs": frozenset(
-        {("case_id", "hypothesis_id", "evidence_id")}
-    ),
+    "hypothesis_evidence_refs": frozenset({("case_id", "hypothesis_id", "evidence_id")}),
     "audit_events": frozenset({("case_id", "event_id")}),
 }
 
@@ -188,17 +186,14 @@ def _table_columns(
     )
 
 
-def _unique_indexes(
-    connection: sqlite3.Connection, table: str
-) -> frozenset[tuple[str, ...]]:
+def _unique_indexes(connection: sqlite3.Connection, table: str) -> frozenset[tuple[str, ...]]:
     unique_indexes: set[tuple[str, ...]] = set()
     for index in connection.execute(f'PRAGMA index_list("{table}")'):
         if index["unique"] != 1:
             continue
         index_name = index["name"]
         columns = tuple(
-            row["name"]
-            for row in connection.execute(f'PRAGMA index_info("{index_name}")')
+            row["name"] for row in connection.execute(f'PRAGMA index_info("{index_name}")')
         )
         unique_indexes.add(columns)
     return frozenset(unique_indexes)
@@ -207,9 +202,7 @@ def _unique_indexes(
 def _foreign_keys(
     connection: sqlite3.Connection, table: str
 ) -> frozenset[tuple[str, tuple[tuple[str, str], ...], str, str, str]]:
-    grouped: dict[
-        tuple[int, str, str, str, str], list[tuple[int, str, str]]
-    ] = {}
+    grouped: dict[tuple[int, str, str, str, str], list[tuple[int, str, str]]] = {}
     for row in connection.execute(f'PRAGMA foreign_key_list("{table}")'):
         key = (
             row["id"],
@@ -430,9 +423,9 @@ def test_initialize_schema_creates_exact_metadata_on_real_file(db_path: Path) ->
             "diagnosis_snapshots(case_id, diagnosis_id) deferrable initially deferred"
             in normalized_sql["cases"]
         )
-        assert sum(
-            sql.count("deferrable initially deferred") for sql in normalized_sql.values()
-        ) == 1
+        assert (
+            sum(sql.count("deferrable initially deferred") for sql in normalized_sql.values()) == 1
+        )
     finally:
         connection.close()
 
@@ -648,9 +641,9 @@ def test_composite_foreign_keys_reject_cross_case_references(db_path: Path) -> N
             """,
             (case_a, hypothesis_a, evidence_a),
         )
-        assert connection.execute(
-            "SELECT count(*) FROM hypothesis_evidence_refs"
-        ).fetchone()[0] == 1
+        assert (
+            connection.execute("SELECT count(*) FROM hypothesis_evidence_refs").fetchone()[0] == 1
+        )
     finally:
         connection.close()
 
@@ -683,10 +676,13 @@ def test_deferred_current_diagnosis_reference_supports_cycle_and_rolls_back_cros
                 (diagnosis_b, case_a),
             )
 
-        assert connection.execute(
-            "SELECT current_diagnosis_id FROM cases WHERE case_id = ?",
-            (case_a,),
-        ).fetchone()[0] == diagnosis_a
+        assert (
+            connection.execute(
+                "SELECT current_diagnosis_id FROM cases WHERE case_id = ?",
+                (case_a,),
+            ).fetchone()[0]
+            == diagnosis_a
+        )
     finally:
         connection.close()
 

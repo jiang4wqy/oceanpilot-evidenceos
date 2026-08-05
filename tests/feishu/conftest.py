@@ -28,24 +28,18 @@ class RecordingTransport:
     def __call__(self, request: FeishuHttpRequest) -> FeishuHttpResponse:
         if request.url.endswith("/tenant_access_token/internal"):
             self.token_calls += 1
-            return _json_response(
-                {"code": 0, "tenant_access_token": TENANT_TOKEN, "expire": 7200}
-            )
+            return _json_response({"code": 0, "tenant_access_token": TENANT_TOKEN, "expire": 7200})
         if "/im/v1/messages" in request.url:
             if self.fail_send:
                 raise RuntimeError("network down")
             body = json.loads(request.body)
             self.sent.append(body)
-            return _json_response(
-                {"code": 0, "data": {"message_id": f"om_sent_{len(self.sent)}"}}
-            )
+            return _json_response({"code": 0, "data": {"message_id": f"om_sent_{len(self.sent)}"}})
         return _json_response({"code": 0})
 
 
 def _json_response(payload: object, status: int = 200) -> FeishuHttpResponse:
-    return FeishuHttpResponse(
-        status_code=status, body=json.dumps(payload).encode()
-    )
+    return FeishuHttpResponse(status_code=status, body=json.dumps(payload).encode())
 
 
 def make_app(
@@ -77,9 +71,7 @@ def sign(
     encrypt_key: str = ENCRYPT_KEY,
 ) -> dict[str, str]:
     ts = str(timestamp if timestamp is not None else int(time.time()))
-    signature = hashlib.sha256(
-        f"{ts}{nonce}{encrypt_key}".encode() + raw
-    ).hexdigest()
+    signature = hashlib.sha256(f"{ts}{nonce}{encrypt_key}".encode() + raw).hexdigest()
     return {
         "Content-Type": "application/json",
         "X-Lark-Request-Timestamp": ts,

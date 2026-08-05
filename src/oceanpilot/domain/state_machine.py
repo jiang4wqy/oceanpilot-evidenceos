@@ -6,22 +6,30 @@ from oceanpilot.domain.enums import CaseCommand, CaseStatus
 from oceanpilot.domain.errors import InvalidTransition
 from oceanpilot.domain.models import DiagnosisDraft, ReadinessAssessment
 
-ALLOWED_COMMANDS: Final[Mapping[CaseStatus, frozenset[CaseCommand]]] = MappingProxyType({
-    CaseStatus.NEW: frozenset(),
-    CaseStatus.NEED_INFO: frozenset({CaseCommand.ADD_EVIDENCE}),
-    CaseStatus.EVIDENCE_READY: frozenset({
-        CaseCommand.ADD_EVIDENCE,
-        CaseCommand.DIAGNOSE,
-    }),
-    CaseStatus.DIAGNOSED: frozenset({
-        CaseCommand.ADD_EVIDENCE,
-        CaseCommand.DIAGNOSE,
-    }),
-    CaseStatus.HUMAN_REVIEW: frozenset({
-        CaseCommand.ADD_EVIDENCE,
-        CaseCommand.DIAGNOSE,
-    }),
-})
+ALLOWED_COMMANDS: Final[Mapping[CaseStatus, frozenset[CaseCommand]]] = MappingProxyType(
+    {
+        CaseStatus.NEW: frozenset(),
+        CaseStatus.NEED_INFO: frozenset({CaseCommand.ADD_EVIDENCE}),
+        CaseStatus.EVIDENCE_READY: frozenset(
+            {
+                CaseCommand.ADD_EVIDENCE,
+                CaseCommand.DIAGNOSE,
+            }
+        ),
+        CaseStatus.DIAGNOSED: frozenset(
+            {
+                CaseCommand.ADD_EVIDENCE,
+                CaseCommand.DIAGNOSE,
+            }
+        ),
+        CaseStatus.HUMAN_REVIEW: frozenset(
+            {
+                CaseCommand.ADD_EVIDENCE,
+                CaseCommand.DIAGNOSE,
+            }
+        ),
+    }
+)
 
 
 def assert_command_allowed(status: CaseStatus, command: CaseCommand) -> None:

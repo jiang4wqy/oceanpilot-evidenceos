@@ -597,16 +597,12 @@ def _canonicalize_diagnosis(snapshot: DiagnosisSnapshot) -> DiagnosisSnapshot:
     if canonical != snapshot:
         raise PersistenceInvariantViolation()
     hypotheses = tuple(
-        hypothesis.model_copy(
-            update={"evidence_refs": tuple(sorted(hypothesis.evidence_refs))}
-        )
+        hypothesis.model_copy(update={"evidence_refs": tuple(sorted(hypothesis.evidence_refs))})
         for hypothesis in canonical.hypotheses
     )
     route = canonical.routing_decision
     if route is not None:
-        route = route.model_copy(
-            update={"evidence_refs": tuple(sorted(route.evidence_refs))}
-        )
+        route = route.model_copy(update={"evidence_refs": tuple(sorted(route.evidence_refs))})
     ticket = canonical.ticket_draft
     if ticket is not None:
         ticket = ticket.model_copy(

@@ -75,9 +75,7 @@ def create_app(
         with store_factory() as store:
             store.healthcheck()
         if resolved.feishu is not None:
-            app.state.feishu_store_factory = FeishuCallbackStoreFactory(
-                resolved.feishu.db_path
-            )
+            app.state.feishu_store_factory = FeishuCallbackStoreFactory(resolved.feishu.db_path)
         yield
 
     application = FastAPI(lifespan=lifespan)

@@ -36,9 +36,7 @@ EVIDENCE_REFS = (
 
 
 def _diagnosis_view(*, requires_human: bool) -> DiagnosisView:
-    review_reasons = (
-        frozenset({ReviewReason.RISK_DECISION}) if requires_human else frozenset()
-    )
+    review_reasons = frozenset({ReviewReason.RISK_DECISION}) if requires_human else frozenset()
     hypothesis = Hypothesis(
         hypothesis_id="00000000-0000-4000-8000-000000000301",
         cause_code="SYNTHETIC_CAUSE",
@@ -52,9 +50,7 @@ def _diagnosis_view(*, requires_human: bool) -> DiagnosisView:
     draft = HypothesisDraft(**hypothesis.model_dump(exclude={"hypothesis_id"}))
     route = RoutingDecision(
         responsible_team=(
-            ResponsibleTeam.RISK
-            if requires_human
-            else ResponsibleTeam.TECHNICAL_SUPPORT
+            ResponsibleTeam.RISK if requires_human else ResponsibleTeam.TECHNICAL_SUPPORT
         ),
         priority=Priority.HIGH,
         reason="Synthetic responsibility route",
@@ -89,9 +85,7 @@ def _diagnosis_view(*, requires_human: bool) -> DiagnosisView:
     )
     return DiagnosisView(
         case_id=CASE_ID,
-        case_status=(
-            CaseStatus.HUMAN_REVIEW if requires_human else CaseStatus.DIAGNOSED
-        ),
+        case_status=(CaseStatus.HUMAN_REVIEW if requires_human else CaseStatus.DIAGNOSED),
         case_revision=7,
         evidence_revision=5,
         diagnosis=snapshot,

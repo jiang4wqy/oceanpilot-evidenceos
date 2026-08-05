@@ -178,9 +178,7 @@ class CaseService:
                 origin=command.origin,
                 collected_at=now,
             )
-            if any(
-                item.evidence_id == evidence.evidence_id for item in snapshot.evidence
-            ):
+            if any(item.evidence_id == evidence.evidence_id for item in snapshot.evidence):
                 return store.append_evidence_atomic(
                     expected_case_revision=snapshot.case.case_revision,
                     expected_evidence_revision=snapshot.case.evidence_revision,
@@ -190,9 +188,7 @@ class CaseService:
                     audit_events=(),
                 )
 
-            readiness = assess_readiness(
-                build_active_evidence_view((*snapshot.evidence, evidence))
-            )
+            readiness = assess_readiness(build_active_evidence_view((*snapshot.evidence, evidence)))
             target_status = status_after_evidence(snapshot.case.status, readiness)
             event_types = [AuditEventType.EVIDENCE_ADDED]
             if snapshot.case.status in (CaseStatus.DIAGNOSED, CaseStatus.HUMAN_REVIEW):

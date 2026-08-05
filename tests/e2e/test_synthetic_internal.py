@@ -167,8 +167,7 @@ def test_internal_synthetic_case_runs_to_evidence_cited_diagnosis(tmp_path, scen
     assert ready.case.readiness.ready is True
     assert all(item.source_type is SourceType.SYNTHETIC_ADAPTER for item in ready.evidence)
     assert all(
-        item.source_reliability is SourceReliability.SYNTHETIC_TEST
-        for item in ready.evidence
+        item.source_reliability is SourceReliability.SYNTHETIC_TEST for item in ready.evidence
     )
 
     result = service.diagnose(

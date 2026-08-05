@@ -44,9 +44,7 @@ def _import_targets(tree: ast.AST, package: tuple[str, ...]) -> tuple[str, ...]:
             if node.level == 0:
                 if node.module is not None:
                     targets.append(node.module)
-                    targets.extend(
-                        f"{node.module}.{alias.name}" for alias in node.names
-                    )
+                    targets.extend(f"{node.module}.{alias.name}" for alias in node.names)
                 continue
             retained = len(package) - (node.level - 1)
             base = package[:retained]
@@ -96,8 +94,7 @@ def _class_definition_paths(root: Path, class_name: str) -> tuple[str, ...]:
     for path in sorted(root.rglob("*.py")):
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
         if any(
-            isinstance(node, ast.ClassDef) and node.name == class_name
-            for node in ast.walk(tree)
+            isinstance(node, ast.ClassDef) and node.name == class_name for node in ast.walk(tree)
         ):
             paths.append(path.relative_to(root).as_posix())
     return tuple(paths)
@@ -189,18 +186,24 @@ def test_domain_import_boundary_has_no_forbidden_dependencies() -> None:
 
 
 def test_application_import_boundary_has_no_forbidden_dependencies() -> None:
-    assert _boundary_violations(
-        APPLICATION_ROOT,
-        APPLICATION_FORBIDDEN,
-        forbidden_names=APPLICATION_FORBIDDEN_IMPORTED_NAMES,
-    ) == []
+    assert (
+        _boundary_violations(
+            APPLICATION_ROOT,
+            APPLICATION_FORBIDDEN,
+            forbidden_names=APPLICATION_FORBIDDEN_IMPORTED_NAMES,
+        )
+        == []
+    )
 
 
 def test_task_five_modules_do_not_import_outer_protocols_under_aliases() -> None:
-    assert _imported_names_for_paths(
-        TASK5_APPLICATION_MODULES,
-        ("DiagnosisEngine", "EvidenceSource", "SyntheticScenario"),
-    ) == ()
+    assert (
+        _imported_names_for_paths(
+            TASK5_APPLICATION_MODULES,
+            ("DiagnosisEngine", "EvidenceSource", "SyntheticScenario"),
+        )
+        == ()
+    )
 
 
 def test_future_case_service_may_import_the_domain_diagnosis_engine() -> None:
@@ -209,9 +212,7 @@ def test_future_case_service_may_import_the_domain_diagnosis_engine() -> None:
     targets = _import_targets(tree, ("oceanpilot", "application"))
 
     assert not any(_is_forbidden(target, APPLICATION_FORBIDDEN) for target in targets)
-    assert not any(
-        name in APPLICATION_FORBIDDEN_IMPORTED_NAMES for name in _imported_names(tree)
-    )
+    assert not any(name in APPLICATION_FORBIDDEN_IMPORTED_NAMES for name in _imported_names(tree))
 
 
 def test_engine_and_source_protocol_ownership_is_unique_across_src() -> None:

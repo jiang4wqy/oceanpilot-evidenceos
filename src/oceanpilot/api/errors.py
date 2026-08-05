@@ -21,22 +21,24 @@ from oceanpilot.domain.errors import InvalidTransition, SensitiveDataRejected
 from oceanpilot.domain.models import Revision, UUID4Str
 
 _SAFE_ALLOW = re.compile(r"[A-Z]+(?:, [A-Z]+)*")
-_KNOWN_LOCATION_SEGMENTS = frozenset({
-    "body",
-    "path",
-    "query",
-    "case_id",
-    "case_type",
-    "summary",
-    "merchant_ref",
-    "synthetic",
-    "evidence_id",
-    "evidence_code",
-    "availability",
-    "typed_value",
-    "observed_at",
-    "source_ref",
-})
+_KNOWN_LOCATION_SEGMENTS = frozenset(
+    {
+        "body",
+        "path",
+        "query",
+        "case_id",
+        "case_type",
+        "summary",
+        "merchant_ref",
+        "synthetic",
+        "evidence_id",
+        "evidence_code",
+        "availability",
+        "typed_value",
+        "observed_at",
+        "source_ref",
+    }
+)
 _SAFE_VALIDATION_REASONS = {
     "extra_forbidden": "extra_field",
     "missing": "required_field",

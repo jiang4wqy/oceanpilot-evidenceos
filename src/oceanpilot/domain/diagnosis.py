@@ -15,28 +15,26 @@ from oceanpilot.domain.models import (
 HUMAN_REVIEW_SCORE_THRESHOLD = Decimal("0.90")
 HUMAN_REVIEW_SOURCE_QUALITY_THRESHOLD = Decimal("0.75")
 
-SOURCE_QUALITY: Final[Mapping[SourceReliability, Decimal]] = MappingProxyType({
-    SourceReliability.SYSTEM_OF_RECORD: Decimal("1.00"),
-    SourceReliability.VERIFIED_DOCUMENT: Decimal("0.90"),
-    SourceReliability.SYNTHETIC_TEST: Decimal("0.80"),
-    SourceReliability.OPERATOR_CONFIRMED: Decimal("0.75"),
-    SourceReliability.USER_REPORTED: Decimal("0.55"),
-})
+SOURCE_QUALITY: Final[Mapping[SourceReliability, Decimal]] = MappingProxyType(
+    {
+        SourceReliability.SYSTEM_OF_RECORD: Decimal("1.00"),
+        SourceReliability.VERIFIED_DOCUMENT: Decimal("0.90"),
+        SourceReliability.SYNTHETIC_TEST: Decimal("0.80"),
+        SourceReliability.OPERATOR_CONFIRMED: Decimal("0.75"),
+        SourceReliability.USER_REPORTED: Decimal("0.55"),
+    }
+)
 
 
 def _valid_coverage(value: object) -> bool:
     return (
-        isinstance(value, Decimal)
-        and value.is_finite()
-        and Decimal("0") <= value <= Decimal("1")
+        isinstance(value, Decimal) and value.is_finite() and Decimal("0") <= value <= Decimal("1")
     )
 
 
 def _valid_consistency(value: object) -> bool:
     return (
-        isinstance(value, Decimal)
-        and value.is_finite()
-        and value in {Decimal("0"), Decimal("1")}
+        isinstance(value, Decimal) and value.is_finite() and value in {Decimal("0"), Decimal("1")}
     )
 
 

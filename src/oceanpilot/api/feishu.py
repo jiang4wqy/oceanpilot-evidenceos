@@ -207,9 +207,7 @@ def _process_message(
         if case_id is None:
             return _reply(200, _ACK)
         summary = _summary(outcome, case_id=case_id)
-        store.complete_event(
-            event_id, response=summary, case_id=case_id, completed_at=_now_text()
-        )
+        store.complete_event(event_id, response=summary, case_id=case_id, completed_at=_now_text())
 
     _send_card(client, message.chat_id, outcome)
     return _reply(200, summary)
@@ -254,9 +252,7 @@ def _process_evidence(
     outcome = orchestrator.handle_evidence(store, answer)
     case_id = _case_id_of(outcome) or value.case_id
     summary = _summary(outcome, case_id=case_id)
-    store.complete_event(
-        action_id, response=summary, case_id=case_id, completed_at=_now_text()
-    )
+    store.complete_event(action_id, response=summary, case_id=case_id, completed_at=_now_text())
     return _reply(200, summary), outcome, chat_id
 
 
@@ -356,9 +352,7 @@ def _process_card_action(
             if action_kind == ACTION_SUBMIT_EVIDENCE:
                 processed = _process_evidence(orchestrator, store, envelope, action_id)
             else:
-                processed = _process_confirmation(
-                    orchestrator, store, envelope, action_id
-                )
+                processed = _process_confirmation(orchestrator, store, envelope, action_id)
         except (UnboundChat, CaseBindingMismatch):
             return _reply(400, _ERR_INVALID)
 
@@ -375,12 +369,7 @@ async def _handle(request: Request, mode: str) -> JSONResponse:
     store_factory = getattr(state, "feishu_store_factory", None)
     verifier: FeishuRequestVerifier | None = getattr(state, "feishu_verifier", None)
     client = getattr(state, "feishu_client", None)
-    if (
-        orchestrator is None
-        or store_factory is None
-        or verifier is None
-        or client is None
-    ):
+    if orchestrator is None or store_factory is None or verifier is None or client is None:
         return _reply(503, _ERR_UNAVAILABLE)
 
     if not _content_type_ok(request.headers.get("content-type")):

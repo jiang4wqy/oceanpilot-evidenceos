@@ -198,9 +198,7 @@ def test_confirmation_of_current_requires_human_diagnosis(tmp_path):
     orchestrator, _case_service, feishu_factory = _build_orchestrator(tmp_path)
 
     with feishu_factory.session() as binding:
-        created = orchestrator.handle_message(
-            binding, MessageEvent(chat_id=CHAT_ID, text="3DS")
-        )
+        created = orchestrator.handle_message(binding, MessageEvent(chat_id=CHAT_ID, text="3DS"))
         case_id = created.case_view.case.case_id
         diagnosed = _submit_threeds(orchestrator, binding, case_id)
         diagnosis_id = diagnosed.diagnosis_view.diagnosis.diagnosis_id
@@ -222,9 +220,7 @@ def test_confirmation_with_stale_diagnosis_id_is_not_confirmable(tmp_path):
     orchestrator, _case_service, feishu_factory = _build_orchestrator(tmp_path)
 
     with feishu_factory.session() as binding:
-        created = orchestrator.handle_message(
-            binding, MessageEvent(chat_id=CHAT_ID, text="3DS")
-        )
+        created = orchestrator.handle_message(binding, MessageEvent(chat_id=CHAT_ID, text="3DS"))
         case_id = created.case_view.case.case_id
         _submit_threeds(orchestrator, binding, case_id)
         outcome = orchestrator.evaluate_confirmation(

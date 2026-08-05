@@ -34,15 +34,11 @@ def test_openapi_freezes_paths_replay_and_problem_contract(tmp_path):
     assert "audit_reference" in diagnosis_schema["required"]
 
     problem_schema = document["components"]["schemas"]["ProblemDetails"]
-    assert {"case_id", "missing_fields", "current_revision"}.issubset(
-        problem_schema["properties"]
-    )
+    assert {"case_id", "missing_fields", "current_revision"}.issubset(problem_schema["properties"])
     assert not {"case_id", "missing_fields", "current_revision"}.intersection(
         problem_schema["required"]
     )
-    safe_error_ref = problem_schema["properties"]["errors"]["anyOf"][0]["items"][
-        "$ref"
-    ]
+    safe_error_ref = problem_schema["properties"]["errors"]["anyOf"][0]["items"]["$ref"]
     assert safe_error_ref == "#/components/schemas/SafeValidationError"
     assert "SafeValidationError" in document["components"]["schemas"]
     create = document["paths"]["/api/v1/cases"]["post"]

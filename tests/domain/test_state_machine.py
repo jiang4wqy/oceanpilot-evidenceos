@@ -38,18 +38,24 @@ def readiness(ready: bool) -> ReadinessAssessment:
 EXPECTED_COMMANDS = {
     CaseStatus.NEW: frozenset(),
     CaseStatus.NEED_INFO: frozenset({CaseCommand.ADD_EVIDENCE}),
-    CaseStatus.EVIDENCE_READY: frozenset({
-        CaseCommand.ADD_EVIDENCE,
-        CaseCommand.DIAGNOSE,
-    }),
-    CaseStatus.DIAGNOSED: frozenset({
-        CaseCommand.ADD_EVIDENCE,
-        CaseCommand.DIAGNOSE,
-    }),
-    CaseStatus.HUMAN_REVIEW: frozenset({
-        CaseCommand.ADD_EVIDENCE,
-        CaseCommand.DIAGNOSE,
-    }),
+    CaseStatus.EVIDENCE_READY: frozenset(
+        {
+            CaseCommand.ADD_EVIDENCE,
+            CaseCommand.DIAGNOSE,
+        }
+    ),
+    CaseStatus.DIAGNOSED: frozenset(
+        {
+            CaseCommand.ADD_EVIDENCE,
+            CaseCommand.DIAGNOSE,
+        }
+    ),
+    CaseStatus.HUMAN_REVIEW: frozenset(
+        {
+            CaseCommand.ADD_EVIDENCE,
+            CaseCommand.DIAGNOSE,
+        }
+    ),
 }
 
 
@@ -70,9 +76,7 @@ def test_allowed_commands_are_exact_and_externally_immutable() -> None:
 @pytest.mark.parametrize(
     ("status", "command"),
     tuple(
-        (status, command)
-        for status, commands in EXPECTED_COMMANDS.items()
-        for command in commands
+        (status, command) for status, commands in EXPECTED_COMMANDS.items() for command in commands
     ),
 )
 def test_allowlisted_commands_are_accepted(

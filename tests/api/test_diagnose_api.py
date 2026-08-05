@@ -252,8 +252,6 @@ def test_real_sqlite_rule_diagnosis_creates_then_replays(tmp_path):
     assert replay.status_code == 200
     assert first.json()["outcome"] == "CREATED"
     assert replay.json()["outcome"] == "REPLAY"
-    assert first.json()["diagnosis"]["diagnosis_id"] == replay.json()["diagnosis"][
-        "diagnosis_id"
-    ]
+    assert first.json()["diagnosis"]["diagnosis_id"] == replay.json()["diagnosis"]["diagnosis_id"]
     assert first.json()["audit_reference"] == replay.json()["audit_reference"]
     assert first.json()["diagnosis"]["hypotheses"][0]["rule_id"] == "THREEDS_INCOMPLETE_V1"

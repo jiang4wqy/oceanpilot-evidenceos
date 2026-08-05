@@ -78,9 +78,7 @@ def _is_sensitive_key(value: str) -> bool:
     if not tokens or tokens[-1] in _SAFE_METADATA_SUFFIXES:
         return False
     singular_tokens = tuple(
-        token[:-1]
-        if token.endswith("s") and token[:-1] in _SENSITIVE_KEY_TOKENS
-        else token
+        token[:-1] if token.endswith("s") and token[:-1] in _SENSITIVE_KEY_TOKENS else token
         for token in tokens
     )
     compact_key = "".join(tokens)
@@ -95,11 +93,8 @@ def _is_trusted_derived_value(key: object, value: object) -> bool:
     if not isinstance(key, str) or not isinstance(value, str):
         return False
     return (
-        key in _UUID_IDENTIFIER_FIELDS
-        and _UUID4_IDENTIFIER_PATTERN.fullmatch(value) is not None
-    ) or (
-        key == "content_hash" and _CONTENT_HASH_PATTERN.fullmatch(value) is not None
-    )
+        key in _UUID_IDENTIFIER_FIELDS and _UUID4_IDENTIFIER_PATTERN.fullmatch(value) is not None
+    ) or (key == "content_hash" and _CONTENT_HASH_PATTERN.fullmatch(value) is not None)
 
 
 def _contains_sensitive_value(value: object, visited: set[int]) -> bool:

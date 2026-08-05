@@ -54,9 +54,7 @@ def evidence_factory():
             evidence_id=evidence_id,
             evidence_code=EvidenceCode(code),
             availability=availability,
-            typed_value=(
-                value if availability is EvidenceAvailability.AVAILABLE else None
-            ),
+            typed_value=(value if availability is EvidenceAvailability.AVAILABLE else None),
             observed_at=datetime.fromisoformat("2026-07-18T12:00:00+08:00"),
             source_ref="synthetic:fixture",
         )

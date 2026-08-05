@@ -46,9 +46,9 @@ def _client(transport) -> FeishuOutboundClient:
 
 
 def test_get_tenant_access_token_internal_uses_injected_credentials():
-    transport = _ScriptedTransport([
-        _response({"code": 0, "tenant_access_token": TOKEN, "expire": 7200})
-    ])
+    transport = _ScriptedTransport(
+        [_response({"code": 0, "tenant_access_token": TOKEN, "expire": 7200})]
+    )
 
     assert _client(transport).get_tenant_access_token() == TOKEN
     request = transport.requests[0]
@@ -62,12 +62,14 @@ def test_get_tenant_access_token_internal_uses_injected_credentials():
 
 
 def test_interactive_card_send_uses_token_and_stable_idempotency_key():
-    transport = _ScriptedTransport([
-        _response({"code": 0, "tenant_access_token": TOKEN, "expire": 7200}),
-        _response({"code": 0, "data": {"message_id": "om_001"}}),
-        _response({"code": 0, "tenant_access_token": TOKEN, "expire": 7200}),
-        _response({"code": 0, "data": {"message_id": "om_001"}}),
-    ])
+    transport = _ScriptedTransport(
+        [
+            _response({"code": 0, "tenant_access_token": TOKEN, "expire": 7200}),
+            _response({"code": 0, "data": {"message_id": "om_001"}}),
+            _response({"code": 0, "tenant_access_token": TOKEN, "expire": 7200}),
+            _response({"code": 0, "data": {"message_id": "om_001"}}),
+        ]
+    )
     client = _client(transport)
     card = {"schema": "2.0", "body": {"elements": []}}
 
@@ -127,10 +129,12 @@ def test_token_failures_use_one_safe_error_without_logs(responses, caplog):
 
 
 def test_message_failure_never_echoes_token_or_response_body():
-    transport = _ScriptedTransport([
-        _response({"code": 0, "tenant_access_token": TOKEN}),
-        _response({"code": 999, "msg": f"failed with {TOKEN}"}),
-    ])
+    transport = _ScriptedTransport(
+        [
+            _response({"code": 0, "tenant_access_token": TOKEN}),
+            _response({"code": 999, "msg": f"failed with {TOKEN}"}),
+        ]
+    )
     with pytest.raises(FeishuOutboundError) as captured:
         _client(transport).send_interactive_card(
             receive_id="oc_synthetic_chat",

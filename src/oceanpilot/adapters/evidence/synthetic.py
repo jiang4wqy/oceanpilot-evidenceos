@@ -79,16 +79,12 @@ class SyntheticEvidenceSource:
         sequence = _SCENARIO_SEQUENCE[scenario]
         return tuple(
             EvidenceCreate(
-                evidence_id=(
-                    f"00000000-0000-4000-8000-{sequence * 100 + index:012d}"
-                ),
+                evidence_id=(f"00000000-0000-4000-8000-{sequence * 100 + index:012d}"),
                 evidence_code=code,
                 availability=EvidenceAvailability.AVAILABLE,
                 typed_value=value,
                 observed_at=_OBSERVED_AT,
-                source_ref=(
-                    f"synthetic:oceanpilot:{scenario.value.lower()}:{code.value}"
-                ),
+                source_ref=(f"synthetic:oceanpilot:{scenario.value.lower()}:{code.value}"),
             )
             for index, (code, value) in enumerate(_SCENARIO_FACTS[scenario], start=1)
         )

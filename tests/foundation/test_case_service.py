@@ -327,9 +327,7 @@ def test_existing_evidence_uses_store_replay_without_allocating_audit_ids():
 
 
 def test_foundation_service_does_not_retry_concurrent_write():
-    service, fake, _ = make_service(
-        case_view=empty_case_view(), append_error=ConcurrentCaseWrite()
-    )
+    service, fake, _ = make_service(case_view=empty_case_view(), append_error=ConcurrentCaseWrite())
     with pytest.raises(ConcurrentCaseWrite):
         service.add_evidence(add_environment_command())
     assert fake.load_count == 1
