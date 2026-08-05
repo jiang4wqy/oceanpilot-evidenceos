@@ -244,6 +244,68 @@ def test_outbound_failure_still_records_case(tmp_path):
     assert bound == response.json()["case_id"]
 
 
+def _drive_to_confirmable(client, chat_id, prefix):
+    message = _post(
+        client,
+        EVENTS_PATH,
+        to_bytes(message_payload(event_id=f"{prefix}-msg", chat_id=chat_id, text="x")),
+    )
+    case_id = message.json()["case_id"]
+    last = None
+    for index, (code, value) in enumerate(FLOW_FACTS):
+        raw = to_bytes(
+            evidence_payload(
+                event_id=f"{prefix}-ev-{index}",
+                chat_id=chat_id,
+                case_id=case_id,
+                evidence_id=f"00000000-0000-4000-8000-{index + 1:012d}",
+                evidence_code=code,
+                typed_value=value,
+            )
+        )
+        last = _post(client, CARD_PATH, raw)
+    return case_id, last.json()["diagnosis_id"]
+
+
+def test_second_confirmation_of_same_diagnosis_is_rejected(tmp_path):
+    transport = RecordingTransport()
+    app = make_app(tmp_path, transport)
+    chat = "oc_double_confirm"
+    with TestClient(app, raise_server_exceptions=False) as client:
+        case_id, diagnosis_id = _drive_to_confirmable(client, chat, "dc")
+        first = _post(
+            client,
+            CARD_PATH,
+            to_bytes(
+                confirm_payload(
+                    event_id="dc-confirm-1",
+                    chat_id=chat,
+                    case_id=case_id,
+                    diagnosis_id=diagnosis_id,
+                )
+            ),
+        )
+        second = _post(
+            client,
+            CARD_PATH,
+            to_bytes(
+                confirm_payload(
+                    event_id="dc-confirm-2",
+                    chat_id=chat,
+                    case_id=case_id,
+                    diagnosis_id=diagnosis_id,
+                )
+            ),
+        )
+        with app.state.feishu_store_factory.session() as store:
+            first_audit = store.get_approval_audit("dc-confirm-1")
+            second_audit = store.get_approval_audit("dc-confirm-2")
+    assert first.json()["outcome"] == "CONFIRMED"
+    assert second.status_code == 409
+    assert first_audit is not None
+    assert second_audit is None
+
+
 def test_responses_and_database_never_leak_secrets(tmp_path):
     transport = RecordingTransport()
     app = make_app(tmp_path, transport)

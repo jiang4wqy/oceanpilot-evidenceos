@@ -58,7 +58,8 @@ _SCHEMA = (
         actor_id TEXT NOT NULL,
         result TEXT NOT NULL,
         occurred_at TEXT NOT NULL,
-        synthetic INTEGER NOT NULL DEFAULT 1 CHECK (synthetic = 1)
+        synthetic INTEGER NOT NULL DEFAULT 1 CHECK (synthetic = 1),
+        UNIQUE (case_id, diagnosis_id)
     )
     """,
 )
