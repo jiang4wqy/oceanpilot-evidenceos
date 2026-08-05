@@ -15,6 +15,7 @@ from oceanpilot.application.errors import (
     CaseNotFound,
     ConcurrentCaseWrite,
     DatabaseUnavailable,
+    DiagnosisInputStale,
     EvidenceConflict,
     PersistenceInvariantViolation,
 )
@@ -46,6 +47,7 @@ from oceanpilot.domain.models import (
     AuditEvent,
     CaseInputSnapshot,
     CaseView,
+    CommitDiagnosisResult,
     DiagnosisSnapshot,
     EvidenceCreate,
     EvidenceItem,
@@ -72,7 +74,7 @@ def _call_with_error_mapping[T](operation: Callable[[], T]) -> T:
     mapped: DatabaseUnavailable | PersistenceInvariantViolation
     try:
         return operation()
-    except (CaseNotFound, EvidenceConflict, ConcurrentCaseWrite):
+    except (CaseNotFound, DiagnosisInputStale, EvidenceConflict, ConcurrentCaseWrite):
         raise
     except (
         sqlite3.IntegrityError,
@@ -585,6 +587,53 @@ def _canonicalize_audit(event: AuditEvent) -> AuditEvent:
     return canonical
 
 
+def _canonicalize_diagnosis(snapshot: DiagnosisSnapshot) -> DiagnosisSnapshot:
+    canonical = _invariant_call(
+        lambda: DiagnosisSnapshot.model_validate(
+            snapshot.model_dump(mode="python"),
+            strict=True,
+        )
+    )
+    if canonical != snapshot:
+        raise PersistenceInvariantViolation()
+    hypotheses = tuple(
+        hypothesis.model_copy(
+            update={"evidence_refs": tuple(sorted(hypothesis.evidence_refs))}
+        )
+        for hypothesis in canonical.hypotheses
+    )
+    route = canonical.routing_decision
+    if route is not None:
+        route = route.model_copy(
+            update={"evidence_refs": tuple(sorted(route.evidence_refs))}
+        )
+    ticket = canonical.ticket_draft
+    if ticket is not None:
+        ticket = ticket.model_copy(
+            update={
+                "hypotheses": tuple(
+                    hypothesis.model_copy(
+                        update={"evidence_refs": tuple(sorted(hypothesis.evidence_refs))}
+                    )
+                    for hypothesis in ticket.hypotheses
+                )
+            }
+        )
+    normalized = _invariant_call(
+        lambda: DiagnosisSnapshot.model_validate(
+            canonical.model_copy(
+                update={
+                    "hypotheses": hypotheses,
+                    "routing_decision": route,
+                    "ticket_draft": ticket,
+                }
+            ).model_dump(mode="python"),
+            strict=True,
+        )
+    )
+    return _validate_diagnosis_snapshot(normalized)
+
+
 def _validate_audit_batch(
     events: Sequence[AuditEvent],
     *,
@@ -685,6 +734,83 @@ def _insert_audit(connection: sqlite3.Connection, event: AuditEvent) -> None:
     )
     if cursor.rowcount != 1:
         raise PersistenceInvariantViolation()
+
+
+def _insert_diagnosis(
+    connection: sqlite3.Connection,
+    snapshot: DiagnosisSnapshot,
+) -> None:
+    routing_json: str | None = None
+    if snapshot.routing_decision is not None:
+        routing_payload = snapshot.routing_decision.model_dump(mode="json")
+        routing_payload["review_reasons"] = sorted(
+            reason.value for reason in snapshot.routing_decision.review_reasons
+        )
+        routing_json = _encode_json(routing_payload)
+    cursor = connection.execute(
+        """
+        INSERT INTO diagnosis_snapshots (
+            case_id, diagnosis_id, evidence_revision, policy_version,
+            engine_version, status, routing_json, ticket_json, requires_human,
+            review_reasons_json, synthetic, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            snapshot.case_id,
+            snapshot.diagnosis_id,
+            snapshot.evidence_revision,
+            snapshot.policy_version,
+            snapshot.engine_version,
+            snapshot.status.value,
+            routing_json,
+            (
+                _encode_json(snapshot.ticket_draft.model_dump(mode="json"))
+                if snapshot.ticket_draft is not None
+                else None
+            ),
+            int(snapshot.requires_human),
+            _encode_json(sorted(reason.value for reason in snapshot.review_reasons)),
+            1,
+            _encode_datetime(snapshot.created_at),
+        ),
+    )
+    if cursor.rowcount != 1:
+        raise PersistenceInvariantViolation()
+
+    for hypothesis in snapshot.hypotheses:
+        cursor = connection.execute(
+            """
+            INSERT INTO hypotheses (
+                case_id, hypothesis_id, diagnosis_id, cause_code, explanation,
+                confidence_score, confidence_method, next_verification_action,
+                rule_id
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                snapshot.case_id,
+                hypothesis.hypothesis_id,
+                snapshot.diagnosis_id,
+                hypothesis.cause_code,
+                hypothesis.explanation,
+                str(hypothesis.confidence_score),
+                hypothesis.confidence_method,
+                hypothesis.next_verification_action,
+                hypothesis.rule_id,
+            ),
+        )
+        if cursor.rowcount != 1:
+            raise PersistenceInvariantViolation()
+        for evidence_id in hypothesis.evidence_refs:
+            cursor = connection.execute(
+                """
+                INSERT INTO hypothesis_evidence_refs (
+                    case_id, hypothesis_id, evidence_id
+                ) VALUES (?, ?, ?)
+                """,
+                (snapshot.case_id, hypothesis.hypothesis_id, evidence_id),
+            )
+            if cursor.rowcount != 1:
+                raise PersistenceInvariantViolation()
 
 
 def _canonicalize_readiness(
@@ -1060,6 +1186,169 @@ class SqliteCaseStoreSession:
                     evidence=view.evidence,
                     current_diagnosis=view.current_diagnosis,
                 )
+
+        return _call_with_error_mapping(operation)
+
+    def find_diagnosis(
+        self,
+        *,
+        case_id: str,
+        evidence_revision: int,
+        policy_version: str,
+    ) -> DiagnosisSnapshot | None:
+        def operation() -> DiagnosisSnapshot | None:
+            normalized_case_id = _decode_uuid(case_id)
+            if (
+                type(evidence_revision) is not int
+                or evidence_revision < 0
+                or type(policy_version) is not str
+                or not policy_version
+            ):
+                raise PersistenceInvariantViolation()
+            with _deferred_read_transaction(self._connection):
+                row = self._connection.execute(
+                    """
+                    SELECT diagnosis_id
+                    FROM diagnosis_snapshots
+                    WHERE case_id = ? AND evidence_revision = ? AND policy_version = ?
+                    """,
+                    (normalized_case_id, evidence_revision, policy_version),
+                ).fetchone()
+                if row is None:
+                    return None
+                snapshot = self._load_diagnosis_snapshot_by_id(
+                    normalized_case_id,
+                    _decode_uuid(row["diagnosis_id"]),
+                )
+                if snapshot is None:
+                    raise PersistenceInvariantViolation()
+                assert_no_sensitive_data(snapshot)
+                return snapshot
+
+        return _call_with_error_mapping(operation)
+
+    def commit_diagnosis_atomic(
+        self,
+        *,
+        expected_case_revision: int,
+        expected_evidence_revision: int,
+        snapshot: DiagnosisSnapshot,
+        target_status: CaseStatus,
+        audit_events: Sequence[AuditEvent],
+    ) -> CommitDiagnosisResult:
+        events = tuple(audit_events)
+        assert_no_sensitive_data(snapshot)
+        assert_no_sensitive_data(target_status)
+        for event in events:
+            assert_no_sensitive_data(event)
+        canonical_snapshot = _canonicalize_diagnosis(snapshot)
+
+        def operation() -> CommitDiagnosisResult:
+            if (
+                type(expected_case_revision) is not int
+                or expected_case_revision < 0
+                or type(expected_evidence_revision) is not int
+                or expected_evidence_revision < 0
+                or canonical_snapshot.evidence_revision != expected_evidence_revision
+                or canonical_snapshot.status is not DiagnosisStatus.CURRENT
+                or type(target_status) is not CaseStatus
+                or target_status
+                is not (
+                    CaseStatus.HUMAN_REVIEW
+                    if canonical_snapshot.requires_human
+                    else CaseStatus.DIAGNOSED
+                )
+            ):
+                raise PersistenceInvariantViolation()
+
+            with immediate_transaction(self._connection):
+                current = self._load_case_graph(canonical_snapshot.case_id)
+                if current is None:
+                    raise CaseNotFound()
+                case = current.case
+                if case.evidence_revision != expected_evidence_revision:
+                    raise DiagnosisInputStale()
+                replay_row = self._connection.execute(
+                    """
+                    SELECT diagnosis_id
+                    FROM diagnosis_snapshots
+                    WHERE case_id = ? AND evidence_revision = ? AND policy_version = ?
+                    """,
+                    (
+                        canonical_snapshot.case_id,
+                        expected_evidence_revision,
+                        canonical_snapshot.policy_version,
+                    ),
+                ).fetchone()
+                if replay_row is not None:
+                    replayed = self._load_diagnosis_snapshot_by_id(
+                        canonical_snapshot.case_id,
+                        _decode_uuid(replay_row["diagnosis_id"]),
+                    )
+                    if (
+                        replayed is None
+                        or replayed.status is not DiagnosisStatus.CURRENT
+                        or case.current_diagnosis_id != replayed.diagnosis_id
+                        or current.current_diagnosis != replayed
+                    ):
+                        raise PersistenceInvariantViolation()
+                    return CommitDiagnosisResult(
+                        outcome=WriteOutcome.REPLAY,
+                        case_view=current,
+                        diagnosis=replayed,
+                    )
+                if case.case_revision != expected_case_revision:
+                    raise ConcurrentCaseWrite()
+                if case.status is not CaseStatus.EVIDENCE_READY:
+                    raise PersistenceInvariantViolation()
+
+                required_types = {
+                    AuditEventType.DIAGNOSIS_CREATED,
+                    AuditEventType.STATE_TRANSITIONED,
+                }
+                if canonical_snapshot.routing_decision is not None:
+                    required_types.add(AuditEventType.ROUTING_PROPOSED)
+                validated_audits = _validate_audit_batch(
+                    events,
+                    case_id=case.case_id,
+                    required_types=frozenset(required_types),
+                    from_status=case.status,
+                    to_status=target_status,
+                    case_revision=expected_case_revision + 1,
+                    evidence_revision=expected_evidence_revision,
+                )
+
+                _insert_diagnosis(self._connection, canonical_snapshot)
+                cursor = self._connection.execute(
+                    """
+                    UPDATE cases
+                    SET status = ?, case_revision = ?, updated_at = ?,
+                        current_diagnosis_id = ?
+                    WHERE case_id = ? AND case_revision = ? AND evidence_revision = ?
+                    """,
+                    (
+                        target_status.value,
+                        expected_case_revision + 1,
+                        _encode_datetime(max(case.updated_at, canonical_snapshot.created_at)),
+                        canonical_snapshot.diagnosis_id,
+                        case.case_id,
+                        expected_case_revision,
+                        expected_evidence_revision,
+                    ),
+                )
+                if cursor.rowcount != 1:
+                    raise ConcurrentCaseWrite()
+                for event in validated_audits:
+                    _insert_audit(self._connection, event)
+                fresh = self._load_case_graph(case.case_id)
+                if fresh is None or fresh.current_diagnosis is None:
+                    raise PersistenceInvariantViolation()
+
+            return CommitDiagnosisResult(
+                outcome=WriteOutcome.CREATED,
+                case_view=fresh,
+                diagnosis=fresh.current_diagnosis,
+            )
 
         return _call_with_error_mapping(operation)
 
