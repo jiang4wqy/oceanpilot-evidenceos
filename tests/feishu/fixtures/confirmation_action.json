@@ -1,0 +1,24 @@
+{
+  "schema": "2.0",
+  "header": {
+    "event_id": "evt-action-confirm-0001",
+    "event_type": "card.action.trigger",
+    "create_time": "1754366402000",
+    "token": "synthetic-verification-token"
+  },
+  "event": {
+    "operator": {"open_id": "ou_reviewer_0001"},
+    "context": {
+      "open_chat_id": "oc_case_chat_0001",
+      "open_message_id": "om_diagnosis_0001"
+    },
+    "action": {
+      "tag": "button",
+      "value": {
+        "action": "confirm_review",
+        "case_id": "00000000-0000-4000-8000-000000000001",
+        "diagnosis_id": "00000000-0000-4000-8000-000000000201"
+      }
+    }
+  }
+}

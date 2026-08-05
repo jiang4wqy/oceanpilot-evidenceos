@@ -24,6 +24,8 @@ def test_openapi_freezes_paths_replay_and_problem_contract(tmp_path):
         "/api/v1/cases/{case_id}",
         "/api/v1/cases/{case_id}/evidence",
         "/api/v1/cases/{case_id}/diagnose",
+        "/api/v1/integrations/feishu/events",
+        "/api/v1/integrations/feishu/card-actions",
     }
     diagnose = document["paths"]["/api/v1/cases/{case_id}/diagnose"]["post"]
     assert {"200", "201", "409", "422", "500", "503"}.issubset(diagnose["responses"])

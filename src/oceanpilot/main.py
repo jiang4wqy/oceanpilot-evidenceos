@@ -1,4 +1,5 @@
-from collections.abc import AsyncIterator
+import time
+from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from uuid import uuid4
@@ -7,6 +8,13 @@ from fastapi import FastAPI, Request
 from fastapi.openapi.utils import get_openapi
 
 from oceanpilot.adapters.diagnosis.rules import RuleDiagnosisEngine
+from oceanpilot.adapters.feishu.client import (
+    FeishuHttpRequest,
+    FeishuHttpResponse,
+    FeishuOutboundClient,
+)
+from oceanpilot.adapters.feishu.security import FeishuRequestVerifier
+from oceanpilot.adapters.feishu.store import FeishuCallbackStoreFactory
 from oceanpilot.adapters.persistence.sqlite import (
     SqliteCaseStoreFactory,
     initialize_schema,
@@ -14,12 +22,42 @@ from oceanpilot.adapters.persistence.sqlite import (
 from oceanpilot.api.cases import router as cases_router
 from oceanpilot.api.dependencies import RequestContext
 from oceanpilot.api.errors import ProblemDetails, register_exception_handlers
+from oceanpilot.api.feishu import router as feishu_router
 from oceanpilot.api.health import router as health_router
 from oceanpilot.application.case_service import CaseService
-from oceanpilot.config import Settings
+from oceanpilot.application.feishu_orchestrator import FeishuOrchestrator
+from oceanpilot.config import FeishuSettings, Settings
 
 
-def create_app(settings: Settings | None = None) -> FastAPI:
+def _configure_feishu(
+    app: FastAPI,
+    feishu: FeishuSettings,
+    case_service: CaseService,
+    transport: Callable[[FeishuHttpRequest], FeishuHttpResponse] | None,
+) -> None:
+    app.state.feishu_settings = feishu
+    app.state.feishu_verifier = FeishuRequestVerifier(
+        encrypt_key=feishu.encrypt_key,
+        verification_token=feishu.verification_token,
+        now=lambda: int(time.time()),
+    )
+    app.state.feishu_client = FeishuOutboundClient(
+        app_id=feishu.app_id,
+        app_secret=feishu.app_secret,
+        transport=transport,
+    )
+    app.state.feishu_orchestrator = FeishuOrchestrator(
+        case_service,
+        clock=lambda: datetime.now(UTC),
+        uuid_factory=lambda: str(uuid4()),
+    )
+
+
+def create_app(
+    settings: Settings | None = None,
+    *,
+    feishu_transport: Callable[[FeishuHttpRequest], FeishuHttpResponse] | None = None,
+) -> FastAPI:
     resolved = settings or Settings.from_env()
     store_factory = SqliteCaseStoreFactory(resolved.db_path)
     case_service = CaseService(
@@ -33,18 +71,23 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-        del app
         initialize_schema(resolved.db_path)
         with store_factory() as store:
             store.healthcheck()
+        if resolved.feishu is not None:
+            app.state.feishu_store_factory = FeishuCallbackStoreFactory(
+                resolved.feishu.db_path
+            )
         yield
 
-    app = FastAPI(lifespan=lifespan)
-    app.state.settings = resolved
-    app.state.store_factory = store_factory
-    app.state.case_service = case_service
+    application = FastAPI(lifespan=lifespan)
+    application.state.settings = resolved
+    application.state.store_factory = store_factory
+    application.state.case_service = case_service
+    if resolved.feishu is not None:
+        _configure_feishu(application, resolved.feishu, case_service, feishu_transport)
 
-    @app.middleware("http")
+    @application.middleware("http")
     async def request_context(request: Request, call_next):
         context = RequestContext(request_id=str(uuid4()), trace_id=str(uuid4()))
         request.state.request_context = context
@@ -52,16 +95,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         response.headers["X-Trace-ID"] = context.trace_id
         return response
 
-    register_exception_handlers(app)
-    app.include_router(health_router)
-    app.include_router(cases_router)
+    register_exception_handlers(application)
+    application.include_router(health_router)
+    application.include_router(cases_router)
+    application.include_router(feishu_router)
 
     def openapi_schema() -> dict[str, object]:
-        if app.openapi_schema is None:
+        if application.openapi_schema is None:
             schema = get_openapi(
-                title=app.title,
-                version=app.version,
-                routes=app.routes,
+                title=application.title,
+                version=application.version,
+                routes=application.routes,
             )
             components = schema.setdefault("components", {}).setdefault("schemas", {})
             problem_schema = ProblemDetails.model_json_schema(
@@ -69,8 +113,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             )
             components.update(problem_schema.pop("$defs", {}))
             components["ProblemDetails"] = problem_schema
-            app.openapi_schema = schema
-        return app.openapi_schema
+            application.openapi_schema = schema
+        return application.openapi_schema
 
-    app.openapi = openapi_schema
-    return app
+    application.openapi = openapi_schema
+    return application
