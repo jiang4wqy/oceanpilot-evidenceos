@@ -27,6 +27,12 @@ from oceanpilot.domain.chargeback import (
     DisputeReasonCode,
     assess_chargeback,
 )
+from oceanpilot.domain.chargeback_prevention import (
+    PreventionAssessment,
+    PreventionRiskLevel,
+    PreventionSignals,
+    assess_chargeback_risk,
+)
 
 _ASSESS_SYSTEM = (
     "You explain a cross-border chargeback representment assessment to an "
@@ -342,4 +348,100 @@ class EvidenceAgent:
         text = result.text.strip()
         if not text:
             return _fallback_question(code, remaining), ExplanationSource.FALLBACK
+        return text, ExplanationSource.MODEL
+
+
+# --- Prevention agent: pre-dispute risk tip (design §6 ⑦) ------------------
+
+
+@dataclass(frozen=True)
+class PreventionOutcome:
+    assessment: PreventionAssessment
+    advice: str
+    advice_source: ExplanationSource
+
+
+_PREVENTION_SYSTEM = (
+    "You warn a merchant, in plain Chinese, that a transaction has an elevated "
+    "chargeback risk and tell them which evidence to keep now so they can win a "
+    "future dispute. You are given a risk decision already made by a "
+    "deterministic engine — do NOT change the risk level or invent new factors, "
+    "only explain them and list the evidence to retain. You never block, hold, "
+    "capture, or refund anything; the strongest action is advising a manual "
+    "review. Be concise. Synthetic data; never claim any action was executed."
+)
+
+_RISK_LABELS = {
+    PreventionRiskLevel.LOW: "低",
+    PreventionRiskLevel.MEDIUM: "中",
+    PreventionRiskLevel.HIGH: "高",
+}
+
+
+def _prevention_facts(a: PreventionAssessment) -> str:
+    factors = ", ".join(f.value for f in a.factors) or "(none)"
+    evidence = ", ".join(c.value for c in a.recommended_evidence) or "(none)"
+    return (
+        f"risk_level={a.risk_level.value}\n"
+        f"risk_score={a.risk_score}\n"
+        f"risk_factors={factors}\n"
+        f"recommend_manual_review={a.recommend_manual_review}\n"
+        f"recommended_evidence={evidence}"
+    )
+
+
+def _prevention_fallback(a: PreventionAssessment) -> str:
+    label = _RISK_LABELS[a.risk_level]
+    if a.risk_level is PreventionRiskLevel.LOW or not a.recommended_evidence:
+        return f"合成风险提示：拒付风险{label}，暂无需额外留证。"
+    evidence = "、".join(c.value for c in a.recommended_evidence)
+    review = "，建议人工复核后再放行" if a.recommend_manual_review else ""
+    return f"合成风险提示：拒付风险{label}{review}。建议现在留存证据：{evidence}。"
+
+
+class PreventionAgent:
+    """Pre-dispute risk assistant: deterministic kernel decides, model advises.
+
+    Takes synthetic transaction signals directly (the channel/composition layer
+    fetches them via a ``SignalSource``); the kernel decides the risk level and
+    which evidence to keep, and the model only phrases the merchant-facing tip
+    with a deterministic fallback. Purely advisory — it never acts on a payment.
+    """
+
+    def __init__(
+        self,
+        model: ModelProvider,
+        *,
+        security_tier: SecurityTier = SecurityTier.LOW,
+        effort: Effort = Effort.LOW,
+    ) -> None:
+        self._model = model
+        self._security_tier = security_tier
+        self._effort = effort
+
+    def assess(self, signals: PreventionSignals) -> PreventionOutcome:
+        assessment = assess_chargeback_risk(signals)
+        advice, source = self._advise(assessment)
+        return PreventionOutcome(
+            assessment=assessment,
+            advice=advice,
+            advice_source=source,
+        )
+
+    def _advise(self, assessment: PreventionAssessment) -> tuple[str, ExplanationSource]:
+        try:
+            result = self._model.complete(
+                TaskSpec(
+                    kind="chargeback_prevention_advice",
+                    security_tier=self._security_tier,
+                    effort=self._effort,
+                ),
+                [ModelMessage(role=ModelRole.USER, content=_prevention_facts(assessment))],
+                system=_PREVENTION_SYSTEM,
+            )
+        except ModelProviderError:
+            return _prevention_fallback(assessment), ExplanationSource.FALLBACK
+        text = result.text.strip()
+        if not text:
+            return _prevention_fallback(assessment), ExplanationSource.FALLBACK
         return text, ExplanationSource.MODEL
