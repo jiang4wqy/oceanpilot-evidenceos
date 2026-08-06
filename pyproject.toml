@@ -8,6 +8,7 @@ version = "0.1.0"
 description = "Synthetic local prototype for evidence-driven payment incident collaboration"
 requires-python = ">=3.12,<3.13"
 dependencies = [
+  "anthropic==0.120.2",
   "fastapi==0.139.2",
   "pydantic==2.13.4",
   "uvicorn==0.51.0",
