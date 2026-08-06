@@ -16,8 +16,9 @@ from oceanpilot.adapters.feishu.client import (
 from oceanpilot.adapters.feishu.security import FeishuRequestVerifier
 from oceanpilot.adapters.feishu.store import FeishuCallbackStoreFactory
 from oceanpilot.adapters.model.fake import ScriptedModelProvider
-from oceanpilot.adapters.persistence.chargeback_memory import (
-    InMemoryChargebackCaseStore,
+from oceanpilot.adapters.persistence.chargeback_sqlite import (
+    SqliteChargebackCaseStore,
+    initialize_chargeback_schema,
 )
 from oceanpilot.adapters.persistence.sqlite import (
     SqliteCaseStoreFactory,
@@ -82,11 +83,14 @@ def create_app(
         engine_version=resolved.engine_version,
     )
 
+    chargeback_db_path = resolved.resolved_chargeback_db_path()
+
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         initialize_schema(resolved.db_path)
         with store_factory() as store:
             store.healthcheck()
+        initialize_chargeback_schema(chargeback_db_path)
         if resolved.feishu is not None:
             app.state.feishu_store_factory = FeishuCallbackStoreFactory(resolved.feishu.db_path)
         yield
@@ -106,7 +110,12 @@ def create_app(
         evidence=EvidenceAgent(chargeback_provider),
         assess=ChargebackAssessAgent(chargeback_provider),
     )
-    application.state.chargeback_store = InMemoryChargebackCaseStore()
+    # Durable store: chargeback cases survive across requests/restarts with an
+    # atomic audit trail and optimistic CAS. Its own file, initialized in lifespan.
+    application.state.chargeback_store = SqliteChargebackCaseStore(
+        chargeback_db_path,
+        clock=lambda: datetime.now(UTC),
+    )
 
     if resolved.feishu is not None:
         _configure_feishu(application, resolved.feishu, case_service, feishu_transport)

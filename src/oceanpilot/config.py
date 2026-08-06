@@ -19,11 +19,23 @@ class Settings:
     policy_version: str = "POLICY_V1"
     engine_version: str = "RULES_V1"
     feishu: FeishuSettings | None = None
+    chargeback_db_path: Path | None = None
+
+    def resolved_chargeback_db_path(self) -> Path:
+        """Durable store file for the chargeback cluster (sibling of ``db_path``)."""
+        if self.chargeback_db_path is not None:
+            return self.chargeback_db_path
+        return self.db_path.parent / "oceanpilot-chargeback.db"
 
     @classmethod
     def from_env(cls) -> "Settings":
         db_path = Path(os.getenv("OCEANPILOT_DB_PATH", "work/oceanpilot.db"))
-        return cls(db_path=db_path, feishu=_feishu_from_env(db_path))
+        chargeback_env = os.getenv("OCEANPILOT_CHARGEBACK_DB_PATH")
+        return cls(
+            db_path=db_path,
+            feishu=_feishu_from_env(db_path),
+            chargeback_db_path=Path(chargeback_env) if chargeback_env else None,
+        )
 
 
 def _feishu_from_env(core_db_path: Path) -> FeishuSettings | None:
