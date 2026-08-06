@@ -46,6 +46,29 @@ def test_uuid4_embedded_in_arbitrary_identifier_text_is_still_rejected() -> None
         assert_no_sensitive_data({"request_id": f"prefix:{LUHN_POSITIVE_UUID4}"})
 
 
+def test_uuid4_list_under_evidence_refs_is_not_treated_as_card_numbers() -> None:
+    # evidence_refs holds key-less UUID4 elements; a luhn-positive uuid there is
+    # not PII and must not trip the card detector (regression: CI flake where a
+    # random uuid4 in evidence_refs was rejected ~1 in 473).
+    assert (
+        assert_no_sensitive_data({"evidence_refs": [LUHN_POSITIVE_UUID4, LUHN_POSITIVE_UUID4]})
+        is None
+    )
+    assert assert_no_sensitive_data({"evidence_refs": ()}) is None
+
+
+def test_non_uuid_values_under_evidence_refs_are_still_rejected() -> None:
+    with pytest.raises(SensitiveDataRejected):
+        assert_no_sensitive_data({"evidence_refs": ["4242424242424242"]})
+
+
+def test_luhn_positive_uuid4_list_outside_identifier_field_is_rejected() -> None:
+    # The list allowlist is keyed: the same uuids under a non-id list key are not
+    # trusted, so the policy from the scalar case is preserved for lists too.
+    with pytest.raises(SensitiveDataRejected):
+        assert_no_sensitive_data({"notes": [LUHN_POSITIVE_UUID4]})
+
+
 def test_sensitive_value_in_other_field_is_still_rejected() -> None:
     with pytest.raises(SensitiveDataRejected):
         assert_no_sensitive_data({"summary": "authorization=Bearer-SECRET-SENTINEL"})
