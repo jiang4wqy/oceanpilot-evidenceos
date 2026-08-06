@@ -15,17 +15,29 @@ from oceanpilot.adapters.feishu.client import (
 )
 from oceanpilot.adapters.feishu.security import FeishuRequestVerifier
 from oceanpilot.adapters.feishu.store import FeishuCallbackStoreFactory
+from oceanpilot.adapters.model.fake import ScriptedModelProvider
+from oceanpilot.adapters.persistence.chargeback_memory import (
+    InMemoryChargebackCaseStore,
+)
 from oceanpilot.adapters.persistence.sqlite import (
     SqliteCaseStoreFactory,
     initialize_schema,
 )
 from oceanpilot.api.cases import router as cases_router
+from oceanpilot.api.chargeback import router as chargeback_router
 from oceanpilot.api.dependencies import RequestContext
 from oceanpilot.api.errors import ProblemDetails, register_exception_handlers
 from oceanpilot.api.feishu import router as feishu_router
 from oceanpilot.api.health import router as health_router
 from oceanpilot.application.case_service import CaseService
+from oceanpilot.application.chargeback_agents import (
+    ChargebackAssessAgent,
+    EvidenceAgent,
+    IntakeAgent,
+)
+from oceanpilot.application.chargeback_supervisor import ChargebackSupervisor
 from oceanpilot.application.feishu_orchestrator import FeishuOrchestrator
+from oceanpilot.application.model_provider import ModelProvider
 from oceanpilot.config import FeishuSettings, Settings
 
 
@@ -57,6 +69,7 @@ def create_app(
     settings: Settings | None = None,
     *,
     feishu_transport: Callable[[FeishuHttpRequest], FeishuHttpResponse] | None = None,
+    chargeback_model: ModelProvider | None = None,
 ) -> FastAPI:
     resolved = settings or Settings.from_env()
     store_factory = SqliteCaseStoreFactory(resolved.db_path)
@@ -82,6 +95,19 @@ def create_app(
     application.state.settings = resolved
     application.state.store_factory = store_factory
     application.state.case_service = case_service
+
+    # Chargeback agent cluster. Offline by default (no API key); inject a real
+    # provider (e.g. ClaudeProvider) via `chargeback_model` for live runs.
+    chargeback_provider = chargeback_model or ScriptedModelProvider(
+        default_text="（合成模型输出，仅用于离线演示）"
+    )
+    application.state.chargeback_supervisor = ChargebackSupervisor(
+        intake=IntakeAgent(chargeback_provider),
+        evidence=EvidenceAgent(chargeback_provider),
+        assess=ChargebackAssessAgent(chargeback_provider),
+    )
+    application.state.chargeback_store = InMemoryChargebackCaseStore()
+
     if resolved.feishu is not None:
         _configure_feishu(application, resolved.feishu, case_service, feishu_transport)
 
@@ -97,6 +123,7 @@ def create_app(
     application.include_router(health_router)
     application.include_router(cases_router)
     application.include_router(feishu_router)
+    application.include_router(chargeback_router)
 
     def openapi_schema() -> dict[str, object]:
         if application.openapi_schema is None:
