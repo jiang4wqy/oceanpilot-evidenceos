@@ -1,3 +1,4 @@
+import os
 import time
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
@@ -15,6 +16,7 @@ from oceanpilot.adapters.feishu.client import (
 )
 from oceanpilot.adapters.feishu.security import FeishuRequestVerifier
 from oceanpilot.adapters.feishu.store import FeishuCallbackStoreFactory
+from oceanpilot.adapters.model.composition import build_chargeback_model_provider
 from oceanpilot.adapters.model.fake import ScriptedModelProvider
 from oceanpilot.adapters.persistence.chargeback_sqlite import (
     SqliteChargebackCaseStore,
@@ -40,6 +42,10 @@ from oceanpilot.application.chargeback_supervisor import ChargebackSupervisor
 from oceanpilot.application.feishu_orchestrator import FeishuOrchestrator
 from oceanpilot.application.model_provider import ModelProvider
 from oceanpilot.config import FeishuSettings, Settings
+
+
+def _truthy(value: str | None) -> bool:
+    return value is not None and value.strip().lower() in ("1", "true", "yes", "on")
 
 
 def _configure_feishu(
@@ -100,11 +106,15 @@ def create_app(
     application.state.store_factory = store_factory
     application.state.case_service = case_service
 
-    # Chargeback agent cluster. Offline by default (no API key); inject a real
-    # provider (e.g. ClaudeProvider) via `chargeback_model` for live runs.
-    chargeback_provider = chargeback_model or ScriptedModelProvider(
-        default_text="（合成模型输出，仅用于离线演示）"
-    )
+    # Chargeback agent cluster. Offline by default (no API key). An explicit
+    # switch (OCEANPILOT_CHARGEBACK_LIVE_MODEL) opts into the live tiered provider
+    # so tests/CI stay deterministic even when an ANTHROPIC_API_KEY is present;
+    # `chargeback_model` injection always wins.
+    chargeback_provider: ModelProvider | None = chargeback_model
+    if chargeback_provider is None and _truthy(os.getenv("OCEANPILOT_CHARGEBACK_LIVE_MODEL")):
+        chargeback_provider = build_chargeback_model_provider()
+    if chargeback_provider is None:
+        chargeback_provider = ScriptedModelProvider(default_text="（合成模型输出，仅用于离线演示）")
     application.state.chargeback_supervisor = ChargebackSupervisor(
         intake=IntakeAgent(chargeback_provider),
         evidence=EvidenceAgent(chargeback_provider),
