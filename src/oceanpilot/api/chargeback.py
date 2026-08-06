@@ -9,16 +9,17 @@ from oceanpilot.api.chargeback_schemas import (
     CreateChargebackRequest,
     SubmitEvidenceRequest,
 )
+from oceanpilot.application.channels import Delivery, InboundKind, NormalizedInbound
+from oceanpilot.application.chargeback_channel_service import ChargebackChannelService
 from oceanpilot.application.chargeback_ports import ChargebackCaseStore
-from oceanpilot.application.chargeback_supervisor import (
-    ChargebackCaseState,
-    ChargebackSupervisor,
-    SupervisorPhase,
-    SupervisorStep,
-)
-from oceanpilot.application.errors import CaseNotFound
+from oceanpilot.application.chargeback_supervisor import ChargebackSupervisor
 
 router = APIRouter(prefix="/api/v1/chargeback")
+
+# The HTTP API is one channel over the channel-agnostic core: it maps the request
+# to a NormalizedInbound, runs the shared ChargebackChannelService, and renders
+# the resulting Delivery as JSON. Feishu / other channels reuse the same core.
+_CHANNEL = "http"
 
 
 def get_supervisor(request: Request) -> ChargebackSupervisor:
@@ -29,38 +30,35 @@ def get_store(request: Request) -> ChargebackCaseStore:
     return request.app.state.chargeback_store
 
 
-def _response(
-    case_id: str, state: ChargebackCaseState, step: SupervisorStep
-) -> ChargebackCaseResponse:
-    payload: dict[str, object] = {
-        "case_id": case_id,
-        "phase": step.phase.value,
-        "reason_code": state.reason_code.value if state.reason_code else None,
-        "collected": tuple(sorted(code.value for code in state.collected)),
-    }
-    if step.phase is SupervisorPhase.NEED_EVIDENCE and step.evidence_request:
-        request = step.evidence_request
-        payload["next_evidence"] = request.next_evidence.value if request.next_evidence else None
-        payload["question"] = request.question
-        payload["missing"] = tuple(code.value for code in request.missing)
-    elif step.phase is SupervisorPhase.ASSESSED and step.assessment:
-        assessment = step.assessment.assessment
-        payload["assessment"] = ChargebackAssessmentDTO(
-            win_likelihood=str(assessment.win_likelihood),
-            completeness=str(assessment.completeness),
-            responsible_team=assessment.responsible_team.value,
-            requires_human=assessment.requires_human,
-            review_reasons=tuple(r.value for r in assessment.review_reasons),
-            explanation=step.assessment.explanation,
+def get_channel_service(
+    supervisor: Annotated[ChargebackSupervisor, Depends(get_supervisor)],
+    store: Annotated[ChargebackCaseStore, Depends(get_store)],
+) -> ChargebackChannelService:
+    return ChargebackChannelService(supervisor, store)
+
+
+def _response(delivery: Delivery) -> ChargebackCaseResponse:
+    assessment = None
+    if delivery.assessment is not None:
+        a = delivery.assessment
+        assessment = ChargebackAssessmentDTO(
+            win_likelihood=a.win_likelihood,
+            completeness=a.completeness,
+            responsible_team=a.responsible_team,
+            requires_human=a.requires_human,
+            review_reasons=a.review_reasons,
+            explanation=a.explanation,
         )
-    return ChargebackCaseResponse(**payload)
-
-
-def _load(store: ChargebackCaseStore, case_id: str) -> ChargebackCaseState:
-    state = store.load(case_id)
-    if state is None:
-        raise CaseNotFound()
-    return state
+    return ChargebackCaseResponse(
+        case_id=delivery.case_id,
+        phase=delivery.phase,
+        reason_code=delivery.reason_code,
+        collected=delivery.collected,
+        next_evidence=delivery.next_evidence,
+        question=delivery.question,
+        missing=delivery.missing,
+        assessment=assessment,
+    )
 
 
 @router.post(
@@ -71,14 +69,16 @@ def _load(store: ChargebackCaseStore, case_id: str) -> ChargebackCaseState:
 )
 def create_case(
     payload: CreateChargebackRequest,
-    supervisor: Annotated[ChargebackSupervisor, Depends(get_supervisor)],
-    store: Annotated[ChargebackCaseStore, Depends(get_store)],
+    service: Annotated[ChargebackChannelService, Depends(get_channel_service)],
 ) -> ChargebackCaseResponse:
-    case_id = store.create()
-    state = _load(store, case_id)
-    supervisor.intake(state, payload.description)
-    store.save(case_id, state)
-    return _response(case_id, state, supervisor.advance(state))
+    delivery = service.handle(
+        NormalizedInbound(
+            kind=InboundKind.OPEN_CASE,
+            channel=_CHANNEL,
+            description=payload.description,
+        )
+    )
+    return _response(delivery)
 
 
 @router.post(
@@ -89,13 +89,17 @@ def create_case(
 def submit_evidence(
     case_id: str,
     payload: SubmitEvidenceRequest,
-    supervisor: Annotated[ChargebackSupervisor, Depends(get_supervisor)],
-    store: Annotated[ChargebackCaseStore, Depends(get_store)],
+    service: Annotated[ChargebackChannelService, Depends(get_channel_service)],
 ) -> ChargebackCaseResponse:
-    state = _load(store, case_id)
-    supervisor.submit_evidence(state, payload.evidence_code)
-    store.save(case_id, state)
-    return _response(case_id, state, supervisor.advance(state))
+    delivery = service.handle(
+        NormalizedInbound(
+            kind=InboundKind.SUBMIT_EVIDENCE,
+            channel=_CHANNEL,
+            case_id=case_id,
+            evidence_code=payload.evidence_code.value,
+        )
+    )
+    return _response(delivery)
 
 
 @router.get(
@@ -105,8 +109,9 @@ def submit_evidence(
 )
 def get_case(
     case_id: str,
-    supervisor: Annotated[ChargebackSupervisor, Depends(get_supervisor)],
-    store: Annotated[ChargebackCaseStore, Depends(get_store)],
+    service: Annotated[ChargebackChannelService, Depends(get_channel_service)],
 ) -> ChargebackCaseResponse:
-    state = _load(store, case_id)
-    return _response(case_id, state, supervisor.advance(state))
+    delivery = service.handle(
+        NormalizedInbound(kind=InboundKind.GET_CASE, channel=_CHANNEL, case_id=case_id)
+    )
+    return _response(delivery)

@@ -26,6 +26,7 @@ from oceanpilot.application.errors import (
     DatabaseUnavailable,
     DiagnosisInputStale,
     EvidenceConflict,
+    InvalidInbound,
     PersistenceInvariantViolation,
 )
 from oceanpilot.application.ports import CaseStoreFactory, CaseStoreSession
@@ -291,6 +292,7 @@ ERROR_MESSAGES = {
     DiagnosisInputStale: "diagnosis input is stale",
     DatabaseUnavailable: "database is unavailable",
     PersistenceInvariantViolation: "persistence invariant was violated",
+    InvalidInbound: "inbound request is invalid",
 }
 ORDINARY_ERRORS = tuple(error for error in ERROR_MESSAGES if error is not CaseNotReady)
 
@@ -308,6 +310,7 @@ def test_application_error_subclass_set_and_messages_are_exact() -> None:
         "DiagnosisInputStale",
         "DatabaseUnavailable",
         "PersistenceInvariantViolation",
+        "InvalidInbound",
     }
     for error_type, expected_message in ERROR_MESSAGES.items():
         assert error_type.message == expected_message
