@@ -130,3 +130,216 @@ def _fallback(a: ChargebackAssessment) -> str:
         f"合成评估：预计胜诉可能性约 {percent}%，责任域 {a.responsible_team.value}，"
         f"{review}。下一步：{nxt}。（{a.default_deadline_days} 天举证时限）"
     )
+
+
+# --- Intake agent: free-text description -> dispute reason code -------------
+
+
+class ClassificationSource(StrEnum):
+    MODEL = "MODEL"
+    HEURISTIC = "HEURISTIC"
+
+
+@dataclass(frozen=True)
+class IntakeOutcome:
+    reason_code: DisputeReasonCode
+    confident: bool
+    source: ClassificationSource
+
+
+_INTAKE_SYSTEM = (
+    "You classify a merchant's free-text description of a card dispute into "
+    "exactly one reason code. Reply with ONLY the code token, nothing else. "
+    "Valid codes: " + ", ".join(c.value for c in DisputeReasonCode) + ". "
+    "This is synthetic data."
+)
+
+# ordered keyword heuristics (Chinese + English); first match wins.
+_HEURISTICS: tuple[tuple[tuple[str, ...], DisputeReasonCode], ...] = (
+    (
+        ("未收到", "没收到", "没到", "未送达", "not received", "never arrived"),
+        DisputeReasonCode.PRODUCT_NOT_RECEIVED,
+    ),
+    (
+        ("不对板", "不符", "描述不符", "假货", "not as described", "wrong item"),
+        DisputeReasonCode.PRODUCT_NOT_AS_DESCRIBED,
+    ),
+    (
+        ("重复", "扣了两次", "两笔", "duplicate", "charged twice"),
+        DisputeReasonCode.DUPLICATE_PROCESSING,
+    ),
+    (
+        ("退款", "没退", "未退", "refund", "credit not"),
+        DisputeReasonCode.CREDIT_NOT_PROCESSED,
+    ),
+    (
+        ("订阅", "会员", "recurring", "subscription", "cancel"),
+        DisputeReasonCode.SUBSCRIPTION_CANCELED,
+    ),
+    (
+        ("欺诈", "盗刷", "未授权", "不是我", "fraud", "unauthorized"),
+        DisputeReasonCode.FRAUD_CARD_NOT_PRESENT,
+    ),
+    (
+        ("授权", "处理错误", "authorization", "processing error"),
+        DisputeReasonCode.AUTHORIZATION_ERROR,
+    ),
+)
+
+_DEFAULT_REASON = DisputeReasonCode.AUTHORIZATION_ERROR
+
+
+def _parse_reason(text: str) -> DisputeReasonCode | None:
+    upper = text.upper()
+    for code in DisputeReasonCode:
+        if code.value in upper:
+            return code
+    return None
+
+
+def _heuristic_reason(text: str) -> DisputeReasonCode | None:
+    lowered = text.lower()
+    for keywords, code in _HEURISTICS:
+        if any(keyword.lower() in lowered for keyword in keywords):
+            return code
+    return None
+
+
+class IntakeAgent:
+    def __init__(
+        self,
+        model: ModelProvider,
+        *,
+        security_tier: SecurityTier = SecurityTier.MEDIUM,
+        effort: Effort = Effort.LOW,
+    ) -> None:
+        self._model = model
+        self._security_tier = security_tier
+        self._effort = effort
+
+    def classify(self, text: str) -> IntakeOutcome:
+        try:
+            result = self._model.complete(
+                TaskSpec(
+                    kind="chargeback_intake",
+                    security_tier=self._security_tier,
+                    effort=self._effort,
+                ),
+                [ModelMessage(role=ModelRole.USER, content=text)],
+                system=_INTAKE_SYSTEM,
+            )
+        except ModelProviderError:
+            result = None
+        if result is not None:
+            code = _parse_reason(result.text)
+            if code is not None:
+                return IntakeOutcome(
+                    reason_code=code, confident=True, source=ClassificationSource.MODEL
+                )
+        heuristic = _heuristic_reason(text)
+        if heuristic is not None:
+            return IntakeOutcome(
+                reason_code=heuristic,
+                confident=True,
+                source=ClassificationSource.HEURISTIC,
+            )
+        return IntakeOutcome(
+            reason_code=_DEFAULT_REASON,
+            confident=False,
+            source=ClassificationSource.HEURISTIC,
+        )
+
+
+# --- Evidence agent: next missing-evidence question ------------------------
+
+
+@dataclass(frozen=True)
+class EvidenceRequest:
+    reason_code: DisputeReasonCode
+    complete: bool
+    next_evidence: ChargebackEvidenceCode | None
+    missing: tuple[ChargebackEvidenceCode, ...]
+    question: str
+    question_source: ExplanationSource
+
+
+_EVIDENCE_SYSTEM = (
+    "You ask a merchant, in one concise Chinese sentence, to provide exactly "
+    "one specified piece of chargeback evidence. Ask only for the given "
+    "evidence code; do not invent new requirements. Synthetic data."
+)
+
+
+def _fallback_question(code: ChargebackEvidenceCode, remaining: int) -> str:
+    return f"请补充证据：{code.value}（还差 {remaining} 项）。"
+
+
+class EvidenceAgent:
+    def __init__(
+        self,
+        model: ModelProvider,
+        *,
+        security_tier: SecurityTier = SecurityTier.LOW,
+        effort: Effort = Effort.LOW,
+    ) -> None:
+        self._model = model
+        self._security_tier = security_tier
+        self._effort = effort
+
+    def next_request(
+        self,
+        reason_code: DisputeReasonCode,
+        present: Iterable[ChargebackEvidenceCode],
+    ) -> EvidenceRequest:
+        assessment = assess_chargeback(reason_code, present)
+        if assessment.ready_to_submit:
+            return EvidenceRequest(
+                reason_code=reason_code,
+                complete=True,
+                next_evidence=None,
+                missing=(),
+                question="证据已齐备，可进入胜诉评估。",
+                question_source=ExplanationSource.FALLBACK,
+            )
+        next_code = (
+            assessment.missing_critical[0]
+            if assessment.missing_critical
+            else assessment.missing_evidence[0]
+        )
+        question, source = self._ask(reason_code, next_code, len(assessment.missing_evidence))
+        return EvidenceRequest(
+            reason_code=reason_code,
+            complete=False,
+            next_evidence=next_code,
+            missing=assessment.missing_evidence,
+            question=question,
+            question_source=source,
+        )
+
+    def _ask(
+        self,
+        reason_code: DisputeReasonCode,
+        code: ChargebackEvidenceCode,
+        remaining: int,
+    ) -> tuple[str, ExplanationSource]:
+        prompt = (
+            f"reason_code={reason_code.value}\n"
+            f"evidence_code={code.value}\n"
+            f"remaining_missing={remaining}"
+        )
+        try:
+            result = self._model.complete(
+                TaskSpec(
+                    kind="chargeback_evidence_question",
+                    security_tier=self._security_tier,
+                    effort=self._effort,
+                ),
+                [ModelMessage(role=ModelRole.USER, content=prompt)],
+                system=_EVIDENCE_SYSTEM,
+            )
+        except ModelProviderError:
+            return _fallback_question(code, remaining), ExplanationSource.FALLBACK
+        text = result.text.strip()
+        if not text:
+            return _fallback_question(code, remaining), ExplanationSource.FALLBACK
+        return text, ExplanationSource.MODEL
