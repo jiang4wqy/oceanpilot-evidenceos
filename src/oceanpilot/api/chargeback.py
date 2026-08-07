@@ -6,12 +6,14 @@ from oceanpilot.api.cases import COMMON_PROBLEMS, PROBLEM_RESPONSE
 from oceanpilot.api.chargeback_schemas import (
     ChargebackAssessmentDTO,
     ChargebackCaseResponse,
+    ChargebackDeadlineDTO,
     ConfirmReasonRequest,
     CreateChargebackRequest,
     SubmitEvidenceRequest,
 )
 from oceanpilot.application.channels import Delivery, InboundKind, NormalizedInbound
 from oceanpilot.application.chargeback_channel_service import ChargebackChannelService
+from oceanpilot.application.chargeback_deadline import DeadlineTracker
 from oceanpilot.application.chargeback_ports import ChargebackCaseStore
 from oceanpilot.application.chargeback_supervisor import ChargebackSupervisor
 
@@ -31,11 +33,16 @@ def get_store(request: Request) -> ChargebackCaseStore:
     return request.app.state.chargeback_store
 
 
+def get_deadline(request: Request) -> DeadlineTracker:
+    return request.app.state.chargeback_deadline
+
+
 def get_channel_service(
     supervisor: Annotated[ChargebackSupervisor, Depends(get_supervisor)],
     store: Annotated[ChargebackCaseStore, Depends(get_store)],
+    deadline: Annotated[DeadlineTracker, Depends(get_deadline)],
 ) -> ChargebackChannelService:
-    return ChargebackChannelService(supervisor, store)
+    return ChargebackChannelService(supervisor, store, deadline=deadline)
 
 
 def _response(delivery: Delivery) -> ChargebackCaseResponse:
@@ -50,6 +57,15 @@ def _response(delivery: Delivery) -> ChargebackCaseResponse:
             review_reasons=a.review_reasons,
             explanation=a.explanation,
         )
+    deadline = None
+    if delivery.deadline is not None:
+        d = delivery.deadline
+        deadline = ChargebackDeadlineDTO(
+            phase=d.phase,
+            days_remaining=d.days_remaining,
+            deadline_at=d.deadline_at,
+            overdue=d.overdue,
+        )
     return ChargebackCaseResponse(
         case_id=delivery.case_id,
         phase=delivery.phase,
@@ -61,6 +77,7 @@ def _response(delivery: Delivery) -> ChargebackCaseResponse:
         question=delivery.question,
         missing=delivery.missing,
         assessment=assessment,
+        deadline=deadline,
     )
 
 

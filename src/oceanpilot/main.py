@@ -8,6 +8,7 @@ from uuid import uuid4
 from fastapi import FastAPI, Request
 from fastapi.openapi.utils import get_openapi
 
+from oceanpilot.adapters.clock import SystemClock
 from oceanpilot.adapters.diagnosis.rules import RuleDiagnosisEngine
 from oceanpilot.adapters.feishu.client import (
     FeishuHttpRequest,
@@ -38,6 +39,7 @@ from oceanpilot.application.chargeback_agents import (
     EvidenceAgent,
     IntakeAgent,
 )
+from oceanpilot.application.chargeback_deadline import DeadlineTracker
 from oceanpilot.application.chargeback_supervisor import ChargebackSupervisor
 from oceanpilot.application.feishu_orchestrator import FeishuOrchestrator
 from oceanpilot.application.model_provider import ModelProvider
@@ -126,6 +128,8 @@ def create_app(
         chargeback_db_path,
         clock=lambda: datetime.now(UTC),
     )
+    # SLA / evidence-window deadline tracker, surfaced on every delivery.
+    application.state.chargeback_deadline = DeadlineTracker(SystemClock())
 
     if resolved.feishu is not None:
         _configure_feishu(application, resolved.feishu, case_service, feishu_transport)

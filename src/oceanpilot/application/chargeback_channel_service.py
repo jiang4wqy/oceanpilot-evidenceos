@@ -10,9 +10,11 @@ it stays free of any channel or transport detail.
 from oceanpilot.application.channels import (
     Delivery,
     DeliveryAssessment,
+    DeliveryDeadline,
     InboundKind,
     NormalizedInbound,
 )
+from oceanpilot.application.chargeback_deadline import DeadlineTracker
 from oceanpilot.application.chargeback_ports import ChargebackCaseStore
 from oceanpilot.application.chargeback_supervisor import (
     ChargebackCaseState,
@@ -25,7 +27,12 @@ from oceanpilot.domain.chargeback import ChargebackEvidenceCode, DisputeReasonCo
 from oceanpilot.domain.reason_catalog import confirm_prompt
 
 
-def _delivery(case_id: str, state: ChargebackCaseState, step: SupervisorStep) -> Delivery:
+def _delivery(
+    case_id: str,
+    state: ChargebackCaseState,
+    step: SupervisorStep,
+    deadline: DeliveryDeadline | None = None,
+) -> Delivery:
     next_evidence: str | None = None
     question: str | None = None
     missing: tuple[str, ...] | None = None
@@ -62,6 +69,7 @@ def _delivery(case_id: str, state: ChargebackCaseState, step: SupervisorStep) ->
         question=question,
         missing=missing,
         assessment=assessment,
+        deadline=deadline,
     )
 
 
@@ -70,9 +78,27 @@ class ChargebackChannelService:
         self,
         supervisor: ChargebackSupervisor,
         store: ChargebackCaseStore,
+        *,
+        deadline: DeadlineTracker | None = None,
     ) -> None:
         self._supervisor = supervisor
         self._store = store
+        self._deadline_tracker = deadline
+
+    def _deadline(self, state: ChargebackCaseState) -> DeliveryDeadline | None:
+        if self._deadline_tracker is None or state.created_at is None:
+            return None
+        outcome = self._deadline_tracker.evaluate(created_at=state.created_at)
+        return DeliveryDeadline(
+            phase=outcome.phase.value,
+            days_remaining=outcome.days_remaining,
+            deadline_at=outcome.deadline_at.isoformat() if outcome.deadline_at else None,
+            overdue=outcome.overdue,
+        )
+
+    def _deliver(self, case_id: str, state: ChargebackCaseState) -> Delivery:
+        step = self._supervisor.advance(state)
+        return _delivery(case_id, state, step, self._deadline(state))
 
     def handle(self, inbound: NormalizedInbound) -> Delivery:
         if inbound.kind is InboundKind.OPEN_CASE:
@@ -94,7 +120,7 @@ class ChargebackChannelService:
         state = self._require_state(case_id)
         self._supervisor.intake(state, inbound.description)
         self._store.save(case_id, state)
-        return _delivery(case_id, state, self._supervisor.advance(state))
+        return self._deliver(case_id, state)
 
     def _confirm_reason(self, inbound: NormalizedInbound) -> Delivery:
         if not inbound.case_id:
@@ -108,7 +134,7 @@ class ChargebackChannelService:
         state = self._require_state(inbound.case_id)
         self._supervisor.confirm_reason(state, corrected)
         self._store.save(inbound.case_id, state)
-        return _delivery(inbound.case_id, state, self._supervisor.advance(state))
+        return self._deliver(inbound.case_id, state)
 
     def _submit_evidence(self, inbound: NormalizedInbound) -> Delivery:
         if not inbound.case_id or not inbound.evidence_code:
@@ -120,7 +146,7 @@ class ChargebackChannelService:
         state = self._require_state(inbound.case_id)
         self._supervisor.submit_evidence(state, code)
         self._store.save(inbound.case_id, state)
-        return _delivery(inbound.case_id, state, self._supervisor.advance(state))
+        return self._deliver(inbound.case_id, state)
 
     def _finalize_evidence(self, inbound: NormalizedInbound) -> Delivery:
         if not inbound.case_id:
@@ -128,13 +154,13 @@ class ChargebackChannelService:
         state = self._require_state(inbound.case_id)
         self._supervisor.finalize_evidence(state)
         self._store.save(inbound.case_id, state)
-        return _delivery(inbound.case_id, state, self._supervisor.advance(state))
+        return self._deliver(inbound.case_id, state)
 
     def _get_case(self, inbound: NormalizedInbound) -> Delivery:
         if not inbound.case_id:
             raise InvalidInbound()
         state = self._require_state(inbound.case_id)
-        return _delivery(inbound.case_id, state, self._supervisor.advance(state))
+        return self._deliver(inbound.case_id, state)
 
     def _require_state(self, case_id: str) -> ChargebackCaseState:
         state = self._store.load(case_id)

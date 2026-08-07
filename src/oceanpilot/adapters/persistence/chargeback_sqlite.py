@@ -415,7 +415,7 @@ class SqliteChargebackCaseStore:
     ) -> tuple[ChargebackCaseState, int] | None:
         row = connection.execute(
             """
-            SELECT reason_code, reason_confirmed, collection_finalized, revision
+            SELECT reason_code, reason_confirmed, collection_finalized, created_at, revision
             FROM chargeback_cases WHERE case_id = ?
             """,
             (case_id,),
@@ -439,6 +439,7 @@ class SqliteChargebackCaseStore:
             collected=codes,
             reason_confirmed=bool(self._require_int(row["reason_confirmed"])),
             collection_finalized=bool(self._require_int(row["collection_finalized"])),
+            created_at=_decode_dt(row["created_at"]),
         )
         return state, self._require_int(row["revision"])
 

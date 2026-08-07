@@ -53,6 +53,16 @@ class DeliveryAssessment:
 
 
 @dataclass(frozen=True)
+class DeliveryDeadline:
+    """Channel-neutral view of the evidence-window SLA."""
+
+    phase: str
+    days_remaining: int | None
+    deadline_at: str | None
+    overdue: bool
+
+
+@dataclass(frozen=True)
 class Delivery:
     case_id: str
     phase: str
@@ -64,6 +74,7 @@ class Delivery:
     question: str | None = None
     missing: tuple[str, ...] | None = None
     assessment: DeliveryAssessment | None = None
+    deadline: DeliveryDeadline | None = None
 
 
 @runtime_checkable

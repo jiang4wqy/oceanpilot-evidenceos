@@ -126,3 +126,15 @@ def test_finalize_routes_to_human_review(tmp_path):
     assert body["collection_finalized"] is True
     assert body["phase"] == "ASSESSED"
     assert body["assessment"]["requires_human"] is True
+
+
+def test_response_includes_evidence_window_deadline(tmp_path):
+    with _client(tmp_path) as client:
+        body = client.post(
+            "/api/v1/chargeback/cases", json={"description": "客户下单后一直没收到货"}
+        ).json()
+    assert body["deadline"] is not None
+    assert body["deadline"]["phase"] == "COLLECTING_EVIDENCE"
+    assert body["deadline"]["overdue"] is False
+    assert body["deadline"]["days_remaining"] is not None
+    assert 0 <= body["deadline"]["days_remaining"] <= 15

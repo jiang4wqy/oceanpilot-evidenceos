@@ -58,6 +58,15 @@ class HttpChannel:
                 "review_reasons": list(a.review_reasons),
                 "explanation": a.explanation,
             }
+        deadline: dict[str, object] | None = None
+        if delivery.deadline is not None:
+            d = delivery.deadline
+            deadline = {
+                "phase": d.phase,
+                "days_remaining": d.days_remaining,
+                "deadline_at": d.deadline_at,
+                "overdue": d.overdue,
+            }
         return {
             "channel": self.name,
             "case_id": delivery.case_id,
@@ -70,4 +79,5 @@ class HttpChannel:
             "question": delivery.question,
             "missing": list(delivery.missing) if delivery.missing is not None else None,
             "assessment": assessment,
+            "deadline": deadline,
         }

@@ -15,6 +15,7 @@ from collections.abc import Mapping
 
 from oceanpilot.application.channels import (
     Delivery,
+    DeliveryDeadline,
     InboundKind,
     NormalizedInbound,
 )
@@ -121,6 +122,8 @@ class FeishuChannel:
             elements.append(_field(f"**争议原因**：{reason_text}（{confirmed_mark}）"))
         if delivery.collected:
             elements.append(_field("**已收集**：" + "、".join(delivery.collected)))
+        if delivery.deadline is not None:
+            elements.append(_field(_deadline_text(delivery.deadline)))
 
         if delivery.phase == "REASON_PROPOSED":
             if delivery.question:
@@ -192,3 +195,12 @@ class FeishuChannel:
 
 def _field(content: str) -> dict[str, object]:
     return {"tag": "div", "text": {"tag": "lark_md", "content": content}}
+
+
+def _deadline_text(deadline: DeliveryDeadline) -> str:
+    due = deadline.deadline_at[:10] if deadline.deadline_at else "—"
+    if deadline.overdue:
+        return f"**举证时限**：<font color='red'>已逾期</font>（截止 {due}）"
+    if deadline.days_remaining is None:
+        return f"**举证时限**：截止 {due}"
+    return f"**举证时限**：还剩 {deadline.days_remaining} 天（截止 {due}）"

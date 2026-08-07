@@ -306,3 +306,10 @@ def test_finalization_cannot_be_revoked(store: SqliteChargebackCaseStore) -> Non
     revoked = ChargebackCaseState(reason_code=REASON, collected=set(), collection_finalized=False)
     with pytest.raises(PersistenceInvariantViolation):
         store.save(case_id, revoked)
+
+
+def test_created_at_is_loaded_for_deadline_tracking(store: SqliteChargebackCaseStore) -> None:
+    case_id = store.create()
+    state = store.load(case_id)
+    assert state is not None
+    assert state.created_at == FIXED_MOMENT

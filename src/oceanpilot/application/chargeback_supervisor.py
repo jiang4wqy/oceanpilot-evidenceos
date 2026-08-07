@@ -8,6 +8,7 @@ agents (injected) and the domain, never on adapters.
 """
 
 from dataclasses import dataclass, field
+from datetime import datetime
 from enum import StrEnum
 
 from oceanpilot.application.chargeback_agents import (
@@ -25,6 +26,9 @@ from oceanpilot.domain.chargeback import ChargebackEvidenceCode, DisputeReasonCo
 class ChargebackCaseState:
     reason_code: DisputeReasonCode | None = None
     collected: set[ChargebackEvidenceCode] = field(default_factory=set)
+    # When the case was opened, used to compute the SLA / evidence-window
+    # deadline. Populated by the store on load; None until persisted.
+    created_at: datetime | None = None
     # The kernel/intake proposes a reason; a human confirms it before the case
     # proceeds. A confident classification is auto-confirmed; a low-confidence
     # one waits at REASON_PROPOSED for an explicit human confirm/correction.

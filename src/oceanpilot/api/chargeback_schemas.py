@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictStr
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictInt, StrictStr
 
 from oceanpilot.domain.chargeback import ChargebackEvidenceCode, DisputeReasonCode
 
@@ -35,6 +35,15 @@ class ChargebackAssessmentDTO(BaseModel):
     explanation: StrictStr
 
 
+class ChargebackDeadlineDTO(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    phase: StrictStr
+    days_remaining: StrictInt | None = None
+    deadline_at: StrictStr | None = None
+    overdue: StrictBool
+
+
 class ChargebackCaseResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -48,3 +57,4 @@ class ChargebackCaseResponse(BaseModel):
     question: StrictStr | None = None
     missing: tuple[StrictStr, ...] | None = None
     assessment: ChargebackAssessmentDTO | None = None
+    deadline: ChargebackDeadlineDTO | None = None
