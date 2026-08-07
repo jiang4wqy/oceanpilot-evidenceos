@@ -10,7 +10,7 @@ decides / model explains / human confirms / never executes) — on one screen.
 """
 
 from fastapi import APIRouter
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 
 router = APIRouter()
 
@@ -60,6 +60,12 @@ _DEMO_HTML = """<!doctype html>
   .seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
   .seg button{background:transparent;border:0;color:var(--mut);padding:6px 11px;font-size:12px;cursor:pointer}
   .seg button.on{background:linear-gradient(135deg,var(--accent1),var(--accent2));color:#06121f;font-weight:700}
+  .lnk{color:var(--mut);font-size:12px;text-decoration:none;border:1px solid var(--line);border-radius:8px;
+    padding:6px 10px;background:var(--card)}
+  .lnk:hover{color:var(--fg);border-color:var(--accent2)}
+  .howto{margin:10px 2px 0;font-size:12.5px;color:var(--mut);border:1px solid var(--line);
+    background:var(--card);border-radius:10px;padding:9px 13px}
+  .howto b{color:var(--fg)}
 
   /* pipeline */
   .pipe{display:flex;align-items:flex-start;gap:0;margin:20px 2px 22px;overflow-x:auto;padding-bottom:4px}
@@ -157,6 +163,8 @@ _DEMO_HTML = """<!doctype html>
     </div>
     <div class="spacer"></div>
     <div class="safety"><span class="dot"></span>内核决策 · 模型解释 · 人工确认 · <b>绝不执行业务动作</b></div>
+    <a class="lnk" href="/docs" target="_blank" rel="noopener">API 文档</a>
+    <a class="lnk" href="/health" target="_blank" rel="noopener">健康</a>
     <div class="seg"><button id="loc-zh" class="on" onclick="setLocale('zh')">中文</button>
       <button id="loc-en" onclick="setLocale('en')">EN</button></div>
     <button class="btn ghost" onclick="reset()">＋ 新建案件</button>
@@ -401,6 +409,11 @@ renderStages();renderAction();refreshMetrics();
 </body>
 </html>
 """
+
+
+@router.get("/", include_in_schema=False)
+def root() -> RedirectResponse:
+    return RedirectResponse(url="/demo")
 
 
 @router.get("/demo", include_in_schema=False, response_class=HTMLResponse)

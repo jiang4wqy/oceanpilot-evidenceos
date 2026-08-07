@@ -25,3 +25,20 @@ def test_demo_page_is_not_in_openapi(tmp_path):
     with _client(tmp_path) as client:
         paths = client.get("/openapi.json").json()["paths"]
     assert "/demo" not in paths
+
+
+def test_root_redirects_to_demo(tmp_path):
+    with _client(tmp_path) as client:
+        r = client.get("/", follow_redirects=False)
+        assert r.status_code in (302, 307)
+        assert r.headers["location"] == "/demo"
+        followed = client.get("/")
+    assert followed.status_code == 200
+    assert "跨境拒付" in followed.text
+
+
+def test_demo_links_to_api_docs(tmp_path):
+    with _client(tmp_path) as client:
+        body = client.get("/demo").text
+    assert 'href="/docs"' in body
+    assert 'href="/health"' in body
