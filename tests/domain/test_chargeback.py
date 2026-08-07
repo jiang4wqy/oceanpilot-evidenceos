@@ -12,6 +12,8 @@ from oceanpilot.domain.chargeback import (
 )
 from oceanpilot.domain.enums import ResponsibleTeam
 
+_C = ChargebackEvidenceCode
+
 
 def test_every_reason_code_has_a_policy():
     for reason in DisputeReasonCode:
@@ -102,6 +104,53 @@ def test_low_win_likelihood_drives_review_reason():
     )
     assert result.win_likelihood < WIN_REVIEW_THRESHOLD
     assert ChargebackReviewReason.LOW_WIN_LIKELIHOOD in result.review_reasons
+
+
+def test_missing_one_critical_gates_win_below_the_raw_ratio():
+    # FRAUD: everything present except the critical 3DS. Raw weighted ratio is
+    # 9/12 = 0.75, but with 1 of 2 critical items present the gate halves it to
+    # 0.375 — a weight-complete case missing decisive proof must not read high.
+    reason = DisputeReasonCode.FRAUD_CARD_NOT_PRESENT
+    present = [c for c in required_evidence_for(reason) if c is not _C.THREEDS_AUTHENTICATION]
+    result = assess_chargeback(reason, present)
+    assert result.win_likelihood == Decimal("0.3750")
+    assert result.win_likelihood < WIN_REVIEW_THRESHOLD
+    assert _C.THREEDS_AUTHENTICATION in result.missing_critical
+    assert result.requires_human is True
+    assert ChargebackReviewReason.MISSING_CRITICAL_EVIDENCE in result.review_reasons
+    assert ChargebackReviewReason.LOW_WIN_LIKELIHOOD in result.review_reasons
+
+
+def test_missing_all_criticals_with_some_evidence_floors_low_but_nonzero():
+    # FRAUD: only non-critical AVS + CVV present; both critical items missing.
+    # The gate zeroes the product, then the floor lifts it to 0.05 — bleak, not 0.
+    reason = DisputeReasonCode.FRAUD_CARD_NOT_PRESENT
+    result = assess_chargeback(reason, [_C.AVS_RESULT, _C.CVV_RESULT])
+    assert result.win_likelihood == Decimal("0.0500")
+    assert result.win_likelihood > Decimal("0")
+
+
+def test_all_criticals_present_incurs_no_gate_penalty():
+    # PRODUCT_NOT_RECEIVED: both critical items present, only non-critical missing.
+    # Win equals the raw weighted ratio (7/10) with no gate reduction.
+    reason = DisputeReasonCode.PRODUCT_NOT_RECEIVED
+    present = [_C.TRANSACTION_RECEIPT, _C.DELIVERY_TRACKING, _C.PROOF_OF_DELIVERY]
+    result = assess_chargeback(reason, present)
+    assert result.win_likelihood == Decimal("0.7000")
+    assert result.missing_critical == ()
+    assert result.requires_human is False
+
+
+def test_dropping_any_required_item_never_raises_the_win():
+    # Monotonicity property: removing any single required item can only lower
+    # (or hold) the win likelihood — the gate never makes a weaker case score
+    # higher than the complete one.
+    for reason in DisputeReasonCode:
+        full = required_evidence_for(reason)
+        result_full = assess_chargeback(reason, full)
+        for dropped_code in full:
+            weaker = assess_chargeback(reason, [c for c in full if c is not dropped_code])
+            assert weaker.win_likelihood <= result_full.win_likelihood
 
 
 def test_invalid_reason_code_type_is_rejected():

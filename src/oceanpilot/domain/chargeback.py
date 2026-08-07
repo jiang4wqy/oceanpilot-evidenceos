@@ -23,6 +23,13 @@ from oceanpilot.domain.enums import ResponsibleTeam
 _QUANT = Decimal("0.0001")
 # Below this rule-based win likelihood, route to human review.
 WIN_REVIEW_THRESHOLD = Decimal("0.60")
+# Missing "critical" evidence gates the win likelihood by the fraction of
+# critical evidence present: without your decisive proof you realistically
+# cannot win, so a case that is weight-complete but missing a critical item
+# must not read as high-confidence. Floored to a small non-zero value once any
+# evidence exists (a bleak estimate, not an absolute 0%); with no evidence at
+# all the likelihood stays exactly 0.
+CRITICAL_MISSING_FLOOR = Decimal("0.05")
 
 
 class DisputeReasonCode(StrEnum):
@@ -208,9 +215,21 @@ def assess_chargeback(
     completeness = (Decimal(len(present_required)) / Decimal(required_count)).quantize(
         _QUANT, rounding=ROUND_HALF_UP
     )
-    win_likelihood = (Decimal(present_weight) / Decimal(total_weight)).quantize(
-        _QUANT, rounding=ROUND_HALF_UP
-    )
+
+    # Critical-evidence gate: scale the raw weighted ratio by how much of the
+    # decisive (critical) evidence is present, so a case missing a critical item
+    # never reads as high-confidence even if its total weight is high.
+    critical_required = [r for r in policy.required if r.critical]
+    if critical_required:
+        present_critical = sum(1 for r in critical_required if r.code in present_set)
+        critical_ratio = Decimal(present_critical) / Decimal(len(critical_required))
+    else:
+        critical_ratio = Decimal(1)
+    raw_ratio = Decimal(present_weight) / Decimal(total_weight)
+    gated = raw_ratio * critical_ratio
+    if present_weight > 0 and critical_ratio < 1:
+        gated = max(gated, CRITICAL_MISSING_FLOOR)
+    win_likelihood = gated.quantize(_QUANT, rounding=ROUND_HALF_UP)
 
     reasons: list[ChargebackReviewReason] = []
     if policy.high_risk:
