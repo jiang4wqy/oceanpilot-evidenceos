@@ -68,3 +68,7 @@ class DatabaseUnavailable(ApplicationError):
 
 class PersistenceInvariantViolation(ApplicationError):
     message = "persistence invariant was violated"
+
+
+class InvalidInbound(ApplicationError):
+    message = "inbound request is invalid"

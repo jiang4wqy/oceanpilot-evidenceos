@@ -26,6 +26,7 @@ from oceanpilot.application.errors import (
     DatabaseUnavailable,
     DiagnosisInputStale,
     EvidenceConflict,
+    InvalidInbound,
     PersistenceInvariantViolation,
 )
 from oceanpilot.application.ports import CaseStoreFactory, CaseStoreSession
@@ -142,10 +143,7 @@ def test_command_fields_are_required_and_constructor_is_keyword_only(
 ) -> None:
     assert tuple(command_type.model_fields) == field_names
     assert all(field.is_required() for field in command_type.model_fields.values())
-    assert all(
-        field.default is PydanticUndefined
-        for field in command_type.model_fields.values()
-    )
+    assert all(field.default is PydanticUndefined for field in command_type.model_fields.values())
 
     parameters = signature(command_type).parameters
     assert tuple(parameters) == field_names
@@ -254,14 +252,16 @@ def test_add_evidence_rejects_extra_fields_without_aliasing_model_inputs() -> No
     assert command.evidence is evidence
     assert command.origin is origin
     with pytest.raises(ValidationError):
-        AddEvidenceCommand.model_validate({
-            "case_id": CASE_ID,
-            "evidence": valid_evidence_payload(),
-            "origin": valid_origin_payload(),
-            "request_id": REQUEST_ID,
-            "trace_id": TRACE_ID,
-            "unexpected": True,
-        })
+        AddEvidenceCommand.model_validate(
+            {
+                "case_id": CASE_ID,
+                "evidence": valid_evidence_payload(),
+                "origin": valid_origin_payload(),
+                "request_id": REQUEST_ID,
+                "trace_id": TRACE_ID,
+                "unexpected": True,
+            }
+        )
 
 
 def test_diagnose_command_is_strict_and_frozen() -> None:
@@ -273,12 +273,14 @@ def test_diagnose_command_is_strict_and_frozen() -> None:
     with pytest.raises(ValidationError):
         command.trace_id = "00000000-0000-4000-8000-000000000099"
     with pytest.raises(ValidationError):
-        DiagnoseCaseCommand.model_validate({
-            "case_id": CASE_ID,
-            "request_id": REQUEST_ID,
-            "trace_id": TRACE_ID,
-            "unexpected": True,
-        })
+        DiagnoseCaseCommand.model_validate(
+            {
+                "case_id": CASE_ID,
+                "request_id": REQUEST_ID,
+                "trace_id": TRACE_ID,
+                "unexpected": True,
+            }
+        )
 
 
 ERROR_MESSAGES = {
@@ -290,6 +292,7 @@ ERROR_MESSAGES = {
     DiagnosisInputStale: "diagnosis input is stale",
     DatabaseUnavailable: "database is unavailable",
     PersistenceInvariantViolation: "persistence invariant was violated",
+    InvalidInbound: "inbound request is invalid",
 }
 ORDINARY_ERRORS = tuple(error for error in ERROR_MESSAGES if error is not CaseNotReady)
 
@@ -307,6 +310,7 @@ def test_application_error_subclass_set_and_messages_are_exact() -> None:
         "DiagnosisInputStale",
         "DatabaseUnavailable",
         "PersistenceInvariantViolation",
+        "InvalidInbound",
     }
     for error_type, expected_message in ERROR_MESSAGES.items():
         assert error_type.message == expected_message
@@ -434,9 +438,7 @@ def assert_parameters(method: object, expected: tuple[tuple[str, Parameter], ...
         kind for _, kind in expected
     )
     assert all(
-        parameter.default is Parameter.empty
-        for name, parameter in actual.items()
-        if name != "self"
+        parameter.default is Parameter.empty for name, parameter in actual.items() if name != "self"
     )
 
 
@@ -552,9 +554,7 @@ def test_store_session_annotations_and_returns_are_exact() -> None:
 def test_store_factory_signature_is_exact() -> None:
     assert CaseStoreFactory._is_protocol is True
     contract_names = {
-        name
-        for name in CaseStoreFactory.__dict__
-        if name == "__call__" or not name.startswith("_")
+        name for name in CaseStoreFactory.__dict__ if name == "__call__" or not name.startswith("_")
     }
     assert contract_names == {"__call__"}
     assert_parameters(CaseStoreFactory.__call__, (("self", Parameter.POSITIONAL_OR_KEYWORD),))

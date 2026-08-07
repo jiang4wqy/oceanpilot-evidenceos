@@ -136,18 +136,20 @@ def test_plugin_platform_answer_advances_to_version_question(evidence_factory) -
 
 def test_complete_plugin_context_is_ready(evidence_factory) -> None:
     items = progressive_items(evidence_factory, 5, integration="PLUGIN")
-    items.extend((
-        evidence_factory(
-            code="integration.platform",
-            value="SHOPIFY",
-            evidence_id="00000000-0000-4000-8000-000000000006",
-        ),
-        evidence_factory(
-            code="integration.plugin_version",
-            value="v1.2.3",
-            evidence_id="00000000-0000-4000-8000-000000000007",
-        ),
-    ))
+    items.extend(
+        (
+            evidence_factory(
+                code="integration.platform",
+                value="SHOPIFY",
+                evidence_id="00000000-0000-4000-8000-000000000006",
+            ),
+            evidence_factory(
+                code="integration.plugin_version",
+                value="v1.2.3",
+                evidence_id="00000000-0000-4000-8000-000000000007",
+            ),
+        )
+    )
     result = assess_readiness(build_active_evidence_view(items))
 
     assert result.ready is True
@@ -207,18 +209,20 @@ def test_all_symptom_members_unavailable_make_core_confirmed_unknown(
 
 def test_partial_symptom_unknown_remains_missing(evidence_factory) -> None:
     items = progressive_items(evidence_factory, 3)
-    items.extend((
-        evidence_factory(
-            code="symptom.status",
-            availability=EvidenceAvailability.CONFIRMED_UNAVAILABLE,
-            evidence_id="00000000-0000-4000-8000-000000000004",
-        ),
-        evidence_factory(
-            code="integration.type",
-            value="API",
-            evidence_id="00000000-0000-4000-8000-000000000005",
-        ),
-    ))
+    items.extend(
+        (
+            evidence_factory(
+                code="symptom.status",
+                availability=EvidenceAvailability.CONFIRMED_UNAVAILABLE,
+                evidence_id="00000000-0000-4000-8000-000000000004",
+            ),
+            evidence_factory(
+                code="integration.type",
+                value="API",
+                evidence_id="00000000-0000-4000-8000-000000000005",
+            ),
+        )
+    )
     result = assess_readiness(build_active_evidence_view(items))
 
     assert result.next_question == "symptom.signal"
@@ -277,23 +281,25 @@ def test_core_conflict_counts_available_and_can_be_ready(evidence_factory) -> No
 
 def test_symptom_member_conflict_counts_the_composite_available(evidence_factory) -> None:
     items = progressive_items(evidence_factory, 3)
-    items.extend((
-        evidence_factory(
-            code="symptom.status",
-            value="FAILED",
-            evidence_id="00000000-0000-4000-8000-000000000004",
-        ),
-        evidence_factory(
-            code="symptom.status",
-            value="SUCCEEDED",
-            evidence_id="00000000-0000-4000-8000-000000000005",
-        ),
-        evidence_factory(
-            code="integration.type",
-            value="API",
-            evidence_id="00000000-0000-4000-8000-000000000006",
-        ),
-    ))
+    items.extend(
+        (
+            evidence_factory(
+                code="symptom.status",
+                value="FAILED",
+                evidence_id="00000000-0000-4000-8000-000000000004",
+            ),
+            evidence_factory(
+                code="symptom.status",
+                value="SUCCEEDED",
+                evidence_id="00000000-0000-4000-8000-000000000005",
+            ),
+            evidence_factory(
+                code="integration.type",
+                value="API",
+                evidence_id="00000000-0000-4000-8000-000000000006",
+            ),
+        )
+    )
     view = build_active_evidence_view(items)
     result = assess_readiness(view)
 
@@ -305,18 +311,20 @@ def test_symptom_member_conflict_counts_the_composite_available(evidence_factory
 
 def test_integration_conflict_does_not_activate_plugin_rows(evidence_factory) -> None:
     items = progressive_items(evidence_factory, 4)
-    items.extend((
-        evidence_factory(
-            code="integration.type",
-            value="API",
-            evidence_id="00000000-0000-4000-8000-000000000005",
-        ),
-        evidence_factory(
-            code="integration.type",
-            value="PLUGIN",
-            evidence_id="00000000-0000-4000-8000-000000000006",
-        ),
-    ))
+    items.extend(
+        (
+            evidence_factory(
+                code="integration.type",
+                value="API",
+                evidence_id="00000000-0000-4000-8000-000000000005",
+            ),
+            evidence_factory(
+                code="integration.type",
+                value="PLUGIN",
+                evidence_id="00000000-0000-4000-8000-000000000006",
+            ),
+        )
+    )
     result = assess_readiness(build_active_evidence_view(items))
 
     assert result.ready is True
@@ -326,18 +334,20 @@ def test_integration_conflict_does_not_activate_plugin_rows(evidence_factory) ->
 
 def test_inactive_presupplied_plugin_evidence_has_no_effect(evidence_factory) -> None:
     items = progressive_items(evidence_factory, 4)
-    items.extend((
-        evidence_factory(
-            code="integration.platform",
-            value="SHOPIFY",
-            evidence_id="00000000-0000-4000-8000-000000000006",
-        ),
-        evidence_factory(
-            code="integration.plugin_version",
-            value="v1",
-            evidence_id="00000000-0000-4000-8000-000000000007",
-        ),
-    ))
+    items.extend(
+        (
+            evidence_factory(
+                code="integration.platform",
+                value="SHOPIFY",
+                evidence_id="00000000-0000-4000-8000-000000000006",
+            ),
+            evidence_factory(
+                code="integration.plugin_version",
+                value="v1",
+                evidence_id="00000000-0000-4000-8000-000000000007",
+            ),
+        )
+    )
     result = assess_readiness(build_active_evidence_view(items))
 
     assert result.completion_ratio == Decimal("0.8000")
@@ -348,18 +358,20 @@ def test_inactive_presupplied_plugin_evidence_has_no_effect(evidence_factory) ->
 
 def test_plugin_known_unknown_fields_are_lexically_sorted(evidence_factory) -> None:
     items = progressive_items(evidence_factory, 5, integration="PLUGIN")
-    items.extend((
-        evidence_factory(
-            code="integration.plugin_version",
-            availability=EvidenceAvailability.CONFIRMED_UNAVAILABLE,
-            evidence_id="00000000-0000-4000-8000-000000000006",
-        ),
-        evidence_factory(
-            code="integration.platform",
-            availability=EvidenceAvailability.CONFIRMED_UNAVAILABLE,
-            evidence_id="00000000-0000-4000-8000-000000000007",
-        ),
-    ))
+    items.extend(
+        (
+            evidence_factory(
+                code="integration.plugin_version",
+                availability=EvidenceAvailability.CONFIRMED_UNAVAILABLE,
+                evidence_id="00000000-0000-4000-8000-000000000006",
+            ),
+            evidence_factory(
+                code="integration.platform",
+                availability=EvidenceAvailability.CONFIRMED_UNAVAILABLE,
+                evidence_id="00000000-0000-4000-8000-000000000007",
+            ),
+        )
+    )
     result = assess_readiness(build_active_evidence_view(items))
 
     assert result.ready is True

@@ -36,10 +36,12 @@ def test_source_quality_map_is_exact_and_externally_immutable() -> None:
             SourceReliability.USER_REPORTED,
             "0.865",
             "0.87",
-            frozenset({
-                ReviewReason.LOW_CONFIDENCE,
-                ReviewReason.INSUFFICIENT_SOURCE_QUALITY,
-            }),
+            frozenset(
+                {
+                    ReviewReason.LOW_CONFIDENCE,
+                    ReviewReason.INSUFFICIENT_SOURCE_QUALITY,
+                }
+            ),
         ),
     ),
 )

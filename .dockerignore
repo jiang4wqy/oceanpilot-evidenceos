@@ -1,0 +1,16 @@
+.git
+.github
+.ruff_cache
+.pytest_cache
+__pycache__
+*.pyc
+tests
+docs
+examples
+artifacts
+scripts
+work
+*.db
+*.db-*
+.env
+.env.*

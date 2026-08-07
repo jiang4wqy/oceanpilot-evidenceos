@@ -298,9 +298,7 @@ def test_available_beats_unavailable_history(evidence_factory) -> None:
         availability=EvidenceAvailability.CONFIRMED_UNAVAILABLE,
         evidence_id="00000000-0000-4000-8000-000000000001",
     )
-    available = evidence_factory(
-        evidence_id="00000000-0000-4000-8000-000000000002"
-    )
+    available = evidence_factory(evidence_id="00000000-0000-4000-8000-000000000002")
     slot = build_active_evidence_view([unavailable, available]).slots[
         EvidenceCode.CONTEXT_ENVIRONMENT
     ]
@@ -324,9 +322,9 @@ def test_same_value_uses_all_quality_levels_then_lowest_id(evidence_factory) -> 
         )
         for index, reliability in enumerate(reliability_order, start=1)
     ]
-    selected = build_active_evidence_view(items).slots[
-        EvidenceCode.CONTEXT_ENVIRONMENT
-    ].selected_evidence
+    selected = (
+        build_active_evidence_view(items).slots[EvidenceCode.CONTEXT_ENVIRONMENT].selected_evidence
+    )
     assert selected is not None
     assert selected.source_reliability is SourceReliability.SYSTEM_OF_RECORD
 
@@ -338,9 +336,11 @@ def test_same_value_uses_all_quality_levels_then_lowest_id(evidence_factory) -> 
         reliability=SourceReliability.SYSTEM_OF_RECORD,
         evidence_id="00000000-0000-4000-8000-000000000010",
     )
-    tied = build_active_evidence_view([high_b, high_a]).slots[
-        EvidenceCode.CONTEXT_ENVIRONMENT
-    ].selected_evidence
+    tied = (
+        build_active_evidence_view([high_b, high_a])
+        .slots[EvidenceCode.CONTEXT_ENVIRONMENT]
+        .selected_evidence
+    )
     assert tied == high_a
 
 
@@ -367,9 +367,11 @@ def test_each_adjacent_quality_level_beats_the_next(
         evidence_id="00000000-0000-4000-8000-000000000002",
     )
 
-    selected = build_active_evidence_view([lower_id, higher_id]).slots[
-        EvidenceCode.CONTEXT_ENVIRONMENT
-    ].selected_evidence
+    selected = (
+        build_active_evidence_view([lower_id, higher_id])
+        .slots[EvidenceCode.CONTEXT_ENVIRONMENT]
+        .selected_evidence
+    )
     assert selected == higher_id
 
 
@@ -402,14 +404,10 @@ def test_unicode_and_datetime_values_are_normalized_for_folding(evidence_factory
 
 
 def test_boolean_fold_equality_is_exact(evidence_factory) -> None:
-    true_a = evidence_factory(
-        evidence_id="00000000-0000-4000-8000-000000000001"
-    ).model_copy(
+    true_a = evidence_factory(evidence_id="00000000-0000-4000-8000-000000000001").model_copy(
         update={"typed_value": True, "value_type": EvidenceValueType.BOOLEAN}
     )
-    true_b = evidence_factory(
-        evidence_id="00000000-0000-4000-8000-000000000002"
-    ).model_copy(
+    true_b = evidence_factory(evidence_id="00000000-0000-4000-8000-000000000002").model_copy(
         update={"typed_value": True, "value_type": EvidenceValueType.BOOLEAN}
     )
     false_b = true_b.model_copy(update={"typed_value": False})
@@ -427,12 +425,8 @@ def test_boolean_fold_equality_is_exact(evidence_factory) -> None:
 
 
 def test_different_available_values_become_conflict(evidence_factory) -> None:
-    first = evidence_factory(
-        value="PROD", evidence_id="00000000-0000-4000-8000-000000000001"
-    )
-    second = evidence_factory(
-        value="SANDBOX", evidence_id="00000000-0000-4000-8000-000000000002"
-    )
+    first = evidence_factory(value="PROD", evidence_id="00000000-0000-4000-8000-000000000001")
+    second = evidence_factory(value="SANDBOX", evidence_id="00000000-0000-4000-8000-000000000002")
 
     view = build_active_evidence_view([first, second])
     slot = view.slots[EvidenceCode.CONTEXT_ENVIRONMENT]

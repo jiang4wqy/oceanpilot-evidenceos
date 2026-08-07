@@ -1,0 +1,28 @@
+{
+  "schema": "2.0",
+  "header": {
+    "event_id": "evt-action-evidence-0001",
+    "event_type": "card.action.trigger",
+    "create_time": "1754366401000",
+    "token": "synthetic-verification-token"
+  },
+  "event": {
+    "operator": {"open_id": "ou_reporter_0001"},
+    "context": {
+      "open_chat_id": "oc_case_chat_0001",
+      "open_message_id": "om_message_0001"
+    },
+    "action": {
+      "tag": "button",
+      "value": {
+        "action": "submit_evidence",
+        "case_id": "00000000-0000-4000-8000-000000000001",
+        "evidence_id": "00000000-0000-4000-8000-000000000101",
+        "evidence_code": "context.environment",
+        "availability": "AVAILABLE",
+        "typed_value": "PROD",
+        "source_ref": "feishu:context.environment"
+      }
+    }
+  }
+}

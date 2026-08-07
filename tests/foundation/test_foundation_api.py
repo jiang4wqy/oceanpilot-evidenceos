@@ -137,14 +137,15 @@ def test_evidence_replay_is_200_and_conflict_is_409(
     assert CaseView.model_validate_json(after_conflict.content) == first_view
 
 
-def test_diagnosis_is_explicitly_deferred(client: TestClient, created_case: str):
+def test_diagnosis_requires_ready_evidence(client: TestClient, created_case: str):
     response = client.post(f"/api/v1/cases/{created_case}/diagnose")
-    assert response.status_code == 501
-    assert response.json() == {
-        "status": 501,
-        "code": "FEATURE_DEFERRED",
-        "detail": "diagnosis is deferred in the foundation milestone",
-    }
+    assert response.status_code == 409
+    body = response.json()
+    assert body["code"] == "CASE_NOT_READY"
+    assert body["case_id"] == created_case
+    assert body["current_revision"] == 1
+    assert body["missing_fields"]
+    assert response.headers["X-Trace-ID"] == body["trace_id"]
 
 
 @pytest.mark.parametrize("synthetic", [False, "true", 1])
@@ -264,11 +265,9 @@ def test_request_timestamp_parse_failures_are_fixed_422(
         changes["evidence_code"] = "transaction.occurred_at"
     response = post_evidence(client, created_case, **changes)
     assert response.status_code == 422
-    assert response.json() == {
-        "status": 422,
-        "code": "INVALID_REQUEST",
-        "detail": "request validation failed",
-    }
+    assert response.headers["content-type"].startswith("application/problem+json")
+    assert response.json()["code"] == "INVALID_REQUEST"
+    assert response.json()["detail"] == "request validation failed"
 
 
 @pytest.mark.skipif(not SCHEMAS_AVAILABLE, reason="schemas module is created after API RED")
@@ -315,6 +314,20 @@ def test_openapi_has_exact_foundation_paths(app: FastAPI):
         "/api/v1/cases/{case_id}",
         "/api/v1/cases/{case_id}/evidence",
         "/api/v1/cases/{case_id}/diagnose",
+        "/api/v1/integrations/feishu/events",
+        "/api/v1/integrations/feishu/card-actions",
+        "/api/v1/chargeback/catalog",
+        "/api/v1/chargeback/cases",
+        "/api/v1/chargeback/cases/{case_id}",
+        "/api/v1/chargeback/cases/{case_id}/appeal",
+        "/api/v1/chargeback/cases/{case_id}/audit",
+        "/api/v1/chargeback/cases/{case_id}/confirm",
+        "/api/v1/chargeback/cases/{case_id}/evidence",
+        "/api/v1/chargeback/cases/{case_id}/finalize",
+        "/api/v1/chargeback/cases/{case_id}/package",
+        "/api/v1/chargeback/metrics",
+        "/api/v1/chargeback/prevention/assess",
+        "/api/v1/chargeback/safety/scan",
     }
     assert {path: set(item) for path, item in paths.items()} == {
         "/health": {"get"},
@@ -322,4 +335,18 @@ def test_openapi_has_exact_foundation_paths(app: FastAPI):
         "/api/v1/cases/{case_id}": {"get"},
         "/api/v1/cases/{case_id}/evidence": {"post"},
         "/api/v1/cases/{case_id}/diagnose": {"post"},
+        "/api/v1/integrations/feishu/events": {"post"},
+        "/api/v1/integrations/feishu/card-actions": {"post"},
+        "/api/v1/chargeback/catalog": {"get"},
+        "/api/v1/chargeback/cases": {"post"},
+        "/api/v1/chargeback/cases/{case_id}": {"get"},
+        "/api/v1/chargeback/cases/{case_id}/appeal": {"post"},
+        "/api/v1/chargeback/cases/{case_id}/audit": {"get"},
+        "/api/v1/chargeback/cases/{case_id}/confirm": {"post"},
+        "/api/v1/chargeback/cases/{case_id}/evidence": {"post"},
+        "/api/v1/chargeback/cases/{case_id}/finalize": {"post"},
+        "/api/v1/chargeback/cases/{case_id}/package": {"get"},
+        "/api/v1/chargeback/metrics": {"get"},
+        "/api/v1/chargeback/prevention/assess": {"post"},
+        "/api/v1/chargeback/safety/scan": {"post"},
     }

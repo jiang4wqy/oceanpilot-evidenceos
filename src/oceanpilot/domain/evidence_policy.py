@@ -80,73 +80,73 @@ def _member_of(values: frozenset[str]) -> Callable[[object], bool]:
 
 def _aware_datetime(value: object) -> bool:
     return (
-        isinstance(value, datetime)
-        and value.tzinfo is not None
-        and value.utcoffset() is not None
+        isinstance(value, datetime) and value.tzinfo is not None and value.utcoffset() is not None
     )
 
 
-FIELD_CATALOG: Mapping[EvidenceCode, _FieldPolicy] = MappingProxyType({
-    EvidenceCode.CONTEXT_ENVIRONMENT: _FieldPolicy(
-        EvidenceValueType.STRING, _one_of("PROD", "SANDBOX")
-    ),
-    EvidenceCode.TRANSACTION_REFERENCE: _FieldPolicy(
-        EvidenceValueType.STRING, _fullmatch(r"[A-Za-z0-9_.-]{1,64}")
-    ),
-    EvidenceCode.TRANSACTION_OCCURRED_AT: _FieldPolicy(
-        EvidenceValueType.DATETIME, _aware_datetime
-    ),
-    EvidenceCode.TRANSACTION_COUNTRY: _FieldPolicy(
-        EvidenceValueType.COUNTRY, _member_of(ISO_COUNTRY_ALPHA2)
-    ),
-    EvidenceCode.TRANSACTION_CURRENCY: _FieldPolicy(
-        EvidenceValueType.CURRENCY, _member_of(ISO_CURRENCY_ALPHA3)
-    ),
-    EvidenceCode.PAYMENT_METHOD: _FieldPolicy(
-        EvidenceValueType.STRING,
-        _one_of("CARD", "APPLE_PAY", "GOOGLE_PAY", "KLARNA", "LOCAL_PAYMENT", "OTHER"),
-    ),
-    EvidenceCode.INTEGRATION_TYPE: _FieldPolicy(
-        EvidenceValueType.STRING, _one_of("API", "PLUGIN")
-    ),
-    EvidenceCode.INTEGRATION_PLATFORM: _FieldPolicy(
-        EvidenceValueType.STRING,
-        _one_of("SHOPIFY", "WOOCOMMERCE", "MAGENTO", "CUSTOM"),
-    ),
-    EvidenceCode.INTEGRATION_PLUGIN_VERSION: _FieldPolicy(
-        EvidenceValueType.STRING, _fullmatch(r"[A-Za-z0-9][A-Za-z0-9._+-]{0,31}")
-    ),
-    EvidenceCode.SYMPTOM_STATUS: _FieldPolicy(
-        EvidenceValueType.STRING,
-        _one_of("PENDING", "FAILED", "SUCCEEDED", "DECLINED", "UNKNOWN"),
-    ),
-    EvidenceCode.SYMPTOM_ERROR_CODE: _FieldPolicy(
-        EvidenceValueType.STRING, _fullmatch(r"[A-Za-z0-9_.-]{1,64}")
-    ),
-    EvidenceCode.AUTHENTICATION_STATUS: _FieldPolicy(
-        EvidenceValueType.STRING,
-        _one_of("REQUIRED", "CHALLENGE_PENDING", "AUTHENTICATED", "FAILED", "UNKNOWN"),
-    ),
-    EvidenceCode.AUTHENTICATION_RESULT_CODE: _FieldPolicy(
-        EvidenceValueType.STRING, _fullmatch(r"[A-Za-z0-9_.-]{1,64}")
-    ),
-    EvidenceCode.CALLBACK_DELIVERY_STATUS: _FieldPolicy(
-        EvidenceValueType.STRING,
-        _one_of("NOT_RECEIVED", "DELIVERED", "FAILED", "UNKNOWN"),
-    ),
-    EvidenceCode.RISK_DECISION_CODE: _FieldPolicy(
-        EvidenceValueType.STRING, _fullmatch(r"[A-Za-z0-9_.-]{1,64}")
-    ),
-    EvidenceCode.CONFIGURATION_CHECK_RESULT: _FieldPolicy(
-        EvidenceValueType.STRING,
-        _one_of(
-            "MERCHANT_SIDE_MISMATCH",
-            "PSP_PROFILE_MISMATCH",
-            "NO_MISMATCH",
-            "UNKNOWN",
+FIELD_CATALOG: Mapping[EvidenceCode, _FieldPolicy] = MappingProxyType(
+    {
+        EvidenceCode.CONTEXT_ENVIRONMENT: _FieldPolicy(
+            EvidenceValueType.STRING, _one_of("PROD", "SANDBOX")
         ),
-    ),
-})
+        EvidenceCode.TRANSACTION_REFERENCE: _FieldPolicy(
+            EvidenceValueType.STRING, _fullmatch(r"[A-Za-z0-9_.-]{1,64}")
+        ),
+        EvidenceCode.TRANSACTION_OCCURRED_AT: _FieldPolicy(
+            EvidenceValueType.DATETIME, _aware_datetime
+        ),
+        EvidenceCode.TRANSACTION_COUNTRY: _FieldPolicy(
+            EvidenceValueType.COUNTRY, _member_of(ISO_COUNTRY_ALPHA2)
+        ),
+        EvidenceCode.TRANSACTION_CURRENCY: _FieldPolicy(
+            EvidenceValueType.CURRENCY, _member_of(ISO_CURRENCY_ALPHA3)
+        ),
+        EvidenceCode.PAYMENT_METHOD: _FieldPolicy(
+            EvidenceValueType.STRING,
+            _one_of("CARD", "APPLE_PAY", "GOOGLE_PAY", "KLARNA", "LOCAL_PAYMENT", "OTHER"),
+        ),
+        EvidenceCode.INTEGRATION_TYPE: _FieldPolicy(
+            EvidenceValueType.STRING, _one_of("API", "PLUGIN")
+        ),
+        EvidenceCode.INTEGRATION_PLATFORM: _FieldPolicy(
+            EvidenceValueType.STRING,
+            _one_of("SHOPIFY", "WOOCOMMERCE", "MAGENTO", "CUSTOM"),
+        ),
+        EvidenceCode.INTEGRATION_PLUGIN_VERSION: _FieldPolicy(
+            EvidenceValueType.STRING, _fullmatch(r"[A-Za-z0-9][A-Za-z0-9._+-]{0,31}")
+        ),
+        EvidenceCode.SYMPTOM_STATUS: _FieldPolicy(
+            EvidenceValueType.STRING,
+            _one_of("PENDING", "FAILED", "SUCCEEDED", "DECLINED", "UNKNOWN"),
+        ),
+        EvidenceCode.SYMPTOM_ERROR_CODE: _FieldPolicy(
+            EvidenceValueType.STRING, _fullmatch(r"[A-Za-z0-9_.-]{1,64}")
+        ),
+        EvidenceCode.AUTHENTICATION_STATUS: _FieldPolicy(
+            EvidenceValueType.STRING,
+            _one_of("REQUIRED", "CHALLENGE_PENDING", "AUTHENTICATED", "FAILED", "UNKNOWN"),
+        ),
+        EvidenceCode.AUTHENTICATION_RESULT_CODE: _FieldPolicy(
+            EvidenceValueType.STRING, _fullmatch(r"[A-Za-z0-9_.-]{1,64}")
+        ),
+        EvidenceCode.CALLBACK_DELIVERY_STATUS: _FieldPolicy(
+            EvidenceValueType.STRING,
+            _one_of("NOT_RECEIVED", "DELIVERED", "FAILED", "UNKNOWN"),
+        ),
+        EvidenceCode.RISK_DECISION_CODE: _FieldPolicy(
+            EvidenceValueType.STRING, _fullmatch(r"[A-Za-z0-9_.-]{1,64}")
+        ),
+        EvidenceCode.CONFIGURATION_CHECK_RESULT: _FieldPolicy(
+            EvidenceValueType.STRING,
+            _one_of(
+                "MERCHANT_SIDE_MISMATCH",
+                "PSP_PROFILE_MISMATCH",
+                "NO_MISMATCH",
+                "UNKNOWN",
+            ),
+        ),
+    }
+)
 
 _SOURCE_QUALITY = {
     SourceReliability.SYSTEM_OF_RECORD: 5,
@@ -246,11 +246,7 @@ def build_active_evidence_view(evidence: Sequence[EvidenceItem]) -> ActiveEviden
     has_conflict = False
     for code in EvidenceCode:
         items = by_code[code]
-        available = [
-            item
-            for item in items
-            if item.availability is EvidenceAvailability.AVAILABLE
-        ]
+        available = [item for item in items if item.availability is EvidenceAvailability.AVAILABLE]
         normalized_values = {_fold_value(item.typed_value) for item in available}
         conflicting = len(normalized_values) > 1
         selected = None
@@ -267,11 +263,7 @@ def build_active_evidence_view(evidence: Sequence[EvidenceItem]) -> ActiveEviden
         )
         has_conflict = has_conflict or conflicting
 
-    reasons = (
-        frozenset({ReviewReason.CONFLICTING_EVIDENCE})
-        if has_conflict
-        else frozenset()
-    )
+    reasons = frozenset({ReviewReason.CONFLICTING_EVIDENCE}) if has_conflict else frozenset()
     return ActiveEvidenceView(slots=slots, review_reasons=reasons)
 
 
@@ -341,17 +333,21 @@ def assess_readiness(view: ActiveEvidenceView) -> ReadinessAssessment:
     active_rows = _READINESS_ROWS if plugin_active else _READINESS_ROWS[:5]
     states = tuple((row, _row_state(view, row)) for row in active_rows)
     unanswered = tuple(row for row, state in states if state is _AnswerState.MISSING)
-    missing_fields = tuple(sorted(
-        row.slot
-        for row, state in states
-        if state is _AnswerState.MISSING
-        or (row.core and state is _AnswerState.CONFIRMED_UNKNOWN)
-    ))
-    known_unknown_fields = tuple(sorted(
-        row.slot
-        for row, state in states
-        if not row.core and state is _AnswerState.CONFIRMED_UNKNOWN
-    ))
+    missing_fields = tuple(
+        sorted(
+            row.slot
+            for row, state in states
+            if state is _AnswerState.MISSING
+            or (row.core and state is _AnswerState.CONFIRMED_UNKNOWN)
+        )
+    )
+    known_unknown_fields = tuple(
+        sorted(
+            row.slot
+            for row, state in states
+            if not row.core and state is _AnswerState.CONFIRMED_UNKNOWN
+        )
+    )
 
     answered_count = sum(state is not _AnswerState.MISSING for _, state in states)
     completion_ratio = (Decimal(answered_count) / Decimal(len(active_rows))).quantize(

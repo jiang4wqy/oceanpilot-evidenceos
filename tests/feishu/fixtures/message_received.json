@@ -1,0 +1,23 @@
+{
+  "schema": "2.0",
+  "header": {
+    "event_id": "evt-message-0001",
+    "event_type": "im.message.receive_v1",
+    "create_time": "1754366400000",
+    "token": "synthetic-verification-token",
+    "app_id": "cli_synthetic_app",
+    "tenant_key": "tk_synthetic"
+  },
+  "event": {
+    "sender": {
+      "sender_id": {"open_id": "ou_reporter_0001"},
+      "sender_type": "user"
+    },
+    "message": {
+      "chat_id": "oc_case_chat_0001",
+      "message_id": "om_message_0001",
+      "message_type": "text",
+      "content": "{\"text\":\"跨境支付回调一直没有收到\"}"
+    }
+  }
+}

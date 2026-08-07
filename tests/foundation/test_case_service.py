@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 
 import pytest
 
+from oceanpilot.adapters.diagnosis.rules import RuleDiagnosisEngine
 from oceanpilot.application.case_service import CaseService
 from oceanpilot.application.commands import AddEvidenceCommand, CreateCaseCommand
 from oceanpilot.application.errors import (
@@ -264,7 +265,12 @@ def make_service(
 ) -> tuple[CaseService, _FakeStore, _IdFactory]:
     fake = _FakeStore(case_view=case_view, append_error=append_error)
     ids = _IdFactory()
-    service = CaseService(fake.factory, clock=lambda: NOW, uuid_factory=ids)
+    service = CaseService(
+        fake.factory,
+        RuleDiagnosisEngine(),
+        clock=lambda: NOW,
+        uuid_factory=ids,
+    )
     return service, fake, ids
 
 
@@ -321,9 +327,7 @@ def test_existing_evidence_uses_store_replay_without_allocating_audit_ids():
 
 
 def test_foundation_service_does_not_retry_concurrent_write():
-    service, fake, _ = make_service(
-        case_view=empty_case_view(), append_error=ConcurrentCaseWrite()
-    )
+    service, fake, _ = make_service(case_view=empty_case_view(), append_error=ConcurrentCaseWrite())
     with pytest.raises(ConcurrentCaseWrite):
         service.add_evidence(add_environment_command())
     assert fake.load_count == 1

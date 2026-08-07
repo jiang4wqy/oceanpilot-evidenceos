@@ -222,19 +222,13 @@ PREDICATE_VALUES = (
     ),
 )
 ACCEPTED_PREDICATES = tuple(
-    (rule_id, code, value)
-    for rule_id, code, accepted, _ in PREDICATE_VALUES
-    for value in accepted
+    (rule_id, code, value) for rule_id, code, accepted, _ in PREDICATE_VALUES for value in accepted
 )
 EXCLUDED_PREDICATES = tuple(
-    (rule_id, code, value)
-    for rule_id, code, _, excluded in PREDICATE_VALUES
-    for value in excluded
+    (rule_id, code, value) for rule_id, code, _, excluded in PREDICATE_VALUES for value in excluded
 )
 REQUIRED_PREDICATES = tuple(
-    (case["rule_id"], code)
-    for case in RULE_CASES
-    for code, _ in case["facts"]
+    (case["rule_id"], code) for case in RULE_CASES for code, _ in case["facts"]
 )
 
 
@@ -244,16 +238,13 @@ def replace_fact(
     value: str,
 ) -> tuple[tuple[str, str], ...]:
     return tuple(
-        (item_code, value if item_code == code else item_value)
-        for item_code, item_value in facts
+        (item_code, value if item_code == code else item_value) for item_code, item_value in facts
     )
 
 
 def test_rules_are_exact_and_deeply_immutable() -> None:
     assert isinstance(RULES, tuple)
-    assert tuple(rule.rule_id for rule in RULES) == tuple(
-        case["rule_id"] for case in RULE_CASES
-    )
+    assert tuple(rule.rule_id for rule in RULES) == tuple(case["rule_id"] for case in RULE_CASES)
     assert all(isinstance(rule.required_predicates, tuple) for rule in RULES)
     assert all(
         isinstance(predicate.allowed_values, frozenset)
@@ -323,8 +314,7 @@ def test_missing_or_unavailable_required_predicate_never_emits_target_rule(
     )
     remaining_view = make_view(evidence_factory, remaining_facts)
     evidence = [
-        remaining_view.slots[EvidenceCode(code)].selected_evidence
-        for code, _ in remaining_facts
+        remaining_view.slots[EvidenceCode(code)].selected_evidence for code, _ in remaining_facts
     ]
     assert all(item is not None for item in evidence)
     if availability == "confirmed_unavailable":
@@ -336,9 +326,7 @@ def test_missing_or_unavailable_required_predicate_never_emits_target_rule(
             )
         )
     view = build_active_evidence_view(evidence)
-    result = RuleDiagnosisEngine().evaluate(
-        make_case(), view, policy_version=POLICY_VERSION
-    )
+    result = RuleDiagnosisEngine().evaluate(make_case(), view, policy_version=POLICY_VERSION)
 
     assert rule_id not in tuple(hypothesis.rule_id for hypothesis in result.hypotheses)
 
@@ -356,8 +344,7 @@ def test_each_rule_emits_the_complete_fixed_output(evidence_factory, rule_case) 
     assert len(result.hypotheses) == 1
     hypothesis = result.hypotheses[0]
     decisive = tuple(
-        view.slots[EvidenceCode(code)].selected_evidence
-        for code, _ in rule_case["facts"]
+        view.slots[EvidenceCode(code)].selected_evidence for code, _ in rule_case["facts"]
     )
     expected_refs = tuple(sorted(item.evidence_id for item in decisive if item is not None))
     assert hypothesis.rule_id == rule_case["rule_id"]
@@ -383,9 +370,7 @@ def test_each_rule_emits_the_complete_fixed_output(evidence_factory, rule_case) 
     assert ticket is not None
     assert ticket.title == rule_case["ticket_title"]
     assert ticket.summary == rule_case["explanation"]
-    assert ticket.evidence_summary == tuple(
-        f"{code}={value}" for code, value in rule_case["facts"]
-    )
+    assert ticket.evidence_summary == tuple(f"{code}={value}" for code, value in rule_case["facts"])
     assert ticket.missing_material == ()
     assert ticket.hypotheses == (hypothesis,)
     assert ticket.next_action == rule_case["next_action"]
@@ -413,9 +398,7 @@ def test_conflicting_view_short_circuits_an_otherwise_matching_rule(
 ) -> None:
     facts = (*RULE_CASES[0]["facts"], ("symptom.status", "FAILED"))
     view = make_view(evidence_factory, facts)
-    result = RuleDiagnosisEngine().evaluate(
-        make_case(), view, policy_version=POLICY_VERSION
-    )
+    result = RuleDiagnosisEngine().evaluate(make_case(), view, policy_version=POLICY_VERSION)
 
     assert ReviewReason.CONFLICTING_EVIDENCE in view.review_reasons
     assert result.hypotheses == ()
@@ -427,9 +410,7 @@ def test_conflicting_view_short_circuits_an_otherwise_matching_rule(
 
 def test_zero_matches_returns_policy_gap_only(evidence_factory) -> None:
     view = make_view(evidence_factory, (("symptom.status", "SUCCEEDED"),))
-    result = RuleDiagnosisEngine().evaluate(
-        make_case(), view, policy_version=POLICY_VERSION
-    )
+    result = RuleDiagnosisEngine().evaluate(make_case(), view, policy_version=POLICY_VERSION)
 
     assert result.hypotheses == ()
     assert result.routing_decision is None
@@ -476,10 +457,12 @@ def test_user_reported_nonrisk_keeps_route_and_ticket(evidence_factory) -> None:
         policy_version=POLICY_VERSION,
     )
     assert result.hypotheses[0].confidence_score == Decimal("0.87")
-    assert result.review_reasons == frozenset({
-        ReviewReason.LOW_CONFIDENCE,
-        ReviewReason.INSUFFICIENT_SOURCE_QUALITY,
-    })
+    assert result.review_reasons == frozenset(
+        {
+            ReviewReason.LOW_CONFIDENCE,
+            ReviewReason.INSUFFICIENT_SOURCE_QUALITY,
+        }
+    )
     assert result.requires_human is True
     assert result.routing_decision is not None
     assert result.ticket_draft is not None
@@ -499,11 +482,13 @@ def test_user_reported_risk_unions_all_reasons_and_keeps_risk_route(
         policy_version=POLICY_VERSION,
     )
     assert result.hypotheses[0].confidence_score == Decimal("0.87")
-    assert result.review_reasons == frozenset({
-        ReviewReason.LOW_CONFIDENCE,
-        ReviewReason.INSUFFICIENT_SOURCE_QUALITY,
-        ReviewReason.RISK_DECISION,
-    })
+    assert result.review_reasons == frozenset(
+        {
+            ReviewReason.LOW_CONFIDENCE,
+            ReviewReason.INSUFFICIENT_SOURCE_QUALITY,
+            ReviewReason.RISK_DECISION,
+        }
+    )
     assert result.routing_decision is not None
     assert result.routing_decision.responsible_team is ResponsibleTeam.RISK
     assert result.ticket_draft is not None
@@ -516,8 +501,7 @@ def test_unrelated_low_quality_evidence_does_not_change_confidence(
     rule_case = RULE_CASES[0]
     baseline_view = make_view(evidence_factory, rule_case["facts"])
     decisive = [
-        baseline_view.slots[EvidenceCode(code)].selected_evidence
-        for code, _ in rule_case["facts"]
+        baseline_view.slots[EvidenceCode(code)].selected_evidence for code, _ in rule_case["facts"]
     ]
     assert all(item is not None for item in decisive)
     unrelated = evidence_factory(
@@ -529,9 +513,7 @@ def test_unrelated_low_quality_evidence_does_not_change_confidence(
     unrelated_view = build_active_evidence_view([*decisive, unrelated])
     engine = RuleDiagnosisEngine()
     baseline = engine.evaluate(make_case(), baseline_view, policy_version=POLICY_VERSION)
-    with_unrelated = engine.evaluate(
-        make_case(), unrelated_view, policy_version=POLICY_VERSION
-    )
+    with_unrelated = engine.evaluate(make_case(), unrelated_view, policy_version=POLICY_VERSION)
     assert with_unrelated == baseline
 
 

@@ -49,6 +49,12 @@ _UUID_IDENTIFIER_FIELDS = frozenset(
         "correlation_id",
     }
 )
+# Fields holding a list/tuple of UUID4 identifiers (not scalars). Their elements
+# are key-less when scanned, so the scalar allowlist above can't reach them; a
+# uuid whose digits happen to pass Luhn would otherwise be a false positive.
+# Each element must still be an exact UUID4 (embedded/prefixed values are not
+# trusted), preserving the same policy as the scalar identifier fields.
+_UUID_IDENTIFIER_LIST_FIELDS = frozenset({"evidence_refs"})
 _UUID4_IDENTIFIER_PATTERN = re.compile(
     r"[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}",
     re.IGNORECASE,
@@ -78,9 +84,7 @@ def _is_sensitive_key(value: str) -> bool:
     if not tokens or tokens[-1] in _SAFE_METADATA_SUFFIXES:
         return False
     singular_tokens = tuple(
-        token[:-1]
-        if token.endswith("s") and token[:-1] in _SENSITIVE_KEY_TOKENS
-        else token
+        token[:-1] if token.endswith("s") and token[:-1] in _SENSITIVE_KEY_TOKENS else token
         for token in tokens
     )
     compact_key = "".join(tokens)
@@ -95,10 +99,18 @@ def _is_trusted_derived_value(key: object, value: object) -> bool:
     if not isinstance(key, str) or not isinstance(value, str):
         return False
     return (
-        key in _UUID_IDENTIFIER_FIELDS
-        and _UUID4_IDENTIFIER_PATTERN.fullmatch(value) is not None
-    ) or (
-        key == "content_hash" and _CONTENT_HASH_PATTERN.fullmatch(value) is not None
+        key in _UUID_IDENTIFIER_FIELDS and _UUID4_IDENTIFIER_PATTERN.fullmatch(value) is not None
+    ) or (key == "content_hash" and _CONTENT_HASH_PATTERN.fullmatch(value) is not None)
+
+
+def _is_trusted_identifier_list(key: object, value: object) -> bool:
+    if not isinstance(key, str) or key not in _UUID_IDENTIFIER_LIST_FIELDS:
+        return False
+    if not isinstance(value, (Sequence, Set)) or isinstance(value, (str, bytes, bytearray)):
+        return False
+    return all(
+        isinstance(item, str) and _UUID4_IDENTIFIER_PATTERN.fullmatch(item) is not None
+        for item in value
     )
 
 
@@ -119,7 +131,7 @@ def _contains_sensitive_value(value: object, visited: set[int]) -> bool:
                 return True
             if _contains_sensitive_value(key, visited):
                 return True
-            if _is_trusted_derived_value(key, item):
+            if _is_trusted_derived_value(key, item) or _is_trusted_identifier_list(key, item):
                 continue
             if _contains_sensitive_value(item, visited):
                 return True
