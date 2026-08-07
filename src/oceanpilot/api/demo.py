@@ -169,6 +169,21 @@ _DEMO_HTML = """<!doctype html>
   textarea:focus,select:focus,input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
   label.chk{display:inline-flex;align-items:center;gap:7px;color:var(--muted);font-size:12.5px;border:1px solid var(--border);border-radius:8px;padding:8px 11px;cursor:pointer;background:var(--surface)}
   .empty{color:var(--faint);font-size:12.5px}
+  :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+  .schips{display:flex;flex-wrap:wrap;gap:8px;margin:2px 0 12px}
+  .schip{border:1px solid var(--border);background:var(--surface);color:var(--body);border-radius:999px;
+    padding:6px 13px;font-size:12.5px;cursor:pointer;font-family:var(--sans)}
+  .schip:hover{border-color:var(--border-2)}
+  .schip.on{border-color:var(--accent);color:var(--accent);background:var(--accent-soft);font-weight:600}
+  .mstat{margin:0 0 12px}
+  .mstat .ml{display:flex;justify-content:space-between;font-size:11.5px;color:var(--muted);margin-bottom:4px}
+  .mstat .ml b{color:var(--ink);font-variant-numeric:tabular-nums;font-family:var(--mono);font-weight:600}
+  .mbar{height:8px;border-radius:5px;background:var(--sunken);overflow:hidden}
+  .mbar > i{display:block;height:100%;background:var(--accent)}
+  .mnote{display:grid;grid-template-columns:1fr auto;gap:4px 12px;font-family:var(--mono);font-size:11px;
+    color:var(--muted);border-top:1px solid var(--border);padding-top:10px;margin-top:4px}
+  .mnote b{color:var(--body);font-weight:600;text-align:right;font-variant-numeric:tabular-nums}
 </style>
 </head>
 <body>
@@ -328,7 +343,8 @@ async function refreshCase(){if(!S.caseId)return;apply((await api("GET",`/cases/
 async function confirmReason(){const v=$('fix')?$('fix').value:"";apply((await api("POST",`/cases/${S.caseId}/confirm`,v?{reason_code:v}:{})).data);}
 async function submitEvidence(code){apply((await api("POST",`/cases/${S.caseId}/evidence`,{evidence_code:code})).data);}
 async function finalize(){apply((await api("POST",`/cases/${S.caseId}/finalize`)).data);}
-function fillScenario(){const s=$('scenario'),d=$('desc');if(s&&d)d.value=SCENARIOS[+s.value].desc;}
+function fillScenario(i){const d=$('desc');if(d)d.value=SCENARIOS[i].desc;
+  document.querySelectorAll('.schip').forEach(c=>c.classList.toggle('on',+c.dataset.i===i));}
 async function autoRun(){if(!S.caseId)await openCase();let g=0;
   while(S.last&&S.last.phase!=="ASSESSED"&&g++<40){
     if(S.last.phase==="REASON_PROPOSED")await confirmReason();
@@ -347,16 +363,20 @@ function renderCaseHead(d){
     +`<div class="field"><div class="k">案件</div><div class="v mono">${esc(d.case_id.slice(0,18))}</div></div>`
     +`<div class="field"><div class="k">争议原因</div><div class="v">${esc(d.reason_code||"—")} ${conf}</div></div>`;
   if(d.facts&&d.facts.amount)h+=`<div class="field"><div class="k">金额</div><div class="v num">${esc(d.facts.amount)} ${esc(d.facts.currency||"")}</div></div>`;
-  if(d.deadline){const od=d.deadline.overdue?' <span class="pill p-crit">已逾期</span>':'';
-    h+=`<div class="field"><div class="k">举证时限</div><div class="v num">还剩 ${d.deadline.days_remaining} 天${od}</div></div>`;}
+  if(d.deadline){const dl=d.deadline;let cls='p-mut',lb='充裕';
+    if(dl.overdue){cls='p-crit';lb='已逾期';}
+    else if(dl.days_remaining<=3){cls='p-crit';lb='紧迫';}
+    else if(dl.days_remaining<=7){cls='p-warn';lb='临近';}
+    const txt=dl.overdue?'已逾期':`还剩 ${dl.days_remaining} 天`;
+    h+=`<div class="field"><div class="k">举证时限</div><div class="v"><span class="num">${txt}</span> <span class="pill ${cls}">${lb}</span></div></div>`;}
   h+=`<div class="field"><div class="k">状态</div><div class="v"><span class="pill ${st[1]}">${st[0]}</span></div></div></div>`;
   $('caseHead').innerHTML=h;}
 
 function renderAction(){const d=S.last;const tag=$('phaseTag');
   if(!S.caseId){if(tag)tag.textContent="Intake";
-    const opts=SCENARIOS.map((s,i)=>`<option value="${i}">${esc(s.label)}</option>`).join("");
-    $('action').innerHTML=`<div class="row" style="margin-bottom:9px"><span class="muted">示例场景</span>`
-      +`<select id="scenario" style="max-width:260px" onchange="fillScenario()">${opts}</select></div>`
+    const chips=SCENARIOS.map((s,i)=>`<button class="schip${i===0?' on':''}" data-i="${i}" onclick="fillScenario(${i})">${esc(s.label)}</button>`).join("");
+    $('action').innerHTML=`<div class="muted" style="margin-bottom:8px">选择示例场景，或直接描述问题：</div>`
+      +`<div class="schips">${chips}</div>`
       +`<textarea id="desc" rows="2">${esc(SCENARIOS[0].desc)}</textarea>`
       +`<div class="actions"><button class="tbtn primary" onclick="openCase()">建案 · 开始</button>`
       +`<button class="tbtn" onclick="autoRun()">⚡ 自动补证跑到评估</button></div>`;return;}
@@ -385,7 +405,8 @@ function renderAssess(d){const a=d.assessment;if(!a)return;
     +`${esc(i.label)}${i.critical?' <span class="crit-tag">关键</span>':''}</div>`).join("");
   $('verdictBody').innerHTML=`<div class="verdict"><div><div class="vnum" style="color:${col}">${pct}%</div>`
     +`<div class="vcap">预计胜诉概率 · 内核判定</div></div>`
-    +`<div class="vmeta"><div class="row">${rev}<span class="pill p-mut">责任域 · ${esc(a.responsible_team)}</span>`
+    +`<div class="vmeta"><div class="row"><span class="pill p-acc">判定 · 确定性内核</span>${rev}`
+    +`<span class="pill p-mut">责任域 · ${esc(a.responsible_team)}</span>`
     +`<span class="pill p-mut">说明来源 · ${src}</span></div>`
     +`<div class="cov"><div class="track"><i style="width:${cov}%"></i></div><span class="n">证据 ${have}/${bd.length}</span></div></div></div>`
     +`<div class="ev">${chk}</div>`
@@ -415,8 +436,17 @@ function renderTrace(d){const t=d.agent_trace||[];
 async function refreshAudit(){if(!S.caseId)return;const {ok,data}=await api("GET",`/cases/${S.caseId}/audit`);if(!ok)return;
   $('auditOut').innerHTML=data.events.map(e=>`<li><div class="e">${esc(e.event_type)}${e.detail?` · ${esc(e.detail)}`:""}</div>`
     +`<div class="m">rev ${e.case_revision}</div></li>`).join("")||'<li class="empty">—</li>';}
-async function refreshMetrics(){const {data}=await api("GET","/metrics");const c=(data&&data.counts)||{};const ks=Object.keys(c);
-  $('metricsOut').innerHTML=ks.length?`<div class="metrics">`+ks.map(k=>`<span class="k">${esc(k)}</span><span class="v">${c[k]}</span>`).join("")+`</div>`:'<span class="empty">暂无</span>';}
+async function refreshMetrics(){const {data}=await api("GET","/metrics");const c=(data&&data.counts)||{};
+  if(!Object.keys(c).length){$('metricsOut').innerHTML='<span class="empty">暂无（运行一个案子后出现）</span>';return;}
+  const g=k=>c[k]||0;
+  const rhT=g('requires_human_true'),rhF=g('requires_human_false'),rhTot=rhT+rhF,rhPct=rhTot?Math.round(rhT/rhTot*100):0;
+  const mdl=g('explanation_source_MODEL'),fb=g('explanation_source_FALLBACK'),sTot=mdl+fb,mdlPct=sTot?Math.round(mdl/sTot*100):0;
+  let h="";
+  if(rhTot)h+=`<div class="mstat"><div class="ml"><span>需人工复核率</span><b>${rhPct}%</b></div><div class="mbar"><i style="width:${rhPct}%"></i></div></div>`;
+  if(sTot)h+=`<div class="mstat"><div class="ml"><span>说明来源 · 模型占比</span><b>模型 ${mdl} · 兜底 ${fb}</b></div><div class="mbar"><i style="width:${mdlPct}%"></i></div></div>`;
+  const extra=[['评估次数',g('assessments_total')],['申诉已提交',g('appeal_submitted')],['申诉被阻断',g('appeal_blocked')]];
+  h+=`<div class="mnote">`+extra.map(x=>`<span>${x[0]}</span><b>${x[1]}</b>`).join("")+`</div>`;
+  $('metricsOut').innerHTML=h;}
 async function assessPrevention(){
   const b={three_ds_authenticated:!$('p_no3ds').checked,avs_match:!$('p_noavs').checked,cross_border:$('p_cross').checked,amount:($('p_amount').value||"0")};
   const {ok,data}=await api("POST","/prevention/assess",b);
