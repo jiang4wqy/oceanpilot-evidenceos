@@ -34,3 +34,7 @@ line-length = 100
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.ruff.lint.per-file-ignores]
+# Embedded self-contained HTML/JS demo document — line length is not meaningful.
+"src/oceanpilot/api/demo.py" = ["E501"]

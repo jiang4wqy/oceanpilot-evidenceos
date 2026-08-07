@@ -32,6 +32,7 @@ from oceanpilot.adapters.persistence.sqlite import (
 from oceanpilot.adapters.upstream.mock import MockUpstreamConnector
 from oceanpilot.api.cases import router as cases_router
 from oceanpilot.api.chargeback import router as chargeback_router
+from oceanpilot.api.demo import router as demo_router
 from oceanpilot.api.dependencies import RequestContext
 from oceanpilot.api.errors import ProblemDetails, register_exception_handlers
 from oceanpilot.api.feishu import router as feishu_router
@@ -173,6 +174,7 @@ def create_app(
     application.include_router(cases_router)
     application.include_router(feishu_router)
     application.include_router(chargeback_router)
+    application.include_router(demo_router)
 
     def openapi_schema() -> dict[str, object]:
         if application.openapi_schema is None:
