@@ -17,9 +17,12 @@ from oceanpilot.api.chargeback_schemas import (
     ConfirmReasonRequest,
     CreateChargebackRequest,
     LabeledEvidenceDTO,
+    PreventionRequest,
+    PreventionResponse,
     SubmitEvidenceRequest,
 )
 from oceanpilot.application.channels import Delivery, InboundKind, NormalizedInbound
+from oceanpilot.application.chargeback_agents import PreventionAgent
 from oceanpilot.application.chargeback_appeal import AppealAgent
 from oceanpilot.application.chargeback_channel_service import ChargebackChannelService
 from oceanpilot.application.chargeback_deadline import DeadlineTracker
@@ -28,6 +31,7 @@ from oceanpilot.application.chargeback_ports import ChargebackCaseStore
 from oceanpilot.application.chargeback_supervisor import ChargebackSupervisor
 from oceanpilot.application.errors import CaseNotFound
 from oceanpilot.domain.chargeback import ChargebackEvidenceCode
+from oceanpilot.domain.chargeback_prevention import PreventionSignals
 from oceanpilot.domain.evidence_catalog import label_of
 from oceanpilot.domain.reason_catalog import reason_label
 
@@ -57,6 +61,10 @@ def get_packager(request: Request) -> PackagerAgent:
 
 def get_appeal(request: Request) -> AppealAgent:
     return request.app.state.chargeback_appeal
+
+
+def get_prevention(request: Request) -> PreventionAgent:
+    return request.app.state.chargeback_prevention
 
 
 def _labeled(codes: tuple[ChargebackEvidenceCode, ...]) -> tuple[LabeledEvidenceDTO, ...]:
@@ -280,6 +288,40 @@ def post_appeal(
         submission_id=outcome.submission_id,
         status=outcome.status,
         blocked_reason=outcome.blocked_reason.value if outcome.blocked_reason else None,
+    )
+
+
+@router.post(
+    "/prevention/assess",
+    response_model=PreventionResponse,
+    responses={**COMMON_PROBLEMS},
+)
+def assess_prevention(
+    payload: PreventionRequest,
+    agent: Annotated[PreventionAgent, Depends(get_prevention)],
+) -> PreventionResponse:
+    signals = PreventionSignals(
+        avs_match=payload.avs_match,
+        cvv_match=payload.cvv_match,
+        three_ds_authenticated=payload.three_ds_authenticated,
+        device_ip_match=payload.device_ip_match,
+        amount=payload.amount,
+        high_risk_mcc=payload.high_risk_mcc,
+        cross_border=payload.cross_border,
+        shipping_billing_mismatch=payload.shipping_billing_mismatch,
+        customer_dispute_history=payload.customer_dispute_history,
+        digital_goods=payload.digital_goods,
+    )
+    outcome = agent.assess(signals)
+    a = outcome.assessment
+    return PreventionResponse(
+        risk_level=a.risk_level.value,
+        risk_score=str(a.risk_score),
+        factors=tuple(factor.value for factor in a.factors),
+        recommended_evidence=_labeled(a.recommended_evidence),
+        recommend_manual_review=a.recommend_manual_review,
+        advice=outcome.advice,
+        advice_source=outcome.advice_source.value,
     )
 
 

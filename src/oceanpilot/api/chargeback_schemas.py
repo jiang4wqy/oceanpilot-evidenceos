@@ -1,3 +1,4 @@
+from decimal import Decimal
 from typing import Annotated
 
 from pydantic import (
@@ -137,6 +138,32 @@ class ChargebackAppealResponse(BaseModel):
     submission_id: StrictStr | None = None
     status: StrictStr | None = None
     blocked_reason: StrictStr | None = None
+
+
+class PreventionRequest(_StrictRequest):
+    # Synthetic pre-/at-transaction signals; clean defaults => no risk factors.
+    avs_match: StrictBool = True
+    cvv_match: StrictBool = True
+    three_ds_authenticated: StrictBool = True
+    device_ip_match: StrictBool = True
+    amount: Annotated[Decimal, Field(ge=0)] = Decimal("0")
+    high_risk_mcc: StrictBool = False
+    cross_border: StrictBool = False
+    shipping_billing_mismatch: StrictBool = False
+    customer_dispute_history: Annotated[StrictInt, Field(ge=0)] = 0
+    digital_goods: StrictBool = False
+
+
+class PreventionResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    risk_level: StrictStr
+    risk_score: StrictStr
+    factors: tuple[StrictStr, ...] = ()
+    recommended_evidence: tuple[LabeledEvidenceDTO, ...] = ()
+    recommend_manual_review: StrictBool
+    advice: StrictStr
+    advice_source: StrictStr
 
 
 class ChargebackCaseResponse(BaseModel):

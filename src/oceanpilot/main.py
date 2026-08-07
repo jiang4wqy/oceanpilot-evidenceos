@@ -40,6 +40,7 @@ from oceanpilot.application.chargeback_agents import (
     ChargebackAssessAgent,
     EvidenceAgent,
     IntakeAgent,
+    PreventionAgent,
 )
 from oceanpilot.application.chargeback_appeal import AppealAgent
 from oceanpilot.application.chargeback_deadline import DeadlineTracker
@@ -138,6 +139,8 @@ def create_app(
     # human-approval gate; the upstream connector is a synthetic mock).
     application.state.chargeback_packager = PackagerAgent(chargeback_provider, InMemoryBankRules())
     application.state.chargeback_appeal = AppealAgent(chargeback_provider, MockUpstreamConnector())
+    # Pre-dispute prevention advisor (purely advisory; never acts on a payment).
+    application.state.chargeback_prevention = PreventionAgent(chargeback_provider)
 
     if resolved.feishu is not None:
         _configure_feishu(application, resolved.feishu, case_service, feishu_transport)

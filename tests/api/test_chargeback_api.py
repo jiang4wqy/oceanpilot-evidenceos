@@ -257,3 +257,37 @@ def test_package_unknown_case_is_safe_404(tmp_path):
     with _client(tmp_path) as client:
         resp = client.get("/api/v1/chargeback/cases/nope/package")
     assert resp.status_code == 404
+
+
+def test_prevention_clean_signals_are_low_risk(tmp_path):
+    with _client(tmp_path) as client:
+        body = client.post("/api/v1/chargeback/prevention/assess", json={}).json()
+    assert body["risk_level"] == "LOW"
+    assert body["recommend_manual_review"] is False
+    assert body["factors"] == []
+    assert body["advice"]
+
+
+def test_prevention_high_risk_signals_recommend_review_and_evidence(tmp_path):
+    with _client(tmp_path) as client:
+        body = client.post(
+            "/api/v1/chargeback/prevention/assess",
+            json={
+                "three_ds_authenticated": False,
+                "avs_match": False,
+                "cvv_match": False,
+                "amount": "5000",
+            },
+        ).json()
+    assert body["risk_level"] == "HIGH"
+    assert body["recommend_manual_review"] is True
+    assert body["factors"]
+    assert body["recommended_evidence"]
+    first = body["recommended_evidence"][0]
+    assert set(first) == {"code", "label"}
+
+
+def test_prevention_rejects_negative_amount(tmp_path):
+    with _client(tmp_path) as client:
+        resp = client.post("/api/v1/chargeback/prevention/assess", json={"amount": "-1"})
+    assert resp.status_code == 422
