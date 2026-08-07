@@ -139,6 +139,26 @@ _CATALOG: dict[ChargebackEvidenceCode, EvidenceDisplay] = {
 }
 
 
+# English labels (cross-border): keyed by code, exhaustive over the enum.
+_LABELS_EN: dict[ChargebackEvidenceCode, str] = {
+    _C.TRANSACTION_RECEIPT: "Transaction receipt",
+    _C.AVS_RESULT: "AVS result",
+    _C.CVV_RESULT: "CVV result",
+    _C.THREEDS_AUTHENTICATION: "3DS authentication",
+    _C.DEVICE_OR_IP_MATCH: "Device/IP match",
+    _C.DELIVERY_TRACKING: "Delivery tracking",
+    _C.PROOF_OF_DELIVERY: "Proof of delivery",
+    _C.SHIPPING_ADDRESS_MATCH: "Shipping address match",
+    _C.PRODUCT_DESCRIPTION: "Product description",
+    _C.REFUND_RECORD: "Refund record",
+    _C.TERMS_AND_REFUND_POLICY: "Terms & refund policy",
+    _C.CUSTOMER_COMMUNICATION: "Customer communication",
+    _C.CANCELLATION_RECORD: "Cancellation record",
+    _C.PRIOR_TRANSACTION_HISTORY: "Prior transaction history",
+    _C.DUPLICATE_CHECK: "Duplicate-charge check",
+}
+
+
 def describe(code: ChargebackEvidenceCode) -> EvidenceDisplay:
     """The merchant-facing description of an evidence code."""
     if type(code) is not ChargebackEvidenceCode:
@@ -146,9 +166,13 @@ def describe(code: ChargebackEvidenceCode) -> EvidenceDisplay:
     return _CATALOG[code]
 
 
-def label_of(code: ChargebackEvidenceCode) -> str:
-    """The short human label for an evidence code (never the raw token)."""
-    return describe(code).label
+def label_of(code: ChargebackEvidenceCode, *, locale: str = "zh") -> str:
+    """The short human label for an evidence code (never the raw token).
+
+    ``locale="en"`` returns the English label; anything else falls back to zh.
+    """
+    display = describe(code)  # validates the code
+    return _LABELS_EN[code] if locale == "en" else display.label
 
 
 def rebuttal_line(code: ChargebackEvidenceCode) -> str:

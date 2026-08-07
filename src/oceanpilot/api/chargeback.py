@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, Request, status
 from oceanpilot.api.cases import COMMON_PROBLEMS, PROBLEM_RESPONSE
 from oceanpilot.api.chargeback_schemas import (
     AppealRequest,
+    CatalogResponse,
     ChargebackAppealResponse,
     ChargebackAssessmentDTO,
     ChargebackAuditEventDTO,
@@ -32,7 +33,7 @@ from oceanpilot.application.chargeback_ports import ChargebackCaseStore
 from oceanpilot.application.chargeback_supervisor import ChargebackSupervisor
 from oceanpilot.application.errors import CaseNotFound
 from oceanpilot.application.metrics import DecisionMetrics
-from oceanpilot.domain.chargeback import ChargebackEvidenceCode
+from oceanpilot.domain.chargeback import ChargebackEvidenceCode, DisputeReasonCode
 from oceanpilot.domain.chargeback_prevention import PreventionSignals
 from oceanpilot.domain.evidence_catalog import label_of
 from oceanpilot.domain.reason_catalog import reason_label
@@ -73,23 +74,31 @@ def get_metrics(request: Request) -> DecisionMetrics:
     return request.app.state.chargeback_metrics
 
 
-def _labeled(codes: tuple[ChargebackEvidenceCode, ...]) -> tuple[LabeledEvidenceDTO, ...]:
-    return tuple(LabeledEvidenceDTO(code=c.value, label=label_of(c)) for c in codes)
+def _norm_locale(locale: str) -> str:
+    return "en" if locale == "en" else "zh"
 
 
-def _package_response(case_id: str, package: RepresentmentPackage) -> ChargebackPackageResponse:
+def _labeled(
+    codes: tuple[ChargebackEvidenceCode, ...], *, locale: str = "zh"
+) -> tuple[LabeledEvidenceDTO, ...]:
+    return tuple(LabeledEvidenceDTO(code=c.value, label=label_of(c, locale=locale)) for c in codes)
+
+
+def _package_response(
+    case_id: str, package: RepresentmentPackage, *, locale: str = "zh"
+) -> ChargebackPackageResponse:
     return ChargebackPackageResponse(
         case_id=case_id,
         reason_code=package.reason_code.value,
-        reason_label=reason_label(package.reason_code),
+        reason_label=reason_label(package.reason_code, locale=locale),
         bank_id=package.bank_id,
         card_network=package.card_network,
         rule_source=package.rule_source,
         submission_window_days=package.submission_window_days,
         completeness=str(package.completeness),
         ready_to_submit=package.ready_to_submit,
-        ordered_evidence=_labeled(package.ordered_evidence),
-        missing_evidence=_labeled(package.missing_evidence),
+        ordered_evidence=_labeled(package.ordered_evidence, locale=locale),
+        missing_evidence=_labeled(package.missing_evidence, locale=locale),
         cover_note=package.cover_note,
         cover_note_source=package.cover_note_source.value,
     )
@@ -253,6 +262,7 @@ def get_package(
     packager: Annotated[PackagerAgent, Depends(get_packager)],
     bank_id: str | None = None,
     card_network: str | None = None,
+    locale: str = "zh",
 ) -> ChargebackPackageResponse:
     state = store.load(case_id)
     if state is None or state.reason_code is None:
@@ -260,7 +270,7 @@ def get_package(
     package = packager.build(
         state.reason_code, state.collected, bank_id=bank_id, card_network=card_network
     )
-    return _package_response(case_id, package)
+    return _package_response(case_id, package, locale=_norm_locale(locale))
 
 
 @router.post(
@@ -298,6 +308,24 @@ def post_appeal(
         status=outcome.status,
         blocked_reason=outcome.blocked_reason.value if outcome.blocked_reason else None,
     )
+
+
+@router.get(
+    "/catalog",
+    response_model=CatalogResponse,
+    responses={**COMMON_PROBLEMS},
+)
+def get_catalog(locale: str = "zh") -> CatalogResponse:
+    loc = _norm_locale(locale)
+    reasons = tuple(
+        LabeledEvidenceDTO(code=r.value, label=reason_label(r, locale=loc))
+        for r in DisputeReasonCode
+    )
+    evidence = tuple(
+        LabeledEvidenceDTO(code=c.value, label=label_of(c, locale=loc))
+        for c in ChargebackEvidenceCode
+    )
+    return CatalogResponse(locale=loc, reasons=reasons, evidence=evidence)
 
 
 @router.get(

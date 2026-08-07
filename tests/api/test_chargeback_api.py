@@ -319,3 +319,33 @@ def test_request_logging_emits_structured_line(tmp_path, caplog):
         client.get("/health")
     messages = [r.getMessage() for r in caplog.records]
     assert any("path=/health" in m and "status=200" in m and "trace_id=" in m for m in messages)
+
+
+def test_catalog_endpoint_localizes(tmp_path):
+    with _client(tmp_path) as client:
+        zh = client.get("/api/v1/chargeback/catalog").json()
+        en = client.get("/api/v1/chargeback/catalog?locale=en").json()
+    assert zh["locale"] == "zh" and en["locale"] == "en"
+    assert len(zh["evidence"]) == 15 and len(zh["reasons"]) == 7
+    zh_pod = next(
+        e["label"] for e in zh["evidence"] if e["code"] == "fulfillment.proof_of_delivery"
+    )
+    en_pod = next(
+        e["label"] for e in en["evidence"] if e["code"] == "fulfillment.proof_of_delivery"
+    )
+    assert zh_pod != en_pod
+    assert en_pod.isascii()
+
+
+def test_unknown_locale_falls_back_to_chinese(tmp_path):
+    with _client(tmp_path) as client:
+        body = client.get("/api/v1/chargeback/catalog?locale=fr").json()
+    assert body["locale"] == "zh"
+
+
+def test_package_can_be_localized(tmp_path):
+    with _client(tmp_path) as client:
+        case_id = _ready_case(client)
+        en = client.get(f"/api/v1/chargeback/cases/{case_id}/package?locale=en").json()
+    assert en["reason_label"].isascii()
+    assert all(item["label"].isascii() for item in en["ordered_evidence"])

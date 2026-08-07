@@ -58,3 +58,18 @@ def test_rebuttal_line_pairs_label_with_rationale_and_hides_token():
         assert display.label in line
         assert display.why in line
         assert code.value not in line
+
+
+def test_english_labels_are_exhaustive_and_distinct_from_zh():
+    for code in ChargebackEvidenceCode:
+        en = label_of(code, locale="en")
+        zh = label_of(code, locale="zh")
+        assert en.strip() and en.isascii()
+        assert en != zh
+        assert code.value not in en
+
+
+def test_default_locale_is_chinese():
+    code = ChargebackEvidenceCode.PROOF_OF_DELIVERY
+    assert label_of(code) == label_of(code, locale="zh")
+    assert label_of(code) != label_of(code, locale="en")

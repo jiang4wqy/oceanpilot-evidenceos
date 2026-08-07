@@ -31,3 +31,11 @@ def test_confirm_prompt_distinguishes_confidence():
     code = DisputeReasonCode.AUTHORIZATION_ERROR
     assert confirm_prompt(code, confident=True) != confirm_prompt(code, confident=False)
     assert "暂不确定" in confirm_prompt(code, confident=False)
+
+
+def test_english_reason_labels_are_exhaustive_and_distinct():
+    for code in DisputeReasonCode:
+        en = reason_label(code, locale="en")
+        assert en.strip() and en.isascii()
+        assert en != reason_label(code, locale="zh")
+        assert code.value not in en

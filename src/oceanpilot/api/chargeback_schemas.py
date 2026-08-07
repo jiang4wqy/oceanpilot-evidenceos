@@ -172,6 +172,14 @@ class MetricsResponse(BaseModel):
     counts: dict[StrictStr, StrictInt] = {}
 
 
+class CatalogResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    locale: StrictStr
+    reasons: tuple[LabeledEvidenceDTO, ...] = ()
+    evidence: tuple[LabeledEvidenceDTO, ...] = ()
+
+
 class ChargebackCaseResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

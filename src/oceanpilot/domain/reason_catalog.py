@@ -21,12 +21,26 @@ _LABELS: dict[DisputeReasonCode, str] = {
     _R.AUTHORIZATION_ERROR: "授权错误",
 }
 
+# English labels (cross-border), exhaustive over the enum.
+_LABELS_EN: dict[DisputeReasonCode, str] = {
+    _R.FRAUD_CARD_NOT_PRESENT: "Card-not-present fraud",
+    _R.PRODUCT_NOT_RECEIVED: "Product not received",
+    _R.PRODUCT_NOT_AS_DESCRIBED: "Product not as described",
+    _R.DUPLICATE_PROCESSING: "Duplicate processing",
+    _R.CREDIT_NOT_PROCESSED: "Credit not processed",
+    _R.SUBSCRIPTION_CANCELED: "Subscription canceled",
+    _R.AUTHORIZATION_ERROR: "Authorization error",
+}
 
-def reason_label(code: DisputeReasonCode) -> str:
-    """The short human label for a reason code (never the raw token)."""
+
+def reason_label(code: DisputeReasonCode, *, locale: str = "zh") -> str:
+    """The short human label for a reason code (never the raw token).
+
+    ``locale="en"`` returns the English label; anything else falls back to zh.
+    """
     if type(code) is not DisputeReasonCode:
         raise TypeError("code must be a DisputeReasonCode")
-    return _LABELS[code]
+    return _LABELS_EN[code] if locale == "en" else _LABELS[code]
 
 
 def confirm_prompt(code: DisputeReasonCode, *, confident: bool) -> str:
