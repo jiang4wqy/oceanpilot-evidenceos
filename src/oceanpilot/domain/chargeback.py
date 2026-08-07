@@ -175,6 +175,16 @@ _POLICIES: dict[DisputeReasonCode, _ReasonPolicy] = MappingProxyType(
 
 
 @dataclass(frozen=True)
+class EvidenceContribution:
+    """One required-evidence item and its role in the win-likelihood decision."""
+
+    code: ChargebackEvidenceCode
+    weight: int
+    critical: bool
+    present: bool
+
+
+@dataclass(frozen=True)
 class ChargebackAssessment:
     reason_code: DisputeReasonCode
     required_evidence: tuple[ChargebackEvidenceCode, ...]
@@ -188,6 +198,8 @@ class ChargebackAssessment:
     ready_to_submit: bool
     requires_human: bool
     review_reasons: tuple[ChargebackReviewReason, ...]
+    # Per-item breakdown behind win_likelihood (why the number is what it is).
+    evidence_breakdown: tuple[EvidenceContribution, ...] = ()
 
 
 def required_evidence_for(reason_code: DisputeReasonCode) -> tuple[ChargebackEvidenceCode, ...]:
@@ -239,6 +251,16 @@ def assess_chargeback(
     if win_likelihood < WIN_REVIEW_THRESHOLD:
         reasons.append(ChargebackReviewReason.LOW_WIN_LIKELIHOOD)
 
+    breakdown = tuple(
+        EvidenceContribution(
+            code=r.code,
+            weight=r.weight,
+            critical=r.critical,
+            present=r.code in present_set,
+        )
+        for r in policy.required
+    )
+
     return ChargebackAssessment(
         reason_code=reason_code,
         required_evidence=tuple(r.code for r in policy.required),
@@ -252,6 +274,7 @@ def assess_chargeback(
         ready_to_submit=not missing,
         requires_human=bool(reasons),
         review_reasons=tuple(reasons),
+        evidence_breakdown=breakdown,
     )
 
 

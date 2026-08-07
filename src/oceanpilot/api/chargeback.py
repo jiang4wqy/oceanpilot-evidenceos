@@ -7,6 +7,7 @@ from oceanpilot.api.chargeback_schemas import (
     ChargebackAssessmentDTO,
     ChargebackCaseResponse,
     ChargebackDeadlineDTO,
+    ChargebackEvidenceItemDTO,
     ChargebackFactsDTO,
     ConfirmReasonRequest,
     CreateChargebackRequest,
@@ -57,6 +58,17 @@ def _response(delivery: Delivery) -> ChargebackCaseResponse:
             requires_human=a.requires_human,
             review_reasons=a.review_reasons,
             explanation=a.explanation,
+            explanation_source=a.explanation_source,
+            evidence_breakdown=tuple(
+                ChargebackEvidenceItemDTO(
+                    code=item.code,
+                    label=item.label,
+                    weight=item.weight,
+                    critical=item.critical,
+                    present=item.present,
+                )
+                for item in a.evidence_breakdown
+            ),
         )
     deadline = None
     if delivery.deadline is not None:

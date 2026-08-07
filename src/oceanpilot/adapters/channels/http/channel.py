@@ -57,6 +57,17 @@ class HttpChannel:
                 "requires_human": a.requires_human,
                 "review_reasons": list(a.review_reasons),
                 "explanation": a.explanation,
+                "explanation_source": a.explanation_source,
+                "evidence_breakdown": [
+                    {
+                        "code": item.code,
+                        "label": item.label,
+                        "weight": item.weight,
+                        "critical": item.critical,
+                        "present": item.present,
+                    }
+                    for item in a.evidence_breakdown
+                ],
             }
         deadline: dict[str, object] | None = None
         if delivery.deadline is not None:

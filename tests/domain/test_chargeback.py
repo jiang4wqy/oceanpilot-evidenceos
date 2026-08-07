@@ -153,6 +153,21 @@ def test_dropping_any_required_item_never_raises_the_win():
             assert weaker.win_likelihood <= result_full.win_likelihood
 
 
+def test_assessment_exposes_per_evidence_breakdown():
+    reason = DisputeReasonCode.PRODUCT_NOT_RECEIVED
+    result = assess_chargeback(reason, [_C.TRANSACTION_RECEIPT, _C.DELIVERY_TRACKING])
+    # Breakdown covers exactly the required checklist, in order.
+    assert tuple(item.code for item in result.evidence_breakdown) == result.required_evidence
+    by_code = {item.code: item for item in result.evidence_breakdown}
+    assert by_code[_C.TRANSACTION_RECEIPT].present is True
+    assert by_code[_C.PROOF_OF_DELIVERY].present is False
+    assert by_code[_C.PROOF_OF_DELIVERY].critical is True
+    assert all(item.weight >= 1 for item in result.evidence_breakdown)
+    # present items are exactly those in present_evidence
+    present = {item.code for item in result.evidence_breakdown if item.present}
+    assert present == set(result.present_evidence)
+
+
 def test_invalid_reason_code_type_is_rejected():
     with pytest.raises(TypeError):
         assess_chargeback("FRAUD_CARD_NOT_PRESENT", [])

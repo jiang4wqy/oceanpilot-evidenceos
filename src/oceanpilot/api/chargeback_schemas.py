@@ -24,6 +24,16 @@ class ConfirmReasonRequest(_StrictRequest):
     reason_code: DisputeReasonCode | None = None
 
 
+class ChargebackEvidenceItemDTO(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    code: StrictStr
+    label: StrictStr
+    weight: StrictInt
+    critical: StrictBool
+    present: StrictBool
+
+
 class ChargebackAssessmentDTO(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -33,6 +43,8 @@ class ChargebackAssessmentDTO(BaseModel):
     requires_human: StrictBool
     review_reasons: tuple[StrictStr, ...]
     explanation: StrictStr
+    explanation_source: StrictStr = "FALLBACK"
+    evidence_breakdown: tuple[ChargebackEvidenceItemDTO, ...] = ()
 
 
 class ChargebackDeadlineDTO(BaseModel):

@@ -11,6 +11,7 @@ from oceanpilot.application.channels import (
     Delivery,
     DeliveryAssessment,
     DeliveryDeadline,
+    DeliveryEvidenceItem,
     InboundKind,
     NormalizedInbound,
 )
@@ -25,6 +26,7 @@ from oceanpilot.application.chargeback_supervisor import (
 )
 from oceanpilot.application.errors import CaseNotFound, InvalidInbound
 from oceanpilot.domain.chargeback import ChargebackEvidenceCode, DisputeReasonCode
+from oceanpilot.domain.evidence_catalog import label_of
 from oceanpilot.domain.reason_catalog import confirm_prompt
 
 
@@ -58,6 +60,17 @@ def _delivery(
             requires_human=result.requires_human,
             review_reasons=tuple(reason.value for reason in result.review_reasons),
             explanation=outcome.explanation,
+            explanation_source=outcome.explanation_source.value,
+            evidence_breakdown=tuple(
+                DeliveryEvidenceItem(
+                    code=item.code.value,
+                    label=label_of(item.code),
+                    weight=item.weight,
+                    critical=item.critical,
+                    present=item.present,
+                )
+                for item in result.evidence_breakdown
+            ),
         )
 
     return Delivery(

@@ -147,3 +147,23 @@ def test_response_has_facts_field(tmp_path):
         ).json()
     # Offline model can't extract facts, but the field is wired into the contract.
     assert "facts" in body
+
+
+def test_assessment_response_exposes_provenance_and_breakdown(tmp_path):
+    with _client(tmp_path) as client:
+        body = client.post(
+            "/api/v1/chargeback/cases", json={"description": "没收到货，要拒付"}
+        ).json()
+        case_id = body["case_id"]
+        for _ in range(20):
+            if body["phase"] == "ASSESSED":
+                break
+            body = client.post(
+                f"/api/v1/chargeback/cases/{case_id}/evidence",
+                json={"evidence_code": body["next_evidence"]},
+            ).json()
+    a = body["assessment"]
+    assert a["explanation_source"] in ("MODEL", "FALLBACK")
+    assert a["evidence_breakdown"]
+    assert set(a["evidence_breakdown"][0]) == {"code", "label", "weight", "critical", "present"}
+    assert all(item["present"] for item in a["evidence_breakdown"])

@@ -45,6 +45,17 @@ class NormalizedInbound:
 
 
 @dataclass(frozen=True)
+class DeliveryEvidenceItem:
+    """One line of the win-likelihood breakdown, channel-neutral."""
+
+    code: str
+    label: str
+    weight: int
+    critical: bool
+    present: bool
+
+
+@dataclass(frozen=True)
 class DeliveryAssessment:
     win_likelihood: str
     completeness: str
@@ -52,6 +63,10 @@ class DeliveryAssessment:
     requires_human: bool
     review_reasons: tuple[str, ...]
     explanation: str
+    # Provenance of the explanation text: MODEL or FALLBACK. The numbers above
+    # always come from the deterministic kernel regardless.
+    explanation_source: str = "FALLBACK"
+    evidence_breakdown: tuple[DeliveryEvidenceItem, ...] = ()
 
 
 @dataclass(frozen=True)

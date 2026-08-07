@@ -388,3 +388,32 @@ def test_feishu_card_shows_extracted_facts():
     serialized = json.dumps(card, ensure_ascii=False)
     assert "识别要点" in serialized
     assert "客户称未收到跨境订单" in serialized
+
+
+def test_assessment_delivery_exposes_source_and_breakdown():
+    service = _service()
+    delivery = service.handle(
+        NormalizedInbound(
+            kind=InboundKind.OPEN_CASE, channel="test", description="没收到货，要拒付"
+        )
+    )
+    case_id = delivery.case_id
+    for _ in range(20):
+        if delivery.phase == "ASSESSED":
+            break
+        delivery = service.handle(
+            NormalizedInbound(
+                kind=InboundKind.SUBMIT_EVIDENCE,
+                channel="test",
+                case_id=case_id,
+                evidence_code=delivery.next_evidence,
+            )
+        )
+    assert delivery.assessment is not None
+    assert delivery.assessment.explanation_source in ("MODEL", "FALLBACK")
+    breakdown = delivery.assessment.evidence_breakdown
+    assert breakdown
+    for item in breakdown:
+        assert item.label and item.weight >= 1
+        assert "." in item.code  # raw token; label is the human name
+    assert all(item.present for item in breakdown)  # full evidence submitted

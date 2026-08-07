@@ -16,6 +16,7 @@ from collections.abc import Mapping
 from oceanpilot.application.channels import (
     Delivery,
     DeliveryDeadline,
+    DeliveryEvidenceItem,
     InboundKind,
     NormalizedInbound,
 )
@@ -184,7 +185,12 @@ class FeishuChannel:
                     f"**胜诉可能性**：{a.win_likelihood}｜**责任域**：{a.responsible_team}｜{review}"
                 )
             )
-            elements.append(_field(a.explanation))
+            if a.evidence_breakdown:
+                elements.append(_field("**证据构成**：" + _breakdown_text(a.evidence_breakdown)))
+            source = "模型生成" if a.explanation_source == "MODEL" else "确定性兜底"
+            elements.append(
+                _field(f"{a.explanation}\n\n_（数字由确定性内核判定；说明文字：{source}）_")
+            )
 
         return {
             "config": {"wide_screen_mode": True},
@@ -198,6 +204,15 @@ class FeishuChannel:
 
 def _field(content: str) -> dict[str, object]:
     return {"tag": "div", "text": {"tag": "lark_md", "content": content}}
+
+
+def _breakdown_text(items: tuple[DeliveryEvidenceItem, ...]) -> str:
+    parts: list[str] = []
+    for item in items:
+        mark = "✅" if item.present else "❌"
+        star = "⭐" if item.critical else ""
+        parts.append(f"{mark}{star}{item.label}")
+    return " ".join(parts)
 
 
 def _facts_text(facts: CaseFacts) -> str:
