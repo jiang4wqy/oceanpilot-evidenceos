@@ -37,6 +37,7 @@ def test_openapi_freezes_paths_replay_and_problem_contract(tmp_path):
         "/api/v1/chargeback/cases/{case_id}/package",
         "/api/v1/chargeback/metrics",
         "/api/v1/chargeback/prevention/assess",
+        "/api/v1/chargeback/safety/scan",
     }
     diagnose = document["paths"]["/api/v1/cases/{case_id}/diagnose"]["post"]
     assert {"200", "201", "409", "422", "500", "503"}.issubset(diagnose["responses"])

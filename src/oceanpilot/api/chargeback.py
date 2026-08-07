@@ -22,6 +22,8 @@ from oceanpilot.api.chargeback_schemas import (
     MetricsResponse,
     PreventionRequest,
     PreventionResponse,
+    SafetyScanRequest,
+    SafetyScanResponse,
     SubmitEvidenceRequest,
 )
 from oceanpilot.application.channels import Delivery, InboundKind, NormalizedInbound
@@ -36,8 +38,10 @@ from oceanpilot.application.errors import CaseNotFound
 from oceanpilot.application.metrics import DecisionMetrics
 from oceanpilot.domain.chargeback import ChargebackEvidenceCode, DisputeReasonCode
 from oceanpilot.domain.chargeback_prevention import PreventionSignals
+from oceanpilot.domain.errors import SensitiveDataRejected
 from oceanpilot.domain.evidence_catalog import label_of
 from oceanpilot.domain.reason_catalog import reason_label
+from oceanpilot.domain.security import assert_no_sensitive_data
 
 router = APIRouter(prefix="/api/v1/chargeback")
 
@@ -313,6 +317,24 @@ def post_appeal(
         status=outcome.status,
         blocked_reason=outcome.blocked_reason.value if outcome.blocked_reason else None,
     )
+
+
+@router.post(
+    "/safety/scan",
+    response_model=SafetyScanResponse,
+    responses={**COMMON_PROBLEMS},
+)
+def safety_scan(payload: SafetyScanRequest) -> SafetyScanResponse:
+    # Runs the same sensitive-data guard used across the system. The input is
+    # never echoed back — only the verdict.
+    try:
+        assert_no_sensitive_data({"text": payload.text})
+    except SensitiveDataRejected:
+        return SafetyScanResponse(
+            accepted=False,
+            detail="检出疑似敏感数据（如卡号 / PII），已拦截，不予接收。",
+        )
+    return SafetyScanResponse(accepted=True, detail="未检出敏感数据。")
 
 
 @router.get(

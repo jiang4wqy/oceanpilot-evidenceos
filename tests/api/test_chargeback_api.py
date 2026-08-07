@@ -381,3 +381,24 @@ def test_agent_trace_shows_human_gate_when_reason_unconfident(tmp_path):
         ).json()
     assert body["phase"] == "REASON_PROPOSED"
     assert any(a["agent"] == "HumanGate" for a in body["agent_trace"])
+
+
+def test_safety_scan_blocks_card_number_without_echo(tmp_path):
+    with _client(tmp_path) as client:
+        resp = client.post(
+            "/api/v1/chargeback/safety/scan",
+            json={"text": "请退款到卡号 4111 1111 1111 1111"},
+        )
+    body = resp.json()
+    assert resp.status_code == 200
+    assert body["accepted"] is False
+    assert body["detail"]
+    assert "4111" not in body["detail"]  # never echoes the input
+
+
+def test_safety_scan_accepts_clean_text(tmp_path):
+    with _client(tmp_path) as client:
+        body = client.post(
+            "/api/v1/chargeback/safety/scan", json={"text": "客户下单后一直没收到货"}
+        ).json()
+    assert body["accepted"] is True

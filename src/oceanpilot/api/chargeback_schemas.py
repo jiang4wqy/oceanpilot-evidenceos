@@ -180,6 +180,17 @@ class CatalogResponse(BaseModel):
     evidence: tuple[LabeledEvidenceDTO, ...] = ()
 
 
+class SafetyScanRequest(_StrictRequest):
+    text: Annotated[StrictStr, Field(min_length=1, max_length=4000)]
+
+
+class SafetyScanResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    accepted: StrictBool
+    detail: StrictStr
+
+
 class AgentActivityDTO(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
