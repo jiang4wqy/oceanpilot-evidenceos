@@ -67,6 +67,48 @@ HTTP / OpenAPI
 
 API 只负责严格输入映射、状态码和安全错误；readiness、状态变化和证据规范化由领域层负责；SQL、事务、revision 条件更新和审计落库由 Store 负责。诊断路由不会绕过这些边界生成临时结果。完整组件和数据流见 [docs/architecture.md](docs/architecture.md)。
 
+## 拒付申诉智能体集群 / Chargeback Agent Cluster
+
+在证据内核之上,2026-08 起扩展出**跨境拒付（chargeback）申诉多智能体集群**——本仓库当前的开发重点。它复用同一套"证据先行 + 人工确认"口径,把一次拒付串成可检查的链路：
+
+```text
+描述问题
+  → Intake     抽结构化事实 + 判定拒付理由（不确定→待人工确认/更正）
+  → Evidence   按理由逐项补证（带 SLA 倒计时；可"无法提供→转人工复核"）
+  → Assess     确定性内核算胜诉率（缺关键证据门控）、责任团队、是否需人工
+  → Package    按银行/卡组织模板结构化打包
+  → Appeal     生成 representment 申诉信；人工确认后才提交上游（mock）
+```
+
+三条设计取向：**(1) 渠道无关内核**,飞书只是可选渠道之一(另有纯 HTTP 渠道);**(2) 模型可插拔**,Claude 优先但按安全档位路由到脱敏/本地隔离模型,不可达时确定性兜底;**(3) 混合决策**——确定性内核决策、LLM 只解释/建议、人类拍板。系统绝不执行支付/退款/风控/提交动作,最强动作是"建议人工复核"。
+
+- 设计文档：[docs/design/2026-08-06-chargeback-agent-cluster-design.md](docs/design/2026-08-06-chargeback-agent-cluster-design.md)
+- 安全与部署分级：[docs/security/deployment-tiers.md](docs/security/deployment-tiers.md)
+- 给公司的数据需求：[docs/data/2026-08-07-chargeback-data-request.md](docs/data/2026-08-07-chargeback-data-request.md)
+- 离线可跑的演示：`examples/chargeback_demo.py`
+
+## 开发者指南 / Developer guide
+
+**先读源码导航**：[`src/oceanpilot/README.md`](src/oceanpilot/README.md) 讲清六边形分层与唯一依赖规则,每层再各有一份 README：
+
+| 层 | 文档 |
+|---|---|
+| 领域内核 | [`src/oceanpilot/domain/README.md`](src/oceanpilot/domain/README.md) |
+| 应用/端口 | [`src/oceanpilot/application/README.md`](src/oceanpilot/application/README.md) |
+| 适配器 | [`src/oceanpilot/adapters/README.md`](src/oceanpilot/adapters/README.md) |
+| HTTP 接口 | [`src/oceanpilot/api/README.md`](src/oceanpilot/api/README.md) |
+| 测试与门禁 | [`tests/README.md`](tests/README.md) |
+
+**配置**：所有环境变量见根目录 [`.env.example`](.env.example)(存储路径、Claude、本地模型、飞书凭据);凭据只经环境变量注入,绝不入库。运行/安装见下方 Quick Start。
+
+**提交前门禁**(与 CI 一致)：
+
+```bash
+python -m pytest -p no:cacheprovider -q
+ruff check src tests && ruff format --check src tests
+python -m compileall -q src tests
+```
+
 ## 提交材料索引
 
 - [报名表 Part 1 / Part 2 可粘贴文本](docs/submission/registration-copy.md)
