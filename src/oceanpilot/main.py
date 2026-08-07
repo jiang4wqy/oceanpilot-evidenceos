@@ -1,3 +1,4 @@
+import logging
 import os
 import time
 from collections.abc import AsyncIterator, Callable
@@ -47,8 +48,11 @@ from oceanpilot.application.chargeback_deadline import DeadlineTracker
 from oceanpilot.application.chargeback_packager import PackagerAgent
 from oceanpilot.application.chargeback_supervisor import ChargebackSupervisor
 from oceanpilot.application.feishu_orchestrator import FeishuOrchestrator
+from oceanpilot.application.metrics import DecisionMetrics
 from oceanpilot.application.model_provider import ModelProvider
 from oceanpilot.config import FeishuSettings, Settings
+
+_request_logger = logging.getLogger("oceanpilot.request")
 
 
 def _truthy(value: str | None) -> bool:
@@ -141,6 +145,8 @@ def create_app(
     application.state.chargeback_appeal = AppealAgent(chargeback_provider, MockUpstreamConnector())
     # Pre-dispute prevention advisor (purely advisory; never acts on a payment).
     application.state.chargeback_prevention = PreventionAgent(chargeback_provider)
+    # Decision metrics (human-review rate, model-vs-fallback, appeal/prevention mix).
+    application.state.chargeback_metrics = DecisionMetrics()
 
     if resolved.feishu is not None:
         _configure_feishu(application, resolved.feishu, case_service, feishu_transport)
@@ -151,6 +157,15 @@ def create_app(
         request.state.request_context = context
         response = await call_next(request)
         response.headers["X-Trace-ID"] = context.trace_id
+        # Structured, PII-free request line (method/path/status + correlation ids).
+        _request_logger.info(
+            "request method=%s path=%s status=%s request_id=%s trace_id=%s",
+            request.method,
+            request.url.path,
+            response.status_code,
+            context.request_id,
+            context.trace_id,
+        )
         return response
 
     register_exception_handlers(application)

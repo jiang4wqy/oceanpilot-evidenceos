@@ -17,6 +17,7 @@ from oceanpilot.api.chargeback_schemas import (
     ConfirmReasonRequest,
     CreateChargebackRequest,
     LabeledEvidenceDTO,
+    MetricsResponse,
     PreventionRequest,
     PreventionResponse,
     SubmitEvidenceRequest,
@@ -30,6 +31,7 @@ from oceanpilot.application.chargeback_packager import PackagerAgent, Representm
 from oceanpilot.application.chargeback_ports import ChargebackCaseStore
 from oceanpilot.application.chargeback_supervisor import ChargebackSupervisor
 from oceanpilot.application.errors import CaseNotFound
+from oceanpilot.application.metrics import DecisionMetrics
 from oceanpilot.domain.chargeback import ChargebackEvidenceCode
 from oceanpilot.domain.chargeback_prevention import PreventionSignals
 from oceanpilot.domain.evidence_catalog import label_of
@@ -67,6 +69,10 @@ def get_prevention(request: Request) -> PreventionAgent:
     return request.app.state.chargeback_prevention
 
 
+def get_metrics(request: Request) -> DecisionMetrics:
+    return request.app.state.chargeback_metrics
+
+
 def _labeled(codes: tuple[ChargebackEvidenceCode, ...]) -> tuple[LabeledEvidenceDTO, ...]:
     return tuple(LabeledEvidenceDTO(code=c.value, label=label_of(c)) for c in codes)
 
@@ -93,8 +99,9 @@ def get_channel_service(
     supervisor: Annotated[ChargebackSupervisor, Depends(get_supervisor)],
     store: Annotated[ChargebackCaseStore, Depends(get_store)],
     deadline: Annotated[DeadlineTracker, Depends(get_deadline)],
+    metrics: Annotated[DecisionMetrics, Depends(get_metrics)],
 ) -> ChargebackChannelService:
-    return ChargebackChannelService(supervisor, store, deadline=deadline)
+    return ChargebackChannelService(supervisor, store, deadline=deadline, metrics=metrics)
 
 
 def _response(delivery: Delivery) -> ChargebackCaseResponse:
@@ -267,6 +274,7 @@ def post_appeal(
     store: Annotated[ChargebackCaseStore, Depends(get_store)],
     packager: Annotated[PackagerAgent, Depends(get_packager)],
     appeal: Annotated[AppealAgent, Depends(get_appeal)],
+    metrics: Annotated[DecisionMetrics, Depends(get_metrics)],
 ) -> ChargebackAppealResponse:
     state = store.load(case_id)
     if state is None or state.reason_code is None:
@@ -281,6 +289,7 @@ def post_appeal(
     outcome = appeal.submit(
         package, human_approved=payload.human_approved, actor_id=payload.actor_id or ""
     )
+    metrics.incr("appeal_submitted" if outcome.submitted else "appeal_blocked")
     return ChargebackAppealResponse(
         draft=outcome.draft,
         draft_source=outcome.draft_source.value,
@@ -291,6 +300,17 @@ def post_appeal(
     )
 
 
+@router.get(
+    "/metrics",
+    response_model=MetricsResponse,
+    responses={**COMMON_PROBLEMS},
+)
+def get_decision_metrics(
+    metrics: Annotated[DecisionMetrics, Depends(get_metrics)],
+) -> MetricsResponse:
+    return MetricsResponse(counts=metrics.snapshot())
+
+
 @router.post(
     "/prevention/assess",
     response_model=PreventionResponse,
@@ -299,6 +319,7 @@ def post_appeal(
 def assess_prevention(
     payload: PreventionRequest,
     agent: Annotated[PreventionAgent, Depends(get_prevention)],
+    metrics: Annotated[DecisionMetrics, Depends(get_metrics)],
 ) -> PreventionResponse:
     signals = PreventionSignals(
         avs_match=payload.avs_match,
@@ -314,6 +335,7 @@ def assess_prevention(
     )
     outcome = agent.assess(signals)
     a = outcome.assessment
+    metrics.incr(f"prevention_risk_{a.risk_level.value}")
     return PreventionResponse(
         risk_level=a.risk_level.value,
         risk_score=str(a.risk_score),

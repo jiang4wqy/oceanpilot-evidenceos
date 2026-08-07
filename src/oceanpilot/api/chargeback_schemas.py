@@ -166,6 +166,12 @@ class PreventionResponse(BaseModel):
     advice_source: StrictStr
 
 
+class MetricsResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    counts: dict[StrictStr, StrictInt] = {}
+
+
 class ChargebackCaseResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

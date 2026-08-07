@@ -291,3 +291,31 @@ def test_prevention_rejects_negative_amount(tmp_path):
     with _client(tmp_path) as client:
         resp = client.post("/api/v1/chargeback/prevention/assess", json={"amount": "-1"})
     assert resp.status_code == 422
+
+
+def test_metrics_endpoint_tracks_decisions(tmp_path):
+    with _client(tmp_path) as client:
+        client.post(
+            "/api/v1/chargeback/prevention/assess",
+            json={"three_ds_authenticated": False, "avs_match": False, "amount": "5000"},
+        )
+        case_id = _ready_case(client)  # reaches ASSESSED on the last evidence post
+        client.post(f"/api/v1/chargeback/cases/{case_id}/appeal", json={})  # blocked
+        counts = client.get("/api/v1/chargeback/metrics").json()["counts"]
+    assert counts.get("assessments_total", 0) >= 1
+    assert any(k.startswith("requires_human_") for k in counts)
+    assert any(k.startswith("explanation_source_") for k in counts)
+    assert counts.get("appeal_blocked", 0) >= 1
+    assert any(k.startswith("prevention_risk_") for k in counts)
+
+
+def test_request_logging_emits_structured_line(tmp_path, caplog):
+    import logging
+
+    with (
+        _client(tmp_path) as client,
+        caplog.at_level(logging.INFO, logger="oceanpilot.request"),
+    ):
+        client.get("/health")
+    messages = [r.getMessage() for r in caplog.records]
+    assert any("path=/health" in m and "status=200" in m and "trace_id=" in m for m in messages)

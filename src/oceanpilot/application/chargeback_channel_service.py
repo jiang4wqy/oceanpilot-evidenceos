@@ -25,6 +25,7 @@ from oceanpilot.application.chargeback_supervisor import (
     SupervisorStep,
 )
 from oceanpilot.application.errors import CaseNotFound, InvalidInbound
+from oceanpilot.application.metrics import DecisionMetrics
 from oceanpilot.domain.chargeback import ChargebackEvidenceCode, DisputeReasonCode
 from oceanpilot.domain.evidence_catalog import label_of
 from oceanpilot.domain.reason_catalog import confirm_prompt
@@ -96,10 +97,12 @@ class ChargebackChannelService:
         store: ChargebackCaseStore,
         *,
         deadline: DeadlineTracker | None = None,
+        metrics: DecisionMetrics | None = None,
     ) -> None:
         self._supervisor = supervisor
         self._store = store
         self._deadline_tracker = deadline
+        self._metrics = metrics
 
     def _deadline(self, state: ChargebackCaseState) -> DeliveryDeadline | None:
         if self._deadline_tracker is None or state.created_at is None:
@@ -119,7 +122,19 @@ class ChargebackChannelService:
         facts: CaseFacts | None = None,
     ) -> Delivery:
         step = self._supervisor.advance(state)
-        return _delivery(case_id, state, step, self._deadline(state), facts)
+        delivery = _delivery(case_id, state, step, self._deadline(state), facts)
+        self._record(delivery)
+        return delivery
+
+    def _record(self, delivery: Delivery) -> None:
+        if self._metrics is None or delivery.assessment is None:
+            return
+        assessment = delivery.assessment
+        self._metrics.incr("assessments_total")
+        self._metrics.incr(
+            "requires_human_true" if assessment.requires_human else "requires_human_false"
+        )
+        self._metrics.incr(f"explanation_source_{assessment.explanation_source}")
 
     def handle(self, inbound: NormalizedInbound) -> Delivery:
         if inbound.kind is InboundKind.OPEN_CASE:
