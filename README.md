@@ -87,6 +87,7 @@ API 只负责严格输入映射、状态码和安全错误；readiness、状态�
 - 给公司的数据需求：[docs/data/2026-08-07-chargeback-data-request.md](docs/data/2026-08-07-chargeback-data-request.md)
 - 离线可跑的演示：`examples/chargeback_demo.py`（agent 集群）、`examples/chargeback_transcript.py`（HTTP 全链路 transcript）
 - 一键起服务：`docker build -t oceanpilot-evidenceos . && docker run --rm -p 8000:8000 oceanpilot-evidenceos`
+- 离线评测报告（分类准确率 + 胜诉率校准）：`python scripts/eval_chargeback.py`
 
 ## 开发者指南 / Developer guide
 
