@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, Request, status
 
 from oceanpilot.api.cases import COMMON_PROBLEMS, PROBLEM_RESPONSE
 from oceanpilot.api.chargeback_schemas import (
+    AgentActivityDTO,
     AppealRequest,
     CatalogResponse,
     ChargebackAppealResponse,
@@ -167,6 +168,10 @@ def _response(delivery: Delivery) -> ChargebackCaseResponse:
         assessment=assessment,
         deadline=deadline,
         facts=facts,
+        agent_trace=tuple(
+            AgentActivityDTO(agent=a.agent, action=a.action, source=a.source)
+            for a in delivery.agent_trace
+        ),
     )
 
 

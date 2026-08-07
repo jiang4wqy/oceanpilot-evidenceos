@@ -8,6 +8,7 @@ it stays free of any channel or transport detail.
 """
 
 from oceanpilot.application.channels import (
+    AgentActivity,
     Delivery,
     DeliveryAssessment,
     DeliveryDeadline,
@@ -28,7 +29,44 @@ from oceanpilot.application.errors import CaseNotFound, InvalidInbound
 from oceanpilot.application.metrics import DecisionMetrics
 from oceanpilot.domain.chargeback import ChargebackEvidenceCode, DisputeReasonCode
 from oceanpilot.domain.evidence_catalog import label_of
-from oceanpilot.domain.reason_catalog import confirm_prompt
+from oceanpilot.domain.reason_catalog import confirm_prompt, reason_label
+
+
+def _agent_trace(state: ChargebackCaseState, step: SupervisorStep) -> tuple[AgentActivity, ...]:
+    """Who-proposed-what for this step — makes the agent cluster visible."""
+    trace: list[AgentActivity] = []
+    if state.reason_code is not None:
+        status = "已确认" if state.reason_confirmed else "待确认"
+        trace.append(
+            AgentActivity(
+                agent="IntakeAgent",
+                action=f"判定争议原因：{reason_label(state.reason_code)}（{status}）",
+            )
+        )
+    if step.phase is SupervisorPhase.REASON_PROPOSED:
+        trace.append(AgentActivity(agent="HumanGate", action="等待人工确认/更正争议原因"))
+    elif step.phase is SupervisorPhase.NEED_EVIDENCE and step.evidence_request is not None:
+        request = step.evidence_request
+        if request.next_evidence is not None:
+            trace.append(
+                AgentActivity(
+                    agent="EvidenceAgent",
+                    action=f"请求证据：{label_of(request.next_evidence)}",
+                    source=request.question_source.value,
+                )
+            )
+    elif step.phase is SupervisorPhase.ASSESSED and step.assessment is not None:
+        outcome = step.assessment
+        trace.append(
+            AgentActivity(
+                agent="AssessAgent",
+                action=f"胜诉评估 {outcome.assessment.win_likelihood}（数字由内核判定）",
+                source=outcome.explanation_source.value,
+            )
+        )
+        if outcome.assessment.requires_human:
+            trace.append(AgentActivity(agent="HumanGate", action="建议人工复核"))
+    return tuple(trace)
 
 
 def _delivery(
@@ -87,6 +125,7 @@ def _delivery(
         assessment=assessment,
         deadline=deadline,
         facts=facts if facts is not None and not facts.is_empty else None,
+        agent_trace=_agent_trace(state, step),
     )
 
 

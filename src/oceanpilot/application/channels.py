@@ -80,6 +80,15 @@ class DeliveryDeadline:
 
 
 @dataclass(frozen=True)
+class AgentActivity:
+    """One line of the agent decision trace: who did what, and its source."""
+
+    agent: str
+    action: str
+    source: str | None = None
+
+
+@dataclass(frozen=True)
 class Delivery:
     case_id: str
     phase: str
@@ -93,6 +102,7 @@ class Delivery:
     assessment: DeliveryAssessment | None = None
     deadline: DeliveryDeadline | None = None
     facts: CaseFacts | None = None
+    agent_trace: tuple[AgentActivity, ...] = ()
 
 
 @runtime_checkable

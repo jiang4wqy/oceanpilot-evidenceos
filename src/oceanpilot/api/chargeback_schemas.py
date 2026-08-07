@@ -180,6 +180,14 @@ class CatalogResponse(BaseModel):
     evidence: tuple[LabeledEvidenceDTO, ...] = ()
 
 
+class AgentActivityDTO(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    agent: StrictStr
+    action: StrictStr
+    source: StrictStr | None = None
+
+
 class ChargebackCaseResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -195,3 +203,4 @@ class ChargebackCaseResponse(BaseModel):
     assessment: ChargebackAssessmentDTO | None = None
     deadline: ChargebackDeadlineDTO | None = None
     facts: ChargebackFactsDTO | None = None
+    agent_trace: tuple[AgentActivityDTO, ...] = ()

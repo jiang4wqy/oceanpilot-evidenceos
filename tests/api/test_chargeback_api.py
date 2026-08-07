@@ -349,3 +349,35 @@ def test_package_can_be_localized(tmp_path):
         en = client.get(f"/api/v1/chargeback/cases/{case_id}/package?locale=en").json()
     assert en["reason_label"].isascii()
     assert all(item["label"].isascii() for item in en["ordered_evidence"])
+
+
+def test_agent_trace_is_present_across_the_flow(tmp_path):
+    with _client(tmp_path) as client:
+        body = client.post(
+            "/api/v1/chargeback/cases", json={"description": "没收到货，要拒付"}
+        ).json()
+        # NEED_EVIDENCE step: intake + evidence agents visible.
+        agents = {a["agent"] for a in body["agent_trace"]}
+        assert "IntakeAgent" in agents
+        assert "EvidenceAgent" in agents
+        case_id = body["case_id"]
+        for _ in range(20):
+            if body["phase"] == "ASSESSED":
+                break
+            body = client.post(
+                f"/api/v1/chargeback/cases/{case_id}/evidence",
+                json={"evidence_code": body["next_evidence"]},
+            ).json()
+    trace = body["agent_trace"]
+    assert any(a["agent"] == "AssessAgent" for a in trace)
+    assess = next(a for a in trace if a["agent"] == "AssessAgent")
+    assert assess["source"] in ("MODEL", "FALLBACK")
+
+
+def test_agent_trace_shows_human_gate_when_reason_unconfident(tmp_path):
+    with _client(tmp_path) as client:
+        body = client.post(
+            "/api/v1/chargeback/cases", json={"description": "这是一段用于测试的中性内容"}
+        ).json()
+    assert body["phase"] == "REASON_PROPOSED"
+    assert any(a["agent"] == "HumanGate" for a in body["agent_trace"])

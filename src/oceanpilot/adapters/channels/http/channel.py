@@ -101,4 +101,8 @@ class HttpChannel:
             "assessment": assessment,
             "deadline": deadline,
             "facts": facts,
+            "agent_trace": [
+                {"agent": a.agent, "action": a.action, "source": a.source}
+                for a in delivery.agent_trace
+            ],
         }
