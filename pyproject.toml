@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "oceanpilot-evidenceos"
-version = "0.1.0"
+version = "0.2.0"
 description = "Synthetic local prototype for evidence-driven payment incident collaboration"
 requires-python = ">=3.12,<3.13"
 dependencies = [
