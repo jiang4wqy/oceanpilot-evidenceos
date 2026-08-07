@@ -19,6 +19,7 @@ from oceanpilot.application.channels import (
     InboundKind,
     NormalizedInbound,
 )
+from oceanpilot.application.chargeback_agents import CaseFacts
 from oceanpilot.application.errors import InvalidInbound
 from oceanpilot.domain.chargeback import DisputeReasonCode
 from oceanpilot.domain.reason_catalog import reason_label
@@ -124,6 +125,8 @@ class FeishuChannel:
             elements.append(_field("**已收集**：" + "、".join(delivery.collected)))
         if delivery.deadline is not None:
             elements.append(_field(_deadline_text(delivery.deadline)))
+        if delivery.facts is not None:
+            elements.append(_field(_facts_text(delivery.facts)))
 
         if delivery.phase == "REASON_PROPOSED":
             if delivery.question:
@@ -195,6 +198,21 @@ class FeishuChannel:
 
 def _field(content: str) -> dict[str, object]:
     return {"tag": "div", "text": {"tag": "lark_md", "content": content}}
+
+
+def _facts_text(facts: CaseFacts) -> str:
+    parts: list[str] = []
+    if facts.summary:
+        parts.append(facts.summary)
+    meta: list[str] = []
+    if facts.amount:
+        amount = f"{facts.amount} {facts.currency}" if facts.currency else facts.amount
+        meta.append(f"金额 {amount}")
+    if facts.occurred_on:
+        meta.append(f"日期 {facts.occurred_on}")
+    if meta:
+        parts.append("｜".join(meta))
+    return "**识别要点**：" + ("；".join(parts) if parts else "—")
 
 
 def _deadline_text(deadline: DeliveryDeadline) -> str:

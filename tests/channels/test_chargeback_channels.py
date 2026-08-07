@@ -343,3 +343,48 @@ def test_feishu_evidence_card_offers_a_finalize_button():
     serialized = json.dumps(card, ensure_ascii=False)
     assert "finalize_evidence" in serialized
     assert "转人工复核" in serialized
+
+
+def test_open_case_surfaces_extracted_facts():
+    model = ScriptedModelProvider(
+        [
+            "PRODUCT_NOT_RECEIVED",
+            '{"amount": "1200", "currency": "USD", "summary": "客户称未收到货"}',
+        ],
+        default_text="（合成）",
+    )
+    supervisor = ChargebackSupervisor(
+        intake=IntakeAgent(model),
+        evidence=EvidenceAgent(model),
+        assess=ChargebackAssessAgent(model),
+    )
+    service = ChargebackChannelService(supervisor, InMemoryChargebackCaseStore())
+    delivery = service.handle(
+        NormalizedInbound(kind=InboundKind.OPEN_CASE, channel="test", description="下单后没收到货")
+    )
+    assert delivery.facts is not None
+    assert delivery.facts.amount == "1200"
+    assert delivery.facts.currency == "USD"
+    assert delivery.facts.summary == "客户称未收到货"
+
+
+def test_feishu_card_shows_extracted_facts():
+    model = ScriptedModelProvider(
+        ["PRODUCT_NOT_RECEIVED", '{"summary": "客户称未收到跨境订单"}'],
+        default_text="（合成）",
+    )
+    supervisor = ChargebackSupervisor(
+        intake=IntakeAgent(model),
+        evidence=EvidenceAgent(model),
+        assess=ChargebackAssessAgent(model),
+    )
+    service = ChargebackChannelService(supervisor, InMemoryChargebackCaseStore())
+    delivery = service.handle(
+        NormalizedInbound(
+            kind=InboundKind.OPEN_CASE, channel="feishu", description="下单后没收到货"
+        )
+    )
+    card = FeishuChannel().render(delivery)
+    serialized = json.dumps(card, ensure_ascii=False)
+    assert "识别要点" in serialized
+    assert "客户称未收到跨境订单" in serialized

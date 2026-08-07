@@ -20,6 +20,8 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Protocol, runtime_checkable
 
+from oceanpilot.application.chargeback_agents import CaseFacts
+
 
 class InboundKind(StrEnum):
     OPEN_CASE = "OPEN_CASE"
@@ -75,6 +77,7 @@ class Delivery:
     missing: tuple[str, ...] | None = None
     assessment: DeliveryAssessment | None = None
     deadline: DeliveryDeadline | None = None
+    facts: CaseFacts | None = None
 
 
 @runtime_checkable

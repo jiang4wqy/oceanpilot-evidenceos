@@ -7,6 +7,7 @@ from oceanpilot.api.chargeback_schemas import (
     ChargebackAssessmentDTO,
     ChargebackCaseResponse,
     ChargebackDeadlineDTO,
+    ChargebackFactsDTO,
     ConfirmReasonRequest,
     CreateChargebackRequest,
     SubmitEvidenceRequest,
@@ -66,6 +67,15 @@ def _response(delivery: Delivery) -> ChargebackCaseResponse:
             deadline_at=d.deadline_at,
             overdue=d.overdue,
         )
+    facts = None
+    if delivery.facts is not None:
+        f = delivery.facts
+        facts = ChargebackFactsDTO(
+            amount=f.amount,
+            currency=f.currency,
+            occurred_on=f.occurred_on,
+            summary=f.summary,
+        )
     return ChargebackCaseResponse(
         case_id=delivery.case_id,
         phase=delivery.phase,
@@ -78,6 +88,7 @@ def _response(delivery: Delivery) -> ChargebackCaseResponse:
         missing=delivery.missing,
         assessment=assessment,
         deadline=deadline,
+        facts=facts,
     )
 
 

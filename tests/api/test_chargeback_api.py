@@ -138,3 +138,12 @@ def test_response_includes_evidence_window_deadline(tmp_path):
     assert body["deadline"]["overdue"] is False
     assert body["deadline"]["days_remaining"] is not None
     assert 0 <= body["deadline"]["days_remaining"] <= 15
+
+
+def test_response_has_facts_field(tmp_path):
+    with _client(tmp_path) as client:
+        body = client.post(
+            "/api/v1/chargeback/cases", json={"description": "客户下单后一直没收到货"}
+        ).json()
+    # Offline model can't extract facts, but the field is wired into the contract.
+    assert "facts" in body

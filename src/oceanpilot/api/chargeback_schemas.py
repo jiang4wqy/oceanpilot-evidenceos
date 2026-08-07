@@ -44,6 +44,15 @@ class ChargebackDeadlineDTO(BaseModel):
     overdue: StrictBool
 
 
+class ChargebackFactsDTO(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    amount: StrictStr | None = None
+    currency: StrictStr | None = None
+    occurred_on: StrictStr | None = None
+    summary: StrictStr | None = None
+
+
 class ChargebackCaseResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -58,3 +67,4 @@ class ChargebackCaseResponse(BaseModel):
     missing: tuple[StrictStr, ...] | None = None
     assessment: ChargebackAssessmentDTO | None = None
     deadline: ChargebackDeadlineDTO | None = None
+    facts: ChargebackFactsDTO | None = None

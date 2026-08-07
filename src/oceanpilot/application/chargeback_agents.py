@@ -8,6 +8,7 @@ model being reachable. Depends only on the ``ModelProvider`` protocol — no
 vendor SDK, no adapter imports (kept clean by the import-boundary test).
 """
 
+import json
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
@@ -33,7 +34,9 @@ from oceanpilot.domain.chargeback_prevention import (
     PreventionSignals,
     assess_chargeback_risk,
 )
+from oceanpilot.domain.errors import SensitiveDataRejected
 from oceanpilot.domain.evidence_catalog import describe, request_sentence
+from oceanpilot.domain.security import assert_no_sensitive_data
 
 _ASSESS_SYSTEM = (
     "You explain a cross-border chargeback representment assessment to an "
@@ -212,6 +215,70 @@ def _heuristic_reason(text: str) -> DisputeReasonCode | None:
     return None
 
 
+@dataclass(frozen=True)
+class CaseFacts:
+    """Light, non-sensitive structured facts pulled from the free-text intake."""
+
+    amount: str | None = None
+    currency: str | None = None
+    occurred_on: str | None = None
+    summary: str | None = None
+
+    @property
+    def is_empty(self) -> bool:
+        return not any((self.amount, self.currency, self.occurred_on, self.summary))
+
+
+_EMPTY_FACTS = CaseFacts()
+
+_INTAKE_FACTS_SYSTEM = (
+    "Extract non-sensitive structured facts from a merchant's dispute "
+    "description and reply with ONLY a JSON object with keys: amount (numeric "
+    "string or null), currency (ISO code or null), occurred_on (YYYY-MM-DD or "
+    "null), summary (one neutral Chinese sentence or null). NEVER include card "
+    "numbers, names, emails, phone numbers or any other PII. Synthetic data."
+)
+
+
+def _facts_field(data: dict[str, object], key: str) -> str | None:
+    value = data.get(key)
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+    if isinstance(value, bool):  # avoid bool-as-int surprises
+        return None
+    if isinstance(value, (int, float)):
+        return str(value)
+    return None
+
+
+def _parse_facts(raw: str) -> CaseFacts:
+    try:
+        data = json.loads(raw.strip())
+    except (json.JSONDecodeError, ValueError):
+        return _EMPTY_FACTS
+    if not isinstance(data, dict):
+        return _EMPTY_FACTS
+    facts = CaseFacts(
+        amount=_facts_field(data, "amount"),
+        currency=_facts_field(data, "currency"),
+        occurred_on=_facts_field(data, "occurred_on"),
+        summary=_facts_field(data, "summary"),
+    )
+    # Never surface anything the sensitive-data guard would reject.
+    try:
+        assert_no_sensitive_data(
+            {
+                "amount": facts.amount or "",
+                "currency": facts.currency or "",
+                "occurred_on": facts.occurred_on or "",
+                "summary": facts.summary or "",
+            }
+        )
+    except SensitiveDataRejected:
+        return _EMPTY_FACTS
+    return facts
+
+
 class IntakeAgent:
     def __init__(
         self,
@@ -223,6 +290,22 @@ class IntakeAgent:
         self._model = model
         self._security_tier = security_tier
         self._effort = effort
+
+    def extract_facts(self, text: str) -> CaseFacts:
+        """Best-effort structured facts from the description; empty on any failure."""
+        try:
+            result = self._model.complete(
+                TaskSpec(
+                    kind="chargeback_intake_facts",
+                    security_tier=self._security_tier,
+                    effort=self._effort,
+                ),
+                [ModelMessage(role=ModelRole.USER, content=text)],
+                system=_INTAKE_FACTS_SYSTEM,
+            )
+        except ModelProviderError:
+            return _EMPTY_FACTS
+        return _parse_facts(result.text)
 
     def classify(self, text: str) -> IntakeOutcome:
         try:

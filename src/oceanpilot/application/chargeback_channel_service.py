@@ -14,6 +14,7 @@ from oceanpilot.application.channels import (
     InboundKind,
     NormalizedInbound,
 )
+from oceanpilot.application.chargeback_agents import CaseFacts
 from oceanpilot.application.chargeback_deadline import DeadlineTracker
 from oceanpilot.application.chargeback_ports import ChargebackCaseStore
 from oceanpilot.application.chargeback_supervisor import (
@@ -32,6 +33,7 @@ def _delivery(
     state: ChargebackCaseState,
     step: SupervisorStep,
     deadline: DeliveryDeadline | None = None,
+    facts: CaseFacts | None = None,
 ) -> Delivery:
     next_evidence: str | None = None
     question: str | None = None
@@ -70,6 +72,7 @@ def _delivery(
         missing=missing,
         assessment=assessment,
         deadline=deadline,
+        facts=facts if facts is not None and not facts.is_empty else None,
     )
 
 
@@ -96,9 +99,14 @@ class ChargebackChannelService:
             overdue=outcome.overdue,
         )
 
-    def _deliver(self, case_id: str, state: ChargebackCaseState) -> Delivery:
+    def _deliver(
+        self,
+        case_id: str,
+        state: ChargebackCaseState,
+        facts: CaseFacts | None = None,
+    ) -> Delivery:
         step = self._supervisor.advance(state)
-        return _delivery(case_id, state, step, self._deadline(state))
+        return _delivery(case_id, state, step, self._deadline(state), facts)
 
     def handle(self, inbound: NormalizedInbound) -> Delivery:
         if inbound.kind is InboundKind.OPEN_CASE:
@@ -119,8 +127,9 @@ class ChargebackChannelService:
         case_id = self._store.create()
         state = self._require_state(case_id)
         self._supervisor.intake(state, inbound.description)
+        facts = self._supervisor.extract_facts(inbound.description)
         self._store.save(case_id, state)
-        return self._deliver(case_id, state)
+        return self._deliver(case_id, state, facts)
 
     def _confirm_reason(self, inbound: NormalizedInbound) -> Delivery:
         if not inbound.case_id:

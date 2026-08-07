@@ -67,6 +67,15 @@ class HttpChannel:
                 "deadline_at": d.deadline_at,
                 "overdue": d.overdue,
             }
+        facts: dict[str, object] | None = None
+        if delivery.facts is not None:
+            f = delivery.facts
+            facts = {
+                "amount": f.amount,
+                "currency": f.currency,
+                "occurred_on": f.occurred_on,
+                "summary": f.summary,
+            }
         return {
             "channel": self.name,
             "case_id": delivery.case_id,
@@ -80,4 +89,5 @@ class HttpChannel:
             "missing": list(delivery.missing) if delivery.missing is not None else None,
             "assessment": assessment,
             "deadline": deadline,
+            "facts": facts,
         }

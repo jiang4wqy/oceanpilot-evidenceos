@@ -13,6 +13,7 @@ from enum import StrEnum
 
 from oceanpilot.application.chargeback_agents import (
     AssessOutcome,
+    CaseFacts,
     ChargebackAssessAgent,
     EvidenceAgent,
     EvidenceRequest,
@@ -74,6 +75,10 @@ class ChargebackSupervisor:
         # be confirmed by a human before the flow proceeds.
         state.reason_confirmed = outcome.confident
         return outcome
+
+    def extract_facts(self, text: str) -> CaseFacts:
+        """Best-effort structured facts from the intake description."""
+        return self._intake.extract_facts(text)
 
     def confirm_reason(
         self,
