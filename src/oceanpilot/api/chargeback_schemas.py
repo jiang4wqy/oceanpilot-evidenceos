@@ -42,6 +42,7 @@ class ChargebackCaseResponse(BaseModel):
     phase: StrictStr
     reason_code: StrictStr | None = None
     reason_confirmed: StrictBool = False
+    collection_finalized: StrictBool = False
     collected: tuple[StrictStr, ...] = ()
     next_evidence: StrictStr | None = None
     question: StrictStr | None = None

@@ -320,6 +320,7 @@ def test_openapi_has_exact_foundation_paths(app: FastAPI):
         "/api/v1/chargeback/cases/{case_id}",
         "/api/v1/chargeback/cases/{case_id}/confirm",
         "/api/v1/chargeback/cases/{case_id}/evidence",
+        "/api/v1/chargeback/cases/{case_id}/finalize",
     }
     assert {path: set(item) for path, item in paths.items()} == {
         "/health": {"get"},
@@ -333,4 +334,5 @@ def test_openapi_has_exact_foundation_paths(app: FastAPI):
         "/api/v1/chargeback/cases/{case_id}": {"get"},
         "/api/v1/chargeback/cases/{case_id}/confirm": {"post"},
         "/api/v1/chargeback/cases/{case_id}/evidence": {"post"},
+        "/api/v1/chargeback/cases/{case_id}/finalize": {"post"},
     }

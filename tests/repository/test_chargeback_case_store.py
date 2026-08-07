@@ -282,3 +282,27 @@ def test_audit_trail_is_ordered_and_revision_tagged(store: SqliteChargebackCaseS
     # Both evidence rows share the single revision bump they were written under.
     assert {event.case_revision for event in trail[2:]} == {2}
     assert {event.detail for event in trail[2:]} == {CODE_A.value, CODE_B.value}
+
+
+def test_finalization_persists_and_is_audited(store: SqliteChargebackCaseStore) -> None:
+    case_id = store.create()
+    state = _reason_state(store, case_id)
+    state.collection_finalized = True
+    store.save(case_id, state)
+
+    reloaded = store.load(case_id)
+    assert reloaded is not None
+    assert reloaded.collection_finalized is True
+    trail = [event.event_type for event in store.audit_trail(case_id)]
+    assert ChargebackAuditEventType.COLLECTION_FINALIZED in trail
+
+
+def test_finalization_cannot_be_revoked(store: SqliteChargebackCaseStore) -> None:
+    case_id = store.create()
+    state = _reason_state(store, case_id)
+    state.collection_finalized = True
+    store.save(case_id, state)
+
+    revoked = ChargebackCaseState(reason_code=REASON, collected=set(), collection_finalized=False)
+    with pytest.raises(PersistenceInvariantViolation):
+        store.save(case_id, revoked)

@@ -30,6 +30,10 @@ class ChargebackCaseState:
     # one waits at REASON_PROPOSED for an explicit human confirm/correction.
     reason_confident: bool = False
     reason_confirmed: bool = False
+    # A human may declare evidence collection finished even while required items
+    # are still missing ("I can't provide more"): the loop stops asking and the
+    # case goes to assessment / human review instead of looping forever.
+    collection_finalized: bool = False
 
 
 class SupervisorPhase(StrEnum):
@@ -80,6 +84,10 @@ class ChargebackSupervisor:
     def submit_evidence(self, state: ChargebackCaseState, code: ChargebackEvidenceCode) -> None:
         state.collected.add(code)
 
+    def finalize_evidence(self, state: ChargebackCaseState) -> None:
+        """Human declares evidence collection finished despite remaining gaps."""
+        state.collection_finalized = True
+
     def advance(self, state: ChargebackCaseState) -> SupervisorStep:
         if state.reason_code is None:
             return SupervisorStep(phase=SupervisorPhase.NEEDS_INTAKE)
@@ -87,7 +95,8 @@ class ChargebackSupervisor:
             # Kernel proposed a reason but a human has not confirmed it yet.
             return SupervisorStep(phase=SupervisorPhase.REASON_PROPOSED)
         request = self._evidence.next_request(state.reason_code, state.collected)
-        if not request.complete:
+        # Keep asking only while the human has not declared collection finished.
+        if not request.complete and not state.collection_finalized:
             return SupervisorStep(phase=SupervisorPhase.NEED_EVIDENCE, evidence_request=request)
         outcome = self._assess.assess(state.reason_code, state.collected)
         return SupervisorStep(phase=SupervisorPhase.ASSESSED, assessment=outcome)

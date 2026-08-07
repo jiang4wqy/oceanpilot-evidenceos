@@ -55,6 +55,7 @@ def _response(delivery: Delivery) -> ChargebackCaseResponse:
         phase=delivery.phase,
         reason_code=delivery.reason_code,
         reason_confirmed=delivery.reason_confirmed,
+        collection_finalized=delivery.collection_finalized,
         collected=delivery.collected,
         next_evidence=delivery.next_evidence,
         question=delivery.question,
@@ -120,6 +121,25 @@ def submit_evidence(
             channel=_CHANNEL,
             case_id=case_id,
             evidence_code=payload.evidence_code.value,
+        )
+    )
+    return _response(delivery)
+
+
+@router.post(
+    "/cases/{case_id}/finalize",
+    response_model=ChargebackCaseResponse,
+    responses={404: PROBLEM_RESPONSE, **COMMON_PROBLEMS},
+)
+def finalize_evidence(
+    case_id: str,
+    service: Annotated[ChargebackChannelService, Depends(get_channel_service)],
+) -> ChargebackCaseResponse:
+    delivery = service.handle(
+        NormalizedInbound(
+            kind=InboundKind.FINALIZE_EVIDENCE,
+            channel=_CHANNEL,
+            case_id=case_id,
         )
     )
     return _response(delivery)

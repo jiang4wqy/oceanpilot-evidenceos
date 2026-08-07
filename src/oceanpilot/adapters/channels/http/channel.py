@@ -19,6 +19,7 @@ _ACTIONS = {
     "open_case": InboundKind.OPEN_CASE,
     "confirm_reason": InboundKind.CONFIRM_REASON,
     "submit_evidence": InboundKind.SUBMIT_EVIDENCE,
+    "finalize_evidence": InboundKind.FINALIZE_EVIDENCE,
     "get_case": InboundKind.GET_CASE,
 }
 
@@ -63,6 +64,7 @@ class HttpChannel:
             "phase": delivery.phase,
             "reason_code": delivery.reason_code,
             "reason_confirmed": delivery.reason_confirmed,
+            "collection_finalized": delivery.collection_finalized,
             "collected": list(delivery.collected),
             "next_evidence": delivery.next_evidence,
             "question": delivery.question,

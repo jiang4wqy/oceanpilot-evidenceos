@@ -56,6 +56,7 @@ def _delivery(case_id: str, state: ChargebackCaseState, step: SupervisorStep) ->
         phase=step.phase.value,
         reason_code=state.reason_code.value if state.reason_code else None,
         reason_confirmed=state.reason_confirmed,
+        collection_finalized=state.collection_finalized,
         collected=tuple(sorted(code.value for code in state.collected)),
         next_evidence=next_evidence,
         question=question,
@@ -80,6 +81,8 @@ class ChargebackChannelService:
             return self._confirm_reason(inbound)
         if inbound.kind is InboundKind.SUBMIT_EVIDENCE:
             return self._submit_evidence(inbound)
+        if inbound.kind is InboundKind.FINALIZE_EVIDENCE:
+            return self._finalize_evidence(inbound)
         if inbound.kind is InboundKind.GET_CASE:
             return self._get_case(inbound)
         raise InvalidInbound()
@@ -116,6 +119,14 @@ class ChargebackChannelService:
             raise InvalidInbound() from None
         state = self._require_state(inbound.case_id)
         self._supervisor.submit_evidence(state, code)
+        self._store.save(inbound.case_id, state)
+        return _delivery(inbound.case_id, state, self._supervisor.advance(state))
+
+    def _finalize_evidence(self, inbound: NormalizedInbound) -> Delivery:
+        if not inbound.case_id:
+            raise InvalidInbound()
+        state = self._require_state(inbound.case_id)
+        self._supervisor.finalize_evidence(state)
         self._store.save(inbound.case_id, state)
         return _delivery(inbound.case_id, state, self._supervisor.advance(state))
 

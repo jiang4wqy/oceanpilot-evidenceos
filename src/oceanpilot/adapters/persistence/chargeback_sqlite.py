@@ -48,6 +48,7 @@ class ChargebackAuditEventType(StrEnum):
     REASON_CLASSIFIED = "REASON_CLASSIFIED"
     REASON_CONFIRMED = "REASON_CONFIRMED"
     EVIDENCE_ADDED = "EVIDENCE_ADDED"
+    COLLECTION_FINALIZED = "COLLECTION_FINALIZED"
 
 
 @dataclass(frozen=True, slots=True)
@@ -259,6 +260,7 @@ class SqliteChargebackCaseStore:
         if any(not isinstance(code, ChargebackEvidenceCode) for code in incoming_codes):
             raise PersistenceInvariantViolation()
         incoming_confirmed = bool(state.reason_confirmed)
+        incoming_finalized = bool(state.collection_finalized)
 
         def operation() -> int:
             connection = connect_sqlite(self._path)
@@ -266,7 +268,7 @@ class SqliteChargebackCaseStore:
                 with immediate_transaction(connection):
                     row = connection.execute(
                         """
-                        SELECT reason_code, reason_confirmed, revision
+                        SELECT reason_code, reason_confirmed, collection_finalized, revision
                         FROM chargeback_cases WHERE case_id = ?
                         """,
                         (case_id,),
@@ -280,6 +282,7 @@ class SqliteChargebackCaseStore:
                         else None
                     )
                     current_confirmed = bool(self._require_int(row["reason_confirmed"]))
+                    current_finalized = bool(self._require_int(row["collection_finalized"]))
                     if expected_revision is not None and current_revision != expected_revision:
                         raise ConcurrentCaseWrite()
 
@@ -300,30 +303,40 @@ class SqliteChargebackCaseStore:
                             raise PersistenceInvariantViolation()
                         if current_confirmed and incoming_reason != current_reason:
                             raise PersistenceInvariantViolation()
-                    # Confirmation is a one-way latch — it cannot be revoked.
+                    # Confirmation and finalization are one-way latches.
                     if current_confirmed and not incoming_confirmed:
+                        raise PersistenceInvariantViolation()
+                    if current_finalized and not incoming_finalized:
                         raise PersistenceInvariantViolation()
 
                     reason_changed = (
                         incoming_reason is not None and incoming_reason != current_reason
                     )
                     confirmed_now = incoming_confirmed and not current_confirmed
+                    finalized_now = incoming_finalized and not current_finalized
                     new_codes = tuple(
                         sorted(incoming_codes - stored_codes, key=lambda code: code.value)
                     )
-                    if not reason_changed and not confirmed_now and not new_codes:
+                    if (
+                        not reason_changed
+                        and not confirmed_now
+                        and not finalized_now
+                        and not new_codes
+                    ):
                         return current_revision  # idempotent replay
 
                     new_revision = current_revision + 1
                     cursor = connection.execute(
                         """
                         UPDATE chargeback_cases
-                        SET reason_code = ?, reason_confirmed = ?, revision = ?, updated_at = ?
+                        SET reason_code = ?, reason_confirmed = ?, collection_finalized = ?,
+                            revision = ?, updated_at = ?
                         WHERE case_id = ? AND revision = ?
                         """,
                         (
                             incoming_reason.value if incoming_reason is not None else None,
                             1 if incoming_confirmed else 0,
+                            1 if incoming_finalized else 0,
                             new_revision,
                             _encode_dt(self._clock()),
                             case_id,
@@ -352,6 +365,17 @@ class SqliteChargebackCaseStore:
                             seq=seq,
                             event_type=ChargebackAuditEventType.REASON_CONFIRMED,
                             detail=incoming_reason.value if incoming_reason is not None else None,
+                            case_revision=new_revision,
+                            moment=self._clock(),
+                        )
+                        seq += 1
+                    if finalized_now:
+                        self._insert_audit(
+                            connection,
+                            case_id=case_id,
+                            seq=seq,
+                            event_type=ChargebackAuditEventType.COLLECTION_FINALIZED,
+                            detail=None,
                             case_revision=new_revision,
                             moment=self._clock(),
                         )
@@ -391,7 +415,7 @@ class SqliteChargebackCaseStore:
     ) -> tuple[ChargebackCaseState, int] | None:
         row = connection.execute(
             """
-            SELECT reason_code, reason_confirmed, revision
+            SELECT reason_code, reason_confirmed, collection_finalized, revision
             FROM chargeback_cases WHERE case_id = ?
             """,
             (case_id,),
@@ -414,6 +438,7 @@ class SqliteChargebackCaseStore:
             reason_code=reason,
             collected=codes,
             reason_confirmed=bool(self._require_int(row["reason_confirmed"])),
+            collection_finalized=bool(self._require_int(row["collection_finalized"])),
         )
         return state, self._require_int(row["revision"])
 

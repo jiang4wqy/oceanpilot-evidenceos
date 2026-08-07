@@ -306,3 +306,40 @@ def test_feishu_renders_a_confirm_button_for_reason_proposed():
     serialized = json.dumps(card, ensure_ascii=False)
     assert "confirm_reason" in serialized
     assert "确认该原因" in serialized
+
+
+def test_finalize_evidence_routes_to_assessment():
+    service = _service()
+    opened = service.handle(
+        NormalizedInbound(
+            kind=InboundKind.OPEN_CASE, channel="test", description="没收到货，要拒付"
+        )
+    )
+    assert opened.phase == "NEED_EVIDENCE"
+    final = service.handle(
+        NormalizedInbound(
+            kind=InboundKind.FINALIZE_EVIDENCE, channel="test", case_id=opened.case_id
+        )
+    )
+    assert final.collection_finalized is True
+    assert final.phase == "ASSESSED"
+    assert final.assessment is not None
+    assert final.assessment.requires_human is True
+
+
+def test_finalize_without_case_id_is_rejected():
+    with pytest.raises(InvalidInbound):
+        _service().handle(NormalizedInbound(kind=InboundKind.FINALIZE_EVIDENCE, channel="test"))
+
+
+def test_feishu_evidence_card_offers_a_finalize_button():
+    service = _service()
+    opened = service.handle(
+        NormalizedInbound(
+            kind=InboundKind.OPEN_CASE, channel="feishu", description="没收到货，要拒付"
+        )
+    )
+    card = FeishuChannel().render(opened)
+    serialized = json.dumps(card, ensure_ascii=False)
+    assert "finalize_evidence" in serialized
+    assert "转人工复核" in serialized

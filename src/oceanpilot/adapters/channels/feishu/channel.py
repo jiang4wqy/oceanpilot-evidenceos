@@ -26,6 +26,7 @@ _ACTIONS = {
     "open_case": InboundKind.OPEN_CASE,
     "confirm_reason": InboundKind.CONFIRM_REASON,
     "submit_evidence": InboundKind.SUBMIT_EVIDENCE,
+    "finalize_evidence": InboundKind.FINALIZE_EVIDENCE,
     "get_case": InboundKind.GET_CASE,
 }
 
@@ -156,7 +157,16 @@ class FeishuChannel:
                                 "case_id": delivery.case_id,
                                 "evidence_code": delivery.next_evidence,
                             },
-                        }
+                        },
+                        {
+                            "tag": "button",
+                            "text": {"tag": "plain_text", "content": "无法提供更多，转人工复核"},
+                            "type": "danger",
+                            "value": {
+                                "action": "finalize_evidence",
+                                "case_id": delivery.case_id,
+                            },
+                        },
                     ],
                 }
             )

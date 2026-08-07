@@ -115,3 +115,14 @@ def test_confirm_rejects_unknown_reason(tmp_path):
             json={"reason_code": "NOT_A_REASON"},
         )
     assert resp.status_code == 422
+
+
+def test_finalize_routes_to_human_review(tmp_path):
+    with _client(tmp_path) as client:
+        case_id = client.post(
+            "/api/v1/chargeback/cases", json={"description": "没收到货，要拒付"}
+        ).json()["case_id"]
+        body = client.post(f"/api/v1/chargeback/cases/{case_id}/finalize").json()
+    assert body["collection_finalized"] is True
+    assert body["phase"] == "ASSESSED"
+    assert body["assessment"]["requires_human"] is True

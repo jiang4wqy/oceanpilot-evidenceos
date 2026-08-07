@@ -25,6 +25,7 @@ class InboundKind(StrEnum):
     OPEN_CASE = "OPEN_CASE"
     CONFIRM_REASON = "CONFIRM_REASON"
     SUBMIT_EVIDENCE = "SUBMIT_EVIDENCE"
+    FINALIZE_EVIDENCE = "FINALIZE_EVIDENCE"
     GET_CASE = "GET_CASE"
 
 
@@ -57,6 +58,7 @@ class Delivery:
     phase: str
     reason_code: str | None = None
     reason_confirmed: bool = False
+    collection_finalized: bool = False
     collected: tuple[str, ...] = ()
     next_evidence: str | None = None
     question: str | None = None
