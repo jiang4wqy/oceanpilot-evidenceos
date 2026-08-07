@@ -5,6 +5,8 @@ from fastapi import APIRouter, Depends, Request, status
 from oceanpilot.api.cases import COMMON_PROBLEMS, PROBLEM_RESPONSE
 from oceanpilot.api.chargeback_schemas import (
     ChargebackAssessmentDTO,
+    ChargebackAuditEventDTO,
+    ChargebackAuditResponse,
     ChargebackCaseResponse,
     ChargebackDeadlineDTO,
     ChargebackEvidenceItemDTO,
@@ -18,6 +20,7 @@ from oceanpilot.application.chargeback_channel_service import ChargebackChannelS
 from oceanpilot.application.chargeback_deadline import DeadlineTracker
 from oceanpilot.application.chargeback_ports import ChargebackCaseStore
 from oceanpilot.application.chargeback_supervisor import ChargebackSupervisor
+from oceanpilot.application.errors import CaseNotFound
 
 router = APIRouter(prefix="/api/v1/chargeback")
 
@@ -183,6 +186,30 @@ def finalize_evidence(
         )
     )
     return _response(delivery)
+
+
+@router.get(
+    "/cases/{case_id}/audit",
+    response_model=ChargebackAuditResponse,
+    responses={404: PROBLEM_RESPONSE, **COMMON_PROBLEMS},
+)
+def get_audit(
+    case_id: str,
+    store: Annotated[ChargebackCaseStore, Depends(get_store)],
+) -> ChargebackAuditResponse:
+    if store.load(case_id) is None:
+        raise CaseNotFound()
+    events = tuple(
+        ChargebackAuditEventDTO(
+            seq=event.seq,
+            event_type=event.event_type,
+            detail=event.detail,
+            case_revision=event.case_revision,
+            occurred_at=event.occurred_at.isoformat(),
+        )
+        for event in store.audit_trail(case_id)
+    )
+    return ChargebackAuditResponse(case_id=case_id, events=events)
 
 
 @router.get(

@@ -167,3 +167,30 @@ def test_assessment_response_exposes_provenance_and_breakdown(tmp_path):
     assert a["evidence_breakdown"]
     assert set(a["evidence_breakdown"][0]) == {"code", "label", "weight", "critical", "present"}
     assert all(item["present"] for item in a["evidence_breakdown"])
+
+
+def test_audit_endpoint_returns_ordered_trail(tmp_path):
+    with _client(tmp_path) as client:
+        case_id = client.post(
+            "/api/v1/chargeback/cases", json={"description": "客户下单后一直没收到货"}
+        ).json()["case_id"]
+        client.post(
+            f"/api/v1/chargeback/cases/{case_id}/evidence",
+            json={"evidence_code": "transaction.receipt"},
+        )
+        audit = client.get(f"/api/v1/chargeback/cases/{case_id}/audit").json()
+    assert audit["case_id"] == case_id
+    types = [e["event_type"] for e in audit["events"]]
+    assert types[0] == "CASE_OPENED"
+    assert "REASON_CLASSIFIED" in types
+    assert "EVIDENCE_ADDED" in types
+    seqs = [e["seq"] for e in audit["events"]]
+    assert seqs == sorted(seqs)  # ordered
+    assert all(e["occurred_at"] for e in audit["events"])
+
+
+def test_audit_unknown_case_is_safe_404(tmp_path):
+    with _client(tmp_path) as client:
+        resp = client.get("/api/v1/chargeback/cases/does-not-exist/audit")
+    assert resp.status_code == 404
+    assert resp.headers["content-type"].startswith("application/problem+json")

@@ -1,6 +1,7 @@
 from uuid import uuid4
 
 from oceanpilot.adapters.clock import SystemClock
+from oceanpilot.application.chargeback_ports import ChargebackAuditEvent
 from oceanpilot.application.chargeback_supervisor import ChargebackCaseState
 from oceanpilot.application.scheduling import Clock
 
@@ -28,3 +29,7 @@ class InMemoryChargebackCaseStore:
 
     def save(self, case_id: str, state: ChargebackCaseState) -> None:
         self._cases[case_id] = state
+
+    def audit_trail(self, case_id: str) -> tuple[ChargebackAuditEvent, ...]:
+        # The in-memory store keeps no audit trail; the durable store does.
+        return ()

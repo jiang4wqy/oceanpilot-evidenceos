@@ -20,7 +20,6 @@ across the API's request threads. All rows are synthetic-only.
 
 import sqlite3
 from collections.abc import Callable
-from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
@@ -31,6 +30,7 @@ from oceanpilot.adapters.persistence.chargeback_schema import (
     CHARGEBACK_SCHEMA_SQL,
 )
 from oceanpilot.adapters.persistence.sqlite import connect_sqlite, immediate_transaction
+from oceanpilot.application.chargeback_ports import ChargebackAuditEvent
 from oceanpilot.application.chargeback_supervisor import ChargebackCaseState
 from oceanpilot.application.errors import (
     CaseNotFound,
@@ -49,15 +49,6 @@ class ChargebackAuditEventType(StrEnum):
     REASON_CONFIRMED = "REASON_CONFIRMED"
     EVIDENCE_ADDED = "EVIDENCE_ADDED"
     COLLECTION_FINALIZED = "COLLECTION_FINALIZED"
-
-
-@dataclass(frozen=True, slots=True)
-class ChargebackAuditRecord:
-    seq: int
-    event_type: ChargebackAuditEventType
-    detail: str | None
-    case_revision: int
-    occurred_at: datetime
 
 
 def _default_clock() -> datetime:
@@ -214,8 +205,8 @@ class SqliteChargebackCaseStore:
     ) -> int:
         return self._save(case_id, state, expected_revision=expected_revision)
 
-    def audit_trail(self, case_id: str) -> tuple[ChargebackAuditRecord, ...]:
-        def operation() -> tuple[ChargebackAuditRecord, ...]:
+    def audit_trail(self, case_id: str) -> tuple[ChargebackAuditEvent, ...]:
+        def operation() -> tuple[ChargebackAuditEvent, ...]:
             connection = connect_sqlite(self._path)
             try:
                 rows = connection.execute(
@@ -230,9 +221,9 @@ class SqliteChargebackCaseStore:
             finally:
                 connection.close()
             return tuple(
-                ChargebackAuditRecord(
+                ChargebackAuditEvent(
                     seq=self._require_int(row["seq"]),
-                    event_type=ChargebackAuditEventType(self._require_text(row["event_type"])),
+                    event_type=self._require_text(row["event_type"]),
                     detail=(None if row["detail"] is None else self._require_text(row["detail"])),
                     case_revision=self._require_int(row["case_revision"]),
                     occurred_at=_decode_dt(row["occurred_at"]),

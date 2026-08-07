@@ -65,6 +65,23 @@ class ChargebackFactsDTO(BaseModel):
     summary: StrictStr | None = None
 
 
+class ChargebackAuditEventDTO(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    seq: StrictInt
+    event_type: StrictStr
+    detail: StrictStr | None = None
+    case_revision: StrictInt
+    occurred_at: StrictStr
+
+
+class ChargebackAuditResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    case_id: StrictStr
+    events: tuple[ChargebackAuditEventDTO, ...] = ()
+
+
 class ChargebackCaseResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
