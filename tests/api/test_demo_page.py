@@ -42,3 +42,12 @@ def test_demo_links_to_api_docs(tmp_path):
         body = client.get("/demo").text
     assert 'href="/docs"' in body
     assert 'href="/health"' in body
+
+
+def test_demo_has_scenarios_autorun_and_safety_panel(tmp_path):
+    with _client(tmp_path) as client:
+        body = client.get("/demo").text
+    assert "示例场景" in body  # one-click scenario picker
+    assert "自动补证" in body  # auto-run to assessment
+    assert "安全护栏" in body and "/safety/scan" in body  # visible PII guardrail
+    assert "如何评审" in body  # evaluator orientation

@@ -170,6 +170,10 @@ _DEMO_HTML = """<!doctype html>
     <button class="btn ghost" onclick="reset()">＋ 新建案件</button>
   </div>
 
+  <div class="howto">如何评审：① 选一个<b>示例场景</b>并点「自动补证跑到评估」一键跑完一个案子 ·
+    ② 看评估里的<b>来源</b>与<b>证据构成</b>验证「内核决策、模型仅解释」 ·
+    ③ 在右侧<b>安全护栏</b>提交一个卡号，看它被当场拦截。</div>
+
   <!-- pipeline -->
   <div class="pipe" id="pipe"></div>
 
@@ -207,6 +211,14 @@ _DEMO_HTML = """<!doctype html>
       </div>
 
       <div class="card">
+        <h2><span class="n">⛨</span> 安全护栏 · PII / 卡号</h2>
+        <textarea id="safeText" rows="2">请退款到卡号 4111 1111 1111 1111</textarea>
+        <div class="row mt"><button class="btn" onclick="safetyScan()">扫描</button>
+          <span class="muted">复用领域敏感数据守卫，不回显输入</span></div>
+        <div id="safeOut" class="mt"></div>
+      </div>
+
+      <div class="card">
         <h2><span class="n">⇄</span> 智能体决策轨迹</h2>
         <ul id="traceOut" class="trace"><li class="empty">—</li></ul>
       </div>
@@ -227,6 +239,12 @@ _DEMO_HTML = """<!doctype html>
 <script>
 const BASE="/api/v1/chargeback";
 const S={caseId:null, loc:"zh", packaged:false, appealed:false, last:null};
+const SCENARIOS=[
+  {label:"未收到货（可胜诉）",desc:"客户下单后一直没收到货，现在要求拒付。"},
+  {label:"无卡欺诈（需人工）",desc:"这笔交易不是我本人，是被盗刷的。"},
+  {label:"退款未入账",desc:"我已经申请退款，但一直没有退到账。"},
+  {label:"原因不明（需人工确认）",desc:"这是一段无法自动判定的中性描述内容。"},
+];
 const $=(id)=>document.getElementById(id);
 const esc=(s)=>String(s==null?"":s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
 async function api(m,p,b){const o={method:m,headers:{'Content-Type':'application/json'}};
@@ -278,6 +296,22 @@ async function confirmReason(){const v=$('fix')?$('fix').value:"";
   apply((await api("POST",`/cases/${S.caseId}/confirm`, v?{reason_code:v}:{})).data);}
 async function submitEvidence(code){apply((await api("POST",`/cases/${S.caseId}/evidence`,{evidence_code:code})).data);}
 async function finalize(){apply((await api("POST",`/cases/${S.caseId}/finalize`)).data);}
+function fillScenario(){const s=$('scenario');const d=$('desc');if(s&&d)d.value=SCENARIOS[+s.value].desc;}
+async function autoRun(){
+  if(!S.caseId){await openCase();}
+  let g=0;
+  while(S.last && S.last.phase!=="ASSESSED" && g++<40){
+    if(S.last.phase==="REASON_PROPOSED"){await confirmReason();}
+    else if(S.last.phase==="NEED_EVIDENCE"){await submitEvidence(S.last.next_evidence);}
+    else break;
+  }
+}
+async function safetyScan(){
+  const {ok,data}=await api("POST","/safety/scan",{text:$('safeText').value});
+  if(!ok){$('safeOut').innerHTML='<div class="badge b-bad">请求无效</div>';return;}
+  const badge=data.accepted?'<span class="badge b-ok">通过</span>':'<span class="badge b-bad">已拦截</span>';
+  $('safeOut').innerHTML=`${badge} <span class="muted">${esc(data.detail)}</span>`;
+}
 
 function apply(d){
   if(!d||!d.case_id)return; S.last=d;
@@ -301,9 +335,12 @@ function renderCaseHead(d){
 function renderAction(){
   const d=S.last;
   if(!S.caseId){
-    $('action').innerHTML=`<textarea id="desc" rows="2">客户下单后一直没收到货，现在要求拒付。</textarea>`
+    const opts=SCENARIOS.map((s,i)=>`<option value="${i}">${esc(s.label)}</option>`).join("");
+    $('action').innerHTML=`<div class="row" style="margin-bottom:8px"><span class="muted">示例场景</span>`
+      +`<select id="scenario" style="max-width:260px" onchange="fillScenario()">${opts}</select></div>`
+      +`<textarea id="desc" rows="2">${esc(SCENARIOS[0].desc)}</textarea>`
       +`<div class="row mt"><button class="btn" onclick="openCase()">建案 · 开始</button>`
-      +`<span class="muted">系统将判定争议原因并逐项补证</span></div>`;
+      +`<button class="btn ghost" onclick="autoRun()">⚡ 自动补证跑到评估</button></div>`;
     return;
   }
   const ph=d.phase;
@@ -317,6 +354,7 @@ function renderAction(){
     $('action').innerHTML=`<div class="badge b-info phase-pill">补证进行中</div>`
       +`<div class="mt" style="font-size:14px">${esc(d.question||"")}</div>`
       +`<div class="row mt"><button class="btn" onclick="submitEvidence('${esc(d.next_evidence)}')">我已提交该证据</button>`
+      +`<button class="btn ghost" onclick="autoRun()">⚡ 自动补齐剩余</button>`
       +`<button class="btn danger" onclick="finalize()">无法提供更多 · 转人工</button></div>`;
   } else if(ph==="ASSESSED"){
     $('action').innerHTML=`<div class="badge b-ok phase-pill">评估完成</div>`
