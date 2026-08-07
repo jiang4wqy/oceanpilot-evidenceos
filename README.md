@@ -90,6 +90,17 @@ API 只负责严格输入映射、状态码和安全错误；readiness、状态�
 - Web 演示面板（可视化全链路）：起服务后打开 `http://127.0.0.1:8000/demo`
 - 离线评测报告（分类准确率 + 胜诉率校准）：`python scripts/eval_chargeback.py`
 
+## Web 控制台 / Console
+
+![OceanPilot 拒付申诉控制台：侧栏 + 案件工作台 + 活动流；确定性内核判定的胜诉评估、逐项证据与决策来源](docs/assets/console.png)
+
+统一的单页控制台把整条拒付链串在一屏：判定 → 补证（带 SLA 时限）→ 胜诉评估（内核判定 + 逐项证据 + 决策来源）→ 打包 → 申诉（人工确认闸门）→ 审计轨迹 + 智能体轨迹；另含交易前预防与可见的 PII / 卡号安全护栏。自包含单页、纯 HTML + JS、离线可用、深/浅色自适应。
+
+- 服务启动后打开根路径 `/`（自动跳转到 `/demo`）。
+- Docker：`docker run --rm -p 8000:8000 oceanpilot-evidenceos`，浏览器开 `http://127.0.0.1:8000/demo`。
+- 远程服务器：SSH 端口转发 `ssh -L 8000:127.0.0.1:8000 <user>@<host>`，本地开 `http://localhost:8000/demo`。
+- 顶栏可切换中/英与深/浅色；「API 文档」指向 Swagger `/docs`。
+
 ## 开发者指南 / Developer guide
 
 **先读源码导航**：[`src/oceanpilot/README.md`](src/oceanpilot/README.md) 讲清六边形分层与唯一依赖规则,每层再各有一份 README：
