@@ -4,6 +4,8 @@ from fastapi import APIRouter, Depends, Request, status
 
 from oceanpilot.api.cases import COMMON_PROBLEMS, PROBLEM_RESPONSE
 from oceanpilot.api.chargeback_schemas import (
+    AppealRequest,
+    ChargebackAppealResponse,
     ChargebackAssessmentDTO,
     ChargebackAuditEventDTO,
     ChargebackAuditResponse,
@@ -11,16 +13,23 @@ from oceanpilot.api.chargeback_schemas import (
     ChargebackDeadlineDTO,
     ChargebackEvidenceItemDTO,
     ChargebackFactsDTO,
+    ChargebackPackageResponse,
     ConfirmReasonRequest,
     CreateChargebackRequest,
+    LabeledEvidenceDTO,
     SubmitEvidenceRequest,
 )
 from oceanpilot.application.channels import Delivery, InboundKind, NormalizedInbound
+from oceanpilot.application.chargeback_appeal import AppealAgent
 from oceanpilot.application.chargeback_channel_service import ChargebackChannelService
 from oceanpilot.application.chargeback_deadline import DeadlineTracker
+from oceanpilot.application.chargeback_packager import PackagerAgent, RepresentmentPackage
 from oceanpilot.application.chargeback_ports import ChargebackCaseStore
 from oceanpilot.application.chargeback_supervisor import ChargebackSupervisor
 from oceanpilot.application.errors import CaseNotFound
+from oceanpilot.domain.chargeback import ChargebackEvidenceCode
+from oceanpilot.domain.evidence_catalog import label_of
+from oceanpilot.domain.reason_catalog import reason_label
 
 router = APIRouter(prefix="/api/v1/chargeback")
 
@@ -40,6 +49,36 @@ def get_store(request: Request) -> ChargebackCaseStore:
 
 def get_deadline(request: Request) -> DeadlineTracker:
     return request.app.state.chargeback_deadline
+
+
+def get_packager(request: Request) -> PackagerAgent:
+    return request.app.state.chargeback_packager
+
+
+def get_appeal(request: Request) -> AppealAgent:
+    return request.app.state.chargeback_appeal
+
+
+def _labeled(codes: tuple[ChargebackEvidenceCode, ...]) -> tuple[LabeledEvidenceDTO, ...]:
+    return tuple(LabeledEvidenceDTO(code=c.value, label=label_of(c)) for c in codes)
+
+
+def _package_response(case_id: str, package: RepresentmentPackage) -> ChargebackPackageResponse:
+    return ChargebackPackageResponse(
+        case_id=case_id,
+        reason_code=package.reason_code.value,
+        reason_label=reason_label(package.reason_code),
+        bank_id=package.bank_id,
+        card_network=package.card_network,
+        rule_source=package.rule_source,
+        submission_window_days=package.submission_window_days,
+        completeness=str(package.completeness),
+        ready_to_submit=package.ready_to_submit,
+        ordered_evidence=_labeled(package.ordered_evidence),
+        missing_evidence=_labeled(package.missing_evidence),
+        cover_note=package.cover_note,
+        cover_note_source=package.cover_note_source.value,
+    )
 
 
 def get_channel_service(
@@ -186,6 +225,62 @@ def finalize_evidence(
         )
     )
     return _response(delivery)
+
+
+@router.get(
+    "/cases/{case_id}/package",
+    response_model=ChargebackPackageResponse,
+    responses={404: PROBLEM_RESPONSE, **COMMON_PROBLEMS},
+)
+def get_package(
+    case_id: str,
+    store: Annotated[ChargebackCaseStore, Depends(get_store)],
+    packager: Annotated[PackagerAgent, Depends(get_packager)],
+    bank_id: str | None = None,
+    card_network: str | None = None,
+) -> ChargebackPackageResponse:
+    state = store.load(case_id)
+    if state is None or state.reason_code is None:
+        raise CaseNotFound()
+    package = packager.build(
+        state.reason_code, state.collected, bank_id=bank_id, card_network=card_network
+    )
+    return _package_response(case_id, package)
+
+
+@router.post(
+    "/cases/{case_id}/appeal",
+    response_model=ChargebackAppealResponse,
+    responses={404: PROBLEM_RESPONSE, **COMMON_PROBLEMS},
+)
+def post_appeal(
+    case_id: str,
+    payload: AppealRequest,
+    store: Annotated[ChargebackCaseStore, Depends(get_store)],
+    packager: Annotated[PackagerAgent, Depends(get_packager)],
+    appeal: Annotated[AppealAgent, Depends(get_appeal)],
+) -> ChargebackAppealResponse:
+    state = store.load(case_id)
+    if state is None or state.reason_code is None:
+        raise CaseNotFound()
+    # AppealRequest already enforces actor_id when human_approved.
+    package = packager.build(
+        state.reason_code,
+        state.collected,
+        bank_id=payload.bank_id,
+        card_network=payload.card_network,
+    )
+    outcome = appeal.submit(
+        package, human_approved=payload.human_approved, actor_id=payload.actor_id or ""
+    )
+    return ChargebackAppealResponse(
+        draft=outcome.draft,
+        draft_source=outcome.draft_source.value,
+        submitted=outcome.submitted,
+        submission_id=outcome.submission_id,
+        status=outcome.status,
+        blocked_reason=outcome.blocked_reason.value if outcome.blocked_reason else None,
+    )
 
 
 @router.get(

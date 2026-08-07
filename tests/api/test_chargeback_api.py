@@ -194,3 +194,66 @@ def test_audit_unknown_case_is_safe_404(tmp_path):
         resp = client.get("/api/v1/chargeback/cases/does-not-exist/audit")
     assert resp.status_code == 404
     assert resp.headers["content-type"].startswith("application/problem+json")
+
+
+def _ready_case(client):
+    """Open a PRODUCT_NOT_RECEIVED case and submit its full checklist."""
+    from oceanpilot.domain.chargeback import DisputeReasonCode, required_evidence_for
+
+    body = client.post("/api/v1/chargeback/cases", json={"description": "没收到货，要拒付"}).json()
+    case_id = body["case_id"]
+    for code in required_evidence_for(DisputeReasonCode.PRODUCT_NOT_RECEIVED):
+        client.post(
+            f"/api/v1/chargeback/cases/{case_id}/evidence", json={"evidence_code": code.value}
+        )
+    return case_id
+
+
+def test_package_endpoint_returns_labeled_representment(tmp_path):
+    with _client(tmp_path) as client:
+        case_id = _ready_case(client)
+        pkg = client.get(f"/api/v1/chargeback/cases/{case_id}/package").json()
+    assert pkg["reason_label"]
+    assert pkg["ready_to_submit"] is True
+    assert pkg["ordered_evidence"]
+    first = pkg["ordered_evidence"][0]
+    assert set(first) == {"code", "label"}
+    assert first["label"] and "." in first["code"]
+
+
+def test_appeal_without_approval_is_blocked_and_never_submits(tmp_path):
+    with _client(tmp_path) as client:
+        case_id = _ready_case(client)
+        resp = client.post(f"/api/v1/chargeback/cases/{case_id}/appeal", json={})
+    body = resp.json()
+    assert resp.status_code == 200
+    assert body["submitted"] is False
+    assert body["blocked_reason"] == "NOT_APPROVED"
+    assert body["draft"]
+
+
+def test_appeal_with_human_approval_submits_once(tmp_path):
+    with _client(tmp_path) as client:
+        case_id = _ready_case(client)
+        body = client.post(
+            f"/api/v1/chargeback/cases/{case_id}/appeal",
+            json={"human_approved": True, "actor_id": "ou_reviewer"},
+        ).json()
+    assert body["submitted"] is True
+    assert body["blocked_reason"] is None
+    assert body["submission_id"]
+
+
+def test_appeal_approval_requires_actor(tmp_path):
+    with _client(tmp_path) as client:
+        case_id = _ready_case(client)
+        resp = client.post(
+            f"/api/v1/chargeback/cases/{case_id}/appeal", json={"human_approved": True}
+        )
+    assert resp.status_code == 422
+
+
+def test_package_unknown_case_is_safe_404(tmp_path):
+    with _client(tmp_path) as client:
+        resp = client.get("/api/v1/chargeback/cases/nope/package")
+    assert resp.status_code == 404

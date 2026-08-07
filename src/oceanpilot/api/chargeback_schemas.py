@@ -1,6 +1,14 @@
 from typing import Annotated
 
-from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictInt, StrictStr
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    StrictBool,
+    StrictInt,
+    StrictStr,
+    model_validator,
+)
 
 from oceanpilot.domain.chargeback import ChargebackEvidenceCode, DisputeReasonCode
 
@@ -80,6 +88,55 @@ class ChargebackAuditResponse(BaseModel):
 
     case_id: StrictStr
     events: tuple[ChargebackAuditEventDTO, ...] = ()
+
+
+class LabeledEvidenceDTO(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    code: StrictStr
+    label: StrictStr
+
+
+class ChargebackPackageResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    case_id: StrictStr
+    reason_code: StrictStr
+    reason_label: StrictStr
+    bank_id: StrictStr | None = None
+    card_network: StrictStr | None = None
+    rule_source: StrictStr
+    submission_window_days: StrictInt
+    completeness: StrictStr
+    ready_to_submit: StrictBool
+    ordered_evidence: tuple[LabeledEvidenceDTO, ...] = ()
+    missing_evidence: tuple[LabeledEvidenceDTO, ...] = ()
+    cover_note: StrictStr
+    cover_note_source: StrictStr
+
+
+class AppealRequest(_StrictRequest):
+    bank_id: StrictStr | None = None
+    card_network: StrictStr | None = None
+    human_approved: StrictBool = False
+    actor_id: StrictStr | None = None
+
+    @model_validator(mode="after")
+    def _actor_required_when_approved(self) -> "AppealRequest":
+        if self.human_approved and not (self.actor_id and self.actor_id.strip()):
+            raise ValueError("actor_id is required when human_approved is true")
+        return self
+
+
+class ChargebackAppealResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    draft: StrictStr
+    draft_source: StrictStr
+    submitted: StrictBool
+    submission_id: StrictStr | None = None
+    status: StrictStr | None = None
+    blocked_reason: StrictStr | None = None
 
 
 class ChargebackCaseResponse(BaseModel):

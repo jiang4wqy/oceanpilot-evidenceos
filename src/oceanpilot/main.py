@@ -17,6 +17,7 @@ from oceanpilot.adapters.feishu.client import (
 )
 from oceanpilot.adapters.feishu.security import FeishuRequestVerifier
 from oceanpilot.adapters.feishu.store import FeishuCallbackStoreFactory
+from oceanpilot.adapters.knowledge.bank_rules import InMemoryBankRules
 from oceanpilot.adapters.model.composition import build_chargeback_model_provider
 from oceanpilot.adapters.model.fake import ScriptedModelProvider
 from oceanpilot.adapters.persistence.chargeback_sqlite import (
@@ -27,6 +28,7 @@ from oceanpilot.adapters.persistence.sqlite import (
     SqliteCaseStoreFactory,
     initialize_schema,
 )
+from oceanpilot.adapters.upstream.mock import MockUpstreamConnector
 from oceanpilot.api.cases import router as cases_router
 from oceanpilot.api.chargeback import router as chargeback_router
 from oceanpilot.api.dependencies import RequestContext
@@ -39,7 +41,9 @@ from oceanpilot.application.chargeback_agents import (
     EvidenceAgent,
     IntakeAgent,
 )
+from oceanpilot.application.chargeback_appeal import AppealAgent
 from oceanpilot.application.chargeback_deadline import DeadlineTracker
+from oceanpilot.application.chargeback_packager import PackagerAgent
 from oceanpilot.application.chargeback_supervisor import ChargebackSupervisor
 from oceanpilot.application.feishu_orchestrator import FeishuOrchestrator
 from oceanpilot.application.model_provider import ModelProvider
@@ -130,6 +134,10 @@ def create_app(
     )
     # SLA / evidence-window deadline tracker, surfaced on every delivery.
     application.state.chargeback_deadline = DeadlineTracker(SystemClock())
+    # Representment packaging + appeal drafting (appeal submits only behind a
+    # human-approval gate; the upstream connector is a synthetic mock).
+    application.state.chargeback_packager = PackagerAgent(chargeback_provider, InMemoryBankRules())
+    application.state.chargeback_appeal = AppealAgent(chargeback_provider, MockUpstreamConnector())
 
     if resolved.feishu is not None:
         _configure_feishu(application, resolved.feishu, case_service, feishu_transport)
