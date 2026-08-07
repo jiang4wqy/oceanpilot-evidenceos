@@ -6,6 +6,7 @@ from oceanpilot.api.cases import COMMON_PROBLEMS, PROBLEM_RESPONSE
 from oceanpilot.api.chargeback_schemas import (
     ChargebackAssessmentDTO,
     ChargebackCaseResponse,
+    ConfirmReasonRequest,
     CreateChargebackRequest,
     SubmitEvidenceRequest,
 )
@@ -53,6 +54,7 @@ def _response(delivery: Delivery) -> ChargebackCaseResponse:
         case_id=delivery.case_id,
         phase=delivery.phase,
         reason_code=delivery.reason_code,
+        reason_confirmed=delivery.reason_confirmed,
         collected=delivery.collected,
         next_evidence=delivery.next_evidence,
         question=delivery.question,
@@ -76,6 +78,27 @@ def create_case(
             kind=InboundKind.OPEN_CASE,
             channel=_CHANNEL,
             description=payload.description,
+        )
+    )
+    return _response(delivery)
+
+
+@router.post(
+    "/cases/{case_id}/confirm",
+    response_model=ChargebackCaseResponse,
+    responses={404: PROBLEM_RESPONSE, **COMMON_PROBLEMS},
+)
+def confirm_reason(
+    case_id: str,
+    payload: ConfirmReasonRequest,
+    service: Annotated[ChargebackChannelService, Depends(get_channel_service)],
+) -> ChargebackCaseResponse:
+    delivery = service.handle(
+        NormalizedInbound(
+            kind=InboundKind.CONFIRM_REASON,
+            channel=_CHANNEL,
+            case_id=case_id,
+            reason_code=payload.reason_code.value if payload.reason_code else None,
         )
     )
     return _response(delivery)

@@ -46,6 +46,7 @@ _TIMESTAMP_FORMAT = "%Y-%m-%dT%H:%M:%S.%fZ"
 class ChargebackAuditEventType(StrEnum):
     CASE_OPENED = "CASE_OPENED"
     REASON_CLASSIFIED = "REASON_CLASSIFIED"
+    REASON_CONFIRMED = "REASON_CONFIRMED"
     EVIDENCE_ADDED = "EVIDENCE_ADDED"
 
 
@@ -257,13 +258,17 @@ class SqliteChargebackCaseStore:
         incoming_codes = frozenset(state.collected)
         if any(not isinstance(code, ChargebackEvidenceCode) for code in incoming_codes):
             raise PersistenceInvariantViolation()
+        incoming_confirmed = bool(state.reason_confirmed)
 
         def operation() -> int:
             connection = connect_sqlite(self._path)
             try:
                 with immediate_transaction(connection):
                     row = connection.execute(
-                        "SELECT reason_code, revision FROM chargeback_cases WHERE case_id = ?",
+                        """
+                        SELECT reason_code, reason_confirmed, revision
+                        FROM chargeback_cases WHERE case_id = ?
+                        """,
                         (case_id,),
                     ).fetchone()
                     if row is None:
@@ -274,6 +279,7 @@ class SqliteChargebackCaseStore:
                         if row["reason_code"] is not None
                         else None
                     )
+                    current_confirmed = bool(self._require_int(row["reason_confirmed"]))
                     if expected_revision is not None and current_revision != expected_revision:
                         raise ConcurrentCaseWrite()
 
@@ -284,28 +290,40 @@ class SqliteChargebackCaseStore:
                             (case_id,),
                         )
                     )
-                    # Evidence is append-only; reason is immutable once assigned.
+                    # Evidence is append-only.
                     if not stored_codes.issubset(incoming_codes):
                         raise PersistenceInvariantViolation()
-                    if current_reason is not None and incoming_reason != current_reason:
+                    # A reason, once set, is never unset; once *confirmed* it is
+                    # immutable. Before confirmation it may still be corrected.
+                    if current_reason is not None:
+                        if incoming_reason is None:
+                            raise PersistenceInvariantViolation()
+                        if current_confirmed and incoming_reason != current_reason:
+                            raise PersistenceInvariantViolation()
+                    # Confirmation is a one-way latch — it cannot be revoked.
+                    if current_confirmed and not incoming_confirmed:
                         raise PersistenceInvariantViolation()
 
-                    reason_changed = incoming_reason is not None and current_reason is None
+                    reason_changed = (
+                        incoming_reason is not None and incoming_reason != current_reason
+                    )
+                    confirmed_now = incoming_confirmed and not current_confirmed
                     new_codes = tuple(
                         sorted(incoming_codes - stored_codes, key=lambda code: code.value)
                     )
-                    if not reason_changed and not new_codes:
+                    if not reason_changed and not confirmed_now and not new_codes:
                         return current_revision  # idempotent replay
 
                     new_revision = current_revision + 1
                     cursor = connection.execute(
                         """
                         UPDATE chargeback_cases
-                        SET reason_code = ?, revision = ?, updated_at = ?
+                        SET reason_code = ?, reason_confirmed = ?, revision = ?, updated_at = ?
                         WHERE case_id = ? AND revision = ?
                         """,
                         (
                             incoming_reason.value if incoming_reason is not None else None,
+                            1 if incoming_confirmed else 0,
                             new_revision,
                             _encode_dt(self._clock()),
                             case_id,
@@ -322,7 +340,18 @@ class SqliteChargebackCaseStore:
                             case_id=case_id,
                             seq=seq,
                             event_type=ChargebackAuditEventType.REASON_CLASSIFIED,
-                            detail=incoming_reason.value,
+                            detail=incoming_reason.value if incoming_reason is not None else None,
+                            case_revision=new_revision,
+                            moment=self._clock(),
+                        )
+                        seq += 1
+                    if confirmed_now:
+                        self._insert_audit(
+                            connection,
+                            case_id=case_id,
+                            seq=seq,
+                            event_type=ChargebackAuditEventType.REASON_CONFIRMED,
+                            detail=incoming_reason.value if incoming_reason is not None else None,
                             case_revision=new_revision,
                             moment=self._clock(),
                         )
@@ -361,7 +390,10 @@ class SqliteChargebackCaseStore:
         case_id: str,
     ) -> tuple[ChargebackCaseState, int] | None:
         row = connection.execute(
-            "SELECT reason_code, revision FROM chargeback_cases WHERE case_id = ?",
+            """
+            SELECT reason_code, reason_confirmed, revision
+            FROM chargeback_cases WHERE case_id = ?
+            """,
             (case_id,),
         ).fetchone()
         if row is None:
@@ -378,7 +410,11 @@ class SqliteChargebackCaseStore:
                 (case_id,),
             )
         }
-        state = ChargebackCaseState(reason_code=reason, collected=codes)
+        state = ChargebackCaseState(
+            reason_code=reason,
+            collected=codes,
+            reason_confirmed=bool(self._require_int(row["reason_confirmed"])),
+        )
         return state, self._require_int(row["revision"])
 
     def _next_seq(self, connection: sqlite3.Connection, case_id: str) -> int:

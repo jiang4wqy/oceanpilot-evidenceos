@@ -73,3 +73,45 @@ def test_invalid_evidence_code_is_rejected(tmp_path):
             json={"evidence_code": "not-a-real-code"},
         )
     assert resp.status_code == 422
+
+
+def test_unconfident_case_requires_confirmation_then_proceeds(tmp_path):
+    with _client(tmp_path) as client:
+        created = client.post(
+            "/api/v1/chargeback/cases", json={"description": "这是一段用于测试的中性内容"}
+        ).json()
+        assert created["phase"] == "REASON_PROPOSED"
+        assert created["reason_confirmed"] is False
+        assert created["question"]
+        case_id = created["case_id"]
+
+        confirmed = client.post(f"/api/v1/chargeback/cases/{case_id}/confirm", json={}).json()
+    assert confirmed["reason_confirmed"] is True
+    assert confirmed["phase"] == "NEED_EVIDENCE"
+
+
+def test_confirm_can_correct_the_reason(tmp_path):
+    with _client(tmp_path) as client:
+        case_id = client.post(
+            "/api/v1/chargeback/cases", json={"description": "这是一段用于测试的中性内容"}
+        ).json()["case_id"]
+        resp = client.post(
+            f"/api/v1/chargeback/cases/{case_id}/confirm",
+            json={"reason_code": DisputeReasonCode.FRAUD_CARD_NOT_PRESENT.value},
+        )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["reason_code"] == DisputeReasonCode.FRAUD_CARD_NOT_PRESENT.value
+    assert body["reason_confirmed"] is True
+
+
+def test_confirm_rejects_unknown_reason(tmp_path):
+    with _client(tmp_path) as client:
+        case_id = client.post(
+            "/api/v1/chargeback/cases", json={"description": "这是一段用于测试的中性内容"}
+        ).json()["case_id"]
+        resp = client.post(
+            f"/api/v1/chargeback/cases/{case_id}/confirm",
+            json={"reason_code": "NOT_A_REASON"},
+        )
+    assert resp.status_code == 422

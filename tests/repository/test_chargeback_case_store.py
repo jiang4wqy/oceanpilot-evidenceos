@@ -159,18 +159,76 @@ def test_evidence_is_append_only(store: SqliteChargebackCaseStore) -> None:
     assert reloaded.collected == {CODE_A}
 
 
-def test_reason_is_immutable_once_set(store: SqliteChargebackCaseStore) -> None:
+def test_reason_is_immutable_once_confirmed(store: SqliteChargebackCaseStore) -> None:
     case_id = store.create()
-    _reason_state(store, case_id)
+    state = store.load(case_id)
+    assert state is not None
+    state.reason_code = REASON
+    state.reason_confirmed = True
+    store.save(case_id, state)  # reason set and confirmed
+
     reclassified = ChargebackCaseState(
         reason_code=DisputeReasonCode.FRAUD_CARD_NOT_PRESENT,
         collected=set(),
+        reason_confirmed=True,
     )
     with pytest.raises(PersistenceInvariantViolation):
         store.save(case_id, reclassified)
     reloaded = store.load(case_id)
     assert reloaded is not None
     assert reloaded.reason_code is REASON
+    assert reloaded.reason_confirmed is True
+
+
+def test_reason_can_be_corrected_before_confirmation(store: SqliteChargebackCaseStore) -> None:
+    case_id = store.create()
+    _reason_state(store, case_id)  # proposes REASON, not yet confirmed
+
+    # A human corrects the proposed reason and confirms the corrected one.
+    corrected = ChargebackCaseState(
+        reason_code=DisputeReasonCode.FRAUD_CARD_NOT_PRESENT,
+        collected=set(),
+        reason_confirmed=True,
+    )
+    store.save(case_id, corrected)
+    reloaded = store.load(case_id)
+    assert reloaded is not None
+    assert reloaded.reason_code is DisputeReasonCode.FRAUD_CARD_NOT_PRESENT
+    assert reloaded.reason_confirmed is True
+    trail = [event.event_type for event in store.audit_trail(case_id)]
+    assert ChargebackAuditEventType.REASON_CONFIRMED in trail
+
+
+def test_confirmation_persists_and_is_audited(store: SqliteChargebackCaseStore) -> None:
+    case_id = store.create()
+    _reason_state(store, case_id)  # proposed, unconfirmed
+    proposed = store.load(case_id)
+    assert proposed is not None
+    assert proposed.reason_confirmed is False
+
+    proposed.reason_confirmed = True
+    store.save(case_id, proposed)  # confirm-only change
+    confirmed = store.load(case_id)
+    assert confirmed is not None
+    assert confirmed.reason_confirmed is True
+    assert [event.event_type for event in store.audit_trail(case_id)] == [
+        ChargebackAuditEventType.CASE_OPENED,
+        ChargebackAuditEventType.REASON_CLASSIFIED,
+        ChargebackAuditEventType.REASON_CONFIRMED,
+    ]
+
+
+def test_confirmation_cannot_be_revoked(store: SqliteChargebackCaseStore) -> None:
+    case_id = store.create()
+    state = store.load(case_id)
+    assert state is not None
+    state.reason_code = REASON
+    state.reason_confirmed = True
+    store.save(case_id, state)
+
+    revoked = ChargebackCaseState(reason_code=REASON, collected=set(), reason_confirmed=False)
+    with pytest.raises(PersistenceInvariantViolation):
+        store.save(case_id, revoked)
 
 
 def test_failed_write_rolls_back_atomically(cb_path: Path) -> None:

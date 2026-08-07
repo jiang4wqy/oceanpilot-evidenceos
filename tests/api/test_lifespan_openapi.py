@@ -28,6 +28,7 @@ def test_openapi_freezes_paths_replay_and_problem_contract(tmp_path):
         "/api/v1/integrations/feishu/card-actions",
         "/api/v1/chargeback/cases",
         "/api/v1/chargeback/cases/{case_id}",
+        "/api/v1/chargeback/cases/{case_id}/confirm",
         "/api/v1/chargeback/cases/{case_id}/evidence",
     }
     diagnose = document["paths"]["/api/v1/cases/{case_id}/diagnose"]["post"]

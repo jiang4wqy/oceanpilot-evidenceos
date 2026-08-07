@@ -2,7 +2,7 @@ from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictStr
 
-from oceanpilot.domain.chargeback import ChargebackEvidenceCode
+from oceanpilot.domain.chargeback import ChargebackEvidenceCode, DisputeReasonCode
 
 
 class _StrictRequest(BaseModel):
@@ -17,6 +17,11 @@ class CreateChargebackRequest(_StrictRequest):
 
 class SubmitEvidenceRequest(_StrictRequest):
     evidence_code: ChargebackEvidenceCode
+
+
+class ConfirmReasonRequest(_StrictRequest):
+    # Optional correction; when omitted the human confirms the proposed reason.
+    reason_code: DisputeReasonCode | None = None
 
 
 class ChargebackAssessmentDTO(BaseModel):
@@ -36,6 +41,7 @@ class ChargebackCaseResponse(BaseModel):
     case_id: StrictStr
     phase: StrictStr
     reason_code: StrictStr | None = None
+    reason_confirmed: StrictBool = False
     collected: tuple[StrictStr, ...] = ()
     next_evidence: StrictStr | None = None
     question: StrictStr | None = None

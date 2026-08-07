@@ -17,6 +17,7 @@ from oceanpilot.application.errors import InvalidInbound
 
 _ACTIONS = {
     "open_case": InboundKind.OPEN_CASE,
+    "confirm_reason": InboundKind.CONFIRM_REASON,
     "submit_evidence": InboundKind.SUBMIT_EVIDENCE,
     "get_case": InboundKind.GET_CASE,
 }
@@ -40,6 +41,7 @@ class HttpChannel:
             case_id=_text_or_none(raw, "case_id"),
             description=_text_or_none(raw, "description"),
             evidence_code=_text_or_none(raw, "evidence_code"),
+            reason_code=_text_or_none(raw, "reason_code"),
             actor=_text_or_none(raw, "actor"),
         )
 
@@ -60,6 +62,7 @@ class HttpChannel:
             "case_id": delivery.case_id,
             "phase": delivery.phase,
             "reason_code": delivery.reason_code,
+            "reason_confirmed": delivery.reason_confirmed,
             "collected": list(delivery.collected),
             "next_evidence": delivery.next_evidence,
             "question": delivery.question,

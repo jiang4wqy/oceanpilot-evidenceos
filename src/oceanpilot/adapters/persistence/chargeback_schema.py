@@ -9,6 +9,7 @@ CHARGEBACK_SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS chargeback_cases (
     case_id TEXT NOT NULL PRIMARY KEY,
     reason_code TEXT,
+    reason_confirmed INTEGER NOT NULL DEFAULT 0 CHECK (reason_confirmed IN (0, 1)),
     revision INTEGER NOT NULL CHECK (revision >= 0),
     synthetic INTEGER NOT NULL CHECK (synthetic = 1),
     created_at TEXT NOT NULL,
@@ -29,7 +30,7 @@ CREATE TABLE IF NOT EXISTS chargeback_audit (
     case_id TEXT NOT NULL,
     seq INTEGER NOT NULL CHECK (seq >= 0),
     event_type TEXT NOT NULL CHECK (
-        event_type IN ('CASE_OPENED','REASON_CLASSIFIED','EVIDENCE_ADDED')
+        event_type IN ('CASE_OPENED','REASON_CLASSIFIED','REASON_CONFIRMED','EVIDENCE_ADDED')
     ),
     detail TEXT,
     case_revision INTEGER NOT NULL CHECK (case_revision >= 0),

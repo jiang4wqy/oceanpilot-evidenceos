@@ -318,6 +318,7 @@ def test_openapi_has_exact_foundation_paths(app: FastAPI):
         "/api/v1/integrations/feishu/card-actions",
         "/api/v1/chargeback/cases",
         "/api/v1/chargeback/cases/{case_id}",
+        "/api/v1/chargeback/cases/{case_id}/confirm",
         "/api/v1/chargeback/cases/{case_id}/evidence",
     }
     assert {path: set(item) for path, item in paths.items()} == {
@@ -330,5 +331,6 @@ def test_openapi_has_exact_foundation_paths(app: FastAPI):
         "/api/v1/integrations/feishu/card-actions": {"post"},
         "/api/v1/chargeback/cases": {"post"},
         "/api/v1/chargeback/cases/{case_id}": {"get"},
+        "/api/v1/chargeback/cases/{case_id}/confirm": {"post"},
         "/api/v1/chargeback/cases/{case_id}/evidence": {"post"},
     }

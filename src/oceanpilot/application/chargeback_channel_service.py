@@ -21,7 +21,8 @@ from oceanpilot.application.chargeback_supervisor import (
     SupervisorStep,
 )
 from oceanpilot.application.errors import CaseNotFound, InvalidInbound
-from oceanpilot.domain.chargeback import ChargebackEvidenceCode
+from oceanpilot.domain.chargeback import ChargebackEvidenceCode, DisputeReasonCode
+from oceanpilot.domain.reason_catalog import confirm_prompt
 
 
 def _delivery(case_id: str, state: ChargebackCaseState, step: SupervisorStep) -> Delivery:
@@ -30,7 +31,10 @@ def _delivery(case_id: str, state: ChargebackCaseState, step: SupervisorStep) ->
     missing: tuple[str, ...] | None = None
     assessment: DeliveryAssessment | None = None
 
-    if step.phase is SupervisorPhase.NEED_EVIDENCE and step.evidence_request is not None:
+    if step.phase is SupervisorPhase.REASON_PROPOSED and state.reason_code is not None:
+        # Ask the human to confirm/correct the proposed reason before proceeding.
+        question = confirm_prompt(state.reason_code, confident=state.reason_confident)
+    elif step.phase is SupervisorPhase.NEED_EVIDENCE and step.evidence_request is not None:
         request = step.evidence_request
         next_evidence = request.next_evidence.value if request.next_evidence else None
         question = request.question
@@ -51,6 +55,7 @@ def _delivery(case_id: str, state: ChargebackCaseState, step: SupervisorStep) ->
         case_id=case_id,
         phase=step.phase.value,
         reason_code=state.reason_code.value if state.reason_code else None,
+        reason_confirmed=state.reason_confirmed,
         collected=tuple(sorted(code.value for code in state.collected)),
         next_evidence=next_evidence,
         question=question,
@@ -71,6 +76,8 @@ class ChargebackChannelService:
     def handle(self, inbound: NormalizedInbound) -> Delivery:
         if inbound.kind is InboundKind.OPEN_CASE:
             return self._open_case(inbound)
+        if inbound.kind is InboundKind.CONFIRM_REASON:
+            return self._confirm_reason(inbound)
         if inbound.kind is InboundKind.SUBMIT_EVIDENCE:
             return self._submit_evidence(inbound)
         if inbound.kind is InboundKind.GET_CASE:
@@ -85,6 +92,20 @@ class ChargebackChannelService:
         self._supervisor.intake(state, inbound.description)
         self._store.save(case_id, state)
         return _delivery(case_id, state, self._supervisor.advance(state))
+
+    def _confirm_reason(self, inbound: NormalizedInbound) -> Delivery:
+        if not inbound.case_id:
+            raise InvalidInbound()
+        corrected: DisputeReasonCode | None = None
+        if inbound.reason_code is not None:
+            try:
+                corrected = DisputeReasonCode(inbound.reason_code)
+            except ValueError:
+                raise InvalidInbound() from None
+        state = self._require_state(inbound.case_id)
+        self._supervisor.confirm_reason(state, corrected)
+        self._store.save(inbound.case_id, state)
+        return _delivery(inbound.case_id, state, self._supervisor.advance(state))
 
     def _submit_evidence(self, inbound: NormalizedInbound) -> Delivery:
         if not inbound.case_id or not inbound.evidence_code:

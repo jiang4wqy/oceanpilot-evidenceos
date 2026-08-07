@@ -1,3 +1,5 @@
+import json
+
 import pytest
 
 from oceanpilot.adapters.channels.feishu.channel import FeishuChannel
@@ -236,3 +238,71 @@ def test_feishu_channel_renders_need_evidence_card_with_action_button():
         "case_id": "c1",
         "evidence_code": "fulfillment.tracking",
     }
+
+
+# --- reason confirmation flow (P0-3) ---------------------------------------
+
+_UNCLEAR = "这是一段用于测试的中性内容"
+
+
+def _open_unclear(service: ChargebackChannelService, channel: str = "test") -> Delivery:
+    return service.handle(
+        NormalizedInbound(kind=InboundKind.OPEN_CASE, channel=channel, description=_UNCLEAR)
+    )
+
+
+def test_unconfident_open_case_asks_to_confirm_reason():
+    delivery = _open_unclear(_service())
+    assert delivery.phase == "REASON_PROPOSED"
+    assert delivery.reason_confirmed is False
+    assert delivery.reason_code is not None
+    assert delivery.question  # a confirm prompt is shown
+    assert delivery.next_evidence is None
+
+
+def test_confirming_reason_advances_to_evidence():
+    service = _service()
+    opened = _open_unclear(service)
+    confirmed = service.handle(
+        NormalizedInbound(kind=InboundKind.CONFIRM_REASON, channel="test", case_id=opened.case_id)
+    )
+    assert confirmed.reason_confirmed is True
+    assert confirmed.phase == "NEED_EVIDENCE"
+
+
+def test_confirming_with_a_correction_changes_the_reason():
+    service = _service()
+    opened = _open_unclear(service)
+    confirmed = service.handle(
+        NormalizedInbound(
+            kind=InboundKind.CONFIRM_REASON,
+            channel="test",
+            case_id=opened.case_id,
+            reason_code=DisputeReasonCode.FRAUD_CARD_NOT_PRESENT.value,
+        )
+    )
+    assert confirmed.reason_code == DisputeReasonCode.FRAUD_CARD_NOT_PRESENT.value
+    assert confirmed.reason_confirmed is True
+    assert confirmed.phase == "NEED_EVIDENCE"
+
+
+def test_confirm_with_unknown_reason_is_rejected():
+    service = _service()
+    opened = _open_unclear(service)
+    with pytest.raises(InvalidInbound):
+        service.handle(
+            NormalizedInbound(
+                kind=InboundKind.CONFIRM_REASON,
+                channel="test",
+                case_id=opened.case_id,
+                reason_code="NOT_A_REASON",
+            )
+        )
+
+
+def test_feishu_renders_a_confirm_button_for_reason_proposed():
+    opened = _open_unclear(_service(), channel="feishu")
+    card = FeishuChannel().render(opened)
+    serialized = json.dumps(card, ensure_ascii=False)
+    assert "confirm_reason" in serialized
+    assert "确认该原因" in serialized

@@ -19,12 +19,25 @@ from oceanpilot.application.channels import (
     NormalizedInbound,
 )
 from oceanpilot.application.errors import InvalidInbound
+from oceanpilot.domain.chargeback import DisputeReasonCode
+from oceanpilot.domain.reason_catalog import reason_label
 
 _ACTIONS = {
     "open_case": InboundKind.OPEN_CASE,
+    "confirm_reason": InboundKind.CONFIRM_REASON,
     "submit_evidence": InboundKind.SUBMIT_EVIDENCE,
     "get_case": InboundKind.GET_CASE,
 }
+
+
+def _reason_display(code_value: str | None) -> str | None:
+    """Human label for a reason code value; falls back to the raw value."""
+    if code_value is None:
+        return None
+    try:
+        return reason_label(DisputeReasonCode(code_value))
+    except (ValueError, TypeError):
+        return code_value
 
 
 def _text(value: object) -> str | None:
@@ -61,6 +74,7 @@ class FeishuChannel:
             case_id=_text(value.get("case_id")),
             description=_text(value.get("description")),
             evidence_code=_text(value.get("evidence_code")),
+            reason_code=_text(value.get("reason_code")),
             actor=_text(value.get("actor")),
         )
 
@@ -101,11 +115,32 @@ class FeishuChannel:
             _field(f"**状态**：{delivery.phase}"),
         ]
         if delivery.reason_code is not None:
-            elements.append(_field(f"**争议原因**：{delivery.reason_code}"))
+            confirmed_mark = "已确认" if delivery.reason_confirmed else "待确认"
+            reason_text = _reason_display(delivery.reason_code)
+            elements.append(_field(f"**争议原因**：{reason_text}（{confirmed_mark}）"))
         if delivery.collected:
             elements.append(_field("**已收集**：" + "、".join(delivery.collected)))
 
-        if delivery.phase == "NEED_EVIDENCE" and delivery.next_evidence is not None:
+        if delivery.phase == "REASON_PROPOSED":
+            if delivery.question:
+                elements.append(_field(delivery.question))
+            elements.append(
+                {
+                    "tag": "action",
+                    "actions": [
+                        {
+                            "tag": "button",
+                            "text": {"tag": "plain_text", "content": "确认该原因"},
+                            "type": "primary",
+                            "value": {
+                                "action": "confirm_reason",
+                                "case_id": delivery.case_id,
+                            },
+                        }
+                    ],
+                }
+            )
+        elif delivery.phase == "NEED_EVIDENCE" and delivery.next_evidence is not None:
             if delivery.question:
                 elements.append(_field(delivery.question))
             elements.append(

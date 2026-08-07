@@ -23,6 +23,7 @@ from typing import Protocol, runtime_checkable
 
 class InboundKind(StrEnum):
     OPEN_CASE = "OPEN_CASE"
+    CONFIRM_REASON = "CONFIRM_REASON"
     SUBMIT_EVIDENCE = "SUBMIT_EVIDENCE"
     GET_CASE = "GET_CASE"
 
@@ -34,6 +35,9 @@ class NormalizedInbound:
     case_id: str | None = None
     description: str | None = None
     evidence_code: str | None = None
+    # Optional reason correction supplied with a CONFIRM_REASON action; when
+    # absent, the human is confirming the reason the kernel proposed.
+    reason_code: str | None = None
     actor: str | None = None
 
 
@@ -52,6 +56,7 @@ class Delivery:
     case_id: str
     phase: str
     reason_code: str | None = None
+    reason_confirmed: bool = False
     collected: tuple[str, ...] = ()
     next_evidence: str | None = None
     question: str | None = None
