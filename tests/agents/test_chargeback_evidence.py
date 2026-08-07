@@ -5,6 +5,7 @@ from oceanpilot.domain.chargeback import (
     DisputeReasonCode,
     required_evidence_for,
 )
+from oceanpilot.domain.evidence_catalog import label_of
 
 _REASON = DisputeReasonCode.PRODUCT_NOT_RECEIVED
 
@@ -32,4 +33,6 @@ def test_model_failure_falls_back_to_deterministic_question():
     request = agent.next_request(_REASON, [])
     assert request.complete is False
     assert request.question_source is ExplanationSource.FALLBACK
-    assert request.next_evidence.value in request.question
+    # The fallback speaks plain language and never leaks the raw code token.
+    assert label_of(request.next_evidence) in request.question
+    assert request.next_evidence.value not in request.question

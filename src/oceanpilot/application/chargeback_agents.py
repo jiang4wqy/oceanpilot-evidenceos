@@ -33,6 +33,7 @@ from oceanpilot.domain.chargeback_prevention import (
     PreventionSignals,
     assess_chargeback_risk,
 )
+from oceanpilot.domain.evidence_catalog import describe, request_sentence
 
 _ASSESS_SYSTEM = (
     "You explain a cross-border chargeback representment assessment to an "
@@ -270,14 +271,17 @@ class EvidenceRequest:
 
 
 _EVIDENCE_SYSTEM = (
-    "You ask a merchant, in one concise Chinese sentence, to provide exactly "
-    "one specified piece of chargeback evidence. Ask only for the given "
-    "evidence code; do not invent new requirements. Synthetic data."
+    "You ask a merchant, in one or two concise Chinese sentences, to provide "
+    "exactly one specified piece of chargeback evidence. You are given the "
+    "evidence's human label, what it is, why it matters, and acceptable "
+    "examples — use them so the merchant understands what to send and why. Ask "
+    "only for the given evidence; never show the raw evidence_code token and "
+    "never invent new requirements. Synthetic data."
 )
 
 
 def _fallback_question(code: ChargebackEvidenceCode, remaining: int) -> str:
-    return f"请补充证据：{code.value}（还差 {remaining} 项）。"
+    return request_sentence(code, remaining)
 
 
 class EvidenceAgent:
@@ -328,9 +332,14 @@ class EvidenceAgent:
         code: ChargebackEvidenceCode,
         remaining: int,
     ) -> tuple[str, ExplanationSource]:
+        display = describe(code)
         prompt = (
             f"reason_code={reason_code.value}\n"
             f"evidence_code={code.value}\n"
+            f"evidence_label={display.label}\n"
+            f"evidence_description={display.description}\n"
+            f"why_it_matters={display.why}\n"
+            f"examples={', '.join(display.examples)}\n"
             f"remaining_missing={remaining}"
         )
         try:
