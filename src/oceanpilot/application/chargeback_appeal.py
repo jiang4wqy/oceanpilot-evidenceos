@@ -22,11 +22,16 @@ from oceanpilot.application.model_provider import (
     TaskSpec,
 )
 from oceanpilot.application.upstream import UpstreamConnector
+from oceanpilot.domain.evidence_catalog import label_of, rebuttal_line
+from oceanpilot.domain.reason_catalog import reason_label
 
 _APPEAL_SYSTEM = (
-    "You draft a concise Chinese chargeback representment appeal letter from the "
-    "enclosed package. Use only the listed evidence; invent nothing. Synthetic "
-    "data; never claim any business action was taken."
+    "You draft a structured Chinese chargeback representment appeal letter from "
+    "the enclosed package. You are given the dispute reason and, for each "
+    "enclosed item, its human label and how it rebuts the dispute — argue each "
+    "one. Use only the listed evidence; invent nothing; never show a raw "
+    "evidence-code token. Synthetic data; never claim any business action was "
+    "taken."
 )
 
 
@@ -60,11 +65,12 @@ class AppealAgent:
         self._effort = effort
 
     def draft(self, package: RepresentmentPackage) -> tuple[str, ExplanationSource]:
+        included = "; ".join(rebuttal_line(c) for c in package.ordered_evidence) or "(none)"
         prompt = (
-            f"reason={package.reason_code.value}\n"
+            f"reason={reason_label(package.reason_code)}\n"
             f"bank_id={package.bank_id or '(any)'}\n"
             f"card_network={package.card_network or '(any)'}\n"
-            f"included={', '.join(c.value for c in package.ordered_evidence) or '(none)'}\n"
+            f"included={included}\n"
             f"window_days={package.submission_window_days}"
         )
         try:
@@ -130,8 +136,30 @@ def _blocked(draft: str, source: ExplanationSource, reason: AppealBlockedReason)
 
 
 def _fallback_letter(package: RepresentmentPackage) -> str:
-    count = len(package.ordered_evidence)
-    return (
-        f"申诉说明（合成）：针对 {package.reason_code.value} 争议，随附 {count} 项证据，"
-        f"请在 {package.submission_window_days} 天窗口内受理。（合成数据，不执行任何业务动作）"
+    """Deterministic, structured representment letter (used when no model runs)."""
+    reason = reason_label(package.reason_code)
+    recipient = package.card_network or "受理机构"
+    if package.ordered_evidence:
+        enclosed = "\n".join(
+            f"{index}. {rebuttal_line(code)}"
+            for index, code in enumerate(package.ordered_evidence, start=1)
+        )
+    else:
+        enclosed = "（暂无随附证据）"
+
+    sections = [
+        "拒付申诉说明（合成样例，非真实提交）",
+        f"争议原因：{reason}",
+        f"受理方：{recipient}",
+        f"举证时限：{package.submission_window_days} 天内",
+        "一、申诉立场\n我方就上述争议提交举证，随附以下证据，证明交易真实且商户已依约履行：",
+        f"二、随附证据（按受理方模板顺序）\n{enclosed}",
+    ]
+    if package.missing_evidence:
+        missing = "、".join(label_of(code) for code in package.missing_evidence)
+        sections.append(f"三、尚缺证据（提交前需补齐或书面说明）\n{missing}")
+    sections.append("结论\n基于上述证据，恳请受理方在举证窗口内予以复核并驳回本次拒付。")
+    sections.append(
+        "（本内容为合成数据；系统不执行任何支付/退款/风控/提交动作，最终以人工确认为准。）"
     )
+    return "\n\n".join(sections)

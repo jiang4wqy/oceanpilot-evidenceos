@@ -75,3 +75,16 @@ def test_model_cannot_change_inclusion_or_order():
     assert deterministic.ordered_evidence == other.ordered_evidence
     assert deterministic.completeness == other.completeness
     assert deterministic.ready_to_submit == other.ready_to_submit
+
+
+def test_fallback_note_uses_labels_not_raw_codes():
+    from oceanpilot.domain.evidence_catalog import label_of
+
+    agent = _agent(ScriptedModelProvider(error=ModelProviderError()))
+    pkg = agent.build(
+        DisputeReasonCode.CREDIT_NOT_PROCESSED,
+        [ChargebackEvidenceCode.TRANSACTION_RECEIPT],
+    )
+    assert pkg.cover_note_source is ExplanationSource.FALLBACK
+    assert label_of(ChargebackEvidenceCode.TRANSACTION_RECEIPT) in pkg.cover_note
+    assert ChargebackEvidenceCode.TRANSACTION_RECEIPT.value not in pkg.cover_note

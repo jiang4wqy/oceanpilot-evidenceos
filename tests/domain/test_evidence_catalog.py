@@ -5,6 +5,7 @@ from oceanpilot.domain.evidence_catalog import (
     EvidenceDisplay,
     describe,
     label_of,
+    rebuttal_line,
     request_sentence,
 )
 
@@ -48,3 +49,12 @@ def test_request_sentence_is_human_and_hides_the_token():
 def test_request_sentence_marks_the_last_item():
     sentence = request_sentence(ChargebackEvidenceCode.TRANSACTION_RECEIPT, remaining=1)
     assert "最后 1 项" in sentence
+
+
+def test_rebuttal_line_pairs_label_with_rationale_and_hides_token():
+    for code in ChargebackEvidenceCode:
+        line = rebuttal_line(code)
+        display = describe(code)
+        assert display.label in line
+        assert display.why in line
+        assert code.value not in line

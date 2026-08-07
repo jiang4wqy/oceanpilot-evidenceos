@@ -73,3 +73,28 @@ def test_approved_and_ready_submits_once_to_mock():
     assert len(upstream.submissions) == 1
     assert upstream.submissions[0]["payload"]["approved_by"] == "ou_reviewer"
     assert upstream.submissions[0]["payload"]["synthetic"] is True
+
+
+def test_fallback_letter_is_structured_and_hides_codes():
+    from oceanpilot.domain.evidence_catalog import label_of
+    from oceanpilot.domain.reason_catalog import reason_label
+
+    agent = AppealAgent(ScriptedModelProvider(error=ModelProviderError()), MockUpstreamConnector())
+    draft, source = agent.draft(_package(ready=True))
+    assert source is ExplanationSource.FALLBACK
+    assert reason_label(DisputeReasonCode.CREDIT_NOT_PROCESSED) in draft
+    assert label_of(ChargebackEvidenceCode.TRANSACTION_RECEIPT) in draft
+    assert "随附证据" in draft
+    assert "人工确认" in draft
+    # never leaks a raw reason/evidence code token
+    assert ChargebackEvidenceCode.TRANSACTION_RECEIPT.value not in draft
+    assert DisputeReasonCode.CREDIT_NOT_PROCESSED.value not in draft
+
+
+def test_fallback_letter_lists_missing_evidence_by_label():
+    from oceanpilot.domain.evidence_catalog import label_of
+
+    agent = AppealAgent(ScriptedModelProvider(error=ModelProviderError()), MockUpstreamConnector())
+    draft, _ = agent.draft(_package(ready=False))
+    assert "尚缺证据" in draft
+    assert label_of(ChargebackEvidenceCode.REFUND_RECORD) in draft

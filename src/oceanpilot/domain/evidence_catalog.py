@@ -151,6 +151,16 @@ def label_of(code: ChargebackEvidenceCode) -> str:
     return describe(code).label
 
 
+def rebuttal_line(code: ChargebackEvidenceCode) -> str:
+    """A representment bullet: the evidence label and how it rebuts the dispute.
+
+    Used by the packager and appeal letter so each enclosed item reads as an
+    argument ("签收证明 —— 直接证明商品已送达 …"), never a raw code token.
+    """
+    display = describe(code)
+    return f"{display.label} —— {display.why}"
+
+
 def request_sentence(code: ChargebackEvidenceCode, remaining: int) -> str:
     """A deterministic, merchant-friendly ask for one evidence item.
 

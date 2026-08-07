@@ -23,14 +23,21 @@ from oceanpilot.application.model_provider import (
     TaskSpec,
 )
 from oceanpilot.domain.chargeback import ChargebackEvidenceCode, DisputeReasonCode
+from oceanpilot.domain.evidence_catalog import label_of
+from oceanpilot.domain.reason_catalog import reason_label
 
 _QUANT = Decimal("0.0001")
 _PACKAGER_SYSTEM = (
     "You write a one-paragraph cover note for a chargeback representment "
     "package. Do NOT change which evidence is included or its order; only "
-    "summarize what is enclosed and what is missing. Be concise. Synthetic "
-    "data; never claim any business action was taken."
+    "summarize what is enclosed and what is missing, using the human labels "
+    "provided (never a raw code token). Be concise. Synthetic data; never claim "
+    "any business action was taken."
 )
+
+
+def _labels(codes: tuple[ChargebackEvidenceCode, ...]) -> str:
+    return "、".join(label_of(code) for code in codes) or "（无）"
 
 
 @dataclass(frozen=True)
@@ -105,10 +112,10 @@ class PackagerAgent:
         missing: tuple[ChargebackEvidenceCode, ...],
     ) -> tuple[str, ExplanationSource]:
         prompt = (
-            f"reason={entry.reason_code.value}\n"
+            f"reason={reason_label(entry.reason_code)}\n"
             f"rule_source={entry.source}\n"
-            f"included={', '.join(c.value for c in ordered) or '(none)'}\n"
-            f"missing={', '.join(c.value for c in missing) or '(none)'}\n"
+            f"included={_labels(ordered)}\n"
+            f"missing={_labels(missing)}\n"
             f"window_days={entry.submission_window_days}"
         )
         try:
@@ -134,12 +141,15 @@ def _fallback_note(
     ordered: tuple[ChargebackEvidenceCode, ...],
     missing: tuple[ChargebackEvidenceCode, ...],
 ) -> str:
+    reason = reason_label(entry.reason_code)
     if missing:
         return (
-            f"合成打包（{entry.source} 规则）：已含 {len(ordered)} 项证据，"
-            f"仍缺 {len(missing)} 项；补齐后在 {entry.submission_window_days} 天窗口内提交。"
+            f"合成打包（{entry.source} 规则，{reason}）：已含 {len(ordered)} 项证据"
+            f"（{_labels(ordered)}），仍缺 {len(missing)} 项（{_labels(missing)}）；"
+            f"补齐后在 {entry.submission_window_days} 天窗口内提交。"
         )
     return (
-        f"合成打包（{entry.source} 规则）：{len(ordered)} 项证据已按模板顺序就绪，"
-        f"可在 {entry.submission_window_days} 天窗口内提交（需人工确认，不执行业务动作）。"
+        f"合成打包（{entry.source} 规则，{reason}）：{len(ordered)} 项证据已按模板顺序就绪"
+        f"（{_labels(ordered)}），可在 {entry.submission_window_days} 天窗口内提交"
+        "（需人工确认，不执行业务动作）。"
     )
