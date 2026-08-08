@@ -1,0 +1,8 @@
+[
+  {
+    "card_network": "VISA",
+    "network_reason_code": "SYNTHETIC-13.1",
+    "reason_code": "PRODUCT_NOT_RECEIVED",
+    "notes": "合成示例；请由公司专家替换并确认实际映射。"
+  }
+]

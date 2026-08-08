@@ -5,6 +5,21 @@ schema and exercising the loaders end to end until real data arrives. They must
 never contain real PII.
 """
 
+SYNTHETIC_REASON_CODE_MAPPINGS: tuple[dict[str, object], ...] = (
+    {
+        "card_network": "VISA",
+        "network_reason_code": "13.1",
+        "reason_code": "PRODUCT_NOT_RECEIVED",
+        "notes": "合成映射：仅用于演示导入格式。",
+    },
+    {
+        "card_network": "MASTERCARD",
+        "network_reason_code": "4837",
+        "reason_code": "FRAUD_CARD_NOT_PRESENT",
+        "notes": "合成映射：请由公司专家确认实际口径。",
+    },
+)
+
 SYNTHETIC_REASON_POLICIES: tuple[dict[str, object], ...] = (
     {
         "reason_code": "PRODUCT_NOT_RECEIVED",
