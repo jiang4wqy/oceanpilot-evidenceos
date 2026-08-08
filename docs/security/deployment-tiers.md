@@ -91,7 +91,9 @@ flowchart LR
 
 ### 4.1 传输加密（in transit）
 - 所有出入站一律 **TLS 1.2+**（飞书开放平台回调、外部模型 API、本地模型端点内网调用建议 mTLS）。
-- 飞书回调**验签 + 时间戳防重放**（已实现 `adapters/feishu/security.py`）；加密事件用飞书 `encrypt_key` 解密后立即校验。
+- 飞书回调对**未加密 payload**执行验签 + 时间戳防重放（已实现
+  `adapters/feishu/security.py`，`encrypt_key` 参与签名计算）。当前 adapter 不解密 AES
+  envelope；测试租户必须按 `docs/feishu-setup.md` 关闭 body encryption。
 - 本地模型端点即便在内网也建议启用 TLS/mTLS，`LocalModelProvider` 支持 `http(s)` 与 `Authorization: Bearer`（`OCEANPILOT_LOCAL_MODEL_API_KEY`）。
 
 ### 4.2 静态加密（at rest）
@@ -105,7 +107,8 @@ flowchart LR
 - 人在环闸门：⑤提交、⑥超期判负必须人工确认（「确认建议并记录，不执行业务动作」）。
 
 ### 4.4 日志/审计/留痕
-- 日志与审计**不含**凭据、原始用户 ID、证据正文；需要关联时存 **hash**。
+- 日志与审计**不含**凭据、原始用户 ID、证据正文；飞书 `chat_id` / `actor_id`
+  在 store adapter 落库前转换为稳定、域分离的 SHA-256 引用，原值只在当前请求与出站发送边界内使用。
 - 审计留痕原子写入、可重放、带 revision（T9 已实现）；`trace_id` 贯穿请求便于追溯而不泄露内容。
 
 ---

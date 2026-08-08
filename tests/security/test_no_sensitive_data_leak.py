@@ -22,8 +22,11 @@ from tests.feishu.conftest import (
 )
 
 CHAT_ID = "oc_security_chat"
+REPORTER_ID = "ou_reporter_0001"
+REVIEWER_ID = "ou_reviewer_0001"
 _SECRETS = (APP_SECRET, ENCRYPT_KEY, TOKEN, TENANT_TOKEN)
 _SECRET_BYTES = (APP_SECRET.encode(), ENCRYPT_KEY.encode(), TENANT_TOKEN.encode())
+_EXTERNAL_IDENTIFIER_BYTES = (CHAT_ID.encode(), REPORTER_ID.encode(), REVIEWER_ID.encode())
 
 FLOW_FACTS = (
     ("callback.delivery_status", "NOT_RECEIVED"),
@@ -98,6 +101,10 @@ def test_credentials_never_appear_in_responses_or_databases(tmp_path):
         blob = db_path.read_bytes()
         for secret in _SECRET_BYTES:
             assert secret not in blob
+
+    feishu_blob = feishu_db.read_bytes()
+    for identifier in _EXTERNAL_IDENTIFIER_BYTES:
+        assert identifier not in feishu_blob
 
     # outbound card payloads must carry no credentials either
     for message in transport.sent:
