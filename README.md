@@ -4,34 +4,35 @@
 
 **证据驱动的跨境商户成功协作系统。** OceanPilot 用同一份“商户成功案件”串联问题、证据、判断与交接：缺证先补问，达到证据门槛后再进入候选判断，高风险动作由人工确认。
 
-> **当前边界：** 已验证建案、证据存储、完整度判断、确定性诊断与审计边界，并接入一条经签名校验的飞书事件/卡片回调链路（建案 → 补问 → 达标诊断 → 人工确认审计）。真实 Oceanpayment 数据、A2A、MCP、工单与飞书真机联调仍为规划/入围后能力。当前原型仅使用合成数据，不执行任何支付、退款、风控放行或资金动作；人工确认只记录建议、不改变案件状态、不触发业务动作。
+> **当前边界：** `v0.2.1` 同时提供 Foundation 支付异常链与 synthetic 拒付申诉集群。Foundation 已验证建案、证据存储、确定性诊断、审计，以及经签名校验的飞书事件/卡片回调；拒付集群已通过 HTTP/Web 跑通 Intake → Evidence → Assess → Package → Appeal（mock）、时限计算、预防建议与审计展示。拒付 `FeishuChannel` 目前是已测试的解析/渲染适配器 seam，尚未接入现有签名回调路由或真实 tenant。真实 Oceanpayment 数据、外部 A2A、MCP、工单与上游申诉仍未接入。系统不执行真实支付、退款、风控放行、资金或上游提交动作；Foundation 人工确认只写审计，拒付人工批准最多驱动 synthetic mock connector。
 
 ### 三个核心设计
 
 - **商户成功案件（Merchant Success Case）：** 用持续演进、可版本化的案件聚合问题上下文与协作状态，减少截图和聊天记录反复转发。
 - **案件证据契约（Case Evidence Contract）：** 每条证据绑定来源、时间、版本与引用；资料不足时先定位缺口，不让系统直接猜测。
-- **受控协作闭环：** 完整方案中由 AI 处理模糊表达和补问，确定性规则约束状态与责任路由，高风险动作必须人工确认；当前基础原型只验证案件与证据内核。
+- **受控协作闭环：** AI 处理模糊表达和补问，确定性规则约束评估、状态与责任路由，高风险步骤必须人工确认；当前 synthetic 原型已验证 Foundation 内核与拒付集群，但不代表真实业务集成或生产就绪。
 
 ## What OceanPilot Is
 
-OceanPilot EvidenceOS 是一个面向跨境支付异常协作的独立参赛原型。它把零散的问题描述整理为版本化案件，把每条输入转换为可追溯证据，再由确定性的领域策略计算资料完整度和案件状态。当前重点不是给出未经验证的“AI 结论”，而是先证明一条较窄但可检查的链路：创建 synthetic payment incident 案件、追加证据、读取同一案件视图，并对尚未完成的诊断能力明确停机。
+OceanPilot EvidenceOS 是一个面向跨境支付异常协作的独立参赛原型。它把零散的问题描述整理为版本化案件，把输入转换为可追溯证据，再由确定性的领域策略计算资料完整度、诊断或拒付胜诉评估。当前运行时包含两条 synthetic 切片：Foundation `PAYMENT_INCIDENT` 内核，以及在其设计口径上扩展的拒付申诉多智能体集群。
 
-这个基础版本适合用于代码审查、架构讨论和后续分工。所有商户、交易和证据内容均为合成示例；仓库不包含真实商户数据或外部系统凭据。
+这个版本适合用于代码审查、架构讨论和比赛演示。所有商户、交易、银行规则和证据内容均为合成示例；仓库不包含真实商户数据或外部系统凭据，离线评测结果也只说明 synthetic fixture 上的可重复行为。
 
-## Current Foundation Scope
+## Current Runtime Scope
 
 | Capability | Status | Current behavior |
 |---|---|---|
-| `GET /health` | Available | 检查本地 SQLite Store 是否可访问 |
-| Create case | Available | 创建唯一启用的 synthetic `PAYMENT_INCIDENT` 案件 |
-| Read case | Available | 返回案件、readiness、证据、revision 和当前诊断指针 |
-| Append evidence | Available | 追加受限证据；同 ID 同内容 replay，同 ID 异内容 conflict |
-| Diagnosis | Available (synthetic) | 达标后运行四条确定性规则并持久化诊断；身份 `(case_id, evidence_revision, policy_version)` replay；低置信度/低来源质量/风险/冲突/无规则进入人工复核 |
-| Feishu event & card callbacks | Available (synthetic) | 经签名校验的回调：建案、角色化补问卡、达标真实诊断卡、人工确认审计；未配置飞书时返回固定安全 `503` |
-| Real integrations | Planned | 真实 Oceanpayment / A2A / MCP / 工单接入与飞书真机联调（需公网 HTTPS）为入围后工作 |
-| Production readiness | Not claimed | 尚未完成鉴权、限流、生产日志/指标、部署和运行保障 |
+| Foundation HTTP | Available (synthetic) | 健康检查、`PAYMENT_INCIDENT` 建案/读取/补证、确定性诊断持久化与 identity replay |
+| Foundation Feishu callbacks | Available (synthetic) | 经签名校验的建案、补问、诊断卡和人工确认审计；未配置凭据时固定安全 `503` |
+| Chargeback HTTP cluster | Available (synthetic) | Intake、reason 确认、逐项补证、确定性评估、银行规则打包、mock 申诉、审计、预防建议和安全扫描 |
+| Web console and demos | Available (synthetic) | `/demo`、跨平台 Python transcript、Docker 一键启动与 synthetic 离线评测 |
+| Basic observability | Available (synthetic) | PII-free request/trace 日志与进程内决策指标；不是生产日志平台或持久化 metrics backend |
+| Chargeback Feishu adapter | Adapter seam only | 解析/渲染适配器及渠道单测已完成；尚未接入签名事件路由或真实 tenant |
+| Rules and company data | Placeholder only | 当前为确定性 reason-code 表与内存精确规则匹配；真实规则、脱敏案例与 RAG 尚未接入 |
+| Real integrations | Planned | 真实 Oceanpayment、外部 A2A/MCP/工单、上游申诉与公网 Feishu tenant smoke |
+| Production readiness | Not claimed | 尚未完成鉴权、限流、生产可观测性后端、云数据库、备份、部署和运行保障 |
 
-公开 HTTP 输入必须使用规范 UUIDv4，`synthetic` 必须是布尔值 `true`。HTTP 层固定证据来源为 `MERCHANT / USER_REPORTED / synthetic=true`，调用方不能注入来源可信度、状态、revision 或路由结论。
+Foundation 公开 HTTP 输入必须使用规范 UUIDv4，`synthetic` 必须是布尔值 `true`。Foundation HTTP 层固定证据来源为 `MERCHANT / USER_REPORTED / synthetic=true`，调用方不能注入来源可信度、状态、revision 或路由结论；拒付入口使用独立的严格 DTO，当前只记录证据类型是否具备。
 
 ## 证据先行闭环
 
@@ -39,33 +40,37 @@ OceanPilot EvidenceOS 是一个面向跨境支付异常协作的独立参赛原�
 
 OceanPilot 的核心不是增加一个信息入口，而是让 AI、确定性规则与人工共同遵守同一套案件证据口径：资料不足先定位缺口，达到门槛后才输出带引用的候选原因，高风险动作始终由人工确认。
 
-> 图例边界：绿色实线为当前基础原型，海洋蓝虚线为离线规则资产，浅灰虚线与琥珀色节点为完整方案的规划路径。
+> 图例边界：这是报名阶段的 Foundation 规划图。绿色实线为当时的基础原型，海洋蓝虚线为离线规则资产，浅灰虚线与琥珀色节点为当时的规划路径；`v0.2.1` 的实际运行边界以本文状态表与 `docs/architecture.md` 为准。
 
 ## 一个合成支付异常如何进入协作案件
 
 ![一个支付异常如何变成可追溯的协作案件](docs/assets/submission/fig-03-case-walkthrough.png)
 
-> 合成支付异常的完整方案交互示意；绿色为当前基础原型，灰色为规划能力。飞书 Agent、真实数据适配、诊断与 Workflow 尚未接入，因此本图不代表当前端到端运行结果。
+> 报名阶段的合成支付异常交互示意，不代表 `v0.2.1` 的完整运行图。Foundation 诊断与 synthetic 飞书回调现已接入；真实数据适配、外部 Workflow/工单仍未接入，拒付集群的实际链路见下文与 Web 控制台。
 
 ## 当前原型与完整方案
 
 ![当前可验证原型与入围后完整方案的分层架构](docs/assets/submission/fig-02-layered-architecture.png)
 
-> **事实边界（图为报名期分层规划）：** 上图记录报名期的分阶段规划，其中诊断主链与飞书回调标为规划接入。**竞赛演示分支已把这两项实现为合成 demo：** 诊断请求返回真实持久化结果（不再 `501`），飞书事件/卡片回调链路可端到端跑通。右侧灰色模块中，真实 Oceanpayment 数据、A2A、MCP、工单与真机联调仍为入围后接入。
+> **事实边界（图为报名期分层规划）：** 图中曾标为规划的 Foundation 诊断主链与飞书回调已实现为 synthetic demo：诊断请求返回持久化结果（不再 `501`），签名事件/卡片回调可端到端跑通。拒付集群另以 HTTP/Web 运行；其飞书适配器尚未接入这条签名回调。真实 Oceanpayment 数据、外部 A2A、MCP、工单与真实 tenant 联调仍未接入。
 
 ## Architecture
 
-当前运行链路保持单向依赖：
+当前两条运行链路都保持单向依赖：
 
 ```text
-HTTP / OpenAPI
-    -> CaseService
-    -> domain evidence policies and state machine
-    -> CaseStore port
-    -> local SQLite
+Foundation HTTP / signed Feishu callbacks
+    -> CaseService -> domain evidence policies / DiagnosisEngine
+    -> CaseStore port -> foundation SQLite
+
+Chargeback HTTP / Web console
+    -> ChargebackChannelService -> Supervisor / deterministic kernel
+    -> ChargebackCaseStore -> chargeback SQLite
+    -> Packager -> in-memory synthetic bank rules
+    -> Appeal -> human gate -> mock upstream connector
 ```
 
-API 只负责严格输入映射、状态码和安全错误；readiness、状态变化和证据规范化由领域层负责；SQL、事务、revision 条件更新和审计落库由 Store 负责。诊断路由不会绕过这些边界生成临时结果。完整组件和数据流见 [docs/architecture.md](docs/architecture.md)。
+API 只负责严格输入映射、状态码和安全错误；领域/应用层负责 readiness、评估和编排；SQL、事务、revision 条件更新和审计落库由 Store 负责。Foundation 诊断快照会持久化并 replay；拒付 assessment/package/appeal 当前按最新案件状态计算，不声明快照 replay 或生产提交语义。完整组件和数据流见 [docs/architecture.md](docs/architecture.md)。
 
 ## 拒付申诉智能体集群 / Chargeback Agent Cluster
 
@@ -80,13 +85,13 @@ API 只负责严格输入映射、状态码和安全错误；readiness、状态�
   → Appeal     生成 representment 申诉信；人工确认后才提交上游（mock）
 ```
 
-三条设计取向：**(1) 渠道无关内核**,飞书只是可选渠道之一(另有纯 HTTP 渠道);**(2) 模型可插拔**,Claude 优先但按安全档位路由到脱敏/本地隔离模型,不可达时确定性兜底;**(3) 混合决策**——确定性内核决策、LLM 只解释/建议、人类拍板。系统绝不执行支付/退款/风控/提交动作,最强动作是"建议人工复核"。
+三条设计取向：**(1) 渠道无关内核**，当前完整链路由 HTTP/Web 驱动，飞书解析/渲染适配器已测试但尚未接入签名回调；**(2) 模型可插拔**，离线运行默认 Scripted/确定性 fallback，只有显式开启 live 开关才按安全档位路由到 Claude 或本地隔离模型；**(3) 混合决策**——确定性内核决策、LLM 只解释/建议、人类拍板。系统绝不执行真实支付、退款、风控或上游提交；人工批准只可能调用 synthetic mock connector。
 
 - 设计文档：[docs/design/2026-08-06-chargeback-agent-cluster-design.md](docs/design/2026-08-06-chargeback-agent-cluster-design.md)
 - 安全与部署分级：[docs/security/deployment-tiers.md](docs/security/deployment-tiers.md)
 - 给公司的数据需求：[docs/data/2026-08-07-chargeback-data-request.md](docs/data/2026-08-07-chargeback-data-request.md)
 - 离线可跑的演示：`examples/chargeback_demo.py`（agent 集群）、`examples/chargeback_transcript.py`（HTTP 全链路 transcript）
-- 一键起服务：`docker build -t oceanpilot-evidenceos . && docker run --rm -p 8000:8000 oceanpilot-evidenceos`
+- 一键起服务：`docker build -t oceanpilot-evidenceos . && docker run --rm -p 127.0.0.1:8000:8000 oceanpilot-evidenceos`
 - Web 演示面板（可视化全链路）：起服务后打开 `http://127.0.0.1:8000/demo`
 - 离线评测报告（分类准确率 + 胜诉率校准）：`python scripts/eval_chargeback.py`
 
@@ -97,7 +102,7 @@ API 只负责严格输入映射、状态码和安全错误；readiness、状态�
 统一的单页控制台把整条拒付链串在一屏：判定 → 补证（带 SLA 时限）→ 胜诉评估（内核判定 + 逐项证据 + 决策来源）→ 打包 → 申诉（人工确认闸门）→ 审计轨迹 + 智能体轨迹；另含交易前预防与可见的 PII / 卡号安全护栏。自包含单页、纯 HTML + JS、离线可用、深/浅色自适应。
 
 - 服务启动后打开根路径 `/`（自动跳转到 `/demo`）。
-- Docker：`docker run --rm -p 8000:8000 oceanpilot-evidenceos`，浏览器开 `http://127.0.0.1:8000/demo`。
+- Docker：`docker run --rm -p 127.0.0.1:8000:8000 oceanpilot-evidenceos`，浏览器开 `http://127.0.0.1:8000/demo`。
 - 远程服务器：SSH 端口转发 `ssh -L 8000:127.0.0.1:8000 <user>@<host>`，本地开 `http://localhost:8000/demo`。
 - 顶栏可切换中/英与深/浅色；「API 文档」指向 Swagger `/docs`。
 
@@ -132,7 +137,7 @@ python -m compileall -q src tests
 - [飞书集成配置指南](docs/feishu-setup.md)
 - [本地演示 runbook](docs/demo.md)
 
-> 公共仓库仅供比赛评审；未授予复用许可。当前原型仅使用合成数据，完整飞书协作链为入围后规划。
+> 公共仓库仅供比赛评审；未授予复用许可。当前原型仅使用合成数据。Foundation 飞书回调已在签名 callback seam 跑通；拒付集群的飞书签名路由接线、真实 tenant smoke 和生产部署仍未完成。
 
 ## Quick Start
 
@@ -178,20 +183,21 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\examples\demo.ps1
 
 ## What Is Deliberately Deferred
 
-已完成（PR1–PR5）：诊断快照 CAS 持久化、唯一键 replay、stale 检查与原子审计；`CaseService.diagnose()` 编排与有限重算；RFC 9457 Problem Details、request/trace 关联头与 OpenAPI 错误矩阵；三个闭环 synthetic 业务场景；跨表面敏感数据 sentinel 与 Python 3.12 GitHub Actions；经签名校验的飞书事件/卡片回调链路。
+已完成（截至 `v0.2.1`）：Foundation 诊断快照 CAS 持久化、identity replay、stale 检查与原子审计；RFC 9457 Problem Details、request/trace 关联头与 OpenAPI 错误矩阵；经签名校验的 Foundation 飞书事件/卡片回调；synthetic 拒付 Supervisor、补证、评估、打包、mock 申诉、时限计算、预防建议、审计/agent trace；Web 控制台、Docker、跨平台 transcript、基础结构化日志/进程内指标和离线评测。
 
 仍然延期：
 
-- 真实 Oceanpayment API、A2A、MCP、工单、SLA、通知、自动派单或任何支付动作；
-- 飞书真机联调（需公网 HTTPS 部署）与远程 CI 运行的绿灯证据；
-- 鉴权、限流、生产日志/指标；
-- 容器、云数据库和发布运维。
+- 真实 Oceanpayment 数据/API、真实银行规则、外部 A2A、MCP、工单、上游申诉、自动派单或任何资金动作；
+- RAG/向量检索，以及 company-data 校准；
+- 拒付 `FeishuChannel` 到签名回调路由的接线、公网 HTTPS 部署与真实 tenant smoke；
+- 定时任务、出站 SLA 通知和超期后的生产工作流变更；
+- 鉴权、限流、生产可观测性后端、云数据库、备份和发布运维。
 
 逐项依赖、文件所有权与可执行验收命令见 [docs/roadmap/incomplete-work.md](docs/roadmap/incomplete-work.md)。延期能力不会用内存假结果或展示文案代替。
 
 ## Verification
 
-当前本地全量套件新鲜验证为 `862 passed, 1 skipped`（skip 的是无 PowerShell 环境下的 `demo.ps1` 语法测试）。Ruff lint、`ruff format --check`、compileall、7 路径 OpenAPI 与 diff 检查均通过；TestClient 运行会出现一条来自固定版本 Starlette/httpx 组合的上游弃用警告。GitHub Actions（Python 3.12）在 [`.github/workflows/ci.yml`](.github/workflows/ci.yml) 中定义；这里不声称远程 CI 运行结果，以实际 Actions 状态为准。
+`v0.2.1` 标签的本地全量套件基线为 `1095 passed, 3 skipped`：无 PowerShell 环境跳过一个 `demo.ps1` 语法测试，无 `ANTHROPIC_API_KEY` 跳过两个可选 live Claude 测试。Ruff lint、`ruff format --check`、compileall、19 路径 OpenAPI 合同与 diff 检查均通过；TestClient 运行会出现一条来自固定版本 Starlette/httpx 组合的上游弃用警告。GitHub Actions（Python 3.12）在 [`.github/workflows/ci.yml`](.github/workflows/ci.yml) 中定义；分支新增测试后的准确数量与远程结果以对应 commit 的实际门禁为准。
 
 可重复执行（Linux / macOS；Windows 用 `.\.venv\Scripts\python.exe`）：
 
@@ -201,7 +207,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\examples\demo.ps1
 .venv/bin/ruff check src tests
 .venv/bin/ruff format --check src tests
 .venv/bin/python -m compileall -q src tests
-.venv/bin/python -c "from oceanpilot.main import create_app; assert len(create_app().openapi()['paths']) == 7"
+.venv/bin/python -m pytest tests/api/test_lifespan_openapi.py -q
 git diff --check
 ```
 
@@ -209,6 +215,6 @@ Foundation 遗留的 `ruff format` 格式漂移已在一个独立的机械提交
 
 ## Competition Context
 
-本项目用于 [2026 AI 先锋未来人才大赛](https://activity.feishu.cn/future-talent#challenge) 的 Oceanpayment 企业命题探索，关注跨境商户接入与上线后问题协作。当前实现只覆盖 synthetic `PAYMENT_INCIDENT` 基础切片，不代表 Oceanpayment 官方产品，也未获得其真实接口、流程或生产数据验证。
+本项目用于 [2026 AI 先锋未来人才大赛](https://activity.feishu.cn/future-talent#challenge) 的 Oceanpayment 企业命题探索，关注跨境商户接入与上线后问题协作。当前实现覆盖 synthetic `PAYMENT_INCIDENT` Foundation 与 synthetic 拒付申诉集群，不代表 Oceanpayment 官方产品，也未获得其真实接口、流程、银行规则或生产数据验证。
 
 领域证据契约、状态机、原子事务和规则表属于本参赛方案中的组合设计；其中使用的通用工程方法不被表述为团队独创算法。公开代码当前仅供比赛评审，未授予复用许可。
