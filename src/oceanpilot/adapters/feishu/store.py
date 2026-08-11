@@ -1,10 +1,17 @@
+import hashlib
 import json
 import sqlite3
 from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass
+from datetime import datetime
 from enum import StrEnum
 from pathlib import Path
+
+from oceanpilot.application.feishu_models import (
+    FeishuApprovalRecord,
+    FeishuConfirmationReceipt,
+)
 
 _SCHEMA = (
     """
@@ -56,12 +63,21 @@ _SCHEMA = (
         case_id TEXT NOT NULL,
         diagnosis_id TEXT NOT NULL,
         actor_id TEXT NOT NULL,
+        action_kind TEXT NOT NULL DEFAULT 'CONFIRM_REVIEW',
         result TEXT NOT NULL,
+        request_id TEXT,
+        trace_id TEXT,
         occurred_at TEXT NOT NULL,
         synthetic INTEGER NOT NULL DEFAULT 1 CHECK (synthetic = 1)
     )
     """,
 )
+
+_SEMANTIC_APPROVAL_INDEX = """
+CREATE UNIQUE INDEX IF NOT EXISTS ux_feishu_approval_semantic_action
+ON feishu_approval_audits (case_id, diagnosis_id, action_kind)
+WHERE request_id IS NOT NULL
+"""
 
 _FORBIDDEN_RESPONSE_KEYS = frozenset(
     {
@@ -102,8 +118,11 @@ class ApprovalAudit:
     action_id: str
     case_id: str
     diagnosis_id: str
-    actor_id: str
+    actor_hash: str
+    action_kind: str
     result: str
+    request_id: str | None
+    trace_id: str | None
     occurred_at: str
     synthetic: bool
 
@@ -112,6 +131,13 @@ def _require_text(name: str, value: str) -> str:
     if not isinstance(value, str) or not value:
         raise ValueError(f"{name} must be non-empty text")
     return value
+
+
+def _actor_hash(actor_id: str) -> str:
+    actor_id = _require_text("actor_id", actor_id)
+    if len(actor_id) == 64 and all(character in "0123456789abcdef" for character in actor_id):
+        return actor_id
+    return hashlib.sha256(actor_id.encode("utf-8")).hexdigest()
 
 
 def _reject_sensitive_keys(value: object) -> None:
@@ -174,6 +200,33 @@ def _immediate_transaction(connection: sqlite3.Connection) -> Iterator[None]:
         raise
 
 
+def _add_column_if_missing(
+    connection: sqlite3.Connection,
+    *,
+    table: str,
+    column: str,
+    declaration: str,
+) -> None:
+    columns = {
+        row["name"] for row in connection.execute(f"PRAGMA table_info({table})").fetchall()
+    }
+    if column not in columns:
+        connection.execute(f"ALTER TABLE {table} ADD COLUMN {column} {declaration}")
+
+
+def _hash_existing_actor_ids(connection: sqlite3.Connection, *, table: str) -> None:
+    rows = connection.execute(
+        f"SELECT rowid, actor_id FROM {table} WHERE actor_id IS NOT NULL"
+    ).fetchall()
+    for row in rows:
+        actor_hash = _actor_hash(row["actor_id"])
+        if actor_hash != row["actor_id"]:
+            connection.execute(
+                f"UPDATE {table} SET actor_id = ? WHERE rowid = ?",
+                (actor_hash, row["rowid"]),
+            )
+
+
 def _initialize(path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     connection = _connect(path)
@@ -181,6 +234,27 @@ def _initialize(path: Path) -> None:
         with _immediate_transaction(connection):
             for statement in _SCHEMA:
                 connection.execute(statement)
+            _add_column_if_missing(
+                connection,
+                table="feishu_approval_audits",
+                column="request_id",
+                declaration="TEXT",
+            )
+            _add_column_if_missing(
+                connection,
+                table="feishu_approval_audits",
+                column="trace_id",
+                declaration="TEXT",
+            )
+            _add_column_if_missing(
+                connection,
+                table="feishu_approval_audits",
+                column="action_kind",
+                declaration="TEXT NOT NULL DEFAULT 'CONFIRM_REVIEW'",
+            )
+            _hash_existing_actor_ids(connection, table="feishu_action_receipts")
+            _hash_existing_actor_ids(connection, table="feishu_approval_audits")
+            connection.execute(_SEMANTIC_APPROVAL_INDEX)
     finally:
         connection.close()
 
@@ -300,7 +374,7 @@ class FeishuCallbackStoreSession:
             {
                 "case_id": _require_text("case_id", case_id),
                 "diagnosis_id": _require_text("diagnosis_id", diagnosis_id),
-                "actor_id": _require_text("actor_id", actor_id),
+                "actor_id": _actor_hash(actor_id),
             },
             _require_text("completed_at", completed_at),
         )
@@ -371,6 +445,12 @@ class FeishuCallbackStoreSession:
         ).fetchone()
         return None if row is None else row["case_id"]
 
+    def bind_case(self, binding_key: str, case_id: str, *, updated_at: str) -> None:
+        self.bind_chat_case(binding_key, case_id, updated_at=updated_at)
+
+    def get_case_id(self, binding_key: str) -> str | None:
+        return self.get_chat_case(binding_key)
+
     def commit_confirmation(
         self,
         *,
@@ -381,6 +461,9 @@ class FeishuCallbackStoreSession:
         diagnosis_id: str,
         actor_id: str,
         result: str,
+        action_kind: str = "CONFIRM_REVIEW",
+        request_id: str,
+        trace_id: str,
         occurred_at: str,
     ) -> ReceiptResult:
         action_id, encoded, metadata, occurred_at = self._action_completion_values(
@@ -393,6 +476,9 @@ class FeishuCallbackStoreSession:
         )
         _require_text("approval_id", approval_id)
         _require_text("result", result)
+        action_kind = _require_text("action_kind", action_kind)
+        request_id = _require_text("request_id", request_id)
+        trace_id = _require_text("trace_id", trace_id)
         try:
             with _immediate_transaction(self._connection):
                 receipt = self._complete_in_transaction(
@@ -405,23 +491,21 @@ class FeishuCallbackStoreSession:
                 )
                 existing = self._connection.execute(
                     """
-                    SELECT approval_id, case_id, diagnosis_id, actor_id, result, occurred_at
+                    SELECT approval_id, action_id, case_id, diagnosis_id, actor_id,
+                           action_kind, result, request_id, trace_id, occurred_at
                     FROM feishu_approval_audits
                     WHERE action_id = ?
+                       OR (case_id = ? AND diagnosis_id = ? AND action_kind = ?)
                     """,
-                    (action_id,),
+                    (action_id, case_id, diagnosis_id, action_kind),
                 ).fetchone()
-                expected = (
-                    approval_id,
-                    case_id,
-                    diagnosis_id,
-                    actor_id,
-                    result,
-                    occurred_at,
-                )
                 if existing is not None:
-                    actual = tuple(existing)
-                    if actual != expected:
+                    if existing["action_id"] == action_id and (
+                        existing["case_id"],
+                        existing["diagnosis_id"],
+                        existing["action_kind"],
+                        existing["result"],
+                    ) != (case_id, diagnosis_id, action_kind, result):
                         raise ReceiptConflict(action_id)
                     return ReceiptResult(ReceiptOutcome.REPLAY, receipt.response)
                 if receipt.outcome is ReceiptOutcome.REPLAY:
@@ -430,16 +514,19 @@ class FeishuCallbackStoreSession:
                     """
                     INSERT INTO feishu_approval_audits (
                         approval_id, action_id, case_id, diagnosis_id, actor_id,
-                        result, occurred_at, synthetic
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, 1)
+                        action_kind, result, request_id, trace_id, occurred_at, synthetic
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
                     """,
                     (
                         approval_id,
                         action_id,
                         case_id,
                         diagnosis_id,
-                        actor_id,
+                        metadata["actor_id"],
+                        action_kind,
                         result,
+                        request_id,
+                        trace_id,
                         occurred_at,
                     ),
                 )
@@ -452,7 +539,7 @@ class FeishuCallbackStoreSession:
         row = self._connection.execute(
             """
             SELECT approval_id, action_id, case_id, diagnosis_id, actor_id,
-                   result, occurred_at, synthetic
+                   action_kind, result, request_id, trace_id, occurred_at, synthetic
             FROM feishu_approval_audits
             WHERE action_id = ?
             """,
@@ -465,8 +552,46 @@ class FeishuCallbackStoreSession:
             action_id=row["action_id"],
             case_id=row["case_id"],
             diagnosis_id=row["diagnosis_id"],
-            actor_id=row["actor_id"],
+            actor_hash=row["actor_id"],
+            action_kind=row["action_kind"],
             result=row["result"],
+            request_id=row["request_id"],
+            trace_id=row["trace_id"],
+            occurred_at=row["occurred_at"],
+            synthetic=bool(row["synthetic"]),
+        )
+
+    def find_approval_audit(
+        self,
+        *,
+        case_id: str,
+        diagnosis_id: str,
+        action_kind: str,
+    ) -> ApprovalAudit | None:
+        _require_text("case_id", case_id)
+        _require_text("diagnosis_id", diagnosis_id)
+        _require_text("action_kind", action_kind)
+        row = self._connection.execute(
+            """
+            SELECT approval_id, action_id, case_id, diagnosis_id, actor_id,
+                   action_kind, result, request_id, trace_id, occurred_at, synthetic
+            FROM feishu_approval_audits
+            WHERE case_id = ? AND diagnosis_id = ? AND action_kind = ?
+            """,
+            (case_id, diagnosis_id, action_kind),
+        ).fetchone()
+        if row is None:
+            return None
+        return ApprovalAudit(
+            approval_id=row["approval_id"],
+            action_id=row["action_id"],
+            case_id=row["case_id"],
+            diagnosis_id=row["diagnosis_id"],
+            actor_hash=row["actor_id"],
+            action_kind=row["action_kind"],
+            result=row["result"],
+            request_id=row["request_id"],
+            trace_id=row["trace_id"],
             occurred_at=row["occurred_at"],
             synthetic=bool(row["synthetic"]),
         )
@@ -484,3 +609,57 @@ class FeishuCallbackStoreFactory:
             yield FeishuCallbackStoreSession(connection)
         finally:
             connection.close()
+
+    def get_case_id(self, binding_key: str) -> str | None:
+        with self.session() as store:
+            return store.get_case_id(binding_key)
+
+    def bind_case(
+        self,
+        binding_key: str,
+        case_id: str,
+        *,
+        updated_at: datetime,
+    ) -> None:
+        if not isinstance(updated_at, datetime) or updated_at.tzinfo is None:
+            raise ValueError("updated_at must be timezone-aware")
+        with self.session() as store:
+            store.bind_case(
+                binding_key,
+                case_id,
+                updated_at=updated_at.isoformat(),
+            )
+
+    def record_confirmation(
+        self,
+        record: FeishuApprovalRecord,
+    ) -> FeishuConfirmationReceipt:
+        if type(record) is not FeishuApprovalRecord:
+            raise TypeError("record must be FeishuApprovalRecord")
+        response = {"ok": True, "result": "confirmed"}
+        with self.session() as store:
+            result = store.commit_confirmation(
+                action_id=record.action_id,
+                approval_id=record.approval_id,
+                response=response,
+                case_id=record.case_id,
+                diagnosis_id=record.diagnosis_id,
+                actor_id=record.actor_hash,
+                action_kind=record.action_kind,
+                result=record.result,
+                request_id=record.request_id,
+                trace_id=record.trace_id,
+                occurred_at=record.occurred_at.isoformat(),
+            )
+            audit = store.find_approval_audit(
+                case_id=record.case_id,
+                diagnosis_id=record.diagnosis_id,
+                action_kind=record.action_kind,
+            )
+        if audit is None:
+            raise ReceiptConflict(record.action_id)
+        return FeishuConfirmationReceipt(
+            approval_id=audit.approval_id,
+            action_id=audit.action_id,
+            replayed=result.outcome is ReceiptOutcome.REPLAY,
+        )
