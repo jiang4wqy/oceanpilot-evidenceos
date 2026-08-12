@@ -29,7 +29,7 @@
 
 | Gate | Status | Reason |
 |---|---|---|
-| GitHub Actions | FIX PENDING REVALIDATION | 首次运行 `31610488039` 在 PDF 已生成后因中文路径写入 `cp1252` 控制台失败；已加入 CLI 回归测试与 ASCII 状态输出，等待新提交验证 |
+| GitHub Actions | FIX PENDING REVALIDATION | run `31612017510` 已验证 PDF 控制台修复；随后 wheel 资产测试暴露 runner 缺少全局 `setuptools.build_meta`，已改用当前解释器和 PEP 517 隔离构建，等待新提交验证 |
 | Real Feishu test group | NOT RUN | 尚无公网 HTTPS callback 下带时间的成功证据 |
 | Anonymous current commit | NOT VERIFIED | 当前 Task 7 提交尚未推送并从未登录会话读取 |
 | Gate 3 main chain | LOCAL PASS | 安全、可复现性与文档真实性独立审查均通过；外部发布门仍单独保留 |

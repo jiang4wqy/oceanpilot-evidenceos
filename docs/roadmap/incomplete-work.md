@@ -26,7 +26,7 @@
 | Security sentinels | Local PASS | `tests/security/` |
 | Full pytest/Ruff/compileall/diff | Local PASS | PR4 checkpoint records fresh counts |
 | Clean temporary copy | Local PASS | 候选树 `950937084251e96fc65fa3b2672df30315917682` 的独立 Python 3.12 venv 中 `1035 passed`，且两级 fallback、Ruff/compileall、依赖审计与非 UTF-8 控制台 PDF 重建通过；见 PR4 checkpoint |
-| GitHub Actions | Fix pending revalidation | Run `31610488039` exposed a `cp1252` console error after PDF generation; the ASCII-output fix and regression test await a new remote run |
+| GitHub Actions | Fix pending revalidation | Run `31612017510` passed the PDF fix, then exposed a wheel test dependency on global `setuptools`; the test now uses the active interpreter and isolated PEP 517 build, pending a new remote run |
 | Real Feishu test group | NOT RUN | Requires public HTTPS callback and valid tenant state |
 | Anonymous current commit | NOT VERIFIED | Current commit has not been pushed |
 

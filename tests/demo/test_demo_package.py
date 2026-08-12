@@ -1,3 +1,4 @@
+import sys
 import zipfile
 from pathlib import Path
 from subprocess import run
@@ -7,14 +8,12 @@ def test_built_wheel_contains_all_demo_assets(tmp_path):
     project_root = Path(__file__).resolve().parents[2]
     result = run(
         [
-            "py",
-            "-3.12",
+            sys.executable,
             "-m",
             "pip",
             "wheel",
             ".",
             "--no-deps",
-            "--no-build-isolation",
             "--wheel-dir",
             str(tmp_path),
         ],
