@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="dark">
+    <title>案件 Cockpit · OceanPilot</title>
+    <link rel="stylesheet" href="/demo/assets/styles.css?v=task6">
+    <script defer src="/demo/assets/app.js?v=task6"></script>
+  </head>
+  <body data-page="case">
+    <a class="skip-link" href="#case-main">跳到案件内容</a>
+    <header class="site-header">
+      <a class="brand" href="/demo"><span class="brand-mark" aria-hidden="true">OP</span><span><strong>OceanPilot</strong><small>Case Cockpit</small></span></a>
+      <p class="build-tag">READ ONLY · BEST EFFORT</p>
+    </header>
+    <main id="case-main" class="cockpit-main">
+      <aside class="synthetic-banner" aria-label="合成数据安全边界">
+        <strong>SYNTHETIC CASE</strong>
+        <span>未执行支付、退款、风控放行、资金移动或生产配置变更</span>
+      </aside>
+      <div id="case-loading" class="loading-state" aria-live="polite">正在读取案件…</div>
+      <section class="case-hero" aria-labelledby="case-title">
+        <div><p class="eyebrow">PAYMENT INCIDENT · 只读</p><h1 id="case-title">案件 Cockpit</h1><p id="case-summary" class="hero-copy">需要 JavaScript 读取安全案件投影。</p></div>
+        <dl class="identity-list"><div><dt>Merchant</dt><dd id="merchant-ref">—</dd></div><div><dt>Case ID</dt><dd id="case-id" class="mono">—</dd></div></dl>
+      </section>
+      <section class="metric-grid" aria-label="案件概览">
+        <article><span>CASE STATUS</span><strong id="case-status">—</strong></article>
+        <article><span>CASE REVISION</span><strong id="case-revision">—</strong></article>
+        <article><span>EVIDENCE REVISION</span><strong id="evidence-revision">—</strong></article>
+        <article><span>READINESS</span><strong id="completion-ratio">—</strong></article>
+      </section>
+      <section id="readiness" class="cockpit-section" aria-labelledby="readiness-title"><div class="section-heading"><div><p class="eyebrow">GATE</p><h2 id="readiness-title">证据门槛</h2></div><p id="readiness-state">—</p></div><dl id="readiness-details" class="detail-grid"></dl></section>
+      <section id="evidence-ledger" class="cockpit-section" aria-labelledby="evidence-title"><div class="section-heading"><div><p class="eyebrow">PROVENANCE</p><h2 id="evidence-title">证据账本</h2></div><p>只展示白名单字段；来源引用和内容哈希不进入浏览器。</p></div><div id="evidence-list" class="evidence-list"></div></section>
+      <section id="diagnosis" class="cockpit-section" aria-labelledby="diagnosis-title"><div class="section-heading"><div><p class="eyebrow">DETERMINISTIC ENGINE</p><h2 id="diagnosis-title">当前诊断</h2></div><p id="diagnosis-meta">—</p></div><div id="diagnosis-content" class="stack"></div></section>
+      <section id="responsibility" class="cockpit-section" aria-labelledby="responsibility-title"><div class="section-heading"><div><p class="eyebrow">RESPONSIBILITY</p><h2 id="responsibility-title">责任建议</h2></div></div><div id="responsibility-content" class="stack"></div></section>
+      <section id="confirmation" class="cockpit-section" aria-labelledby="confirmation-title"><div class="section-heading"><div><p class="eyebrow">HUMAN CONTROL</p><h2 id="confirmation-title">人工确认</h2></div></div><div id="confirmation-content" class="state-panel">—</div></section>
+      <section id="audit-timeline" class="cockpit-section" aria-labelledby="audit-title"><div class="section-heading"><div><p class="eyebrow">TRACEABILITY</p><h2 id="audit-title">审计时间线</h2></div><p>核心案件与飞书确认来自两个独立 SQLite 读取，不宣称分布式事务。</p></div><ol id="timeline-list" class="timeline"></ol></section>
+    </main>
+    <footer><p>OceanPilot EvidenceOS · 只读比赛 Cockpit</p><p><a href="/demo">返回综合智能体能力地图</a></p></footer>
+  </body>
+</html>

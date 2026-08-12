@@ -24,6 +24,7 @@ def test_openapi_freezes_paths_replay_and_problem_contract(tmp_path):
         "/api/v1/cases/{case_id}",
         "/api/v1/cases/{case_id}/evidence",
         "/api/v1/cases/{case_id}/diagnose",
+        "/api/v1/demo/cases/{case_id}",
         "/api/v1/feishu/events",
         "/api/v1/feishu/card-actions",
     }
@@ -34,15 +35,11 @@ def test_openapi_freezes_paths_replay_and_problem_contract(tmp_path):
     assert "audit_reference" in diagnosis_schema["required"]
 
     problem_schema = document["components"]["schemas"]["ProblemDetails"]
-    assert {"case_id", "missing_fields", "current_revision"}.issubset(
-        problem_schema["properties"]
-    )
+    assert {"case_id", "missing_fields", "current_revision"}.issubset(problem_schema["properties"])
     assert not {"case_id", "missing_fields", "current_revision"}.intersection(
         problem_schema["required"]
     )
-    safe_error_ref = problem_schema["properties"]["errors"]["anyOf"][0]["items"][
-        "$ref"
-    ]
+    safe_error_ref = problem_schema["properties"]["errors"]["anyOf"][0]["items"]["$ref"]
     assert safe_error_ref == "#/components/schemas/SafeValidationError"
     assert "SafeValidationError" in document["components"]["schemas"]
     create = document["paths"]["/api/v1/cases"]["post"]
@@ -51,11 +48,16 @@ def test_openapi_freezes_paths_replay_and_problem_contract(tmp_path):
         content = diagnose["responses"][status]["content"]
         assert set(content) == {"application/problem+json"}
 
+    demo_case = document["paths"]["/api/v1/demo/cases/{case_id}"]["get"]
+    assert {"200", "404", "422", "500", "503"}.issubset(demo_case["responses"])
+    assert (
+        demo_case["responses"]["200"]["content"]["application/json"]["schema"]["$ref"]
+        == "#/components/schemas/DemoCaseDetail"
+    )
+
     for path in ("/api/v1/feishu/events", "/api/v1/feishu/card-actions"):
         callback = document["paths"][path]["post"]
-        assert {"401", "409", "413", "422", "500", "503"}.issubset(
-            callback["responses"]
-        )
+        assert {"401", "409", "413", "422", "500", "503"}.issubset(callback["responses"])
         assert callback["requestBody"]["required"] is True
         assert set(callback["requestBody"]["content"]) == {"application/json"}
 

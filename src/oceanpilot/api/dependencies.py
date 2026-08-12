@@ -7,6 +7,7 @@ from oceanpilot.adapters.feishu.security import FeishuRequestVerifier
 from oceanpilot.adapters.feishu.store import FeishuCallbackStoreFactory
 from oceanpilot.api.errors import FeishuUnavailable
 from oceanpilot.application.case_service import CaseService
+from oceanpilot.application.demo_query import DemoQuery
 from oceanpilot.application.feishu_orchestrator import FeishuOrchestrator
 from oceanpilot.application.ports import CaseStoreFactory
 from oceanpilot.domain.models import UUID4Str
@@ -39,6 +40,10 @@ def get_store_factory(request: Request) -> CaseStoreFactory:
 
 def get_case_service(request: Request) -> CaseService:
     return request.app.state.case_service
+
+
+def get_demo_query(request: Request) -> DemoQuery:
+    return request.app.state.demo_query
 
 
 def get_feishu_runtime(request: Request) -> FeishuRuntime:

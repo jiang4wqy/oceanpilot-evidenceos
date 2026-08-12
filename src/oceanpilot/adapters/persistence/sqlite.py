@@ -20,6 +20,7 @@ from oceanpilot.application.errors import (
     PersistenceInvariantViolation,
 )
 from oceanpilot.domain.enums import (
+    AuditActorType,
     AuditEventType,
     CaseStatus,
     CaseType,
@@ -587,6 +588,44 @@ def _canonicalize_audit(event: AuditEvent) -> AuditEvent:
     return canonical
 
 
+def _decode_audit_row(row: sqlite3.Row) -> AuditEvent:
+    from_status_raw = row["from_status"]
+    to_status_raw = row["to_status"]
+    reason_code = row["reason_code"]
+    metadata = _decode_json(row["sanitized_metadata_json"])
+    if type(metadata) is not dict or (reason_code is not None and type(reason_code) is not str):
+        raise PersistenceInvariantViolation()
+    event = _invariant_call(
+        lambda: AuditEvent(
+            event_id=_decode_uuid(row["event_id"]),
+            event_type=AuditEventType(_require_text(row["event_type"])),
+            event_version=_require_text(row["event_version"]),
+            case_id=_decode_uuid(row["case_id"]),
+            request_id=_decode_uuid(row["request_id"]),
+            trace_id=_decode_uuid(row["trace_id"]),
+            actor_type=AuditActorType(_require_text(row["actor_type"])),
+            action=_require_text(row["action"]),
+            from_status=(
+                CaseStatus(_require_text(from_status_raw)) if from_status_raw is not None else None
+            ),
+            to_status=(
+                CaseStatus(_require_text(to_status_raw)) if to_status_raw is not None else None
+            ),
+            case_revision=_require_int(row["case_revision"]),
+            evidence_revision=_require_int(row["evidence_revision"]),
+            occurred_at=_decode_datetime(row["occurred_at"]),
+            result=_require_text(row["result"]),
+            reason_code=reason_code,
+            sanitized_metadata=metadata,
+            synthetic=decode_sqlite_bool("audit.synthetic", row["synthetic"]),
+        )
+    )
+    if event.synthetic is not True:
+        raise PersistenceInvariantViolation()
+    assert_no_sensitive_data(event)
+    return _canonicalize_audit(event)
+
+
 def _canonicalize_diagnosis(snapshot: DiagnosisSnapshot) -> DiagnosisSnapshot:
     canonical = _invariant_call(
         lambda: DiagnosisSnapshot.model_validate(
@@ -597,16 +636,12 @@ def _canonicalize_diagnosis(snapshot: DiagnosisSnapshot) -> DiagnosisSnapshot:
     if canonical != snapshot:
         raise PersistenceInvariantViolation()
     hypotheses = tuple(
-        hypothesis.model_copy(
-            update={"evidence_refs": tuple(sorted(hypothesis.evidence_refs))}
-        )
+        hypothesis.model_copy(update={"evidence_refs": tuple(sorted(hypothesis.evidence_refs))})
         for hypothesis in canonical.hypotheses
     )
     route = canonical.routing_decision
     if route is not None:
-        route = route.model_copy(
-            update={"evidence_refs": tuple(sorted(route.evidence_refs))}
-        )
+        route = route.model_copy(update={"evidence_refs": tuple(sorted(route.evidence_refs))})
     ticket = canonical.ticket_draft
     if ticket is not None:
         ticket = ticket.model_copy(
@@ -1022,8 +1057,7 @@ class SqliteCaseStoreSession:
                         and stored_case.status is canonical_case.status
                         and stored_case.schema_version == canonical_case.schema_version
                         and stored_case.case_revision == canonical_case.case_revision
-                        and stored_case.evidence_revision
-                        == canonical_case.evidence_revision
+                        and stored_case.evidence_revision == canonical_case.evidence_revision
                         and stored_case.synthetic is canonical_case.synthetic
                         and stored_case.summary == canonical_case.summary
                         and stored_case.merchant_ref == canonical_case.merchant_ref
@@ -1546,3 +1580,48 @@ class SqliteCaseStoreFactory:
             yield SqliteCaseStoreSession(connection)
         finally:
             connection.close()
+
+    def get_case_history(
+        self,
+        case_id: str,
+        *,
+        limit: int = 200,
+    ) -> tuple[CaseView | None, tuple[AuditEvent, ...], bool]:
+        if type(limit) is not int or not 1 <= limit <= 200:
+            raise ValueError("limit must be between 1 and 200")
+
+        def operation() -> tuple[CaseView | None, tuple[AuditEvent, ...], bool]:
+            normalized_case_id = _decode_uuid(case_id)
+            with self() as store, _deferred_read_transaction(store._connection):
+                view = store._load_case_graph(normalized_case_id)
+                if view is None:
+                    return None, (), False
+                rows = store._connection.execute(
+                    """
+                    SELECT case_id, event_id, event_type, event_version, request_id,
+                           trace_id, actor_type, action, from_status, to_status,
+                           case_revision, evidence_revision, occurred_at, result,
+                           reason_code, sanitized_metadata_json, synthetic
+                    FROM audit_events
+                    WHERE case_id = ?
+                    ORDER BY occurred_at,
+                        CASE event_type
+                            WHEN 'CASE_CREATED' THEN 10
+                            WHEN 'EVIDENCE_ADDED' THEN 20
+                            WHEN 'DIAGNOSIS_SUPERSEDED' THEN 30
+                            WHEN 'DIAGNOSIS_CREATED' THEN 40
+                            WHEN 'ROUTING_PROPOSED' THEN 50
+                            WHEN 'STATE_TRANSITIONED' THEN 60
+                            ELSE 100
+                        END,
+                        event_id
+                    LIMIT ?
+                    """,
+                    (normalized_case_id, limit + 1),
+                ).fetchall()
+                events = tuple(_decode_audit_row(row) for row in rows[:limit])
+                if any(event.case_id != normalized_case_id for event in events):
+                    raise PersistenceInvariantViolation()
+                return view, events, len(rows) > limit
+
+        return _call_with_error_mapping(operation)

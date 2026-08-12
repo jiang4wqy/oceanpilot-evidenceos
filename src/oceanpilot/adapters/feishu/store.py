@@ -8,6 +8,8 @@ from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
 
+from oceanpilot.application.demo_query import DemoConfirmationRecord
+from oceanpilot.application.errors import DatabaseUnavailable
 from oceanpilot.application.feishu_models import (
     FeishuApprovalRecord,
     FeishuConfirmationReceipt,
@@ -254,6 +256,12 @@ def _decode_response(encoded: str) -> dict[str, object]:
     if not isinstance(decoded, dict):
         raise RuntimeError("stored response is not an object")
     return decoded
+
+
+def _require_synthetic_true(raw: object) -> bool:
+    if type(raw) is not int or raw != 1:
+        raise ValueError("synthetic must be integer 1")
+    return True
 
 
 def _connect(path: Path) -> sqlite3.Connection:
@@ -1271,7 +1279,7 @@ class FeishuCallbackStoreSession:
             request_id=row["request_id"],
             trace_id=row["trace_id"],
             occurred_at=row["occurred_at"],
-            synthetic=bool(row["synthetic"]),
+            synthetic=_require_synthetic_true(row["synthetic"]),
         )
 
     def find_approval_audit(
@@ -1306,7 +1314,7 @@ class FeishuCallbackStoreSession:
             request_id=row["request_id"],
             trace_id=row["trace_id"],
             occurred_at=row["occurred_at"],
-            synthetic=bool(row["synthetic"]),
+            synthetic=_require_synthetic_true(row["synthetic"]),
         )
 
 
@@ -1322,6 +1330,32 @@ class FeishuCallbackStoreFactory:
             yield FeishuCallbackStoreSession(connection)
         finally:
             connection.close()
+
+    def find_confirmation(
+        self,
+        *,
+        case_id: str,
+        diagnosis_id: str,
+    ) -> DemoConfirmationRecord | None:
+        try:
+            with self.session() as store:
+                audit = store.find_approval_audit(
+                    case_id=case_id,
+                    diagnosis_id=diagnosis_id,
+                    action_kind="CONFIRM_REVIEW",
+                )
+            if audit is None:
+                return None
+            occurred_at = _require_aware_timestamp("occurred_at", audit.occurred_at)
+            if audit.result != "CONFIRMED" or audit.synthetic is not True:
+                raise ValueError("invalid confirmation audit")
+            return DemoConfirmationRecord(
+                result="CONFIRMED",
+                occurred_at=occurred_at,
+                synthetic=True,
+            )
+        except (OSError, sqlite3.Error, TypeError, ValueError):
+            raise DatabaseUnavailable() from None
 
     def get_case_id(self, binding_key: str) -> str | None:
         with self.session() as store:

@@ -314,6 +314,7 @@ def test_openapi_has_exact_foundation_paths(app: FastAPI):
         "/api/v1/cases/{case_id}",
         "/api/v1/cases/{case_id}/evidence",
         "/api/v1/cases/{case_id}/diagnose",
+        "/api/v1/demo/cases/{case_id}",
         "/api/v1/feishu/events",
         "/api/v1/feishu/card-actions",
     }
@@ -323,6 +324,7 @@ def test_openapi_has_exact_foundation_paths(app: FastAPI):
         "/api/v1/cases/{case_id}": {"get"},
         "/api/v1/cases/{case_id}/evidence": {"post"},
         "/api/v1/cases/{case_id}/diagnose": {"post"},
+        "/api/v1/demo/cases/{case_id}": {"get"},
         "/api/v1/feishu/events": {"post"},
         "/api/v1/feishu/card-actions": {"post"},
     }

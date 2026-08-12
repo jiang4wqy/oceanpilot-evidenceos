@@ -21,11 +21,13 @@ from oceanpilot.adapters.persistence.sqlite import (
     initialize_schema,
 )
 from oceanpilot.api.cases import router as cases_router
+from oceanpilot.api.demo import router as demo_router
 from oceanpilot.api.dependencies import FeishuRuntime, RequestContext
 from oceanpilot.api.errors import ProblemDetails, register_exception_handlers
 from oceanpilot.api.feishu import router as feishu_router
 from oceanpilot.api.health import router as health_router
 from oceanpilot.application.case_service import CaseService
+from oceanpilot.application.demo_query import DemoQuery
 from oceanpilot.application.feishu_orchestrator import FeishuOrchestrator
 from oceanpilot.config import Settings
 
@@ -52,6 +54,7 @@ def create_app(
         with store_factory() as store:
             store.healthcheck()
         app.state.feishu_runtime = None
+        callback_store = None
         if resolved.feishu is not None and resolved.feishu.is_complete:
             try:
                 callback_db_path = Path(resolved.feishu.callback_db_path)
@@ -88,15 +91,22 @@ def create_app(
                     )
             except (OSError, sqlite3.Error, TypeError, ValueError):
                 app.state.feishu_runtime = None
+                callback_store = None
         try:
+            app.state.demo_query = DemoQuery(
+                store_factory,
+                callback_store,
+            )
             yield
         finally:
             app.state.feishu_runtime = None
+            app.state.demo_query = None
 
     app = FastAPI(lifespan=lifespan)
     app.state.settings = resolved
     app.state.store_factory = store_factory
     app.state.case_service = case_service
+    app.state.demo_query = DemoQuery(store_factory, None)
     app.state.feishu_runtime = None
 
     @app.middleware("http")
@@ -111,6 +121,7 @@ def create_app(
     app.include_router(health_router)
     app.include_router(cases_router)
     app.include_router(feishu_router)
+    app.include_router(demo_router)
 
     def openapi_schema() -> dict[str, object]:
         if app.openapi_schema is None:
