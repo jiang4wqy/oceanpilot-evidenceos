@@ -26,9 +26,9 @@
 | Security sentinels | Local PASS | `tests/security/` |
 | Full pytest/Ruff/compileall/diff | Local PASS | PR4 checkpoint records fresh counts |
 | Clean temporary copy | Local PASS | 候选树 `950937084251e96fc65fa3b2672df30315917682` 的独立 Python 3.12 venv 中 `1035 passed`，且两级 fallback、Ruff/compileall、依赖审计与非 UTF-8 控制台 PDF 重建通过；见 PR4 checkpoint |
-| GitHub Actions | Fix pending revalidation | Run `31612017510` passed the PDF fix, then exposed a wheel test dependency on global `setuptools`; the test now uses the active interpreter and isolated PEP 517 build, pending a new remote run |
+| GitHub Actions | PASS | Run `31612557722` passed on implementation commit `b333933` |
 | Real Feishu test group | NOT RUN | Requires public HTTPS callback and valid tenant state |
-| Anonymous current commit | NOT VERIFIED | Current commit has not been pushed |
+| Anonymous implementation commit | VERIFIED | Raw README for `b333933` returned HTTP 200 without authentication at `2026-08-12T15:32:04Z` |
 
 ## 仍需完成
 
@@ -36,8 +36,6 @@
 
 - 安全整合已经分叉的本地/远端 feature history，不强推覆盖远端；
 - 推送安全新分支并创建/关联 PR；
-- 观察 GitHub Actions 绿色；
-- 用匿名会话验证目标 commit 的 README；
 - 在真实飞书测试群完成一次带时间证据的 message → confirmation → Cockpit smoke；
 - 记录 Gate 3 主链审查和 Gate 4 发布审查。
 

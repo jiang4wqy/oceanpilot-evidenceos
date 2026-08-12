@@ -29,12 +29,12 @@
 
 | Gate | Status | Reason |
 |---|---|---|
-| GitHub Actions | FIX PENDING REVALIDATION | run `31612017510` 已验证 PDF 控制台修复；随后 wheel 资产测试暴露 runner 缺少全局 `setuptools.build_meta`，已改用当前解释器和 PEP 517 隔离构建，等待新提交验证 |
+| GitHub Actions | PASS | run [`31612557722`](https://github.com/jiang4wqy/oceanpilot-evidenceos/actions/runs/31612557722) 在提交 `b333933` 上通过安装、Ruff、compileall、PDF 重建、`1035` 测试、signed fixture、四规则 API demo 和 diff check |
 | Real Feishu test group | NOT RUN | 尚无公网 HTTPS callback 下带时间的成功证据 |
-| Anonymous current commit | NOT VERIFIED | 当前 Task 7 提交尚未推送并从未登录会话读取 |
+| Anonymous implementation commit | VERIFIED | `2026-08-12T15:32:04Z` 未认证读取 `b333933` 的 raw README 返回 HTTP `200`，且包含项目标题与 synthetic 边界；后续仅追加本 checkpoint 的外部证据 |
 | Gate 3 main chain | LOCAL PASS | 安全、可复现性与文档真实性独立审查均通过；外部发布门仍单独保留 |
 | Gate 4 release | NOT RUN | 不能在 CI、匿名访问和真实飞书 smoke 前标记 PASS |
 
 ## Truthfulness decision
 
-当前可声称本地 synthetic 支付异常闭环、两级 fallback 和 clean-copy 发布门已通过；不得声称真实飞书群联调通过、GitHub CI 绿色、当前提交已匿名发布或系统已生产就绪。外部门保持独立，不用本地 fixture 替代。
+当前可声称本地 synthetic 支付异常闭环、两级 fallback、clean-copy 发布门、提交 `b333933` 的 GitHub CI 与匿名 README 验证已通过；不得声称真实飞书群联调通过、Gate 4 PASS、真实业务成效或系统已生产就绪。真实飞书外部门保持独立，不用本地 fixture 替代。
