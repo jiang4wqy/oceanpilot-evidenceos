@@ -178,7 +178,7 @@ $serviceBaseUrl = $BaseUrl.TrimEnd("/")
 $client = [System.Net.Http.HttpClient]::new()
 $summaries = @()
 
-Write-Host "SYNTHETIC LOCAL DEMO — no Oceanpayment or Feishu connection; no payment action is executed."
+Write-Host "SYNTHETIC LOCAL DEMO -- no Oceanpayment or Feishu connection; no payment action is executed."
 Write-Host "HTTP demo origin: MERCHANT / USER_REPORTED; expected review score 0.87, not the internal 0.94 fixture."
 
 try {

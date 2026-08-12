@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - name: Install
+        run: pip install -e ".[dev]"
+      - name: Lint
+        run: ruff check src tests examples scripts
+      - name: Compile
+        run: python -B -m compileall -q src tests examples scripts
+      - name: Rebuild submission PDF
+        run: python -B scripts/build_submission_pdf.py
+      - name: Test
+        env:
+          PYTHONPATH: src
+        run: python -B -m pytest -p no:cacheprovider -q --basetemp '${{ runner.temp }}/oceanpilot-ci'
+      - name: Signed callback fallback
+        env:
+          PYTHONPATH: src
+        run: python -B examples/signed_fixture_demo.py --work-dir '${{ runner.temp }}/signed-fixture'
+      - name: Start local API
+        shell: powershell
+        run: |
+          $env:PYTHONPATH = 'src'
+          $env:OCEANPILOT_DB_PATH = '${{ runner.temp }}/demo.db'
+          $process = Start-Process -FilePath 'python' -ArgumentList '-B','-m','uvicorn','oceanpilot.main:create_app','--factory','--host','127.0.0.1','--port','8000' -WindowStyle Hidden -PassThru
+          $process.Id | Set-Content '${{ runner.temp }}/uvicorn.pid'
+          for ($attempt = 0; $attempt -lt 40; $attempt++) {
+            try { Invoke-RestMethod 'http://127.0.0.1:8000/health'; exit 0 } catch { Start-Sleep -Milliseconds 250 }
+          }
+          exit 1
+      - name: Four-rule API demo
+        shell: powershell
+        run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File ./examples/demo.ps1
+      - name: Stop local API
+        if: always()
+        shell: powershell
+        run: |
+          if (Test-Path '${{ runner.temp }}/uvicorn.pid') {
+            Stop-Process -Id (Get-Content '${{ runner.temp }}/uvicorn.pid') -ErrorAction SilentlyContinue
+          }
+      - name: Diff check
+        run: git diff --check

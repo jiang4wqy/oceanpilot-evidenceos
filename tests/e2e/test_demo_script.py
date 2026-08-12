@@ -16,7 +16,7 @@ def script_text() -> str:
 
 def test_demo_declares_safe_synthetic_scope_and_http_origin(script_text: str):
     assert (
-        'Write-Host "SYNTHETIC LOCAL DEMO — no Oceanpayment or Feishu connection; '
+        'Write-Host "SYNTHETIC LOCAL DEMO -- no Oceanpayment or Feishu connection; '
         'no payment action is executed."' in script_text
     )
     assert (

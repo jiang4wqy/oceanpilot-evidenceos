@@ -10,7 +10,6 @@ from reportlab.lib.enums import TA_CENTER, TA_LEFT
 from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.units import mm
-from reportlab.lib.utils import ImageReader
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfgen import canvas as pdfcanvas
@@ -18,9 +17,6 @@ from reportlab.platypus import Paragraph
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 OUTPUT_PDF = ROOT / "artifacts" / "OceanPilot-开题报告补充材料.pdf"
-FIGURE_1 = ROOT / "docs" / "assets" / "submission" / "fig-01-evidence-loop.png"
-FIGURE_2 = ROOT / "docs" / "assets" / "submission" / "fig-02-layered-architecture.png"
-
 FONT_REGULAR = "OceanPilot-MSYH"
 FONT_BOLD = "OceanPilot-MSYH-Bold"
 FONT_REGULAR_PATH = pathlib.Path(r"C:\Windows\Fonts\msyh.ttc")
@@ -137,36 +133,6 @@ def draw_card(
     )
 
 
-def draw_contained_image(
-    canvas,
-    path: pathlib.Path,
-    x: float,
-    y: float,
-    max_width: float,
-    max_height: float,
-) -> tuple[float, float]:
-    """Draw an uncropped, aspect-ratio-preserving image centered in a box."""
-    if not path.is_file():
-        raise FileNotFoundError(f"Required image not found: {path}")
-    image = ImageReader(str(path))
-    pixel_width, pixel_height = image.getSize()
-    scale = min(max_width / pixel_width, max_height / pixel_height)
-    draw_width = pixel_width * scale
-    draw_height = pixel_height * scale
-    draw_x = x + (max_width - draw_width) / 2
-    draw_y = y + (max_height - draw_height) / 2
-    canvas.drawImage(
-        image,
-        draw_x,
-        draw_y,
-        width=draw_width,
-        height=draw_height,
-        preserveAspectRatio=True,
-        mask="auto",
-    )
-    return draw_width, draw_height
-
-
 def _draw_page_frame(canvas, page_width: float, page_height: float, margin: float) -> None:
     canvas.setFillColor(PAGE_BACKGROUND)
     canvas.rect(0, 0, page_width, page_height, fill=1, stroke=0)
@@ -244,6 +210,82 @@ def _draw_roadmap_bar(
         width - 24,
         roadmap_style.leading,
         roadmap_style,
+    )
+
+
+def _draw_arrow(
+    canvas,
+    x_start: float,
+    y_start: float,
+    x_end: float,
+    y_end: float,
+    *,
+    color=OCEAN_BLUE,
+) -> None:
+    canvas.saveState()
+    canvas.setStrokeColor(color)
+    canvas.setFillColor(color)
+    canvas.setLineWidth(1.8)
+    canvas.line(x_start, y_start, x_end, y_end)
+    if abs(x_end - x_start) >= abs(y_end - y_start):
+        direction = 1 if x_end >= x_start else -1
+        points = (
+            (x_end, y_end),
+            (x_end - direction * 7, y_end + 4),
+            (x_end - direction * 7, y_end - 4),
+        )
+    else:
+        direction = 1 if y_end >= y_start else -1
+        points = (
+            (x_end, y_end),
+            (x_end + 4, y_end - direction * 7),
+            (x_end - 4, y_end - direction * 7),
+        )
+    path = canvas.beginPath()
+    path.moveTo(*points[0])
+    path.lineTo(*points[1])
+    path.lineTo(*points[2])
+    path.close()
+    canvas.drawPath(path, fill=1, stroke=0)
+    canvas.restoreState()
+
+
+def _draw_layer(
+    canvas,
+    x: float,
+    y: float,
+    width: float,
+    height: float,
+    title: str,
+    body: str,
+    *,
+    accent,
+) -> None:
+    canvas.saveState()
+    canvas.setFillColor(white)
+    canvas.setStrokeColor(accent)
+    canvas.setLineWidth(1.2)
+    canvas.roundRect(x, y, width, height, 7, fill=1, stroke=1)
+    canvas.setFillColor(accent)
+    canvas.roundRect(x, y, 7, height, 3, fill=1, stroke=0)
+    canvas.restoreState()
+    layer_style = ParagraphStyle(
+        "layer",
+        fontName=FONT_REGULAR,
+        fontSize=11,
+        leading=14,
+        textColor=NAVY,
+        alignment=TA_CENTER,
+        wordWrap="CJK",
+    )
+    draw_paragraph(
+        canvas,
+        f"<b>{html.escape(title)}</b>　{html.escape(body)}",
+        x + 14,
+        y + (height + layer_style.leading) / 2,
+        width - 28,
+        layer_style.leading,
+        layer_style,
     )
 
 
@@ -357,27 +399,100 @@ def build_pdf(output_path: pathlib.Path = OUTPUT_PDF) -> pathlib.Path:
     )
 
     figure_1_width = 225 * mm
-    figure_1_y = 118.5
-    figure_1_box_height = 359.5
-    drawn_width, _ = draw_contained_image(
-        pdf,
-        FIGURE_1,
-        margin,
-        figure_1_y,
-        figure_1_width,
-        figure_1_box_height,
+    flow_x = margin + 12
+    flow_width = figure_1_width - 24
+    node_width = 125
+    node_height = 70
+    node_gap = (flow_width - 3 * node_width) / 2
+    row_1_y = 360
+    row_2_y = 260
+    row_3_y = 160
+    flow_nodes = (
+        ("1 问题建案", "群聊描述变成版本化案件", flow_x, row_1_y, TEAL),
+        ("2 证据缺口", "readiness 决定下一补问", flow_x + node_width + node_gap, row_1_y, TEAL),
+        (
+            "3 角色化补问",
+            "七步收集服务端选定证据",
+            flow_x + 2 * (node_width + node_gap),
+            row_1_y,
+            TEAL,
+        ),
+        ("4 确定性诊断", "四规则 + 证据引用 + 置信度", flow_x, row_2_y, OCEAN_BLUE),
+        (
+            "5 责任建议",
+            "团队、优先级与下一动作",
+            flow_x + node_width + node_gap,
+            row_2_y,
+            OCEAN_BLUE,
+        ),
+        (
+            "6 人工确认",
+            "只写 approval audit，不执行业务",
+            flow_x + 2 * (node_width + node_gap),
+            row_2_y,
+            AMBER,
+        ),
+        (
+            "7 只读 Cockpit",
+            "同一 persisted case 可回看",
+            flow_x + node_width + node_gap,
+            row_3_y,
+            TEAL,
+        ),
     )
-    if drawn_width < 220 * mm:
-        raise ValueError("Page 1 main diagram rendered below 220 mm")
+    for title, body, x, y, accent in flow_nodes:
+        draw_card(pdf, x, y, node_width, node_height, title, body, accent=accent)
+    _draw_arrow(
+        pdf,
+        flow_x + node_width,
+        row_1_y + node_height / 2,
+        flow_x + node_width + node_gap - 7,
+        row_1_y + node_height / 2,
+    )
+    _draw_arrow(
+        pdf,
+        flow_x + 2 * node_width + node_gap,
+        row_1_y + node_height / 2,
+        flow_x + 2 * (node_width + node_gap) - 7,
+        row_1_y + node_height / 2,
+    )
+    _draw_arrow(
+        pdf,
+        flow_x + 2 * (node_width + node_gap) + node_width / 2,
+        row_1_y - 7,
+        flow_x + node_width / 2,
+        row_2_y + node_height + 7,
+    )
+    _draw_arrow(
+        pdf,
+        flow_x + node_width,
+        row_2_y + node_height / 2,
+        flow_x + node_width + node_gap - 7,
+        row_2_y + node_height / 2,
+    )
+    _draw_arrow(
+        pdf,
+        flow_x + 2 * node_width + node_gap,
+        row_2_y + node_height / 2,
+        flow_x + 2 * (node_width + node_gap) - 7,
+        row_2_y + node_height / 2,
+    )
+    _draw_arrow(
+        pdf,
+        flow_x + 2 * (node_width + node_gap) + node_width / 2,
+        row_2_y - 7,
+        flow_x + node_width + node_gap + node_width / 2,
+        row_3_y + node_height + 7,
+    )
 
     card_x = margin + figure_1_width + 14
     card_width = page_width - margin - card_x
     draw_card(
         pdf,
         card_x,
-        365,
+        360,
         card_width,
-        113,
+        118,
         ">72% 自由文本",
         "Swift 2025：跨境支付异常调查消息仍存在显著结构化缺口。",
         accent=OCEAN_BLUE,
@@ -385,9 +500,9 @@ def build_pdf(output_path: pathlib.Path = OUTPUT_PDF) -> pathlib.Path:
     draw_card(
         pdf,
         card_x,
-        242,
+        232,
         card_width,
-        113,
+        118,
         "单点能力已成熟",
         "Stripe 动态推荐支付方式；Primer 用事件时间线还原请求与响应。",
         accent=TEAL,
@@ -395,9 +510,9 @@ def build_pdf(output_path: pathlib.Path = OUTPUT_PDF) -> pathlib.Path:
     draw_card(
         pdf,
         card_x,
-        119,
+        104,
         card_width,
-        113,
+        118,
         "协作仍需人工还原",
         "G2 单一验证用户反馈：历史交易与到账关系仍需人工梳理。定性个案，不代表行业比例。",
         accent=AMBER,
@@ -405,9 +520,9 @@ def build_pdf(output_path: pathlib.Path = OUTPUT_PDF) -> pathlib.Path:
 
     draw_paragraph(
         pdf,
-        html.escape("绿色实线为当前基础原型，蓝色虚线为离线规则资产，灰色与琥珀色为完整方案路径。"),
+        html.escape("全链仅使用 synthetic 数据；人工确认不执行支付、退款、风控放行或资金动作。"),
         margin,
-        111,
+        144,
         figure_1_width,
         13,
         caption_style,
@@ -451,11 +566,11 @@ def build_pdf(output_path: pathlib.Path = OUTPUT_PDF) -> pathlib.Path:
     draw_paragraph(pdf, page_1_sources, margin, 57, content_width, 20, source_style)
     pdf.showPage()
 
-    # Page 2: verified implementation boundary and staged delivery plan.
+    # Page 2: current runtime, local evidence, and external release boundary.
     _draw_page_frame(pdf, page_width, page_height, margin)
     draw_paragraph(
         pdf,
-        html.escape("02｜证据内核已验证，完整飞书闭环按阶段接入"),
+        html.escape("02｜支付异常闭环已打通，综合智能体按阶段扩展"),
         margin,
         page_height - margin,
         content_width,
@@ -464,70 +579,91 @@ def build_pdf(output_path: pathlib.Path = OUTPUT_PDF) -> pathlib.Path:
     )
 
     figure_2_width = 220 * mm
-    figure_2_y = 169.5
-    figure_2_box_height = 351.5
-    drawn_width, _ = draw_contained_image(
-        pdf,
-        FIGURE_2,
-        margin,
-        figure_2_y,
-        figure_2_width,
-        figure_2_box_height,
+    layer_x = margin + 10
+    layer_width = figure_2_width - 20
+    layer_height = 48
+    layer_y_values = (438, 371, 304, 237, 170)
+    runtime_layers = (
+        ("飞书交互", "签名 callback｜群聊建案｜角色化卡片", OCEAN_BLUE),
+        ("案件编排", "readiness｜七步补证｜去重与租约", TEAL),
+        ("诊断内核", "四条确定性规则｜置信度｜证据引用", TEAL),
+        ("受控协作", "责任建议｜人工确认｜approval audit", AMBER),
+        ("持久化展示", "Core + Feishu SQLite｜只读 Cockpit", OCEAN_BLUE),
     )
-    if drawn_width < 220 * mm - 0.1:
-        raise ValueError("Page 2 main diagram rendered below 220 mm")
+    for index, ((title, body, accent), layer_y) in enumerate(
+        zip(runtime_layers, layer_y_values, strict=True)
+    ):
+        _draw_layer(
+            pdf,
+            layer_x,
+            layer_y,
+            layer_width,
+            layer_height,
+            title,
+            body,
+            accent=accent,
+        )
+        if index < len(runtime_layers) - 1:
+            _draw_arrow(
+                pdf,
+                layer_x + layer_width / 2,
+                layer_y - 4,
+                layer_x + layer_width / 2,
+                layer_y_values[index + 1] + layer_height + 4,
+            )
 
     status_x = margin + figure_2_width + 13
     status_width = page_width - margin - status_x
     draw_card(
         pdf,
         status_x,
-        412,
+        400,
         status_width,
-        109,
-        "当前已实现",
-        "建案、证据、完整度、revision、SQLite 原子事务与审计｜717 项本地测试｜5 条 API 路径",
+        121,
+        "当前已实现｜LIVE / SYNTHETIC",
+        "飞书建案、七步补证、持久化诊断、责任建议、人工确认审计、只读驾驶舱｜8 条 OpenAPI",
         accent=TEAL,
     )
     draw_card(
         pdf,
         status_x,
-        291,
+        267,
         status_width,
-        109,
-        "离线领域资产",
-        "4 条确定性异常规则及测试｜尚未接入运行时诊断主链",
+        121,
+        "本地发布证据",
+        "1034 tests｜signed fixture｜四规则 API demo｜clean copy｜wheel 静态资源",
         accent=OCEAN_BLUE,
     )
     draw_card(
         pdf,
         status_x,
-        170,
+        134,
         status_width,
-        109,
-        "入围后规划",
-        "飞书 Agent｜真实只读适配｜诊断编排｜Workflow｜工单/SLA｜知识复用",
+        121,
+        "仍需外部验证 / 后续扩展",
+        "真实飞书测试群｜GitHub CI / 匿名 commit｜Oceanpayment 只读适配｜Workflow｜工单/SLA",
         accent=NEUTRAL_GRAY,
     )
 
     mandatory_note = (
-        "事实边界：诊断请求进入 API 后固定返回 HTTP 501 FEATURE_DEFERRED；离线规则当前未接入主链。"
-        "图中左侧深蓝折线仅标示停止边界，不表示 501 反向调用 FastAPI。"
+        "事实边界：当前本地能力均使用 synthetic 数据。真实飞书测试群、远端 CI 和"
+        "当前提交的匿名可见性"
+        "尚未验证；诊断与路由只提供建议，人工确认只写审计，不触发任何业务动作。"
     )
     draw_paragraph(
         pdf,
         html.escape(mandatory_note),
         margin,
-        160,
+        126,
         content_width,
-        30,
+        32,
         note_style,
     )
     _draw_roadmap_bar(
         pdf,
-        "基础原型（当前） → 飞书交互 → 真实只读适配 → 试点评估",
+        "比赛演示（当前） → 真实飞书 smoke → 企业授权只读适配 → 试点评估",
         margin,
-        101,
+        64,
         content_width,
         24,
     )
@@ -538,22 +674,22 @@ def build_pdf(output_path: pathlib.Path = OUTPUT_PDF) -> pathlib.Path:
             "首次责任域命中 80%｜改派次数 -30%"
         ),
         margin,
-        91,
+        54,
         content_width,
         16,
         trial_style,
     )
     pdf.setStrokeColor(PALE_BORDER)
     pdf.setLineWidth(0.6)
-    pdf.line(margin, 64, page_width - margin, 64)
+    pdf.line(margin, 36, page_width - margin, 36)
     draw_paragraph(
         pdf,
         html.escape(
-            "仅使用合成数据｜诊断仍为 HTTP 501｜不执行支付、退款、风控放行或资金动作｜"
-            "不声称真实业务成效或生产就绪"
+            "仅使用 synthetic 数据｜不执行支付、退款、风控放行、资金移动或生产配置修改｜"
+            "不声称真实业务成效、真实飞书联调、远端 CI 绿色或生产就绪"
         ),
         margin,
-        57,
+        30,
         content_width,
         14,
         boundary_style,
