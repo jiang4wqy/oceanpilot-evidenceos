@@ -13,13 +13,13 @@
 
 | Gate | Status | Evidence |
 |---|---|---|
-| Full pytest | PASS | 精确 index clean-copy 的全新 Python 3.12 venv：`1034 passed in 72.34s`；另有 1 条既有 Starlette/httpx deprecation warning |
+| Full pytest | PASS | 精确 index clean-copy 的全新 Python 3.12 venv：`1035 passed in 65.39s`；另有 1 条既有 Starlette/httpx deprecation warning |
 | Ruff | PASS | `ruff check src tests examples scripts` |
 | compileall | PASS | `py -3.12 -B -m compileall -q src tests examples scripts` |
 | diff check | PASS | `git diff --check` |
 | Signed fixture | PASS | signed callback → 7 次补证 → diagnosis → confirmation → Cockpit；approval `1`，business action `false` |
 | PowerShell four-rule demo | PASS | 3DS、risk、merchant config、PSP config 全部命中预期规则，退出码 `0` |
-| Clean temporary copy | PASS | 已验证候选树 `d1f5bff430f85c6c5606fe9ffa0a0bd1f911aa70`；全新 Python 3.12 venv 安装并重建 PDF；`1034 passed`；两级 fallback、Ruff/compileall 与 wheel/static 测试；此后仅更新本 checkpoint 的实际证据 |
+| Clean temporary copy | PASS | 已验证候选树 `950937084251e96fc65fa3b2672df30315917682`；全新 Python 3.12 venv 安装并在 `cp1252` 控制台重建 PDF；`1035 passed`；两级 fallback、Ruff/compileall、依赖审计与 wheel/static 测试；此后仅更新本 checkpoint 的实际证据 |
 | Formatting baseline audit | RECORDED | 29 个历史文件待独立机械提交；本次 Task 7 Python 文件均已通过 format check |
 | Dependency audit | PASS | clean-copy 安装 `pypdf 6.15.0`；`pip check` 无损坏依赖，`pip-audit` 无已知漏洞；本地项目包未发布到 PyPI，按工具提示跳过其索引查询 |
 | Secret scan | PASS / REVIEWED | 对候选 index 的 128 个 Git 文件审计：`detect-secrets` 0 命中；定向扫描的 92 个候选均经人工确认为测试、fixture、synthetic 占位或 sentinel canary；真实凭据 0 个；PDF 无附件且内容扫描 0 命中 |
@@ -29,7 +29,7 @@
 
 | Gate | Status | Reason |
 |---|---|---|
-| GitHub Actions | CONFIGURED / NOT RUN | 分支尚未成功推送并触发远端 workflow |
+| GitHub Actions | FIX PENDING REVALIDATION | 首次运行 `31610488039` 在 PDF 已生成后因中文路径写入 `cp1252` 控制台失败；已加入 CLI 回归测试与 ASCII 状态输出，等待新提交验证 |
 | Real Feishu test group | NOT RUN | 尚无公网 HTTPS callback 下带时间的成功证据 |
 | Anonymous current commit | NOT VERIFIED | 当前 Task 7 提交尚未推送并从未登录会话读取 |
 | Gate 3 main chain | LOCAL PASS | 安全、可复现性与文档真实性独立审查均通过；外部发布门仍单独保留 |

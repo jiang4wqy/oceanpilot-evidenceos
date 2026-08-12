@@ -631,7 +631,7 @@ def build_pdf(output_path: pathlib.Path = OUTPUT_PDF) -> pathlib.Path:
         status_width,
         121,
         "本地发布证据",
-        "1034 tests｜signed fixture｜四规则 API demo｜clean copy｜wheel 静态资源",
+        "1035 tests｜signed fixture｜四规则 API demo｜clean copy｜wheel 静态资源",
         accent=OCEAN_BLUE,
     )
     draw_card(
@@ -700,8 +700,8 @@ def build_pdf(output_path: pathlib.Path = OUTPUT_PDF) -> pathlib.Path:
 
 
 def main() -> int:
-    output_path = build_pdf()
-    print(output_path)
+    build_pdf()
+    print("Submission PDF rebuilt.")
     return 0
 
 

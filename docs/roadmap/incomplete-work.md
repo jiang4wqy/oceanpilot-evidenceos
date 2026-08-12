@@ -25,8 +25,8 @@
 | Four-rule API fallback | Local PASS | `examples/demo.ps1` + E2E tests |
 | Security sentinels | Local PASS | `tests/security/` |
 | Full pytest/Ruff/compileall/diff | Local PASS | PR4 checkpoint records fresh counts |
-| Clean temporary copy | Local PASS | 独立 Python 3.12 venv 中 `1034 passed`、两级 fallback 与 wheel/static smoke；见 PR4 checkpoint |
-| GitHub Actions | Configured, NOT RUN | Branch cannot currently reach GitHub 443 |
+| Clean temporary copy | Local PASS | 候选树 `950937084251e96fc65fa3b2672df30315917682` 的独立 Python 3.12 venv 中 `1035 passed`，且两级 fallback、Ruff/compileall、依赖审计与非 UTF-8 控制台 PDF 重建通过；见 PR4 checkpoint |
+| GitHub Actions | Fix pending revalidation | Run `31610488039` exposed a `cp1252` console error after PDF generation; the ASCII-output fix and regression test await a new remote run |
 | Real Feishu test group | NOT RUN | Requires public HTTPS callback and valid tenant state |
 | Anonymous current commit | NOT VERIFIED | Current commit has not been pushed |
 
