@@ -2,10 +2,12 @@ from dataclasses import dataclass
 
 from fastapi import Request
 
+from oceanpilot.adapters.feishu.client import FeishuOutboundClient
 from oceanpilot.adapters.feishu.security import FeishuRequestVerifier
 from oceanpilot.adapters.feishu.store import FeishuCallbackStoreFactory
 from oceanpilot.api.errors import FeishuUnavailable
 from oceanpilot.application.case_service import CaseService
+from oceanpilot.application.feishu_orchestrator import FeishuOrchestrator
 from oceanpilot.application.ports import CaseStoreFactory
 from oceanpilot.domain.models import UUID4Str
 
@@ -20,6 +22,11 @@ class RequestContext:
 class FeishuRuntime:
     verifier: FeishuRequestVerifier
     store_factory: FeishuCallbackStoreFactory
+    outbound_client: FeishuOutboundClient
+    orchestrator: FeishuOrchestrator
+    app_id: str
+    demo_chat_id: str | None
+    demo_merchant_ref: str | None
 
 
 def get_request_context(request: Request) -> RequestContext:

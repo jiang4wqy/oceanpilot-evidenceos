@@ -1011,6 +1011,28 @@ class SqliteCaseStoreSession:
                     case_revision=1,
                     evidence_revision=0,
                 )
+                existing = self._load_case_graph(canonical_case.case_id)
+                if existing is not None:
+                    stored_case = existing.case
+                    same_creation_identity = (
+                        existing.evidence == ()
+                        and existing.current_diagnosis is None
+                        and stored_case.case_id == canonical_case.case_id
+                        and stored_case.case_type is canonical_case.case_type
+                        and stored_case.status is canonical_case.status
+                        and stored_case.schema_version == canonical_case.schema_version
+                        and stored_case.case_revision == canonical_case.case_revision
+                        and stored_case.evidence_revision
+                        == canonical_case.evidence_revision
+                        and stored_case.synthetic is canonical_case.synthetic
+                        and stored_case.summary == canonical_case.summary
+                        and stored_case.merchant_ref == canonical_case.merchant_ref
+                        and stored_case.current_diagnosis_id is None
+                        and stored_case.readiness == canonical_case.readiness
+                    )
+                    if not same_creation_identity:
+                        raise PersistenceInvariantViolation()
+                    return existing
                 _insert_case(self._connection, canonical_case)
                 _insert_audit(self._connection, validated_audits[0])
                 view = self._load_case_graph(canonical_case.case_id)

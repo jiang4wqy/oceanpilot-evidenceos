@@ -4,7 +4,7 @@ import sqlite3
 from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
 
@@ -12,12 +12,20 @@ from oceanpilot.application.feishu_models import (
     FeishuApprovalRecord,
     FeishuConfirmationReceipt,
 )
+from oceanpilot.application.feishu_ports import (
+    FeishuBindingClaim,
+    FeishuBindingOutcome,
+)
 
 _SCHEMA = (
     """
     CREATE TABLE IF NOT EXISTS feishu_event_receipts (
         event_id TEXT PRIMARY KEY,
+        payload_hash TEXT NOT NULL,
         status TEXT NOT NULL CHECK (status IN ('CLAIMED', 'COMPLETED')),
+        claim_token TEXT,
+        lease_expires_at TEXT,
+        attempt INTEGER NOT NULL DEFAULT 0 CHECK (attempt >= 0),
         response_json TEXT,
         case_id TEXT,
         created_at TEXT NOT NULL,
@@ -38,8 +46,31 @@ _SCHEMA = (
     )
     """,
     """
+    CREATE TABLE IF NOT EXISTS feishu_binding_claims (
+        binding_key TEXT PRIMARY KEY,
+        owner_event_id TEXT NOT NULL,
+        status TEXT NOT NULL CHECK (status IN ('CLAIMED', 'BOUND')),
+        case_id TEXT NOT NULL,
+        claim_token TEXT,
+        lease_expires_at TEXT,
+        attempt INTEGER NOT NULL DEFAULT 0 CHECK (attempt >= 0),
+        created_at TEXT NOT NULL,
+        updated_at TEXT,
+        CHECK (
+            (status = 'CLAIMED' AND claim_token IS NOT NULL
+                AND lease_expires_at IS NOT NULL AND attempt >= 1
+                AND updated_at IS NULL)
+            OR
+            (status = 'BOUND' AND case_id IS NOT NULL
+                AND claim_token IS NOT NULL AND lease_expires_at IS NULL
+                AND updated_at IS NOT NULL)
+        )
+    )
+    """,
+    """
     CREATE TABLE IF NOT EXISTS feishu_action_receipts (
         action_id TEXT PRIMARY KEY,
+        payload_hash TEXT NOT NULL,
         status TEXT NOT NULL CHECK (status IN ('CLAIMED', 'COMPLETED')),
         response_json TEXT,
         case_id TEXT,
@@ -133,11 +164,32 @@ def _require_text(name: str, value: str) -> str:
     return value
 
 
+def _require_aware_timestamp(name: str, value: str) -> datetime:
+    value = _require_text(name, value)
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError:
+        raise ValueError(f"{name} must be an aware ISO timestamp") from None
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        raise ValueError(f"{name} must be an aware ISO timestamp")
+    return parsed.astimezone(UTC)
+
+
 def _actor_hash(actor_id: str) -> str:
     actor_id = _require_text("actor_id", actor_id)
     if len(actor_id) == 64 and all(character in "0123456789abcdef" for character in actor_id):
         return actor_id
     return hashlib.sha256(actor_id.encode("utf-8")).hexdigest()
+
+
+def _require_hash(name: str, value: str) -> str:
+    if (
+        type(value) is not str
+        or len(value) != 64
+        or any(character not in "0123456789abcdef" for character in value)
+    ):
+        raise ValueError(f"{name} must be a lowercase sha256 hash")
+    return value
 
 
 def _reject_sensitive_keys(value: object) -> None:
@@ -236,6 +288,60 @@ def _initialize(path: Path) -> None:
                 connection.execute(statement)
             _add_column_if_missing(
                 connection,
+                table="feishu_event_receipts",
+                column="payload_hash",
+                declaration="TEXT",
+            )
+            _add_column_if_missing(
+                connection,
+                table="feishu_event_receipts",
+                column="claim_token",
+                declaration="TEXT",
+            )
+            _add_column_if_missing(
+                connection,
+                table="feishu_event_receipts",
+                column="lease_expires_at",
+                declaration="TEXT",
+            )
+            _add_column_if_missing(
+                connection,
+                table="feishu_event_receipts",
+                column="attempt",
+                declaration="INTEGER NOT NULL DEFAULT 0",
+            )
+            _add_column_if_missing(
+                connection,
+                table="feishu_action_receipts",
+                column="payload_hash",
+                declaration="TEXT",
+            )
+            _add_column_if_missing(
+                connection,
+                table="feishu_binding_claims",
+                column="case_id",
+                declaration="TEXT",
+            )
+            _add_column_if_missing(
+                connection,
+                table="feishu_binding_claims",
+                column="claim_token",
+                declaration="TEXT",
+            )
+            _add_column_if_missing(
+                connection,
+                table="feishu_binding_claims",
+                column="lease_expires_at",
+                declaration="TEXT",
+            )
+            _add_column_if_missing(
+                connection,
+                table="feishu_binding_claims",
+                column="attempt",
+                declaration="INTEGER NOT NULL DEFAULT 0",
+            )
+            _add_column_if_missing(
+                connection,
                 table="feishu_approval_audits",
                 column="request_id",
                 declaration="TEXT",
@@ -269,22 +375,32 @@ class FeishuCallbackStoreSession:
         table: str,
         key_column: str,
         receipt_id: str,
+        payload_hash: str,
         created_at: str,
     ) -> ReceiptResult:
         _require_text(key_column, receipt_id)
+        payload_hash = _require_hash("payload_hash", payload_hash)
         _require_text("created_at", created_at)
         with _immediate_transaction(self._connection):
             row = self._connection.execute(
-                f"SELECT status, response_json FROM {table} WHERE {key_column} = ?",
+                f"SELECT status, response_json, payload_hash FROM {table} "
+                f"WHERE {key_column} = ?",
                 (receipt_id,),
             ).fetchone()
             if row is None:
                 self._connection.execute(
-                    f"INSERT INTO {table} ({key_column}, status, created_at) "
-                    "VALUES (?, 'CLAIMED', ?)",
-                    (receipt_id, created_at),
+                    f"INSERT INTO {table} ({key_column}, payload_hash, status, created_at) "
+                    "VALUES (?, ?, 'CLAIMED', ?)",
+                    (receipt_id, payload_hash, created_at),
                 )
                 return ReceiptResult(ReceiptOutcome.CLAIMED)
+            if row["payload_hash"] is None:
+                self._connection.execute(
+                    f"UPDATE {table} SET payload_hash = ? WHERE {key_column} = ?",
+                    (payload_hash, receipt_id),
+                )
+            elif row["payload_hash"] != payload_hash:
+                raise ReceiptConflict(receipt_id)
             if row["status"] == "CLAIMED":
                 return ReceiptResult(ReceiptOutcome.IN_PROGRESS)
             return ReceiptResult(
@@ -292,43 +408,153 @@ class FeishuCallbackStoreSession:
                 _decode_response(row["response_json"]),
             )
 
-    def claim_event(self, event_id: str, *, created_at: str) -> ReceiptResult:
-        return self._claim(
-            table="feishu_event_receipts",
-            key_column="event_id",
-            receipt_id=event_id,
-            created_at=created_at,
-        )
+    def claim_event(
+        self,
+        event_id: str,
+        *,
+        payload_hash: str,
+        claim_token: str,
+        now: str,
+        lease_expires_at: str,
+    ) -> ReceiptResult:
+        event_id = _require_text("event_id", event_id)
+        payload_hash = _require_hash("payload_hash", payload_hash)
+        claim_token = _require_text("claim_token", claim_token)
+        now_value = _require_aware_timestamp("now", now)
+        lease_value = _require_aware_timestamp("lease_expires_at", lease_expires_at)
+        if lease_value <= now_value:
+            raise ValueError("lease_expires_at must be later than now")
+        now = now_value.isoformat()
+        lease_expires_at = lease_value.isoformat()
+        with _immediate_transaction(self._connection):
+            row = self._connection.execute(
+                "SELECT status, response_json, payload_hash, claim_token, "
+                "lease_expires_at FROM feishu_event_receipts WHERE event_id = ?",
+                (event_id,),
+            ).fetchone()
+            if row is None:
+                self._connection.execute(
+                    "INSERT INTO feishu_event_receipts ("
+                    "event_id, payload_hash, status, claim_token, lease_expires_at, "
+                    "attempt, created_at) VALUES (?, ?, 'CLAIMED', ?, ?, 1, ?)",
+                    (event_id, payload_hash, claim_token, lease_expires_at, now),
+                )
+                return ReceiptResult(ReceiptOutcome.CLAIMED)
+            if row["payload_hash"] is not None and row["payload_hash"] != payload_hash:
+                raise ReceiptConflict(event_id)
+            if row["status"] == "COMPLETED":
+                if row["payload_hash"] is None:
+                    self._connection.execute(
+                        "UPDATE feishu_event_receipts SET payload_hash = ? "
+                        "WHERE event_id = ?",
+                        (payload_hash, event_id),
+                    )
+                return ReceiptResult(
+                    ReceiptOutcome.REPLAY,
+                    _decode_response(row["response_json"]),
+                )
+            active_lease = (
+                _require_aware_timestamp("stored lease_expires_at", row["lease_expires_at"])
+                if row["lease_expires_at"] is not None
+                else None
+            )
+            if active_lease is not None and active_lease > now_value:
+                return ReceiptResult(ReceiptOutcome.IN_PROGRESS)
+            self._connection.execute(
+                "UPDATE feishu_event_receipts SET payload_hash = ?, claim_token = ?, "
+                "lease_expires_at = ?, attempt = attempt + 1 "
+                "WHERE event_id = ? AND status = 'CLAIMED'",
+                (payload_hash, claim_token, lease_expires_at, event_id),
+            )
+            return ReceiptResult(ReceiptOutcome.CLAIMED)
 
-    def claim_action(self, action_id: str, *, created_at: str) -> ReceiptResult:
+    def claim_action(
+        self,
+        action_id: str,
+        *,
+        payload_hash: str,
+        created_at: str,
+    ) -> ReceiptResult:
         return self._claim(
             table="feishu_action_receipts",
             key_column="action_id",
             receipt_id=action_id,
+            payload_hash=payload_hash,
             created_at=created_at,
         )
+
+    def release_event(
+        self,
+        event_id: str,
+        *,
+        payload_hash: str,
+        claim_token: str,
+    ) -> None:
+        event_id = _require_text("event_id", event_id)
+        payload_hash = _require_hash("payload_hash", payload_hash)
+        claim_token = _require_text("claim_token", claim_token)
+        with _immediate_transaction(self._connection):
+            row = self._connection.execute(
+                "SELECT status, payload_hash, claim_token FROM feishu_event_receipts "
+                "WHERE event_id = ?",
+                (event_id,),
+            ).fetchone()
+            if row is None:
+                raise ReceiptNotClaimed(event_id)
+            if (
+                row["status"] != "CLAIMED"
+                or row["payload_hash"] != payload_hash
+                or row["claim_token"] != claim_token
+            ):
+                raise ReceiptConflict(event_id)
+            released = self._connection.execute(
+                "UPDATE feishu_event_receipts SET claim_token = NULL, "
+                "lease_expires_at = NULL WHERE event_id = ? AND status = 'CLAIMED' "
+                "AND payload_hash = ? AND claim_token = ?",
+                (event_id, payload_hash, claim_token),
+            )
+            if released.rowcount != 1:
+                raise ReceiptConflict(event_id)
 
     def complete_event(
         self,
         event_id: str,
         *,
+        claim_token: str,
         response: Mapping[str, object],
         case_id: str,
         completed_at: str,
     ) -> ReceiptResult:
         event_id = _require_text("event_id", event_id)
+        claim_token = _require_text("claim_token", claim_token)
         encoded = _encode_response(response)
-        metadata = {"case_id": _require_text("case_id", case_id)}
-        completed_at = _require_text("completed_at", completed_at)
+        case_id = _require_text("case_id", case_id)
+        completed_at = _require_aware_timestamp(
+            "completed_at", completed_at
+        ).isoformat()
         with _immediate_transaction(self._connection):
-            return self._complete_in_transaction(
-                table="feishu_event_receipts",
-                key_column="event_id",
-                receipt_id=event_id,
-                encoded=encoded,
-                metadata=metadata,
-                completed_at=completed_at,
+            row = self._connection.execute(
+                "SELECT status, response_json, case_id, claim_token "
+                "FROM feishu_event_receipts WHERE event_id = ?",
+                (event_id,),
+            ).fetchone()
+            if row is None:
+                raise ReceiptNotClaimed(event_id)
+            if row["claim_token"] != claim_token:
+                raise ReceiptConflict(event_id)
+            if row["status"] == "COMPLETED":
+                if (row["response_json"], row["case_id"]) != (encoded, case_id):
+                    raise ReceiptConflict(event_id)
+                return ReceiptResult(ReceiptOutcome.REPLAY, _decode_response(encoded))
+            updated = self._connection.execute(
+                "UPDATE feishu_event_receipts SET status = 'COMPLETED', "
+                "response_json = ?, case_id = ?, completed_at = ? "
+                "WHERE event_id = ? AND status = 'CLAIMED' AND claim_token = ?",
+                (encoded, case_id, completed_at, event_id, claim_token),
             )
+            if updated.rowcount != 1:
+                raise ReceiptConflict(event_id)
+            return ReceiptResult(ReceiptOutcome.COMPLETED, _decode_response(encoded))
 
     def complete_action(
         self,
@@ -450,6 +676,209 @@ class FeishuCallbackStoreSession:
 
     def get_case_id(self, binding_key: str) -> str | None:
         return self.get_chat_case(binding_key)
+
+    def claim_case_binding(
+        self,
+        binding_key: str,
+        event_id: str,
+        case_id: str,
+        *,
+        claim_token: str,
+        now: str,
+        lease_expires_at: str,
+    ) -> FeishuBindingClaim:
+        binding_key = _require_text("binding_key", binding_key)
+        event_id = _require_text("event_id", event_id)
+        case_id = _require_text("case_id", case_id)
+        claim_token = _require_text("claim_token", claim_token)
+        now_value = _require_aware_timestamp("now", now)
+        lease_value = _require_aware_timestamp("lease_expires_at", lease_expires_at)
+        if lease_value <= now_value:
+            raise ValueError("lease_expires_at must be later than now")
+        now = now_value.isoformat()
+        lease_expires_at = lease_value.isoformat()
+        with _immediate_transaction(self._connection):
+            mapped = self._connection.execute(
+                "SELECT case_id FROM feishu_chat_cases WHERE chat_id = ?",
+                (binding_key,),
+            ).fetchone()
+            if mapped is not None:
+                return FeishuBindingClaim(
+                    outcome=FeishuBindingOutcome.BOUND,
+                    case_id=mapped["case_id"],
+                )
+            claim = self._connection.execute(
+                "SELECT owner_event_id, status, case_id, claim_token, "
+                "lease_expires_at FROM feishu_binding_claims "
+                "WHERE binding_key = ?",
+                (binding_key,),
+            ).fetchone()
+            if claim is None:
+                self._connection.execute(
+                    """
+                    INSERT INTO feishu_binding_claims (
+                        binding_key, owner_event_id, status, case_id, claim_token,
+                        lease_expires_at, attempt, created_at
+                    ) VALUES (?, ?, 'CLAIMED', ?, ?, ?, 1, ?)
+                    """,
+                    (
+                        binding_key,
+                        event_id,
+                        case_id,
+                        claim_token,
+                        lease_expires_at,
+                        now,
+                    ),
+                )
+                return FeishuBindingClaim(
+                    outcome=FeishuBindingOutcome.CLAIMED,
+                    case_id=case_id,
+                )
+            if claim["status"] == "BOUND":
+                self._connection.execute(
+                    "INSERT INTO feishu_chat_cases (chat_id, case_id, updated_at) "
+                    "VALUES (?, ?, ?) ON CONFLICT(chat_id) DO NOTHING",
+                    (
+                        binding_key,
+                        claim["case_id"],
+                        now,
+                    ),
+                )
+                return FeishuBindingClaim(
+                    outcome=FeishuBindingOutcome.BOUND,
+                    case_id=claim["case_id"],
+                )
+            reserved_case_id = claim["case_id"] or case_id
+            active_lease = (
+                _require_aware_timestamp(
+                    "stored lease_expires_at", claim["lease_expires_at"]
+                )
+                if claim["lease_expires_at"] is not None
+                else None
+            )
+            if active_lease is not None and active_lease > now_value:
+                return FeishuBindingClaim(
+                    outcome=FeishuBindingOutcome.IN_PROGRESS,
+                    case_id=reserved_case_id,
+                )
+            self._connection.execute(
+                "UPDATE feishu_binding_claims SET owner_event_id = ?, case_id = ?, "
+                "claim_token = ?, lease_expires_at = ?, attempt = attempt + 1 "
+                "WHERE binding_key = ? AND status = 'CLAIMED'",
+                (
+                    event_id,
+                    reserved_case_id,
+                    claim_token,
+                    lease_expires_at,
+                    binding_key,
+                ),
+            )
+            return FeishuBindingClaim(
+                outcome=FeishuBindingOutcome.CLAIMED,
+                case_id=reserved_case_id,
+            )
+
+    def complete_case_binding(
+        self,
+        binding_key: str,
+        event_id: str,
+        case_id: str,
+        *,
+        claim_token: str,
+        updated_at: str,
+    ) -> FeishuBindingClaim:
+        binding_key = _require_text("binding_key", binding_key)
+        event_id = _require_text("event_id", event_id)
+        case_id = _require_text("case_id", case_id)
+        claim_token = _require_text("claim_token", claim_token)
+        updated_at = _require_text("updated_at", updated_at)
+        with _immediate_transaction(self._connection):
+            claim = self._connection.execute(
+                "SELECT owner_event_id, status, case_id, claim_token "
+                "FROM feishu_binding_claims "
+                "WHERE binding_key = ?",
+                (binding_key,),
+            ).fetchone()
+            if claim is None:
+                raise ReceiptNotClaimed(binding_key)
+            if claim["status"] == "BOUND":
+                if (
+                    claim["owner_event_id"] != event_id
+                    or claim["case_id"] != case_id
+                    or claim["claim_token"] != claim_token
+                ):
+                    raise ReceiptConflict(binding_key)
+                return FeishuBindingClaim(
+                    outcome=FeishuBindingOutcome.BOUND,
+                    case_id=case_id,
+                )
+            if (
+                claim["owner_event_id"] != event_id
+                or claim["case_id"] != case_id
+                or claim["claim_token"] != claim_token
+            ):
+                raise ReceiptConflict(binding_key)
+            mapped = self._connection.execute(
+                "SELECT case_id FROM feishu_chat_cases WHERE chat_id = ?",
+                (binding_key,),
+            ).fetchone()
+            if mapped is None:
+                self._connection.execute(
+                    """
+                    INSERT INTO feishu_chat_cases (chat_id, case_id, updated_at)
+                    VALUES (?, ?, ?)
+                    """,
+                    (binding_key, case_id, updated_at),
+                )
+            elif mapped["case_id"] != case_id:
+                raise ReceiptConflict(binding_key)
+            self._connection.execute(
+                """
+                UPDATE feishu_binding_claims
+                SET status = 'BOUND', lease_expires_at = NULL, updated_at = ?
+                WHERE binding_key = ? AND owner_event_id = ? AND status = 'CLAIMED'
+                    AND case_id = ? AND claim_token = ?
+                """,
+                (updated_at, binding_key, event_id, case_id, claim_token),
+            )
+            if self._connection.execute("SELECT changes()").fetchone()[0] != 1:
+                raise ReceiptConflict(binding_key)
+            return FeishuBindingClaim(
+                outcome=FeishuBindingOutcome.BOUND,
+                case_id=case_id,
+            )
+
+    def release_case_binding(
+        self,
+        binding_key: str,
+        event_id: str,
+        *,
+        claim_token: str,
+    ) -> None:
+        binding_key = _require_text("binding_key", binding_key)
+        event_id = _require_text("event_id", event_id)
+        claim_token = _require_text("claim_token", claim_token)
+        with _immediate_transaction(self._connection):
+            claim = self._connection.execute(
+                "SELECT owner_event_id, status, claim_token FROM feishu_binding_claims "
+                "WHERE binding_key = ?",
+                (binding_key,),
+            ).fetchone()
+            if claim is None:
+                raise ReceiptNotClaimed(binding_key)
+            if (
+                claim["owner_event_id"] != event_id
+                or claim["status"] != "CLAIMED"
+                or claim["claim_token"] != claim_token
+            ):
+                raise ReceiptConflict(binding_key)
+            self._connection.execute(
+                "DELETE FROM feishu_binding_claims WHERE binding_key = ? "
+                "AND owner_event_id = ? AND status = 'CLAIMED' AND claim_token = ?",
+                (binding_key, event_id, claim_token),
+            )
+            if self._connection.execute("SELECT changes()").fetchone()[0] != 1:
+                raise ReceiptConflict(binding_key)
 
     def commit_confirmation(
         self,
@@ -628,6 +1057,64 @@ class FeishuCallbackStoreFactory:
                 binding_key,
                 case_id,
                 updated_at=updated_at.isoformat(),
+            )
+
+    def claim_case_binding(
+        self,
+        binding_key: str,
+        event_id: str,
+        case_id: str,
+        *,
+        claim_token: str,
+        now: datetime,
+        lease_expires_at: datetime,
+    ) -> FeishuBindingClaim:
+        if not isinstance(now, datetime) or now.tzinfo is None:
+            raise ValueError("now must be timezone-aware")
+        if not isinstance(lease_expires_at, datetime) or lease_expires_at.tzinfo is None:
+            raise ValueError("lease_expires_at must be timezone-aware")
+        with self.session() as store:
+            return store.claim_case_binding(
+                binding_key,
+                event_id,
+                case_id,
+                claim_token=claim_token,
+                now=now.isoformat(),
+                lease_expires_at=lease_expires_at.isoformat(),
+            )
+
+    def complete_case_binding(
+        self,
+        binding_key: str,
+        event_id: str,
+        case_id: str,
+        *,
+        claim_token: str,
+        updated_at: datetime,
+    ) -> FeishuBindingClaim:
+        if not isinstance(updated_at, datetime) or updated_at.tzinfo is None:
+            raise ValueError("updated_at must be timezone-aware")
+        with self.session() as store:
+            return store.complete_case_binding(
+                binding_key,
+                event_id,
+                case_id,
+                claim_token=claim_token,
+                updated_at=updated_at.isoformat(),
+            )
+
+    def release_case_binding(
+        self,
+        binding_key: str,
+        event_id: str,
+        *,
+        claim_token: str,
+    ) -> None:
+        with self.session() as store:
+            store.release_case_binding(
+                binding_key,
+                event_id,
+                claim_token=claim_token,
             )
 
     def record_confirmation(

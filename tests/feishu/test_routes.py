@@ -189,12 +189,13 @@ def test_malformed_legacy_feishu_data_does_not_break_core(tmp_path):
         connection.execute(
             """
             INSERT INTO feishu_action_receipts (
-                action_id, status, response_json, case_id, diagnosis_id,
+                action_id, payload_hash, status, response_json, case_id, diagnosis_id,
                 actor_id, created_at, completed_at
-            ) VALUES (?, 'COMPLETED', '{}', ?, ?, '', ?, ?)
+            ) VALUES (?, ?, 'COMPLETED', '{}', ?, ?, '', ?, ?)
             """,
             (
                 "action-malformed-legacy",
+                "a" * 64,
                 "00000000-0000-4000-8000-000000000010",
                 "00000000-0000-4000-8000-000000000050",
                 "2026-08-05T04:00:00Z",
@@ -463,17 +464,12 @@ def test_verified_unknown_event_shape_is_fixed_422_without_echo(tmp_path):
 
 
 @pytest.mark.parametrize(
-    ("fixture_name", "path"),
-    (
-        ("message_received.json", "/api/v1/feishu/events"),
-        ("evidence_action.json", "/api/v1/feishu/card-actions"),
-        ("confirmation_action.json", "/api/v1/feishu/card-actions"),
-    ),
+    "fixture_name",
+    ("evidence_action.json", "confirmation_action.json"),
 )
-def test_signed_business_callbacks_are_not_accepted_before_orchestration(
+def test_signed_card_actions_are_not_accepted_before_orchestration(
     tmp_path,
     fixture_name,
-    path,
 ):
     feishu = _feishu_settings(tmp_path)
     raw_body = _callback_fixture_body(feishu, fixture_name)
@@ -481,13 +477,30 @@ def test_signed_business_callbacks_are_not_accepted_before_orchestration(
 
     with TestClient(app, raise_server_exceptions=False) as client:
         response = client.post(
-            path,
+            "/api/v1/feishu/card-actions",
             content=raw_body,
             headers=_signed_headers(feishu, raw_body),
         )
 
     assert response.status_code == 422
     assert response.json()["code"] == "FEISHU_INVALID_CALLBACK"
+    assert "ou_synthetic" not in response.text
+
+
+def test_signed_message_requires_demo_group_configuration(tmp_path):
+    feishu = _feishu_settings(tmp_path)
+    raw_body = _callback_fixture_body(feishu, "message_received.json")
+    app = create_app(Settings(db_path=tmp_path / "core.db", feishu=feishu))
+
+    with TestClient(app, raise_server_exceptions=False) as client:
+        response = client.post(
+            "/api/v1/feishu/events",
+            content=raw_body,
+            headers=_signed_headers(feishu, raw_body),
+        )
+
+    assert response.status_code == 503
+    assert response.json()["code"] == "FEISHU_UNAVAILABLE"
     assert "ou_synthetic" not in response.text
 
 

@@ -289,7 +289,32 @@ def test_create_business_validation_runs_inside_transaction_before_first_insert(
     ]
 
 
-def test_duplicate_case_id_is_not_replay_and_preserves_original_rows(db_path: Path) -> None:
+def test_same_case_creation_identity_replays_original_case_without_duplicate_audit(
+    db_path: Path,
+) -> None:
+    factory = _factory(db_path)
+    with factory() as store:
+        original = store.create_case_atomic(case=_case(), audit=_audit())
+
+    replay_time = CREATED_AT + timedelta(seconds=1)
+    with factory() as store:
+        replayed = store.create_case_atomic(
+            case=_case(created_at=replay_time, updated_at=replay_time),
+            audit=_audit(
+                event_id="00000000-0000-4000-8000-000000000021",
+                request_id="00000000-0000-4000-8000-000000000031",
+                trace_id="00000000-0000-4000-8000-000000000041",
+                occurred_at=replay_time,
+            ),
+        )
+
+    assert replayed == original
+    assert _business_counts(db_path) == (1, 0, 0, 0, 0, 1)
+
+
+def test_duplicate_case_id_with_different_summary_fails_closed_and_preserves_original_rows(
+    db_path: Path,
+) -> None:
     factory = _factory(db_path)
     with factory() as store:
         original = store.create_case_atomic(case=_case(), audit=_audit())

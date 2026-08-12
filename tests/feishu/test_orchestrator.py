@@ -8,12 +8,18 @@ from oceanpilot.application.feishu_models import (
     FeishuConfirmationReceipt,
     FeishuEvidenceSubmission,
     FeishuFlowOutcome,
+    FeishuFlowResult,
     FeishuIncident,
 )
 from oceanpilot.application.feishu_orchestrator import (
+    FeishuBindingInProgress,
     FeishuCaseNotBound,
     FeishuOrchestrator,
     InvalidReviewConfirmation,
+)
+from oceanpilot.application.feishu_ports import (
+    FeishuBindingClaim,
+    FeishuBindingOutcome,
 )
 from oceanpilot.domain.enums import (
     CaseStatus,
@@ -38,6 +44,8 @@ from oceanpilot.domain.models import (
 )
 
 NOW = datetime(2026, 8, 5, 4, 0, tzinfo=UTC)
+LEASE_EXPIRES_AT = datetime(2026, 8, 5, 4, 0, 30, tzinfo=UTC)
+CLAIM_TOKEN = "c" * 64
 CASE_ID = "00000000-0000-4000-8000-000000000010"
 OTHER_CASE_ID = "00000000-0000-4000-8000-000000000011"
 DIAGNOSIS_ID = "00000000-0000-4000-8000-000000000050"
@@ -124,14 +132,25 @@ class _CaseService:
                 diagnosis=diagnosis,
             ),
         )
+        self.create_error = None
+        self.recovery_result = None
+
+    def new_case_id(self):
+        return CASE_ID
 
     def create_case(self, command):
         self.created_command = command
+        if self.create_error is not None:
+            raise self.create_error
         return self.create_result
 
     def get_case(self, case_id):
         assert case_id == CASE_ID
         return self.get_result
+
+    def find_case(self, case_id):
+        assert case_id == CASE_ID
+        return self.recovery_result
 
     def add_evidence(self, command):
         self.evidence_command = command
@@ -143,17 +162,76 @@ class _CaseService:
 
 
 class _Chats:
-    def __init__(self, case_id=None) -> None:
+    def __init__(self, case_id=None, *, reserved_case_id=None) -> None:
         self.case_id = case_id
+        self.reserved_case_id = reserved_case_id
         self.bindings = []
+        self.binding_in_progress = False
 
     def get_case_id(self, binding_key):
         assert binding_key == "tenant:chat:thread"
         return self.case_id
 
-    def bind_case(self, binding_key, case_id, *, updated_at):
-        self.bindings.append((binding_key, case_id, updated_at))
+    def claim_case_binding(
+        self,
+        binding_key,
+        event_id,
+        case_id,
+        *,
+        claim_token,
+        now,
+        lease_expires_at,
+    ):
+        assert binding_key == "tenant:chat:thread"
+        if self.case_id is not None:
+            return FeishuBindingClaim(
+                outcome=FeishuBindingOutcome.BOUND,
+                case_id=self.case_id,
+            )
+        if self.binding_in_progress:
+            return FeishuBindingClaim(
+                outcome=FeishuBindingOutcome.IN_PROGRESS,
+                case_id=self.reserved_case_id or case_id,
+            )
+        self.binding_in_progress = True
+        reserved_case_id = self.reserved_case_id or case_id
+        self.bindings.append(
+            (
+                "CLAIMED",
+                binding_key,
+                event_id,
+                reserved_case_id,
+                claim_token,
+                now,
+                lease_expires_at,
+            )
+        )
+        return FeishuBindingClaim(
+            outcome=FeishuBindingOutcome.CLAIMED,
+            case_id=reserved_case_id,
+        )
+
+    def complete_case_binding(
+        self,
+        binding_key,
+        event_id,
+        case_id,
+        *,
+        claim_token,
+        updated_at,
+    ):
+        self.bindings.append(
+            ("BOUND", binding_key, event_id, case_id, claim_token, updated_at)
+        )
         self.case_id = case_id
+        return FeishuBindingClaim(
+            outcome=FeishuBindingOutcome.BOUND,
+            case_id=case_id,
+        )
+
+    def release_case_binding(self, binding_key, event_id, *, claim_token):
+        self.bindings.append(("RELEASED", binding_key, event_id, claim_token))
+        self.binding_in_progress = False
 
 
 class _Approvals:
@@ -175,11 +253,21 @@ def _incident(**changes) -> FeishuIncident:
         "event_id": "event-create-001",
         "summary": "3DS callback was not received",
         "merchant_ref": "merchant_feishu_001",
+        "occurred_at": NOW,
         "request_id": REQUEST_ID,
         "trace_id": TRACE_ID,
     }
     values.update(changes)
     return FeishuIncident(**values)
+
+
+def _start_incident(orchestrator: FeishuOrchestrator) -> FeishuFlowResult:
+    return orchestrator.start_incident(
+        _incident(),
+        claim_token=CLAIM_TOKEN,
+        claimed_at=NOW,
+        lease_expires_at=LEASE_EXPIRES_AT,
+    )
 
 
 def _evidence() -> FeishuEvidenceSubmission:
@@ -211,7 +299,7 @@ def test_start_incident_creates_one_synthetic_payment_case_and_binds_chat():
     chats = _Chats()
     orchestrator = FeishuOrchestrator(service, chats, _Approvals())
 
-    result = orchestrator.start_incident(_incident())
+    result = _start_incident(orchestrator)
 
     assert result.outcome is FeishuFlowOutcome.NEED_INFO
     assert result.case_view == service.create_result
@@ -223,7 +311,25 @@ def test_start_incident_creates_one_synthetic_payment_case_and_binds_chat():
     assert command.synthetic is True
     assert command.request_id == REQUEST_ID
     assert command.trace_id == TRACE_ID
-    assert chats.bindings == [("tenant:chat:thread", CASE_ID, NOW)]
+    assert chats.bindings == [
+        (
+            "CLAIMED",
+            "tenant:chat:thread",
+            "event-create-001",
+            CASE_ID,
+            CLAIM_TOKEN,
+            NOW,
+            LEASE_EXPIRES_AT,
+        ),
+        (
+            "BOUND",
+            "tenant:chat:thread",
+            "event-create-001",
+            CASE_ID,
+            CLAIM_TOKEN,
+            NOW,
+        ),
+    ]
 
 
 def test_start_incident_reuses_case_already_bound_to_chat():
@@ -231,11 +337,65 @@ def test_start_incident_reuses_case_already_bound_to_chat():
     chats = _Chats(CASE_ID)
     orchestrator = FeishuOrchestrator(service, chats, _Approvals())
 
-    result = orchestrator.start_incident(_incident())
+    result = _start_incident(orchestrator)
 
     assert result.outcome is FeishuFlowOutcome.NEED_INFO
     assert service.created_command is None
     assert chats.bindings == []
+
+
+def test_start_incident_does_not_create_when_same_thread_binding_is_in_progress():
+    service = _CaseService()
+    chats = _Chats()
+    chats.binding_in_progress = True
+    orchestrator = FeishuOrchestrator(service, chats, _Approvals())
+
+    with pytest.raises(FeishuBindingInProgress):
+        _start_incident(orchestrator)
+
+    assert service.created_command is None
+
+
+def test_start_incident_preserves_reserved_binding_when_case_creation_fails():
+    service = _CaseService()
+    service.create_error = RuntimeError("synthetic failure")
+    chats = _Chats()
+    orchestrator = FeishuOrchestrator(service, chats, _Approvals())
+
+    with pytest.raises(RuntimeError, match="synthetic failure"):
+        _start_incident(orchestrator)
+
+    assert chats.bindings == [
+        (
+            "CLAIMED",
+            "tenant:chat:thread",
+            "event-create-001",
+            CASE_ID,
+            CLAIM_TOKEN,
+            NOW,
+            LEASE_EXPIRES_AT,
+        ),
+    ]
+
+
+def test_start_incident_recovers_created_reserved_case_before_completing_binding():
+    service = _CaseService()
+    service.recovery_result = service.create_result
+    chats = _Chats(reserved_case_id=CASE_ID)
+    orchestrator = FeishuOrchestrator(service, chats, _Approvals())
+
+    result = _start_incident(orchestrator)
+
+    assert result.case_view == service.create_result
+    assert service.created_command is None
+    assert chats.bindings[-1] == (
+        "BOUND",
+        "tenant:chat:thread",
+        "event-create-001",
+        CASE_ID,
+        CLAIM_TOKEN,
+        NOW,
+    )
 
 
 def test_submit_evidence_uses_fixed_merchant_origin_and_returns_next_question():

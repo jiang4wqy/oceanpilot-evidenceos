@@ -71,6 +71,9 @@ class CaseService:
         self._policy_version = policy_version
         self._engine_version = engine_version
 
+    def new_case_id(self) -> str:
+        return self._uuid_factory()
+
     def _audit_events(
         self,
         *,
@@ -118,7 +121,7 @@ class CaseService:
         readiness = assess_readiness(build_active_evidence_view(()))
         status = status_after_creation(readiness)
         now = self._clock()
-        case_id = self._uuid_factory()
+        case_id = command.case_id or self._uuid_factory()
         audit_id = self._uuid_factory()
         case = MerchantSuccessCase(
             case_id=case_id,
@@ -163,6 +166,10 @@ class CaseService:
         if view is None:
             raise CaseNotFound()
         return view
+
+    def find_case(self, case_id: str) -> CaseView | None:
+        with self._store_factory() as store:
+            return store.get_case_view(case_id)
 
     def add_evidence(self, command: AddEvidenceCommand) -> AppendEvidenceResult:
         assert_no_sensitive_data(command)

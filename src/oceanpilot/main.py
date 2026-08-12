@@ -1,5 +1,5 @@
 import sqlite3
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from pathlib import Path
@@ -9,6 +9,11 @@ from fastapi import FastAPI, Request
 from fastapi.openapi.utils import get_openapi
 
 from oceanpilot.adapters.diagnosis.rules import RuleDiagnosisEngine
+from oceanpilot.adapters.feishu.client import (
+    FeishuHttpRequest,
+    FeishuHttpResponse,
+    FeishuOutboundClient,
+)
 from oceanpilot.adapters.feishu.security import FeishuRequestVerifier
 from oceanpilot.adapters.feishu.store import FeishuCallbackStoreFactory
 from oceanpilot.adapters.persistence.sqlite import (
@@ -21,10 +26,15 @@ from oceanpilot.api.errors import ProblemDetails, register_exception_handlers
 from oceanpilot.api.feishu import router as feishu_router
 from oceanpilot.api.health import router as health_router
 from oceanpilot.application.case_service import CaseService
+from oceanpilot.application.feishu_orchestrator import FeishuOrchestrator
 from oceanpilot.config import Settings
 
 
-def create_app(settings: Settings | None = None) -> FastAPI:
+def create_app(
+    settings: Settings | None = None,
+    *,
+    feishu_transport: Callable[[FeishuHttpRequest], FeishuHttpResponse] | None = None,
+) -> FastAPI:
     resolved = settings or Settings.from_env()
     store_factory = SqliteCaseStoreFactory(resolved.db_path)
     case_service = CaseService(
@@ -46,13 +56,35 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             try:
                 callback_db_path = Path(resolved.feishu.callback_db_path)
                 if callback_db_path.resolve() != resolved.db_path.resolve():
+                    callback_store = FeishuCallbackStoreFactory(callback_db_path)
                     app.state.feishu_runtime = FeishuRuntime(
                         verifier=FeishuRequestVerifier(
                             encrypt_key=resolved.feishu.encrypt_key,
                             verification_token=resolved.feishu.verification_token,
                             now=lambda: int(datetime.now(UTC).timestamp()),
                         ),
-                        store_factory=FeishuCallbackStoreFactory(callback_db_path),
+                        store_factory=callback_store,
+                        outbound_client=FeishuOutboundClient(
+                            app_id=resolved.feishu.app_id,
+                            app_secret=resolved.feishu.app_secret,
+                            transport=feishu_transport,
+                        ),
+                        orchestrator=FeishuOrchestrator(
+                            case_service,
+                            callback_store,
+                            callback_store,
+                        ),
+                        app_id=resolved.feishu.app_id,
+                        demo_chat_id=(
+                            resolved.feishu.demo_chat_id
+                            if resolved.feishu.business_demo_is_complete
+                            else None
+                        ),
+                        demo_merchant_ref=(
+                            resolved.feishu.demo_merchant_ref
+                            if resolved.feishu.business_demo_is_complete
+                            else None
+                        ),
                     )
             except (OSError, sqlite3.Error, TypeError, ValueError):
                 app.state.feishu_runtime = None

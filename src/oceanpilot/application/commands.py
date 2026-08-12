@@ -13,6 +13,7 @@ from oceanpilot.domain.models import (
 
 
 class CreateCaseCommand(FrozenDomainModel):
+    case_id: UUID4Str | None = None
     case_type: CaseType
     summary: Annotated[str, Field(strict=True, min_length=1, max_length=500)]
     merchant_ref: Annotated[str, Field(strict=True, min_length=1, max_length=128)]

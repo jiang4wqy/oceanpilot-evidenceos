@@ -15,6 +15,7 @@ from oceanpilot.application.feishu_models import (
 )
 from oceanpilot.application.feishu_ports import (
     FeishuApprovalPort,
+    FeishuBindingOutcome,
     FeishuChatCasePort,
 )
 from oceanpilot.domain.enums import (
@@ -24,7 +25,7 @@ from oceanpilot.domain.enums import (
     SourceReliability,
     SourceType,
 )
-from oceanpilot.domain.models import CaseView, EvidenceCreate, EvidenceOrigin
+from oceanpilot.domain.models import AwareDateTime, CaseView, EvidenceCreate, EvidenceOrigin
 
 FEISHU_EVIDENCE_ORIGIN = EvidenceOrigin(
     source_type=SourceType.MERCHANT,
@@ -34,6 +35,10 @@ FEISHU_EVIDENCE_ORIGIN = EvidenceOrigin(
 
 
 class FeishuCaseNotBound(RuntimeError):
+    pass
+
+
+class FeishuBindingInProgress(RuntimeError):
     pass
 
 
@@ -76,26 +81,47 @@ class FeishuOrchestrator:
             diagnosis=diagnosed.value,
         )
 
-    def start_incident(self, incident: FeishuIncident) -> FeishuFlowResult:
-        case_id = self._chat_cases.get_case_id(incident.binding_key)
-        if case_id is None:
-            view = self._case_service.create_case(
-                CreateCaseCommand(
-                    case_type=CaseType.PAYMENT_INCIDENT,
-                    summary=incident.summary,
-                    merchant_ref=incident.merchant_ref,
-                    synthetic=True,
-                    request_id=incident.request_id,
-                    trace_id=incident.trace_id,
+    def start_incident(
+        self,
+        incident: FeishuIncident,
+        *,
+        claim_token: str,
+        claimed_at: AwareDateTime,
+        lease_expires_at: AwareDateTime,
+    ) -> FeishuFlowResult:
+        binding = self._chat_cases.claim_case_binding(
+            incident.binding_key,
+            incident.event_id,
+            self._case_service.new_case_id(),
+            claim_token=claim_token,
+            now=claimed_at,
+            lease_expires_at=lease_expires_at,
+        )
+        if binding.outcome is FeishuBindingOutcome.IN_PROGRESS:
+            raise FeishuBindingInProgress()
+        if binding.outcome is FeishuBindingOutcome.CLAIMED:
+            view = self._case_service.find_case(binding.case_id)
+            if view is None:
+                view = self._case_service.create_case(
+                    CreateCaseCommand(
+                        case_id=binding.case_id,
+                        case_type=CaseType.PAYMENT_INCIDENT,
+                        summary=incident.summary,
+                        merchant_ref=incident.merchant_ref,
+                        synthetic=True,
+                        request_id=incident.request_id,
+                        trace_id=incident.trace_id,
+                    )
                 )
-            )
-            self._chat_cases.bind_case(
+            self._chat_cases.complete_case_binding(
                 incident.binding_key,
+                incident.event_id,
                 view.case.case_id,
+                claim_token=claim_token,
                 updated_at=view.case.updated_at,
             )
         else:
-            view = self._case_service.get_case(case_id)
+            view = self._case_service.get_case(binding.case_id)
         return self._advance(
             view,
             request_id=incident.request_id,

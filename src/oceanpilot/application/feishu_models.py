@@ -29,6 +29,7 @@ class FeishuIncident(FrozenDomainModel):
     event_id: FeishuIdentifier
     summary: SummaryText
     merchant_ref: ReferenceText
+    occurred_at: AwareDateTime
     request_id: UUID4Str
     trace_id: UUID4Str
 

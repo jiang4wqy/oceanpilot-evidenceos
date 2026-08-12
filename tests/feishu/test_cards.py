@@ -117,6 +117,7 @@ def test_need_info_card_routes_the_question_to_the_target_role():
         case_revision=3,
         missing_fields=("transaction.reference", "symptom.signal"),
         target_role=TargetRole.MERCHANT_TECH,
+        completion_ratio=Decimal("0.40"),
         next_question="请提供交易参考号和可观察的失败状态。",
         question_reason="这些字段用于定位同一笔交易。",
     )
@@ -128,6 +129,7 @@ def test_need_info_card_routes_the_question_to_the_target_role():
     assert "symptom.signal" in rendered
     assert card_input.next_question in rendered
     assert card_input.question_reason in rendered
+    assert "40%" in rendered
     assert _button_values(card) == []
     assert render_need_info_card(card_input) == card
 

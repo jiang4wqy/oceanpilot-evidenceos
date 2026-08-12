@@ -286,6 +286,15 @@ def test_create_case_builds_revision_one_and_case_created_audit():
     assert fake.calls == ["create_case_atomic"]
 
 
+def test_create_case_uses_internal_preallocated_case_id_without_allocating_one():
+    service, fake, ids = make_service()
+
+    view = service.create_case(create_command().model_copy(update={"case_id": CASE_ID}))
+
+    assert view.case.case_id == CASE_ID
+    assert ids.consumed == 1  # event ID only
+
+
 def test_get_case_raises_stable_not_found():
     service, fake, _ = make_service(case_view=None)
     with pytest.raises(CaseNotFound):

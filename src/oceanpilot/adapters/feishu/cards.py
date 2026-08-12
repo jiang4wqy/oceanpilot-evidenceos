@@ -1,3 +1,4 @@
+from decimal import Decimal
 from typing import Annotated, Final
 
 from pydantic import BaseModel, ConfigDict, Field, StrictStr
@@ -26,15 +27,16 @@ class NeedInfoCardInput(BaseModel):
     case_revision: Revision
     missing_fields: Annotated[tuple[StrictStr, ...], Field(min_length=1)]
     target_role: TargetRole
+    completion_ratio: Annotated[Decimal, Field(ge=0, le=1)]
     next_question: NonEmptyText
     question_reason: NonEmptyText
-
 
 def render_need_info_card(card_input: NeedInfoCardInput) -> dict[str, object]:
     if type(card_input) is not NeedInfoCardInput:
         raise TypeError("card_input must be NeedInfoCardInput")
     role = _ROLE_LABELS[card_input.target_role]
     missing = "\n".join(f"- `{field}`" for field in card_input.missing_fields)
+    completion = f"{card_input.completion_ratio * 100:.0f}%"
     return {
         "schema": "2.0",
         "config": {"update_multi": True},
@@ -48,7 +50,8 @@ def render_need_info_card(card_input: NeedInfoCardInput) -> dict[str, object]:
                     "tag": "markdown",
                     "content": (
                         f"**案件** `{card_input.case_id}`  ·  "
-                        f"**版本** `{card_input.case_revision}`\n\n"
+                        f"**版本** `{card_input.case_revision}`  ·  "
+                        f"**证据完成度** `{completion}`\n\n"
                         f"请 **{role}** 协助补充：\n{missing}"
                     ),
                 },

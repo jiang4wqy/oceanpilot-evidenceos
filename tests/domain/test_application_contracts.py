@@ -94,6 +94,7 @@ def valid_origin_payload() -> dict[str, object]:
 
 def test_command_field_sets_and_order_are_exact() -> None:
     assert tuple(CreateCaseCommand.model_fields) == (
+        "case_id",
         "case_type",
         "summary",
         "merchant_ref",
@@ -119,17 +120,6 @@ def test_command_field_sets_and_order_are_exact() -> None:
     ("command_type", "field_names"),
     (
         (
-            CreateCaseCommand,
-            (
-                "case_type",
-                "summary",
-                "merchant_ref",
-                "synthetic",
-                "request_id",
-                "trace_id",
-            ),
-        ),
-        (
             AddEvidenceCommand,
             ("case_id", "evidence", "origin", "request_id", "trace_id"),
         ),
@@ -153,11 +143,42 @@ def test_command_fields_are_required_and_constructor_is_keyword_only(
     assert all(parameter.default is Parameter.empty for parameter in parameters.values())
 
 
+def test_create_case_command_has_one_optional_internal_case_id() -> None:
+    field_names = (
+        "case_id",
+        "case_type",
+        "summary",
+        "merchant_ref",
+        "synthetic",
+        "request_id",
+        "trace_id",
+    )
+    assert tuple(CreateCaseCommand.model_fields) == field_names
+    assert CreateCaseCommand.model_fields["case_id"].is_required() is False
+    assert CreateCaseCommand.model_fields["case_id"].default is None
+    assert all(
+        CreateCaseCommand.model_fields[name].is_required()
+        for name in field_names
+        if name != "case_id"
+    )
+
+    parameters = signature(CreateCaseCommand).parameters
+    assert tuple(parameters) == field_names
+    assert all(parameter.kind is Parameter.KEYWORD_ONLY for parameter in parameters.values())
+    assert parameters["case_id"].default is None
+    assert all(
+        parameters[name].default is Parameter.empty
+        for name in field_names
+        if name != "case_id"
+    )
+
+
 def test_command_annotations_reuse_the_frozen_domain_types() -> None:
     create_hints = get_type_hints(CreateCaseCommand, include_extras=True)
     add_hints = get_type_hints(AddEvidenceCommand, include_extras=True)
     diagnose_hints = get_type_hints(DiagnoseCaseCommand, include_extras=True)
 
+    assert create_hints["case_id"] == UUID4Str | None
     assert create_hints["case_type"] is CaseType
     assert create_hints["synthetic"] == SyntheticTrue
     assert create_hints["request_id"] == UUID4Str
