@@ -13,13 +13,15 @@
       "open_id": "ou_synthetic_merchant"
     },
     "context": {
-      "open_message_id": "om_question_001"
+      "open_message_id": "om_question_001",
+      "open_chat_id": "oc_demo_group"
     },
     "action": {
       "tag": "button",
       "value": {
         "action_kind": "submit_evidence",
         "case_id": "00000000-0000-4000-8000-000000000010",
+        "case_revision": 1,
         "evidence_code": "transaction.reference",
         "availability": "AVAILABLE",
         "typed_value": "txn_synthetic_001"

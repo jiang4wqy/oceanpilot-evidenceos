@@ -464,12 +464,13 @@ def test_verified_unknown_event_shape_is_fixed_422_without_echo(tmp_path):
 
 
 @pytest.mark.parametrize(
-    "fixture_name",
-    ("evidence_action.json", "confirmation_action.json"),
+    ("fixture_name", "expected_status"),
+    (("evidence_action.json", 503), ("confirmation_action.json", 422)),
 )
 def test_signed_card_actions_are_not_accepted_before_orchestration(
     tmp_path,
     fixture_name,
+    expected_status,
 ):
     feishu = _feishu_settings(tmp_path)
     raw_body = _callback_fixture_body(feishu, fixture_name)
@@ -482,8 +483,10 @@ def test_signed_card_actions_are_not_accepted_before_orchestration(
             headers=_signed_headers(feishu, raw_body),
         )
 
-    assert response.status_code == 422
-    assert response.json()["code"] == "FEISHU_INVALID_CALLBACK"
+    assert response.status_code == expected_status
+    assert response.json()["code"] == (
+        "FEISHU_UNAVAILABLE" if expected_status == 503 else "FEISHU_INVALID_CALLBACK"
+    )
     assert "ou_synthetic" not in response.text
 
 
@@ -535,9 +538,10 @@ def test_unconfigured_callback_dependency_does_not_consume_asgi_body(tmp_path):
     asyncio.run(app(scope, receive, send))
 
     assert received == 0
-    assert next(message for message in messages if message["type"] == "http.response.start")[
-        "status"
-    ] == 503
+    assert (
+        next(message for message in messages if message["type"] == "http.response.start")["status"]
+        == 503
+    )
 
 
 def test_declared_oversize_does_not_consume_asgi_body(tmp_path):
@@ -575,9 +579,10 @@ def test_declared_oversize_does_not_consume_asgi_body(tmp_path):
     asyncio.run(app(scope, receive, send))
 
     assert received == 0
-    assert next(message for message in messages if message["type"] == "http.response.start")[
-        "status"
-    ] == 413
+    assert (
+        next(message for message in messages if message["type"] == "http.response.start")["status"]
+        == 413
+    )
 
 
 def test_overlong_numeric_content_length_is_fixed_422(tmp_path):

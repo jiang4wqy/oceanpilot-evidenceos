@@ -30,6 +30,7 @@ ACTOR_ID = "ou_synthetic_operator"
 ACTOR_HASH = "1bb07ff40167a4833d0315808da6b25031e63c5d396bf04ea9569d61f8d27908"
 REQUEST_ID = "00000000-0000-4000-8000-000000000060"
 TRACE_ID = "00000000-0000-4000-8000-000000000070"
+EVIDENCE_ID = "00000000-0000-4000-8000-000000000101"
 CREATED_AT_DT = datetime(2026, 8, 5, 4, 0, tzinfo=UTC)
 COMPLETED_AT_DT = datetime(2026, 8, 5, 4, 0, 1, tzinfo=UTC)
 
@@ -95,6 +96,278 @@ def test_event_claim_lease_allows_crash_takeover_and_fences_stale_worker(tmp_pat
     finally:
         connection.close()
     assert attempt == 2
+
+
+def test_evidence_action_lease_allows_takeover_and_fences_stale_worker(tmp_path):
+    factory = FeishuCallbackStoreFactory(tmp_path / "evidence-action-lease.db")
+
+    with factory.session() as store:
+        first = store.claim_evidence_action(
+            "evidence-action-crashed-worker",
+            payload_hash=ACTION_HASH,
+            claim_token=FIRST_CLAIM_TOKEN,
+            now=CREATED_AT,
+            lease_expires_at=LEASE_EXPIRES_AT,
+        )
+        active_retry = store.claim_evidence_action(
+            "evidence-action-crashed-worker",
+            payload_hash=ACTION_HASH,
+            claim_token=SECOND_CLAIM_TOKEN,
+            now=ACTIVE_NOW,
+            lease_expires_at=TAKEOVER_LEASE_EXPIRES_AT,
+        )
+        takeover = store.claim_evidence_action(
+            "evidence-action-crashed-worker",
+            payload_hash=ACTION_HASH,
+            claim_token=SECOND_CLAIM_TOKEN,
+            now=TAKEOVER_NOW,
+            lease_expires_at=TAKEOVER_LEASE_EXPIRES_AT,
+        )
+
+        with pytest.raises(ReceiptConflict):
+            store.complete_evidence_action(
+                "evidence-action-crashed-worker",
+                claim_token=FIRST_CLAIM_TOKEN,
+                response={"ok": True},
+                case_id=CASE_ID,
+                evidence_id=EVIDENCE_ID,
+                completed_at=TAKEOVER_NOW,
+            )
+        with pytest.raises(ReceiptConflict):
+            store.release_evidence_action(
+                "evidence-action-crashed-worker",
+                payload_hash=ACTION_HASH,
+                claim_token=FIRST_CLAIM_TOKEN,
+            )
+        completed = store.complete_evidence_action(
+            "evidence-action-crashed-worker",
+            claim_token=SECOND_CLAIM_TOKEN,
+            response={"ok": True},
+            case_id=CASE_ID,
+            evidence_id=EVIDENCE_ID,
+            completed_at=TAKEOVER_NOW,
+        )
+
+    assert first.outcome is ReceiptOutcome.CLAIMED
+    assert active_retry.outcome is ReceiptOutcome.IN_PROGRESS
+    assert takeover.outcome is ReceiptOutcome.CLAIMED
+    assert completed.outcome is ReceiptOutcome.COMPLETED
+    connection = sqlite3.connect(factory.db_path)
+    try:
+        row = connection.execute(
+            "SELECT status, claim_token, lease_expires_at, attempt, case_id, "
+            "evidence_id FROM feishu_evidence_action_receipts "
+            "WHERE action_id = ?",
+            ("evidence-action-crashed-worker",),
+        ).fetchone()
+        assert row == (
+            "COMPLETED",
+            SECOND_CLAIM_TOKEN,
+            None,
+            2,
+            CASE_ID,
+            EVIDENCE_ID,
+        )
+    finally:
+        connection.close()
+
+
+def test_released_evidence_action_can_be_reclaimed_with_fencing(tmp_path):
+    factory = FeishuCallbackStoreFactory(tmp_path / "evidence-action-release.db")
+
+    with factory.session() as store:
+        store.claim_evidence_action(
+            "evidence-action-release",
+            payload_hash=ACTION_HASH,
+            claim_token=FIRST_CLAIM_TOKEN,
+            now=CREATED_AT,
+            lease_expires_at=LEASE_EXPIRES_AT,
+        )
+        store.release_evidence_action(
+            "evidence-action-release",
+            payload_hash=ACTION_HASH,
+            claim_token=FIRST_CLAIM_TOKEN,
+        )
+        retry = store.claim_evidence_action(
+            "evidence-action-release",
+            payload_hash=ACTION_HASH,
+            claim_token=SECOND_CLAIM_TOKEN,
+            now=ACTIVE_NOW,
+            lease_expires_at=TAKEOVER_LEASE_EXPIRES_AT,
+        )
+        with pytest.raises(ReceiptConflict):
+            store.complete_evidence_action(
+                "evidence-action-release",
+                claim_token=FIRST_CLAIM_TOKEN,
+                response={"ok": True},
+                case_id=CASE_ID,
+                evidence_id=EVIDENCE_ID,
+                completed_at=ACTIVE_NOW,
+            )
+
+    assert retry.outcome is ReceiptOutcome.CLAIMED
+    connection = sqlite3.connect(factory.db_path)
+    try:
+        assert connection.execute(
+            "SELECT claim_token, attempt FROM feishu_evidence_action_receipts WHERE action_id = ?",
+            ("evidence-action-release",),
+        ).fetchone() == (SECOND_CLAIM_TOKEN, 2)
+    finally:
+        connection.close()
+
+
+def test_evidence_action_complete_replays_after_reopen_and_conflicts_on_new_payload(
+    tmp_path,
+):
+    db_path = tmp_path / "evidence-action-replay.db"
+    response = {"ok": True, "outcome": "need_info"}
+    factory = FeishuCallbackStoreFactory(db_path)
+
+    with factory.session() as store:
+        store.claim_evidence_action(
+            "evidence-action-replay",
+            payload_hash=ACTION_HASH,
+            claim_token=FIRST_CLAIM_TOKEN,
+            now=CREATED_AT,
+            lease_expires_at=LEASE_EXPIRES_AT,
+        )
+        completed = store.complete_evidence_action(
+            "evidence-action-replay",
+            claim_token=FIRST_CLAIM_TOKEN,
+            response=response,
+            case_id=CASE_ID,
+            evidence_id=EVIDENCE_ID,
+            completed_at=COMPLETED_AT,
+        )
+
+    with FeishuCallbackStoreFactory(db_path).session() as store:
+        replay = store.claim_evidence_action(
+            "evidence-action-replay",
+            payload_hash=ACTION_HASH,
+            claim_token=SECOND_CLAIM_TOKEN,
+            now=ACTIVE_NOW,
+            lease_expires_at=TAKEOVER_LEASE_EXPIRES_AT,
+        )
+        with pytest.raises(ReceiptConflict):
+            store.claim_evidence_action(
+                "evidence-action-replay",
+                payload_hash=EVENT_HASH,
+                claim_token=SECOND_CLAIM_TOKEN,
+                now=ACTIVE_NOW,
+                lease_expires_at=TAKEOVER_LEASE_EXPIRES_AT,
+            )
+
+    assert completed.outcome is ReceiptOutcome.COMPLETED
+    assert completed.response == response
+    assert replay.outcome is ReceiptOutcome.REPLAY
+    assert replay.response == response
+
+
+def test_replaying_evidence_action_completion_requires_same_claim_and_metadata(tmp_path):
+    factory = FeishuCallbackStoreFactory(tmp_path / "evidence-action-completion.db")
+    response = {"ok": True}
+
+    with factory.session() as store:
+        store.claim_evidence_action(
+            "evidence-action-completion",
+            payload_hash=ACTION_HASH,
+            claim_token=FIRST_CLAIM_TOKEN,
+            now=CREATED_AT,
+            lease_expires_at=LEASE_EXPIRES_AT,
+        )
+        store.complete_evidence_action(
+            "evidence-action-completion",
+            claim_token=FIRST_CLAIM_TOKEN,
+            response=response,
+            case_id=CASE_ID,
+            evidence_id=EVIDENCE_ID,
+            completed_at=COMPLETED_AT,
+        )
+        replay = store.complete_evidence_action(
+            "evidence-action-completion",
+            claim_token=FIRST_CLAIM_TOKEN,
+            response=response,
+            case_id=CASE_ID,
+            evidence_id=EVIDENCE_ID,
+            completed_at=TAKEOVER_NOW,
+        )
+        with pytest.raises(ReceiptConflict):
+            store.complete_evidence_action(
+                "evidence-action-completion",
+                claim_token=SECOND_CLAIM_TOKEN,
+                response=response,
+                case_id=CASE_ID,
+                evidence_id=EVIDENCE_ID,
+                completed_at=TAKEOVER_NOW,
+            )
+        with pytest.raises(ReceiptConflict):
+            store.complete_evidence_action(
+                "evidence-action-completion",
+                claim_token=FIRST_CLAIM_TOKEN,
+                response=response,
+                case_id=OTHER_CASE_ID,
+                evidence_id=EVIDENCE_ID,
+                completed_at=TAKEOVER_NOW,
+            )
+
+    assert replay.outcome is ReceiptOutcome.REPLAY
+    assert replay.response == response
+
+
+def test_existing_confirmation_rows_survive_evidence_action_table_addition(tmp_path):
+    db_path = tmp_path / "pre-evidence-action.db"
+    initial = FeishuCallbackStoreFactory(db_path)
+    with initial.session() as store:
+        store.claim_action(
+            "confirmation-before-evidence-actions",
+            payload_hash=ACTION_HASH,
+            created_at=CREATED_AT,
+        )
+    connection = sqlite3.connect(db_path)
+    try:
+        connection.execute("DROP TABLE feishu_evidence_action_receipts")
+        connection.commit()
+    finally:
+        connection.close()
+
+    upgraded = FeishuCallbackStoreFactory(db_path)
+    with upgraded.session() as store:
+        receipt = store.claim_action(
+            "confirmation-before-evidence-actions",
+            payload_hash=ACTION_HASH,
+            created_at=ACTIVE_NOW,
+        )
+        evidence_receipt = store.claim_evidence_action(
+            "evidence-action-after-upgrade",
+            payload_hash=EVENT_HASH,
+            claim_token=FIRST_CLAIM_TOKEN,
+            now=ACTIVE_NOW,
+            lease_expires_at=TAKEOVER_LEASE_EXPIRES_AT,
+        )
+
+    assert receipt.outcome is ReceiptOutcome.IN_PROGRESS
+    assert evidence_receipt.outcome is ReceiptOutcome.CLAIMED
+
+
+def test_concurrent_evidence_action_claim_has_one_owner(tmp_path):
+    factory = FeishuCallbackStoreFactory(tmp_path / "evidence-action-concurrent.db")
+    barrier = Barrier(2)
+
+    def claim(claim_token):
+        barrier.wait()
+        with factory.session() as store:
+            return store.claim_evidence_action(
+                "evidence-action-concurrent",
+                payload_hash=ACTION_HASH,
+                claim_token=claim_token,
+                now=CREATED_AT,
+                lease_expires_at=LEASE_EXPIRES_AT,
+            ).outcome
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        outcomes = list(pool.map(claim, (FIRST_CLAIM_TOKEN, SECOND_CLAIM_TOKEN)))
+
+    assert sorted(outcomes) == sorted((ReceiptOutcome.CLAIMED, ReceiptOutcome.IN_PROGRESS))
 
 
 def test_event_claim_complete_and_replay_survive_reopen(tmp_path):
@@ -209,11 +482,7 @@ def test_legacy_receipt_without_payload_hash_is_pinned_on_first_claim(
     db_path = tmp_path / f"legacy-{receipt_kind}-{status}.db"
     table = f"feishu_{receipt_kind}_receipts"
     key_column = f"{receipt_kind}_id"
-    extra_columns = (
-        ""
-        if receipt_kind == "event"
-        else ", diagnosis_id TEXT, actor_id TEXT"
-    )
+    extra_columns = "" if receipt_kind == "event" else ", diagnosis_id TEXT, actor_id TEXT"
     completion_columns = (
         "response_json, case_id, completed_at"
         if receipt_kind == "event"
@@ -240,8 +509,7 @@ def test_legacy_receipt_without_payload_hash_is_pinned_on_first_claim(
         )
         if status == "CLAIMED":
             connection.execute(
-                f"INSERT INTO {table} ({key_column}, status, created_at) "
-                "VALUES (?, 'CLAIMED', ?)",
+                f"INSERT INTO {table} ({key_column}, status, created_at) VALUES (?, 'CLAIMED', ?)",
                 ("legacy-id", CREATED_AT),
             )
         else:
@@ -266,9 +534,7 @@ def test_legacy_receipt_without_payload_hash_is_pinned_on_first_claim(
                 lease_expires_at=LEASE_EXPIRES_AT,
             )
             if receipt_kind == "event"
-            else store.claim_action(
-                "legacy-id", payload_hash=EVENT_HASH, created_at=CREATED_AT
-            )
+            else store.claim_action("legacy-id", payload_hash=EVENT_HASH, created_at=CREATED_AT)
         )
         with pytest.raises(ReceiptConflict):
             if receipt_kind == "event":
@@ -280,9 +546,7 @@ def test_legacy_receipt_without_payload_hash_is_pinned_on_first_claim(
                     lease_expires_at=TAKEOVER_LEASE_EXPIRES_AT,
                 )
             else:
-                store.claim_action(
-                    "legacy-id", payload_hash=ACTION_HASH, created_at=CREATED_AT
-                )
+                store.claim_action("legacy-id", payload_hash=ACTION_HASH, created_at=CREATED_AT)
 
     expected = (
         ReceiptOutcome.CLAIMED
@@ -406,9 +670,7 @@ def test_new_receipt_tables_require_payload_hash_at_database_boundary(tmp_path):
     connection = sqlite3.connect(db_path)
     try:
         for table in ("feishu_event_receipts", "feishu_action_receipts"):
-            columns = {
-                row[1]: row for row in connection.execute(f"PRAGMA table_info({table})")
-            }
+            columns = {row[1]: row for row in connection.execute(f"PRAGMA table_info({table})")}
             assert columns["payload_hash"][3] == 1
     finally:
         connection.close()
@@ -595,16 +857,10 @@ def test_legacy_case_binding_claims_migrate_without_losing_reserved_case_id(
         lease_expires_at=datetime(2026, 8, 5, 4, 0, 11, tzinfo=UTC),
     )
 
-    expected = (
-        FeishuBindingOutcome.CLAIMED
-        if status == "CLAIMED"
-        else FeishuBindingOutcome.BOUND
-    )
+    expected = FeishuBindingOutcome.CLAIMED if status == "CLAIMED" else FeishuBindingOutcome.BOUND
     assert claim.outcome is expected
     assert claim.case_id == CASE_ID
-    assert factory.get_case_id("legacy-binding-claim") == (
-        CASE_ID if status == "BOUND" else None
-    )
+    assert factory.get_case_id("legacy-binding-claim") == (CASE_ID if status == "BOUND" else None)
 
 
 def test_concurrent_case_binding_claim_has_one_owner(tmp_path):
@@ -749,9 +1005,7 @@ def test_concurrent_claim_has_one_winner(tmp_path, receipt_kind):
 
 
 @pytest.mark.parametrize("receipt_kind", ("event", "action"))
-def test_concurrent_receipt_id_reuse_with_different_hash_has_one_conflict(
-    tmp_path, receipt_kind
-):
+def test_concurrent_receipt_id_reuse_with_different_hash_has_one_conflict(tmp_path, receipt_kind):
     factory = FeishuCallbackStoreFactory(tmp_path / f"{receipt_kind}-hash-race.db")
     barrier = Barrier(2)
 
@@ -764,9 +1018,7 @@ def test_concurrent_receipt_id_reuse_with_different_hash_has_one_conflict(
                         "shared-id",
                         payload_hash=payload_hash,
                         claim_token=(
-                            FIRST_CLAIM_TOKEN
-                            if payload_hash == EVENT_HASH
-                            else SECOND_CLAIM_TOKEN
+                            FIRST_CLAIM_TOKEN if payload_hash == EVENT_HASH else SECOND_CLAIM_TOKEN
                         ),
                         now=CREATED_AT,
                         lease_expires_at=LEASE_EXPIRES_AT,
@@ -847,9 +1099,7 @@ def test_action_claim_complete_and_replay_are_idempotent(tmp_path):
     response = {"ok": True, "result": "confirmed"}
 
     with factory.session() as store:
-        claimed = store.claim_action(
-            "action-001", payload_hash=ACTION_HASH, created_at=CREATED_AT
-        )
+        claimed = store.claim_action("action-001", payload_hash=ACTION_HASH, created_at=CREATED_AT)
         assert claimed.outcome is ReceiptOutcome.CLAIMED
 
         completed = store.complete_action(
@@ -863,9 +1113,7 @@ def test_action_claim_complete_and_replay_are_idempotent(tmp_path):
         assert completed.outcome is ReceiptOutcome.COMPLETED
         assert completed.response == response
 
-        replay = store.claim_action(
-            "action-001", payload_hash=ACTION_HASH, created_at=CREATED_AT
-        )
+        replay = store.claim_action("action-001", payload_hash=ACTION_HASH, created_at=CREATED_AT)
         assert replay.outcome is ReceiptOutcome.REPLAY
         assert replay.response == response
 
@@ -915,9 +1163,7 @@ def test_chat_case_binding_is_idempotent_and_never_overwritten(tmp_path):
 def test_factory_implements_confirmation_port_with_correlated_audit(tmp_path):
     factory = FeishuCallbackStoreFactory(tmp_path / "approval-port.db")
     with factory.session() as store:
-        store.claim_action(
-            "action-port", payload_hash=ACTION_HASH, created_at=CREATED_AT
-        )
+        store.claim_action("action-port", payload_hash=ACTION_HASH, created_at=CREATED_AT)
 
     receipt = factory.record_confirmation(
         FeishuApprovalRecord(
@@ -943,9 +1189,7 @@ def test_factory_implements_confirmation_port_with_correlated_audit(tmp_path):
     assert audit.trace_id == TRACE_ID
 
     with factory.session() as store:
-        store.claim_action(
-            "action-port-retry", payload_hash=ACTION_HASH, created_at=CREATED_AT
-        )
+        store.claim_action("action-port-retry", payload_hash=ACTION_HASH, created_at=CREATED_AT)
     replay = factory.record_confirmation(
         FeishuApprovalRecord(
             action_id="action-port-retry",
@@ -971,9 +1215,7 @@ def test_confirmation_and_approval_audit_commit_atomically_and_replay(tmp_path):
     response = {"ok": True, "result": "approved"}
 
     with factory.session() as store:
-        store.claim_action(
-            "action-confirm", payload_hash=ACTION_HASH, created_at=CREATED_AT
-        )
+        store.claim_action("action-confirm", payload_hash=ACTION_HASH, created_at=CREATED_AT)
         completed = store.commit_confirmation(
             action_id="action-confirm",
             approval_id="approval-001",
@@ -1026,9 +1268,7 @@ def test_confirmation_context_survives_reopen_and_semantic_duplicate_replays(tmp
     response = {"ok": True, "result": "confirmed"}
 
     with factory.session() as store:
-        store.claim_action(
-            "action-first", payload_hash=ACTION_HASH, created_at=CREATED_AT
-        )
+        store.claim_action("action-first", payload_hash=ACTION_HASH, created_at=CREATED_AT)
         created = store.commit_confirmation(
             action_id="action-first",
             approval_id="approval-first",
@@ -1043,9 +1283,7 @@ def test_confirmation_context_survives_reopen_and_semantic_duplicate_replays(tmp
         )
         assert created.outcome is ReceiptOutcome.COMPLETED
 
-        store.claim_action(
-            "action-second", payload_hash=EVENT_HASH, created_at=CREATED_AT
-        )
+        store.claim_action("action-second", payload_hash=EVENT_HASH, created_at=CREATED_AT)
         replay = store.commit_confirmation(
             action_id="action-second",
             approval_id="approval-second",
@@ -1202,9 +1440,7 @@ def test_confirmation_rolls_back_receipt_when_audit_insert_conflicts(tmp_path):
 
     with factory.session() as store:
         for action_id in ("action-first", "action-second"):
-            store.claim_action(
-                action_id, payload_hash=ACTION_HASH, created_at=CREATED_AT
-            )
+            store.claim_action(action_id, payload_hash=ACTION_HASH, created_at=CREATED_AT)
 
         store.commit_confirmation(
             action_id="action-first",

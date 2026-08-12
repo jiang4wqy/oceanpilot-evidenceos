@@ -1,3 +1,7 @@
+from datetime import datetime
+from hashlib import sha256
+from uuid import UUID
+
 from oceanpilot.application.case_service import CaseService
 from oceanpilot.application.commands import (
     AddEvidenceCommand,
@@ -22,10 +26,19 @@ from oceanpilot.domain.enums import (
     CaseStatus,
     CaseType,
     DiagnosisStatus,
+    EvidenceAvailability,
+    EvidenceCode,
     SourceReliability,
     SourceType,
 )
-from oceanpilot.domain.models import AwareDateTime, CaseView, EvidenceCreate, EvidenceOrigin
+from oceanpilot.domain.evidence_policy import build_active_evidence_view
+from oceanpilot.domain.models import (
+    AwareDateTime,
+    CaseView,
+    DiagnosisView,
+    EvidenceCreate,
+    EvidenceOrigin,
+)
 
 FEISHU_EVIDENCE_ORIGIN = EvidenceOrigin(
     source_type=SourceType.MERCHANT,
@@ -34,16 +47,120 @@ FEISHU_EVIDENCE_ORIGIN = EvidenceOrigin(
 )
 
 
-class FeishuCaseNotBound(RuntimeError):
-    pass
+class FeishuEvidenceStale(RuntimeError):
+    def __init__(self, case_view: CaseView) -> None:
+        super().__init__()
+        self.case_view = case_view
 
 
 class FeishuBindingInProgress(RuntimeError):
     pass
 
 
+class FeishuUnexpectedEvidence(RuntimeError):
+    pass
+
+
 class InvalidReviewConfirmation(RuntimeError):
     pass
+
+
+_DIAGNOSTIC_QUESTIONS = {
+    "symptom.signal": EvidenceCode.SYMPTOM_STATUS,
+}
+_FEISHU_EVIDENCE_VALUES = {
+    EvidenceCode.TRANSACTION_REFERENCE: ("txn_threeds_001",),
+    EvidenceCode.TRANSACTION_OCCURRED_AT: ("2026-08-05T04:00:00Z",),
+    EvidenceCode.CONTEXT_ENVIRONMENT: ("PROD",),
+    EvidenceCode.SYMPTOM_STATUS: ("PENDING", "DECLINED"),
+    EvidenceCode.AUTHENTICATION_STATUS: ("REQUIRED",),
+    EvidenceCode.CALLBACK_DELIVERY_STATUS: ("NOT_RECEIVED",),
+    EvidenceCode.RISK_DECISION_CODE: ("RISK_DECLINE",),
+    EvidenceCode.INTEGRATION_TYPE: ("API",),
+}
+
+
+def feishu_evidence_values(evidence_code: EvidenceCode) -> tuple[str, ...]:
+    try:
+        return _FEISHU_EVIDENCE_VALUES[evidence_code]
+    except KeyError:
+        raise ValueError("unsupported Feishu evidence code") from None
+
+
+def _approved_evidence_value(submission: FeishuEvidenceSubmission) -> bool:
+    if submission.availability is not EvidenceAvailability.AVAILABLE:
+        return False
+    approved = feishu_evidence_values(submission.evidence_code)
+    if submission.evidence_code is EvidenceCode.TRANSACTION_OCCURRED_AT:
+        expected = datetime.fromisoformat(approved[0].replace("Z", "+00:00"))
+        return submission.typed_value == expected
+    return type(submission.typed_value) is str and submission.typed_value in approved
+
+
+def _answered(view: CaseView, code: EvidenceCode) -> bool:
+    slot = build_active_evidence_view(view.evidence).slots[code]
+    return slot.selected_evidence is not None or slot.known_unknown or slot.conflicting
+
+
+def next_feishu_evidence_code(view: CaseView) -> EvidenceCode | None:
+    if type(view) is not CaseView:
+        raise TypeError("view must be a CaseView")
+    readiness_question = view.case.readiness.next_question
+    diagnostic_turn = view.case.readiness.ready or readiness_question == "integration.type"
+    if diagnostic_turn:
+        active = build_active_evidence_view(view.evidence)
+        status = active.slots[EvidenceCode.SYMPTOM_STATUS].selected_evidence
+        if status is not None and status.typed_value in {"PENDING", "FAILED"}:
+            for code in (
+                EvidenceCode.AUTHENTICATION_STATUS,
+                EvidenceCode.CALLBACK_DELIVERY_STATUS,
+            ):
+                if not _answered(view, code):
+                    return code
+        if (
+            status is not None
+            and status.typed_value == "DECLINED"
+            and not _answered(view, EvidenceCode.RISK_DECISION_CODE)
+        ):
+            return EvidenceCode.RISK_DECISION_CODE
+    if readiness_question is None:
+        return None
+    selected = _DIAGNOSTIC_QUESTIONS.get(readiness_question)
+    return selected if selected is not None else EvidenceCode(readiness_question)
+
+
+def feishu_evidence_id(
+    case_id: str,
+    case_revision: int,
+    evidence_code: EvidenceCode,
+) -> str:
+    digest = bytearray(
+        sha256(
+            f"FEISHU_EVIDENCE\0{case_id}\0{case_revision}\0{evidence_code.value}".encode()
+        ).digest()[:16]
+    )
+    digest[6] = (digest[6] & 0x0F) | 0x40
+    digest[8] = (digest[8] & 0x3F) | 0x80
+    return str(UUID(bytes=bytes(digest)))
+
+
+def _replayed_diagnosis(view: CaseView, evidence_id: str) -> DiagnosisView | None:
+    diagnosis = view.current_diagnosis
+    if (
+        diagnosis is None
+        or diagnosis.status is not DiagnosisStatus.CURRENT
+        or view.case.current_diagnosis_id != diagnosis.diagnosis_id
+        or diagnosis.evidence_revision != view.case.evidence_revision
+        or not any(item.evidence_id == evidence_id for item in view.evidence)
+    ):
+        return None
+    return DiagnosisView(
+        case_id=view.case.case_id,
+        case_status=view.case.status,
+        case_revision=view.case.case_revision,
+        evidence_revision=view.case.evidence_revision,
+        diagnosis=diagnosis,
+    )
 
 
 class FeishuOrchestrator:
@@ -64,11 +181,13 @@ class FeishuOrchestrator:
         request_id: str,
         trace_id: str,
     ) -> FeishuFlowResult:
-        if not view.case.readiness.ready:
+        if next_feishu_evidence_code(view) is not None:
             return FeishuFlowResult(
                 outcome=FeishuFlowOutcome.NEED_INFO,
                 case_view=view,
             )
+        if not view.case.readiness.ready:
+            raise FeishuUnexpectedEvidence()
         diagnosed = self._case_service.diagnose(
             DiagnoseCaseCommand(
                 case_id=view.case.case_id,
@@ -132,19 +251,43 @@ class FeishuOrchestrator:
         self,
         submission: FeishuEvidenceSubmission,
     ) -> FeishuFlowResult:
-        case_id = self._chat_cases.get_case_id(submission.binding_key)
-        if case_id is None:
-            raise FeishuCaseNotBound()
+        view = self._case_service.get_case(submission.case_id)
+        if not view.case.synthetic or not _approved_evidence_value(submission):
+            raise FeishuUnexpectedEvidence()
+        evidence_id = feishu_evidence_id(
+            view.case.case_id,
+            submission.expected_case_revision,
+            submission.evidence_code,
+        )
+        replayed = _replayed_diagnosis(view, evidence_id)
+        if replayed is not None:
+            return FeishuFlowResult(
+                outcome=FeishuFlowOutcome.DIAGNOSIS,
+                diagnosis=replayed,
+            )
+        if view.current_diagnosis is not None or view.case.status in (
+            CaseStatus.DIAGNOSED,
+            CaseStatus.HUMAN_REVIEW,
+        ):
+            raise FeishuUnexpectedEvidence()
+        if view.case.case_revision != submission.expected_case_revision:
+            raise FeishuEvidenceStale(view)
+        expected_code = next_feishu_evidence_code(view)
+        if expected_code is None or expected_code is not submission.evidence_code:
+            raise FeishuUnexpectedEvidence()
         appended = self._case_service.add_evidence(
             AddEvidenceCommand(
-                case_id=case_id,
+                case_id=view.case.case_id,
                 evidence=EvidenceCreate(
-                    evidence_id=submission.evidence_id,
-                    evidence_code=submission.evidence_code,
+                    evidence_id=evidence_id,
+                    evidence_code=expected_code,
                     availability=submission.availability,
                     typed_value=submission.typed_value,
-                    observed_at=submission.observed_at,
-                    source_ref=f"feishu:event:{submission.event_id}",
+                    observed_at=None,
+                    source_ref=(
+                        f"feishu:case:{view.case.case_id}:"
+                        f"revision:{view.case.case_revision}:{expected_code.value}"
+                    ),
                 ),
                 origin=FEISHU_EVIDENCE_ORIGIN,
                 request_id=submission.request_id,

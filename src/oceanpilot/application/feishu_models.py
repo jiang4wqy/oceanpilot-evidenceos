@@ -10,6 +10,7 @@ from oceanpilot.domain.models import (
     DiagnosisView,
     FrozenDomainModel,
     ReferenceText,
+    Revision,
     SummaryText,
     SyntheticTrue,
     UUID4Str,
@@ -35,13 +36,12 @@ class FeishuIncident(FrozenDomainModel):
 
 
 class FeishuEvidenceSubmission(FrozenDomainModel):
-    binding_key: FeishuIdentifier
     event_id: FeishuIdentifier
-    evidence_id: UUID4Str
+    case_id: UUID4Str
+    expected_case_revision: Revision
     evidence_code: EvidenceCode
     availability: EvidenceAvailability
     typed_value: StrictStr | StrictBool | AwareDateTime | None = None
-    observed_at: AwareDateTime | None = None
     request_id: UUID4Str
     trace_id: UUID4Str
 

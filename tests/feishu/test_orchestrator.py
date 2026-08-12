@@ -1,4 +1,5 @@
 from datetime import UTC, datetime
+from uuid import UUID
 
 import pytest
 from pydantic import ValidationError
@@ -13,9 +14,12 @@ from oceanpilot.application.feishu_models import (
 )
 from oceanpilot.application.feishu_orchestrator import (
     FeishuBindingInProgress,
-    FeishuCaseNotBound,
+    FeishuEvidenceStale,
     FeishuOrchestrator,
+    FeishuUnexpectedEvidence,
     InvalidReviewConfirmation,
+    feishu_evidence_id,
+    next_feishu_evidence_code,
 )
 from oceanpilot.application.feishu_ports import (
     FeishuBindingClaim,
@@ -26,6 +30,8 @@ from oceanpilot.domain.enums import (
     CaseType,
     DiagnosisStatus,
     EvidenceAvailability,
+    EvidenceCode,
+    EvidenceValueType,
     ReviewReason,
     SourceReliability,
     SourceType,
@@ -39,6 +45,7 @@ from oceanpilot.domain.models import (
     CommandResult,
     DiagnosisSnapshot,
     DiagnosisView,
+    EvidenceItem,
     MerchantSuccessCase,
     ReadinessAssessment,
 )
@@ -56,14 +63,46 @@ TRACE_ID = "00000000-0000-4000-8000-000000000040"
 ACTOR_HASH = "a" * 64
 
 
-def _case_view(*, ready: bool, diagnosis: DiagnosisSnapshot | None = None) -> CaseView:
+def _evidence_item(
+    code: EvidenceCode,
+    value: str,
+    *,
+    index: int,
+) -> EvidenceItem:
+    return EvidenceItem(
+        case_id=CASE_ID,
+        evidence_id=f"00000000-0000-4000-8000-{index:012d}",
+        schema_version="1",
+        evidence_code=code,
+        availability=EvidenceAvailability.AVAILABLE,
+        value_type=EvidenceValueType.STRING,
+        typed_value=value,
+        source_type=SourceType.MERCHANT,
+        source_ref=f"synthetic:test:{index}",
+        source_reliability=SourceReliability.USER_REPORTED,
+        observed_at=NOW,
+        collected_at=NOW,
+        synthetic=True,
+        content_hash=f"{index:064x}",
+    )
+
+
+def _case_view(
+    *,
+    ready: bool,
+    diagnosis: DiagnosisSnapshot | None = None,
+    case_revision: int = 6,
+    evidence: tuple[EvidenceItem, ...] = (),
+    next_question: str | None = None,
+) -> CaseView:
+    selected_question = next_question or (None if ready else "transaction.reference")
     readiness = ReadinessAssessment(
         ready=ready,
         missing_fields=() if ready else ("transaction.reference",),
         known_unknown_fields=(),
-        next_question=None if ready else "transaction.reference",
-        question_reason=None if ready else "Locate the transaction",
-        target_role=None if ready else TargetRole.MERCHANT_TECH,
+        next_question=selected_question,
+        question_reason=None if selected_question is None else "Locate the transaction",
+        target_role=None if selected_question is None else TargetRole.MERCHANT_TECH,
         completion_ratio="1" if ready else "0.8",
         stop_reason=StopReason.READY if ready else StopReason.NEED_MORE_EVIDENCE,
     )
@@ -79,8 +118,8 @@ def _case_view(*, ready: bool, diagnosis: DiagnosisSnapshot | None = None) -> Ca
         case_type=CaseType.PAYMENT_INCIDENT,
         status=status,
         schema_version="1",
-        case_revision=7 if diagnosis is not None else 6,
-        evidence_revision=5,
+        case_revision=7 if diagnosis is not None else case_revision,
+        evidence_revision=len(evidence),
         synthetic=True,
         summary="Synthetic Feishu incident",
         merchant_ref="merchant_feishu_001",
@@ -89,7 +128,7 @@ def _case_view(*, ready: bool, diagnosis: DiagnosisSnapshot | None = None) -> Ca
         current_diagnosis_id=diagnosis.diagnosis_id if diagnosis is not None else None,
         readiness=readiness,
     )
-    return CaseView(case=case, evidence=(), current_diagnosis=diagnosis)
+    return CaseView(case=case, evidence=evidence, current_diagnosis=diagnosis)
 
 
 def _human_diagnosis() -> DiagnosisSnapshot:
@@ -220,9 +259,7 @@ class _Chats:
         claim_token,
         updated_at,
     ):
-        self.bindings.append(
-            ("BOUND", binding_key, event_id, case_id, claim_token, updated_at)
-        )
+        self.bindings.append(("BOUND", binding_key, event_id, case_id, claim_token, updated_at))
         self.case_id = case_id
         return FeishuBindingClaim(
             outcome=FeishuBindingOutcome.BOUND,
@@ -272,13 +309,12 @@ def _start_incident(orchestrator: FeishuOrchestrator) -> FeishuFlowResult:
 
 def _evidence() -> FeishuEvidenceSubmission:
     return FeishuEvidenceSubmission(
-        binding_key="tenant:chat:thread",
         event_id="event-evidence-001",
-        evidence_id=EVIDENCE_ID,
+        case_id=CASE_ID,
+        expected_case_revision=6,
         evidence_code="transaction.reference",
         availability=EvidenceAvailability.AVAILABLE,
-        typed_value="txn_feishu_001",
-        observed_at=NOW,
+        typed_value="txn_threeds_001",
         request_id=REQUEST_ID,
         trace_id=TRACE_ID,
     )
@@ -408,11 +444,135 @@ def test_submit_evidence_uses_fixed_merchant_origin_and_returns_next_question():
     assert result.diagnosis is None
     command = service.evidence_command
     assert command.case_id == CASE_ID
-    assert command.evidence.evidence_id == EVIDENCE_ID
-    assert command.evidence.source_ref == "feishu:event:event-evidence-001"
+    assert command.evidence.evidence_id == feishu_evidence_id(
+        CASE_ID, 6, EvidenceCode.TRANSACTION_REFERENCE
+    )
+    assert command.evidence.source_ref == (
+        f"feishu:case:{CASE_ID}:revision:6:transaction.reference"
+    )
     assert command.origin.source_type is SourceType.MERCHANT
     assert command.origin.source_reliability is SourceReliability.USER_REPORTED
     assert command.origin.synthetic is True
+    assert service.diagnose_command is None
+
+
+def test_evidence_model_removes_binding_and_caller_owned_metadata():
+    values = _evidence().model_dump()
+    for field, value in (
+        ("binding_key", "tenant:chat:thread"),
+        ("evidence_id", EVIDENCE_ID),
+        ("observed_at", NOW),
+    ):
+        with pytest.raises(ValidationError):
+            FeishuEvidenceSubmission(**values, **{field: value})
+
+
+def test_evidence_identity_is_stable_uuid4_shaped_and_revision_scoped():
+    first = feishu_evidence_id(CASE_ID, 6, EvidenceCode.TRANSACTION_REFERENCE)
+
+    assert first == feishu_evidence_id(CASE_ID, 6, EvidenceCode.TRANSACTION_REFERENCE)
+    assert UUID(first).version == 4
+    assert first != feishu_evidence_id(CASE_ID, 7, EvidenceCode.TRANSACTION_REFERENCE)
+    assert first != feishu_evidence_id(CASE_ID, 6, EvidenceCode.SYMPTOM_STATUS)
+
+
+def test_submit_evidence_rejects_a_stale_card_before_writing():
+    service = _CaseService()
+    service.get_result = _case_view(ready=False, case_revision=7)
+    orchestrator = FeishuOrchestrator(service, _Chats(CASE_ID), _Approvals())
+
+    with pytest.raises(FeishuEvidenceStale):
+        orchestrator.submit_evidence(_evidence())
+
+    assert service.evidence_command is None
+
+
+def test_submit_evidence_rejects_a_non_synthetic_case_before_writing():
+    service = _CaseService()
+    view = _case_view(ready=False)
+    service.get_result = view.model_copy(
+        update={"case": view.case.model_copy(update={"synthetic": False})}
+    )
+    orchestrator = FeishuOrchestrator(service, _Chats(CASE_ID), _Approvals())
+
+    with pytest.raises(FeishuUnexpectedEvidence):
+        orchestrator.submit_evidence(_evidence())
+
+    assert service.evidence_command is None
+
+
+def test_selector_maps_the_composite_symptom_question_to_status():
+    view = _case_view(ready=False, next_question="symptom.signal")
+
+    assert next_feishu_evidence_code(view) is EvidenceCode.SYMPTOM_STATUS
+
+
+@pytest.mark.parametrize("status", ("PENDING", "FAILED"))
+def test_selector_collects_3ds_details_before_integration(status):
+    symptom = _evidence_item(EvidenceCode.SYMPTOM_STATUS, status, index=1)
+    view = _case_view(
+        ready=False,
+        evidence=(symptom,),
+        next_question="integration.type",
+    )
+
+    assert next_feishu_evidence_code(view) is EvidenceCode.AUTHENTICATION_STATUS
+
+    authentication = _evidence_item(
+        EvidenceCode.AUTHENTICATION_STATUS,
+        "REQUIRED",
+        index=2,
+    )
+    view = _case_view(
+        ready=False,
+        evidence=(symptom, authentication),
+        next_question="integration.type",
+    )
+
+    assert next_feishu_evidence_code(view) is EvidenceCode.CALLBACK_DELIVERY_STATUS
+
+    callback = _evidence_item(
+        EvidenceCode.CALLBACK_DELIVERY_STATUS,
+        "NOT_RECEIVED",
+        index=3,
+    )
+    view = _case_view(
+        ready=False,
+        evidence=(symptom, authentication, callback),
+        next_question="integration.type",
+    )
+
+    assert next_feishu_evidence_code(view) is EvidenceCode.INTEGRATION_TYPE
+
+
+def test_selector_collects_risk_code_before_integration_for_decline():
+    symptom = _evidence_item(EvidenceCode.SYMPTOM_STATUS, "DECLINED", index=1)
+    view = _case_view(
+        ready=False,
+        evidence=(symptom,),
+        next_question="integration.type",
+    )
+
+    assert next_feishu_evidence_code(view) is EvidenceCode.RISK_DECISION_CODE
+
+
+def test_submit_evidence_does_not_diagnose_while_diagnostic_question_remains():
+    service = _CaseService()
+    symptom = _evidence_item(EvidenceCode.SYMPTOM_STATUS, "PENDING", index=1)
+    service.evidence_result = AppendEvidenceResult(
+        outcome=WriteOutcome.CREATED,
+        case_view=_case_view(
+            ready=False,
+            evidence=(symptom,),
+            next_question="integration.type",
+        ),
+    )
+    orchestrator = FeishuOrchestrator(service, _Chats(CASE_ID), _Approvals())
+
+    result = orchestrator.submit_evidence(_evidence())
+
+    assert result.outcome is FeishuFlowOutcome.NEED_INFO
+    assert next_feishu_evidence_code(result.case_view) is EvidenceCode.AUTHENTICATION_STATUS
     assert service.diagnose_command is None
 
 
@@ -433,11 +593,15 @@ def test_submit_evidence_diagnoses_immediately_when_readiness_is_reached():
     assert service.diagnose_command.trace_id == TRACE_ID
 
 
-def test_submit_evidence_requires_a_case_bound_to_the_chat():
+def test_submit_evidence_rejects_an_unexpected_server_question():
     service = _CaseService()
+    service.get_result = _case_view(
+        ready=False,
+        next_question="transaction.occurred_at",
+    )
     orchestrator = FeishuOrchestrator(service, _Chats(), _Approvals())
 
-    with pytest.raises(FeishuCaseNotBound):
+    with pytest.raises(FeishuUnexpectedEvidence):
         orchestrator.submit_evidence(_evidence())
     assert service.evidence_command is None
 

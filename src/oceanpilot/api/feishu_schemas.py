@@ -10,6 +10,9 @@ from pydantic import (
     model_validator,
 )
 
+from oceanpilot.domain.enums import EvidenceAvailability, EvidenceCode
+from oceanpilot.domain.models import Revision, UUID4Str
+
 _STRICT_MODEL_CONFIG = ConfigDict(
     extra="forbid",
     frozen=True,
@@ -185,3 +188,107 @@ def parse_feishu_message_event(payload: dict[str, object]) -> FeishuMessageCallb
     if type(payload) is not dict:
         raise TypeError("payload must be a dict")
     return FeishuMessageCallback.model_validate(payload)
+
+
+class FeishuCardActionHeader(BaseModel):
+    model_config = _STRICT_MODEL_CONFIG
+
+    event_id: Identifier
+    token: Annotated[StrictStr, Field(min_length=1, max_length=512)]
+    create_time: MillisecondTimestamp
+    event_type: Literal["card.action.trigger"]
+    tenant_key: Identifier
+    app_id: Identifier
+
+
+class FeishuCardOperator(BaseModel):
+    model_config = _STRICT_MODEL_CONFIG
+
+    open_id: OptionalIdentifier = ""
+    user_id: OptionalIdentifier = ""
+    union_id: OptionalIdentifier = ""
+
+    @model_validator(mode="after")
+    def _has_identifier(self) -> "FeishuCardOperator":
+        if not (self.open_id or self.user_id or self.union_id):
+            raise ValueError("operator must contain an identifier")
+        return self
+
+
+class FeishuCardContext(BaseModel):
+    model_config = _STRICT_MODEL_CONFIG
+
+    open_message_id: Identifier
+    open_chat_id: Identifier
+
+
+class FeishuEvidenceActionValue(BaseModel):
+    model_config = _STRICT_MODEL_CONFIG
+
+    action_kind: Literal["submit_evidence"]
+    case_id: UUID4Str
+    case_revision: Revision
+    evidence_code: EvidenceCode
+    availability: EvidenceAvailability
+    typed_value: StrictStr | None = None
+
+    @field_validator("typed_value", mode="before")
+    @classmethod
+    def _require_string_value(cls, value: object) -> object:
+        if value is not None and type(value) is not str:
+            raise ValueError("typed value must be text")
+        return value
+
+    @field_validator("evidence_code", mode="before")
+    @classmethod
+    def _parse_evidence_code(cls, value: object) -> EvidenceCode:
+        if type(value) is not str:
+            raise ValueError("evidence code must be text")
+        return EvidenceCode(value)
+
+    @field_validator("availability", mode="before")
+    @classmethod
+    def _parse_availability(cls, value: object) -> EvidenceAvailability:
+        if type(value) is not str:
+            raise ValueError("availability must be text")
+        return EvidenceAvailability(value)
+
+    @model_validator(mode="after")
+    def _availability_matches_value(self) -> "FeishuEvidenceActionValue":
+        if self.availability is EvidenceAvailability.AVAILABLE:
+            if self.typed_value is None:
+                raise ValueError("available evidence requires a value")
+        elif self.typed_value is not None:
+            raise ValueError("unavailable evidence must not have a value")
+        return self
+
+
+class FeishuEvidenceCardAction(BaseModel):
+    model_config = _STRICT_MODEL_CONFIG
+
+    tag: Literal["button"]
+    value: FeishuEvidenceActionValue
+
+
+class FeishuEvidenceCardEvent(BaseModel):
+    model_config = _STRICT_MODEL_CONFIG
+
+    operator: FeishuCardOperator
+    context: FeishuCardContext
+    action: FeishuEvidenceCardAction
+
+
+class FeishuEvidenceCardCallback(BaseModel):
+    model_config = _STRICT_MODEL_CONFIG
+
+    schema_version: Literal["2.0"] = Field(alias="schema")
+    header: FeishuCardActionHeader
+    event: FeishuEvidenceCardEvent
+
+
+def parse_feishu_evidence_action(
+    payload: dict[str, object],
+) -> FeishuEvidenceCardCallback:
+    if type(payload) is not dict:
+        raise TypeError("payload must be a dict")
+    return FeishuEvidenceCardCallback.model_validate(payload)
