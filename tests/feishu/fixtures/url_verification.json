@@ -1,0 +1,5 @@
+{
+  "token": "__VERIFICATION_TOKEN__",
+  "type": "url_verification",
+  "challenge": "challenge-from-fixture"
+}

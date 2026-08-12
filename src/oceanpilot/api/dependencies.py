@@ -2,6 +2,9 @@ from dataclasses import dataclass
 
 from fastapi import Request
 
+from oceanpilot.adapters.feishu.security import FeishuRequestVerifier
+from oceanpilot.adapters.feishu.store import FeishuCallbackStoreFactory
+from oceanpilot.api.errors import FeishuUnavailable
 from oceanpilot.application.case_service import CaseService
 from oceanpilot.application.ports import CaseStoreFactory
 from oceanpilot.domain.models import UUID4Str
@@ -11,6 +14,12 @@ from oceanpilot.domain.models import UUID4Str
 class RequestContext:
     request_id: UUID4Str
     trace_id: UUID4Str
+
+
+@dataclass(frozen=True, slots=True)
+class FeishuRuntime:
+    verifier: FeishuRequestVerifier
+    store_factory: FeishuCallbackStoreFactory
 
 
 def get_request_context(request: Request) -> RequestContext:
@@ -23,3 +32,10 @@ def get_store_factory(request: Request) -> CaseStoreFactory:
 
 def get_case_service(request: Request) -> CaseService:
     return request.app.state.case_service
+
+
+def get_feishu_runtime(request: Request) -> FeishuRuntime:
+    runtime = getattr(request.app.state, "feishu_runtime", None)
+    if runtime is None:
+        raise FeishuUnavailable()
+    return runtime

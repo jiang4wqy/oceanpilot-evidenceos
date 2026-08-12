@@ -1,0 +1,30 @@
+{
+  "schema": "2.0",
+  "header": {
+    "event_id": "evt_message_001",
+    "token": "__VERIFICATION_TOKEN__",
+    "create_time": "1786250000000",
+    "event_type": "im.message.receive_v1",
+    "tenant_key": "tenant_demo",
+    "app_id": "__APP_ID__"
+  },
+  "event": {
+    "sender": {
+      "sender_id": {
+        "open_id": "ou_synthetic_merchant"
+      },
+      "sender_type": "user",
+      "tenant_key": "tenant_demo"
+    },
+    "message": {
+      "message_id": "om_message_001",
+      "root_id": "om_thread_001",
+      "parent_id": "",
+      "create_time": "1786250000000",
+      "chat_id": "oc_demo_group",
+      "chat_type": "group",
+      "message_type": "text",
+      "content": "{\"text\":\"Synthetic 3DS callback was not received\"}"
+    }
+  }
+}

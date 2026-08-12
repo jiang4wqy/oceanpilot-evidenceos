@@ -1,0 +1,27 @@
+{
+  "schema": "2.0",
+  "header": {
+    "event_id": "evt_confirmation_001",
+    "token": "__VERIFICATION_TOKEN__",
+    "create_time": "1786250002000",
+    "event_type": "card.action.trigger",
+    "tenant_key": "tenant_demo",
+    "app_id": "__APP_ID__"
+  },
+  "event": {
+    "operator": {
+      "open_id": "ou_synthetic_reviewer"
+    },
+    "context": {
+      "open_message_id": "om_diagnosis_001"
+    },
+    "action": {
+      "tag": "button",
+      "value": {
+        "action_kind": "confirm_review",
+        "case_id": "00000000-0000-4000-8000-000000000010",
+        "diagnosis_id": "00000000-0000-4000-8000-000000000050"
+      }
+    }
+  }
+}

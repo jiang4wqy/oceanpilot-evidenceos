@@ -63,9 +63,16 @@ class FeishuRequestVerifier:
         timestamp_text = self._header(headers, "X-Lark-Request-Timestamp")
         nonce = self._header(headers, "X-Lark-Request-Nonce")
         supplied_signature = self._header(headers, "X-Lark-Signature")
-        if not timestamp_text.isascii() or not timestamp_text.isdecimal():
+        if (
+            len(timestamp_text) > 20
+            or not timestamp_text.isascii()
+            or not timestamp_text.isdecimal()
+        ):
             raise FeishuVerificationError()
-        timestamp = int(timestamp_text)
+        try:
+            timestamp = int(timestamp_text)
+        except ValueError:
+            raise FeishuVerificationError() from None
         current = self._now()
         if type(current) is not int or abs(current - timestamp) > 300:
             raise FeishuVerificationError()
@@ -77,7 +84,7 @@ class FeishuRequestVerifier:
 
         try:
             payload = json.loads(raw_body)
-        except (json.JSONDecodeError, UnicodeDecodeError):
+        except (json.JSONDecodeError, UnicodeDecodeError, RecursionError):
             raise FeishuVerificationError() from None
         if not isinstance(payload, dict):
             raise FeishuVerificationError()

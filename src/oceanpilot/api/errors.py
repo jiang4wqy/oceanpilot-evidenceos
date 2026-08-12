@@ -48,6 +48,26 @@ _SAFE_VALIDATION_REASONS = {
 }
 
 
+class FeishuUnavailable(RuntimeError):
+    pass
+
+
+class FeishuCallbackTooLarge(RuntimeError):
+    pass
+
+
+class FeishuCallbackUnauthorized(RuntimeError):
+    pass
+
+
+class FeishuInvalidCallback(RuntimeError):
+    pass
+
+
+class FeishuIdempotencyConflict(RuntimeError):
+    pass
+
+
 class SafeValidationError(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
@@ -193,6 +213,51 @@ async def _http_exception_handler(
 
 
 def register_exception_handlers(app: FastAPI) -> None:
+    app.add_exception_handler(
+        FeishuCallbackTooLarge,
+        _fixed_handler(
+            413,
+            "FEISHU_CALLBACK_TOO_LARGE",
+            "Feishu callback too large",
+            "Feishu callback exceeded the size limit",
+        ),
+    )
+    app.add_exception_handler(
+        FeishuCallbackUnauthorized,
+        _fixed_handler(
+            401,
+            "FEISHU_CALLBACK_UNAUTHORIZED",
+            "Feishu callback unauthorized",
+            "Feishu callback verification failed",
+        ),
+    )
+    app.add_exception_handler(
+        FeishuInvalidCallback,
+        _fixed_handler(
+            422,
+            "FEISHU_INVALID_CALLBACK",
+            "Invalid Feishu callback",
+            "Feishu callback validation failed",
+        ),
+    )
+    app.add_exception_handler(
+        FeishuIdempotencyConflict,
+        _fixed_handler(
+            409,
+            "FEISHU_IDEMPOTENCY_CONFLICT",
+            "Feishu idempotency conflict",
+            "Feishu callback identity conflicts with prior content",
+        ),
+    )
+    app.add_exception_handler(
+        FeishuUnavailable,
+        _fixed_handler(
+            503,
+            "FEISHU_UNAVAILABLE",
+            "Feishu unavailable",
+            "Feishu integration is unavailable",
+        ),
+    )
     app.add_exception_handler(
         CaseNotFound,
         _fixed_handler(404, "CASE_NOT_FOUND", "Case not found", "case was not found"),

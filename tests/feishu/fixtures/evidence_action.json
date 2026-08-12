@@ -1,0 +1,29 @@
+{
+  "schema": "2.0",
+  "header": {
+    "event_id": "evt_evidence_001",
+    "token": "__VERIFICATION_TOKEN__",
+    "create_time": "1786250001000",
+    "event_type": "card.action.trigger",
+    "tenant_key": "tenant_demo",
+    "app_id": "__APP_ID__"
+  },
+  "event": {
+    "operator": {
+      "open_id": "ou_synthetic_merchant"
+    },
+    "context": {
+      "open_message_id": "om_question_001"
+    },
+    "action": {
+      "tag": "button",
+      "value": {
+        "action_kind": "submit_evidence",
+        "case_id": "00000000-0000-4000-8000-000000000010",
+        "evidence_code": "transaction.reference",
+        "availability": "AVAILABLE",
+        "typed_value": "txn_synthetic_001"
+      }
+    }
+  }
+}
