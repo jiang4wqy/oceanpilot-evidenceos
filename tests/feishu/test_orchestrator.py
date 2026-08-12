@@ -18,6 +18,7 @@ from oceanpilot.application.feishu_orchestrator import (
     FeishuOrchestrator,
     FeishuUnexpectedEvidence,
     InvalidReviewConfirmation,
+    feishu_approval_id,
     feishu_evidence_id,
     next_feishu_evidence_code,
 )
@@ -119,7 +120,7 @@ def _case_view(
         status=status,
         schema_version="1",
         case_revision=7 if diagnosis is not None else case_revision,
-        evidence_revision=len(evidence),
+        evidence_revision=(diagnosis.evidence_revision if diagnosis is not None else len(evidence)),
         synthetic=True,
         summary="Synthetic Feishu incident",
         merchant_ref="merchant_feishu_001",
@@ -273,9 +274,18 @@ class _Chats:
 
 class _Approvals:
     def __init__(self) -> None:
+        self.calls = []
         self.records = []
 
     def record_confirmation(self, record):
+        self.calls.append(record)
+        if self.records:
+            first = self.records[0]
+            return FeishuConfirmationReceipt(
+                approval_id=first.approval_id,
+                action_id=first.action_id,
+                replayed=True,
+            )
         self.records.append(record)
         return FeishuConfirmationReceipt(
             approval_id=record.approval_id,
@@ -318,6 +328,21 @@ def _evidence() -> FeishuEvidenceSubmission:
         request_id=REQUEST_ID,
         trace_id=TRACE_ID,
     )
+
+
+def _confirmation(**changes) -> FeishuConfirmation:
+    values = {
+        "action_id": "action-confirm-001",
+        "claim_token": CLAIM_TOKEN,
+        "case_id": CASE_ID,
+        "diagnosis_id": DIAGNOSIS_ID,
+        "actor_hash": ACTOR_HASH,
+        "occurred_at": NOW,
+        "request_id": REQUEST_ID,
+        "trace_id": TRACE_ID,
+    }
+    values.update(changes)
+    return FeishuConfirmation(**values)
 
 
 def test_incident_model_does_not_allow_callers_to_set_trust_or_synthetic_flags():
@@ -612,36 +637,34 @@ def test_confirm_review_checks_current_diagnosis_and_delegates_safe_audit():
     service.get_result = _case_view(ready=True, diagnosis=diagnosis)
     approvals = _Approvals()
     orchestrator = FeishuOrchestrator(service, _Chats(CASE_ID), approvals)
-    confirmation = FeishuConfirmation(
-        action_id="action-confirm-001",
-        approval_id="approval-001",
-        case_id=CASE_ID,
-        diagnosis_id=DIAGNOSIS_ID,
-        actor_hash=ACTOR_HASH,
-        occurred_at=NOW,
-        request_id=REQUEST_ID,
-        trace_id=TRACE_ID,
-    )
+    confirmation = _confirmation()
+    before = service.get_result.model_dump(mode="json")
 
     receipt = orchestrator.confirm_review(confirmation)
 
-    assert receipt.approval_id == "approval-001"
+    expected_approval_id = feishu_approval_id(CASE_ID, DIAGNOSIS_ID, ACTOR_HASH)
+    assert receipt.approval_id == expected_approval_id
     assert receipt.replayed is False
     record = approvals.records[0]
+    assert record.approval_id == expected_approval_id
     assert record.case_id == CASE_ID
+    assert record.claim_token == CLAIM_TOKEN
     assert record.diagnosis_id == DIAGNOSIS_ID
     assert record.actor_hash == ACTOR_HASH
     assert record.request_id == REQUEST_ID
     assert record.trace_id == TRACE_ID
     assert record.result == "CONFIRMED"
     assert record.synthetic is True
+    assert service.get_result.model_dump(mode="json") == before
+    assert service.evidence_command is None
+    assert service.diagnose_command is None
 
 
 def test_confirmation_rejects_raw_actor_identifier():
     with pytest.raises(ValidationError):
         FeishuConfirmation(
             action_id="action-confirm-001",
-            approval_id="approval-001",
+            claim_token=CLAIM_TOKEN,
             case_id=CASE_ID,
             diagnosis_id=DIAGNOSIS_ID,
             actor_id="ou_synthetic_operator",
@@ -649,6 +672,47 @@ def test_confirmation_rejects_raw_actor_identifier():
             request_id=REQUEST_ID,
             trace_id=TRACE_ID,
         )
+
+
+def test_confirmation_model_rejects_caller_owned_approval_id():
+    with pytest.raises(ValidationError):
+        FeishuConfirmation(
+            **_confirmation().model_dump(),
+            approval_id="caller-controlled",
+        )
+
+
+def test_stable_approval_id_is_event_independent_and_actor_scoped():
+    first = feishu_approval_id(CASE_ID, DIAGNOSIS_ID, ACTOR_HASH)
+
+    assert first == feishu_approval_id(CASE_ID, DIAGNOSIS_ID, ACTOR_HASH)
+    assert first.startswith("opa_")
+    assert len(first) == 64
+    assert first != feishu_approval_id(CASE_ID, DIAGNOSIS_ID, "b" * 64)
+
+
+def test_different_event_repeat_click_delegates_semantic_replay_to_port():
+    diagnosis = _human_diagnosis()
+    service = _CaseService()
+    service.get_result = _case_view(ready=True, diagnosis=diagnosis)
+    approvals = _Approvals()
+    orchestrator = FeishuOrchestrator(service, _Chats(CASE_ID), approvals)
+
+    first = orchestrator.confirm_review(_confirmation())
+    replay = orchestrator.confirm_review(
+        _confirmation(action_id="action-confirm-002", actor_hash="b" * 64)
+    )
+
+    assert len(approvals.calls) == 2
+    assert len(approvals.records) == 1
+    assert approvals.calls[0].approval_id != approvals.calls[1].approval_id
+    assert first.replayed is False
+    assert replay.replayed is True
+    assert replay.approval_id == first.approval_id
+    assert replay.action_id == first.action_id
+    assert service.get_result.case.status is CaseStatus.HUMAN_REVIEW
+    assert service.evidence_command is None
+    assert service.diagnose_command is None
 
 
 @pytest.mark.parametrize(
@@ -679,19 +743,36 @@ def test_confirm_review_requires_a_synthetic_human_review_case(
     orchestrator = FeishuOrchestrator(service, _Chats(CASE_ID), approvals)
 
     with pytest.raises(InvalidReviewConfirmation):
-        orchestrator.confirm_review(
-            FeishuConfirmation(
-                action_id="action-confirm-001",
-                approval_id="approval-001",
-                case_id=CASE_ID,
-                diagnosis_id=DIAGNOSIS_ID,
-                actor_hash=ACTOR_HASH,
-                occurred_at=NOW,
-                request_id=REQUEST_ID,
-                trace_id=TRACE_ID,
-            )
-        )
+        orchestrator.confirm_review(_confirmation())
     assert approvals.records == []
+
+
+@pytest.mark.parametrize(
+    "case_update,diagnosis_update",
+    (
+        ({"current_diagnosis_id": OTHER_DIAGNOSIS_ID}, {}),
+        ({}, {"case_id": OTHER_CASE_ID}),
+        ({"evidence_revision": 5}, {"evidence_revision": 4}),
+        ({}, {"status": DiagnosisStatus.SUPERSEDED}),
+    ),
+)
+def test_confirm_review_rejects_stale_diagnosis_snapshot(
+    case_update,
+    diagnosis_update,
+):
+    diagnosis = _human_diagnosis().model_copy(update=diagnosis_update)
+    view = _case_view(ready=True, diagnosis=diagnosis)
+    view = view.model_copy(update={"case": view.case.model_copy(update=case_update)})
+    service = _CaseService()
+    service.get_result = view
+    approvals = _Approvals()
+    orchestrator = FeishuOrchestrator(service, _Chats(CASE_ID), approvals)
+
+    with pytest.raises(InvalidReviewConfirmation):
+        orchestrator.confirm_review(_confirmation())
+
+    assert approvals.calls == []
+    assert service.get_result.case.status is CaseStatus.HUMAN_REVIEW
 
 
 @pytest.mark.parametrize("diagnosis_id", (OTHER_DIAGNOSIS_ID, DIAGNOSIS_ID))
@@ -705,16 +786,7 @@ def test_confirm_review_rejects_stale_or_non_reviewable_diagnosis(diagnosis_id):
     service.get_result = _case_view(ready=True, diagnosis=diagnosis)
     approvals = _Approvals()
     orchestrator = FeishuOrchestrator(service, _Chats(CASE_ID), approvals)
-    confirmation = FeishuConfirmation(
-        action_id="action-confirm-001",
-        approval_id="approval-001",
-        case_id=CASE_ID,
-        diagnosis_id=diagnosis_id,
-        actor_hash=ACTOR_HASH,
-        occurred_at=NOW,
-        request_id=REQUEST_ID,
-        trace_id=TRACE_ID,
-    )
+    confirmation = _confirmation(diagnosis_id=diagnosis_id)
 
     with pytest.raises(InvalidReviewConfirmation):
         orchestrator.confirm_review(confirmation)

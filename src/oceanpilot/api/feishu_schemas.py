@@ -57,6 +57,26 @@ class FeishuCallbackAcknowledgement(BaseModel):
     ok: Literal[True] = True
 
 
+class FeishuConfirmationAcknowledgement(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    ok: Literal[True] = True
+    result: Literal["confirmed"] = "confirmed"
+    message: Literal["Recommendation confirmed and recorded; no business action was executed."] = (
+        "Recommendation confirmed and recorded; no business action was executed."
+    )
+
+
+class FeishuConfirmationRefreshAcknowledgement(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    ok: Literal[True] = True
+    result: Literal["refresh_required"] = "refresh_required"
+    message: Literal["This diagnosis is no longer current; refresh before confirming."] = (
+        "This diagnosis is no longer current; refresh before confirming."
+    )
+
+
 class FeishuMessageHeader(BaseModel):
     model_config = _STRICT_MODEL_CONFIG
 
@@ -292,3 +312,42 @@ def parse_feishu_evidence_action(
     if type(payload) is not dict:
         raise TypeError("payload must be a dict")
     return FeishuEvidenceCardCallback.model_validate(payload)
+
+
+class FeishuConfirmationActionValue(BaseModel):
+    model_config = _STRICT_MODEL_CONFIG
+
+    action_kind: Literal["confirm_review"]
+    case_id: UUID4Str
+    diagnosis_id: UUID4Str
+
+
+class FeishuConfirmationCardAction(BaseModel):
+    model_config = _STRICT_MODEL_CONFIG
+
+    tag: Literal["button"]
+    value: FeishuConfirmationActionValue
+
+
+class FeishuConfirmationCardEvent(BaseModel):
+    model_config = _STRICT_MODEL_CONFIG
+
+    operator: FeishuCardOperator
+    context: FeishuCardContext
+    action: FeishuConfirmationCardAction
+
+
+class FeishuConfirmationCardCallback(BaseModel):
+    model_config = _STRICT_MODEL_CONFIG
+
+    schema_version: Literal["2.0"] = Field(alias="schema")
+    header: FeishuCardActionHeader
+    event: FeishuConfirmationCardEvent
+
+
+def parse_feishu_confirmation_action(
+    payload: dict[str, object],
+) -> FeishuConfirmationCardCallback:
+    if type(payload) is not dict:
+        raise TypeError("payload must be a dict")
+    return FeishuConfirmationCardCallback.model_validate(payload)

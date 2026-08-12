@@ -172,6 +172,223 @@ def test_evidence_action_lease_allows_takeover_and_fences_stale_worker(tmp_path)
         connection.close()
 
 
+def test_confirmation_action_lease_allows_takeover_and_fences_stale_worker(tmp_path):
+    factory = FeishuCallbackStoreFactory(tmp_path / "confirmation-action-lease.db")
+
+    with factory.session() as store:
+        first = store.claim_confirmation_action(
+            "confirmation-action-crashed-worker",
+            payload_hash=ACTION_HASH,
+            claim_token=FIRST_CLAIM_TOKEN,
+            now=CREATED_AT,
+            lease_expires_at=LEASE_EXPIRES_AT,
+        )
+        active_retry = store.claim_confirmation_action(
+            "confirmation-action-crashed-worker",
+            payload_hash=ACTION_HASH,
+            claim_token=SECOND_CLAIM_TOKEN,
+            now=ACTIVE_NOW,
+            lease_expires_at=TAKEOVER_LEASE_EXPIRES_AT,
+        )
+        takeover = store.claim_confirmation_action(
+            "confirmation-action-crashed-worker",
+            payload_hash=ACTION_HASH,
+            claim_token=SECOND_CLAIM_TOKEN,
+            now=TAKEOVER_NOW,
+            lease_expires_at=TAKEOVER_LEASE_EXPIRES_AT,
+        )
+
+        with pytest.raises(ReceiptConflict):
+            store.release_confirmation_action(
+                "confirmation-action-crashed-worker",
+                payload_hash=ACTION_HASH,
+                claim_token=FIRST_CLAIM_TOKEN,
+            )
+        store.release_confirmation_action(
+            "confirmation-action-crashed-worker",
+            payload_hash=ACTION_HASH,
+            claim_token=SECOND_CLAIM_TOKEN,
+        )
+
+    assert first.outcome is ReceiptOutcome.CLAIMED
+    assert active_retry.outcome is ReceiptOutcome.IN_PROGRESS
+    assert takeover.outcome is ReceiptOutcome.CLAIMED
+    connection = sqlite3.connect(factory.db_path)
+    try:
+        row = connection.execute(
+            "SELECT claim_token, lease_expires_at, attempt "
+            "FROM feishu_action_receipts WHERE action_id = ?",
+            ("confirmation-action-crashed-worker",),
+        ).fetchone()
+        assert row == (None, None, 2)
+    finally:
+        connection.close()
+
+
+def test_confirmation_commit_requires_current_claim_token(tmp_path):
+    factory = FeishuCallbackStoreFactory(tmp_path / "confirmation-commit-fencing.db")
+    response = {"ok": True, "result": "confirmed"}
+
+    with factory.session() as store:
+        store.claim_confirmation_action(
+            "confirmation-action-fenced",
+            payload_hash=ACTION_HASH,
+            claim_token=FIRST_CLAIM_TOKEN,
+            now=CREATED_AT,
+            lease_expires_at=LEASE_EXPIRES_AT,
+        )
+        store.claim_confirmation_action(
+            "confirmation-action-fenced",
+            payload_hash=ACTION_HASH,
+            claim_token=SECOND_CLAIM_TOKEN,
+            now=TAKEOVER_NOW,
+            lease_expires_at=TAKEOVER_LEASE_EXPIRES_AT,
+        )
+
+        with pytest.raises(ReceiptConflict):
+            store.commit_confirmation(
+                action_id="confirmation-action-fenced",
+                claim_token=FIRST_CLAIM_TOKEN,
+                approval_id="approval-fenced",
+                response=response,
+                case_id=CASE_ID,
+                diagnosis_id=DIAGNOSIS_ID,
+                actor_id=ACTOR_ID,
+                result="CONFIRMED",
+                request_id=REQUEST_ID,
+                trace_id=TRACE_ID,
+                occurred_at=TAKEOVER_NOW,
+            )
+        assert store.get_approval_audit("confirmation-action-fenced") is None
+
+        completed = store.commit_confirmation(
+            action_id="confirmation-action-fenced",
+            claim_token=SECOND_CLAIM_TOKEN,
+            approval_id="approval-fenced",
+            response=response,
+            case_id=CASE_ID,
+            diagnosis_id=DIAGNOSIS_ID,
+            actor_id=ACTOR_ID,
+            result="CONFIRMED",
+            request_id=REQUEST_ID,
+            trace_id=TRACE_ID,
+            occurred_at=TAKEOVER_NOW,
+        )
+        replay = store.claim_confirmation_action(
+            "confirmation-action-fenced",
+            payload_hash=ACTION_HASH,
+            claim_token=FIRST_CLAIM_TOKEN,
+            now=TAKEOVER_NOW,
+            lease_expires_at=TAKEOVER_LEASE_EXPIRES_AT,
+        )
+        with pytest.raises(ReceiptConflict):
+            store.claim_confirmation_action(
+                "confirmation-action-fenced",
+                payload_hash=EVENT_HASH,
+                claim_token=FIRST_CLAIM_TOKEN,
+                now=TAKEOVER_NOW,
+                lease_expires_at=TAKEOVER_LEASE_EXPIRES_AT,
+            )
+
+    assert completed.outcome is ReceiptOutcome.COMPLETED
+    assert replay.outcome is ReceiptOutcome.REPLAY
+    assert replay.response == response
+    with sqlite3.connect(factory.db_path) as connection:
+        lease_expires_at = connection.execute(
+            "SELECT lease_expires_at FROM feishu_action_receipts WHERE action_id = ?",
+            ("confirmation-action-fenced",),
+        ).fetchone()[0]
+    assert lease_expires_at is None
+
+
+def test_legacy_confirmation_receipts_gain_lease_columns_without_losing_rows(tmp_path):
+    db_path = tmp_path / "legacy-confirmation-receipts.db"
+    connection = sqlite3.connect(db_path)
+    try:
+        connection.execute(
+            """
+            CREATE TABLE feishu_action_receipts (
+                action_id TEXT PRIMARY KEY,
+                payload_hash TEXT NOT NULL,
+                status TEXT NOT NULL,
+                response_json TEXT,
+                case_id TEXT,
+                diagnosis_id TEXT,
+                actor_id TEXT,
+                created_at TEXT NOT NULL,
+                completed_at TEXT
+            )
+            """
+        )
+        connection.executemany(
+            """
+            INSERT INTO feishu_action_receipts (
+                action_id, payload_hash, status, response_json, case_id,
+                diagnosis_id, actor_id, created_at, completed_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                (
+                    "legacy-confirmation-claimed",
+                    ACTION_HASH,
+                    "CLAIMED",
+                    None,
+                    None,
+                    None,
+                    None,
+                    CREATED_AT,
+                    None,
+                ),
+                (
+                    "legacy-confirmation-completed",
+                    ACTION_HASH,
+                    "COMPLETED",
+                    '{"ok":true}',
+                    CASE_ID,
+                    DIAGNOSIS_ID,
+                    ACTOR_HASH,
+                    CREATED_AT,
+                    COMPLETED_AT,
+                ),
+            ),
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+    factory = FeishuCallbackStoreFactory(db_path)
+    with factory.session() as store:
+        claimed = store.claim_confirmation_action(
+            "legacy-confirmation-claimed",
+            payload_hash=ACTION_HASH,
+            claim_token=FIRST_CLAIM_TOKEN,
+            now=CREATED_AT,
+            lease_expires_at=LEASE_EXPIRES_AT,
+        )
+        replay = store.claim_confirmation_action(
+            "legacy-confirmation-completed",
+            payload_hash=ACTION_HASH,
+            claim_token=SECOND_CLAIM_TOKEN,
+            now=CREATED_AT,
+            lease_expires_at=LEASE_EXPIRES_AT,
+        )
+
+    with sqlite3.connect(db_path) as connection:
+        columns = {
+            row[1] for row in connection.execute("PRAGMA table_info(feishu_action_receipts)")
+        }
+        rows = connection.execute(
+            "SELECT action_id, status, attempt FROM feishu_action_receipts ORDER BY action_id"
+        ).fetchall()
+    assert {"claim_token", "lease_expires_at", "attempt"} <= columns
+    assert rows == [
+        ("legacy-confirmation-claimed", "CLAIMED", 1),
+        ("legacy-confirmation-completed", "COMPLETED", 0),
+    ]
+    assert claimed.outcome is ReceiptOutcome.CLAIMED
+    assert replay.outcome is ReceiptOutcome.REPLAY
+
+
 def test_released_evidence_action_can_be_reclaimed_with_fencing(tmp_path):
     factory = FeishuCallbackStoreFactory(tmp_path / "evidence-action-release.db")
 
@@ -1163,11 +1380,18 @@ def test_chat_case_binding_is_idempotent_and_never_overwritten(tmp_path):
 def test_factory_implements_confirmation_port_with_correlated_audit(tmp_path):
     factory = FeishuCallbackStoreFactory(tmp_path / "approval-port.db")
     with factory.session() as store:
-        store.claim_action("action-port", payload_hash=ACTION_HASH, created_at=CREATED_AT)
+        store.claim_confirmation_action(
+            "action-port",
+            payload_hash=ACTION_HASH,
+            claim_token=FIRST_CLAIM_TOKEN,
+            now=CREATED_AT,
+            lease_expires_at=LEASE_EXPIRES_AT,
+        )
 
     receipt = factory.record_confirmation(
         FeishuApprovalRecord(
             action_id="action-port",
+            claim_token=FIRST_CLAIM_TOKEN,
             approval_id="approval-port",
             case_id=CASE_ID,
             diagnosis_id=DIAGNOSIS_ID,
@@ -1189,10 +1413,17 @@ def test_factory_implements_confirmation_port_with_correlated_audit(tmp_path):
     assert audit.trace_id == TRACE_ID
 
     with factory.session() as store:
-        store.claim_action("action-port-retry", payload_hash=ACTION_HASH, created_at=CREATED_AT)
+        store.claim_confirmation_action(
+            "action-port-retry",
+            payload_hash=ACTION_HASH,
+            claim_token=SECOND_CLAIM_TOKEN,
+            now=CREATED_AT,
+            lease_expires_at=LEASE_EXPIRES_AT,
+        )
     replay = factory.record_confirmation(
         FeishuApprovalRecord(
             action_id="action-port-retry",
+            claim_token=SECOND_CLAIM_TOKEN,
             approval_id="approval-port-retry",
             case_id=CASE_ID,
             diagnosis_id=DIAGNOSIS_ID,
@@ -1215,9 +1446,16 @@ def test_confirmation_and_approval_audit_commit_atomically_and_replay(tmp_path):
     response = {"ok": True, "result": "approved"}
 
     with factory.session() as store:
-        store.claim_action("action-confirm", payload_hash=ACTION_HASH, created_at=CREATED_AT)
+        store.claim_confirmation_action(
+            "action-confirm",
+            payload_hash=ACTION_HASH,
+            claim_token=FIRST_CLAIM_TOKEN,
+            now=CREATED_AT,
+            lease_expires_at=LEASE_EXPIRES_AT,
+        )
         completed = store.commit_confirmation(
             action_id="action-confirm",
+            claim_token=FIRST_CLAIM_TOKEN,
             approval_id="approval-001",
             response=response,
             case_id=CASE_ID,
@@ -1233,6 +1471,7 @@ def test_confirmation_and_approval_audit_commit_atomically_and_replay(tmp_path):
 
         replay = store.commit_confirmation(
             action_id="action-confirm",
+            claim_token=FIRST_CLAIM_TOKEN,
             approval_id="approval-001",
             response=response,
             case_id=CASE_ID,
@@ -1268,9 +1507,16 @@ def test_confirmation_context_survives_reopen_and_semantic_duplicate_replays(tmp
     response = {"ok": True, "result": "confirmed"}
 
     with factory.session() as store:
-        store.claim_action("action-first", payload_hash=ACTION_HASH, created_at=CREATED_AT)
+        store.claim_confirmation_action(
+            "action-first",
+            payload_hash=ACTION_HASH,
+            claim_token=FIRST_CLAIM_TOKEN,
+            now=CREATED_AT,
+            lease_expires_at=LEASE_EXPIRES_AT,
+        )
         created = store.commit_confirmation(
             action_id="action-first",
+            claim_token=FIRST_CLAIM_TOKEN,
             approval_id="approval-first",
             response=response,
             case_id=CASE_ID,
@@ -1283,9 +1529,16 @@ def test_confirmation_context_survives_reopen_and_semantic_duplicate_replays(tmp
         )
         assert created.outcome is ReceiptOutcome.COMPLETED
 
-        store.claim_action("action-second", payload_hash=EVENT_HASH, created_at=CREATED_AT)
+        store.claim_confirmation_action(
+            "action-second",
+            payload_hash=EVENT_HASH,
+            claim_token=SECOND_CLAIM_TOKEN,
+            now=CREATED_AT,
+            lease_expires_at=LEASE_EXPIRES_AT,
+        )
         replay = store.commit_confirmation(
             action_id="action-second",
+            claim_token=SECOND_CLAIM_TOKEN,
             approval_id="approval-second",
             response=response,
             case_id=CASE_ID,
@@ -1354,13 +1607,18 @@ def test_existing_approval_database_migrates_without_losing_rows(tmp_path):
         assert audit.request_id is None
         assert audit.trace_id is None
 
-        store.claim_action(
-            "action-after-migration", payload_hash=ACTION_HASH, created_at=CREATED_AT
+        store.claim_confirmation_action(
+            "action-after-migration",
+            payload_hash=ACTION_HASH,
+            claim_token=FIRST_CLAIM_TOKEN,
+            now=CREATED_AT,
+            lease_expires_at=LEASE_EXPIRES_AT,
         )
 
     replay = FeishuCallbackStoreFactory(db_path).record_confirmation(
         FeishuApprovalRecord(
             action_id="action-after-migration",
+            claim_token=FIRST_CLAIM_TOKEN,
             approval_id="approval-after-migration",
             case_id=CASE_ID,
             diagnosis_id=DIAGNOSIS_ID,
@@ -1440,10 +1698,17 @@ def test_confirmation_rolls_back_receipt_when_audit_insert_conflicts(tmp_path):
 
     with factory.session() as store:
         for action_id in ("action-first", "action-second"):
-            store.claim_action(action_id, payload_hash=ACTION_HASH, created_at=CREATED_AT)
+            store.claim_confirmation_action(
+                action_id,
+                payload_hash=ACTION_HASH,
+                claim_token=FIRST_CLAIM_TOKEN,
+                now=CREATED_AT,
+                lease_expires_at=LEASE_EXPIRES_AT,
+            )
 
         store.commit_confirmation(
             action_id="action-first",
+            claim_token=FIRST_CLAIM_TOKEN,
             approval_id="approval-shared",
             response={"ok": True, "action": "first"},
             case_id=CASE_ID,
@@ -1458,6 +1723,7 @@ def test_confirmation_rolls_back_receipt_when_audit_insert_conflicts(tmp_path):
         with pytest.raises(ReceiptConflict):
             store.commit_confirmation(
                 action_id="action-second",
+                claim_token=FIRST_CLAIM_TOKEN,
                 approval_id="approval-shared",
                 response={"ok": True, "action": "second"},
                 case_id=OTHER_CASE_ID,
@@ -1470,14 +1736,19 @@ def test_confirmation_rolls_back_receipt_when_audit_insert_conflicts(tmp_path):
             )
 
     with FeishuCallbackStoreFactory(factory.db_path).session() as store:
-        still_claimed = store.claim_action(
-            "action-second", payload_hash=ACTION_HASH, created_at=CREATED_AT
+        still_claimed = store.claim_confirmation_action(
+            "action-second",
+            payload_hash=ACTION_HASH,
+            claim_token=SECOND_CLAIM_TOKEN,
+            now=ACTIVE_NOW,
+            lease_expires_at=TAKEOVER_LEASE_EXPIRES_AT,
         )
         assert still_claimed.outcome is ReceiptOutcome.IN_PROGRESS
         assert store.get_approval_audit("action-second") is None
 
         completed = store.commit_confirmation(
             action_id="action-second",
+            claim_token=FIRST_CLAIM_TOKEN,
             approval_id="approval-second",
             response={"ok": True, "action": "second"},
             case_id=OTHER_CASE_ID,

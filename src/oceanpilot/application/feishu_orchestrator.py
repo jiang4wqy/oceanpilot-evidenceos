@@ -144,6 +144,17 @@ def feishu_evidence_id(
     return str(UUID(bytes=bytes(digest)))
 
 
+def feishu_approval_id(
+    case_id: str,
+    diagnosis_id: str,
+    actor_hash: str,
+) -> str:
+    digest = sha256(
+        f"FEISHU_APPROVAL\0{case_id}\0{diagnosis_id}\0{actor_hash}".encode()
+    ).hexdigest()
+    return f"opa_{digest[:60]}"
+
+
 def _replayed_diagnosis(view: CaseView, evidence_id: str) -> DiagnosisView | None:
     diagnosis = view.current_diagnosis
     if (
@@ -311,6 +322,9 @@ class FeishuOrchestrator:
             or view.case.status is not CaseStatus.HUMAN_REVIEW
             or not view.case.synthetic
             or not diagnosis.synthetic
+            or diagnosis.case_id != view.case.case_id
+            or view.case.current_diagnosis_id != diagnosis.diagnosis_id
+            or diagnosis.evidence_revision != view.case.evidence_revision
             or diagnosis.diagnosis_id != confirmation.diagnosis_id
             or diagnosis.status is not DiagnosisStatus.CURRENT
             or not diagnosis.requires_human
@@ -319,7 +333,12 @@ class FeishuOrchestrator:
         return self._approvals.record_confirmation(
             FeishuApprovalRecord(
                 action_id=confirmation.action_id,
-                approval_id=confirmation.approval_id,
+                claim_token=confirmation.claim_token,
+                approval_id=feishu_approval_id(
+                    confirmation.case_id,
+                    confirmation.diagnosis_id,
+                    confirmation.actor_hash,
+                ),
                 case_id=confirmation.case_id,
                 diagnosis_id=confirmation.diagnosis_id,
                 actor_hash=confirmation.actor_hash,

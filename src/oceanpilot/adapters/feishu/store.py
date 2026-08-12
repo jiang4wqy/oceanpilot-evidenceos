@@ -72,6 +72,9 @@ _SCHEMA = (
         action_id TEXT PRIMARY KEY,
         payload_hash TEXT NOT NULL,
         status TEXT NOT NULL CHECK (status IN ('CLAIMED', 'COMPLETED')),
+        claim_token TEXT,
+        lease_expires_at TEXT,
+        attempt INTEGER NOT NULL DEFAULT 0 CHECK (attempt >= 0),
         response_json TEXT,
         case_id TEXT,
         diagnosis_id TEXT,
@@ -341,6 +344,24 @@ def _initialize(path: Path) -> None:
             )
             _add_column_if_missing(
                 connection,
+                table="feishu_action_receipts",
+                column="claim_token",
+                declaration="TEXT",
+            )
+            _add_column_if_missing(
+                connection,
+                table="feishu_action_receipts",
+                column="lease_expires_at",
+                declaration="TEXT",
+            )
+            _add_column_if_missing(
+                connection,
+                table="feishu_action_receipts",
+                column="attempt",
+                declaration="INTEGER NOT NULL DEFAULT 0",
+            )
+            _add_column_if_missing(
+                connection,
                 table="feishu_binding_claims",
                 column="case_id",
                 declaration="TEXT",
@@ -504,6 +525,62 @@ class FeishuCallbackStoreSession:
             created_at=created_at,
         )
 
+    def claim_confirmation_action(
+        self,
+        action_id: str,
+        *,
+        payload_hash: str,
+        claim_token: str,
+        now: str,
+        lease_expires_at: str,
+    ) -> ReceiptResult:
+        action_id = _require_text("action_id", action_id)
+        payload_hash = _require_hash("payload_hash", payload_hash)
+        claim_token = _require_text("claim_token", claim_token)
+        now_value = _require_aware_timestamp("now", now)
+        lease_value = _require_aware_timestamp("lease_expires_at", lease_expires_at)
+        if lease_value <= now_value:
+            raise ValueError("lease_expires_at must be later than now")
+        now = now_value.isoformat()
+        lease_expires_at = lease_value.isoformat()
+        with _immediate_transaction(self._connection):
+            row = self._connection.execute(
+                "SELECT status, response_json, payload_hash, lease_expires_at "
+                "FROM feishu_action_receipts WHERE action_id = ?",
+                (action_id,),
+            ).fetchone()
+            if row is None:
+                self._connection.execute(
+                    "INSERT INTO feishu_action_receipts ("
+                    "action_id, payload_hash, status, claim_token, lease_expires_at, "
+                    "attempt, created_at) VALUES (?, ?, 'CLAIMED', ?, ?, 1, ?)",
+                    (action_id, payload_hash, claim_token, lease_expires_at, now),
+                )
+                return ReceiptResult(ReceiptOutcome.CLAIMED)
+            if row["payload_hash"] is not None and row["payload_hash"] != payload_hash:
+                raise ReceiptConflict(action_id)
+            if row["status"] == "COMPLETED":
+                return ReceiptResult(
+                    ReceiptOutcome.REPLAY,
+                    _decode_response(row["response_json"]),
+                )
+            active_lease = (
+                _require_aware_timestamp("stored lease_expires_at", row["lease_expires_at"])
+                if row["lease_expires_at"] is not None
+                else None
+            )
+            if active_lease is not None and active_lease > now_value:
+                return ReceiptResult(ReceiptOutcome.IN_PROGRESS)
+            updated = self._connection.execute(
+                "UPDATE feishu_action_receipts SET payload_hash = ?, claim_token = ?, "
+                "lease_expires_at = ?, attempt = attempt + 1 "
+                "WHERE action_id = ? AND status = 'CLAIMED'",
+                (payload_hash, claim_token, lease_expires_at, action_id),
+            )
+            if updated.rowcount != 1:
+                raise ReceiptConflict(action_id)
+            return ReceiptResult(ReceiptOutcome.CLAIMED)
+
     def claim_evidence_action(
         self,
         action_id: str,
@@ -620,6 +697,39 @@ class FeishuCallbackStoreSession:
                 raise ReceiptConflict(action_id)
             released = self._connection.execute(
                 "UPDATE feishu_evidence_action_receipts SET claim_token = NULL, "
+                "lease_expires_at = NULL WHERE action_id = ? AND status = 'CLAIMED' "
+                "AND payload_hash = ? AND claim_token = ?",
+                (action_id, payload_hash, claim_token),
+            )
+            if released.rowcount != 1:
+                raise ReceiptConflict(action_id)
+
+    def release_confirmation_action(
+        self,
+        action_id: str,
+        *,
+        payload_hash: str,
+        claim_token: str,
+    ) -> None:
+        action_id = _require_text("action_id", action_id)
+        payload_hash = _require_hash("payload_hash", payload_hash)
+        claim_token = _require_text("claim_token", claim_token)
+        with _immediate_transaction(self._connection):
+            row = self._connection.execute(
+                "SELECT status, payload_hash, claim_token "
+                "FROM feishu_action_receipts WHERE action_id = ?",
+                (action_id,),
+            ).fetchone()
+            if row is None:
+                raise ReceiptNotClaimed(action_id)
+            if (
+                row["status"] != "CLAIMED"
+                or row["payload_hash"] != payload_hash
+                or row["claim_token"] != claim_token
+            ):
+                raise ReceiptConflict(action_id)
+            released = self._connection.execute(
+                "UPDATE feishu_action_receipts SET claim_token = NULL, "
                 "lease_expires_at = NULL WHERE action_id = ? AND status = 'CLAIMED' "
                 "AND payload_hash = ? AND claim_token = ?",
                 (action_id, payload_hash, claim_token),
@@ -1043,6 +1153,7 @@ class FeishuCallbackStoreSession:
         self,
         *,
         action_id: str,
+        claim_token: str,
         approval_id: str,
         response: Mapping[str, object],
         case_id: str,
@@ -1062,6 +1173,7 @@ class FeishuCallbackStoreSession:
             actor_id=actor_id,
             completed_at=occurred_at,
         )
+        claim_token = _require_text("claim_token", claim_token)
         _require_text("approval_id", approval_id)
         _require_text("result", result)
         action_kind = _require_text("action_kind", action_kind)
@@ -1069,6 +1181,14 @@ class FeishuCallbackStoreSession:
         trace_id = _require_text("trace_id", trace_id)
         try:
             with _immediate_transaction(self._connection):
+                claimed = self._connection.execute(
+                    "SELECT claim_token FROM feishu_action_receipts WHERE action_id = ?",
+                    (action_id,),
+                ).fetchone()
+                if claimed is None:
+                    raise ReceiptNotClaimed(action_id)
+                if claimed["claim_token"] != claim_token:
+                    raise ReceiptConflict(action_id)
                 receipt = self._complete_in_transaction(
                     table="feishu_action_receipts",
                     key_column="action_id",
@@ -1076,6 +1196,11 @@ class FeishuCallbackStoreSession:
                     encoded=encoded,
                     metadata=metadata,
                     completed_at=occurred_at,
+                )
+                self._connection.execute(
+                    "UPDATE feishu_action_receipts SET lease_expires_at = NULL "
+                    "WHERE action_id = ? AND status = 'COMPLETED' AND claim_token = ?",
+                    (action_id, claim_token),
                 )
                 existing = self._connection.execute(
                     """
@@ -1286,6 +1411,7 @@ class FeishuCallbackStoreFactory:
         with self.session() as store:
             result = store.commit_confirmation(
                 action_id=record.action_id,
+                claim_token=record.claim_token,
                 approval_id=record.approval_id,
                 response=response,
                 case_id=record.case_id,

@@ -31,12 +31,17 @@ from oceanpilot.api.errors import (
 )
 from oceanpilot.api.feishu_schemas import (
     FeishuCallbackAcknowledgement,
+    FeishuConfirmationAcknowledgement,
+    FeishuConfirmationRefreshAcknowledgement,
     FeishuUrlVerificationPayload,
     FeishuUrlVerificationResponse,
+    parse_feishu_confirmation_action,
     parse_feishu_evidence_action,
     parse_feishu_message_event,
 )
+from oceanpilot.application.errors import CaseNotFound
 from oceanpilot.application.feishu_models import (
+    FeishuConfirmation,
     FeishuEvidenceSubmission,
     FeishuFlowOutcome,
     FeishuIncident,
@@ -45,6 +50,7 @@ from oceanpilot.application.feishu_orchestrator import (
     FeishuBindingInProgress,
     FeishuEvidenceStale,
     FeishuUnexpectedEvidence,
+    InvalidReviewConfirmation,
     feishu_evidence_id,
     feishu_evidence_values,
     next_feishu_evidence_code,
@@ -341,8 +347,17 @@ def _release_claim(
 async def receive_card_action(
     request: Request,
     runtime: Annotated[FeishuRuntime, Depends(get_feishu_runtime)],
-) -> FeishuCallbackAcknowledgement:
+) -> (
+    FeishuCallbackAcknowledgement
+    | FeishuConfirmationAcknowledgement
+    | FeishuConfirmationRefreshAcknowledgement
+):
     payload, raw_body = await _verified_payload(request, runtime)
+    action_kind = _action_kind(payload)
+    if action_kind == "confirm_review":
+        return _receive_confirmation_action(request, runtime, payload, raw_body)
+    if action_kind != "submit_evidence":
+        raise FeishuInvalidCallback()
     try:
         callback = parse_feishu_evidence_action(payload)
     except (TypeError, ValidationError):
@@ -522,6 +537,126 @@ async def receive_card_action(
         )
         raise
     return FeishuCallbackAcknowledgement()
+
+
+def _action_kind(payload: dict[str, object]) -> str | None:
+    event = payload.get("event")
+    action = event.get("action") if isinstance(event, dict) else None
+    value = action.get("value") if isinstance(action, dict) else None
+    kind = value.get("action_kind") if isinstance(value, dict) else None
+    return kind if type(kind) is str else None
+
+
+def _operator_id(callback) -> str:
+    operator = callback.event.operator
+    return operator.open_id or operator.user_id or operator.union_id
+
+
+def _receive_confirmation_action(
+    request: Request,
+    runtime: FeishuRuntime,
+    payload: dict[str, object],
+    raw_body: bytes,
+) -> (
+    FeishuCallbackAcknowledgement
+    | FeishuConfirmationAcknowledgement
+    | FeishuConfirmationRefreshAcknowledgement
+):
+    try:
+        callback = parse_feishu_confirmation_action(payload)
+    except (TypeError, ValidationError):
+        raise FeishuInvalidCallback() from None
+    if not hmac.compare_digest(
+        callback.header.app_id.encode(),
+        runtime.app_id.encode(),
+    ):
+        raise FeishuCallbackUnauthorized()
+    if runtime.demo_chat_id is None:
+        raise FeishuUnavailable()
+    if not hmac.compare_digest(
+        callback.event.context.open_chat_id.encode(),
+        runtime.demo_chat_id.encode(),
+    ):
+        return FeishuCallbackAcknowledgement()
+
+    received_at = datetime.now(UTC)
+    claim_token = secrets.token_hex(32)
+    payload_hash = hashlib.sha256(raw_body).hexdigest()
+    try:
+        with runtime.store_factory.session() as store:
+            receipt = store.claim_confirmation_action(
+                callback.header.event_id,
+                payload_hash=payload_hash,
+                claim_token=claim_token,
+                now=received_at.isoformat(),
+                lease_expires_at=(received_at + _ACTION_CLAIM_LEASE).isoformat(),
+            )
+    except ReceiptConflict:
+        raise FeishuIdempotencyConflict() from None
+    except (OSError, sqlite3.Error, ValueError):
+        raise FeishuUnavailable() from None
+    if receipt.outcome is ReceiptOutcome.IN_PROGRESS:
+        raise FeishuUnavailable()
+    if receipt.outcome is ReceiptOutcome.REPLAY:
+        return FeishuConfirmationAcknowledgement()
+
+    context = request.state.request_context
+    action = callback.event.action.value
+    actor_material = json.dumps(
+        [callback.header.tenant_key, _operator_id(callback)],
+        ensure_ascii=True,
+        separators=(",", ":"),
+    ).encode()
+    actor_hash = hashlib.sha256(actor_material).hexdigest()
+    try:
+        runtime.orchestrator.confirm_review(
+            FeishuConfirmation(
+                action_id=callback.header.event_id,
+                claim_token=claim_token,
+                case_id=action.case_id,
+                diagnosis_id=action.diagnosis_id,
+                actor_hash=actor_hash,
+                occurred_at=received_at,
+                request_id=context.request_id,
+                trace_id=context.trace_id,
+            )
+        )
+    except (CaseNotFound, InvalidReviewConfirmation):
+        _release_confirmation_action(
+            runtime,
+            callback.header.event_id,
+            payload_hash,
+            claim_token,
+        )
+        return FeishuConfirmationRefreshAcknowledgement()
+    except ReceiptConflict:
+        raise FeishuIdempotencyConflict() from None
+    except (OSError, sqlite3.Error):
+        _release_confirmation_action(
+            runtime,
+            callback.header.event_id,
+            payload_hash,
+            claim_token,
+        )
+        raise FeishuUnavailable() from None
+    return FeishuConfirmationAcknowledgement()
+
+
+def _release_confirmation_action(
+    runtime: FeishuRuntime,
+    action_id: str,
+    payload_hash: str,
+    claim_token: str,
+) -> None:
+    try:
+        with runtime.store_factory.session() as store:
+            store.release_confirmation_action(
+                action_id,
+                payload_hash=payload_hash,
+                claim_token=claim_token,
+            )
+    except (OSError, sqlite3.Error, ReceiptConflict, ValueError):
+        pass
 
 
 def _release_evidence_action(

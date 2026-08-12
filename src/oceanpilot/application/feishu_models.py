@@ -54,7 +54,7 @@ class FeishuFlowResult(FrozenDomainModel):
 
 class FeishuConfirmation(FrozenDomainModel):
     action_id: FeishuIdentifier
-    approval_id: FeishuIdentifier
+    claim_token: FeishuIdentifier
     case_id: UUID4Str
     diagnosis_id: UUID4Str
     actor_hash: FeishuActorHash
@@ -65,6 +65,7 @@ class FeishuConfirmation(FrozenDomainModel):
 
 class FeishuApprovalRecord(FrozenDomainModel):
     action_id: FeishuIdentifier
+    claim_token: FeishuIdentifier
     approval_id: FeishuIdentifier
     case_id: UUID4Str
     diagnosis_id: UUID4Str
