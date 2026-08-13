@@ -1,3 +1,4 @@
+import hashlib
 import json
 import sqlite3
 from collections.abc import Iterator, Mapping
@@ -10,6 +11,7 @@ _SCHEMA = (
     """
     CREATE TABLE IF NOT EXISTS feishu_event_receipts (
         event_id TEXT PRIMARY KEY,
+        payload_hash TEXT NOT NULL,
         status TEXT NOT NULL CHECK (status IN ('CLAIMED', 'COMPLETED')),
         response_json TEXT,
         case_id TEXT,
@@ -33,6 +35,7 @@ _SCHEMA = (
     """
     CREATE TABLE IF NOT EXISTS feishu_action_receipts (
         action_id TEXT PRIMARY KEY,
+        payload_hash TEXT NOT NULL,
         status TEXT NOT NULL CHECK (status IN ('CLAIMED', 'COMPLETED')),
         response_json TEXT,
         case_id TEXT,
@@ -115,6 +118,29 @@ def _require_text(name: str, value: str) -> str:
     return value
 
 
+def _external_id_digest(kind: str, value: str) -> str:
+    value = _require_text(kind, value)
+    prefix = f"sha256:{kind}:"
+    if value.startswith(prefix):
+        encoded_digest = value.removeprefix(prefix)
+        if len(encoded_digest) == 64 and all(
+            character in "0123456789abcdef" for character in encoded_digest
+        ):
+            return value
+    digest = hashlib.sha256(f"feishu-{kind}\0{value}".encode()).hexdigest()
+    return f"{prefix}{digest}"
+
+
+def _require_hash(name: str, value: str) -> str:
+    if (
+        type(value) is not str
+        or len(value) != 64
+        or any(character not in "0123456789abcdef" for character in value)
+    ):
+        raise ValueError(f"{name} must be a lowercase sha256 hash")
+    return value
+
+
 def _reject_sensitive_keys(value: object) -> None:
     if isinstance(value, Mapping):
         for key, nested in value.items():
@@ -182,6 +208,31 @@ def _initialize(path: Path) -> None:
         with _immediate_transaction(connection):
             for statement in _SCHEMA:
                 connection.execute(statement)
+            for table in ("feishu_event_receipts", "feishu_action_receipts"):
+                columns = {
+                    row["name"]
+                    for row in connection.execute(f"PRAGMA table_info({table})").fetchall()
+                }
+                if "payload_hash" not in columns:
+                    connection.execute(f"ALTER TABLE {table} ADD COLUMN payload_hash TEXT")
+            legacy_chats = connection.execute(
+                "SELECT chat_id FROM feishu_chat_cases WHERE chat_id NOT LIKE 'sha256:chat:%'"
+            ).fetchall()
+            for row in legacy_chats:
+                connection.execute(
+                    "UPDATE feishu_chat_cases SET chat_id = ? WHERE chat_id = ?",
+                    (_external_id_digest("chat", row["chat_id"]), row["chat_id"]),
+                )
+            for table in ("feishu_action_receipts", "feishu_approval_audits"):
+                legacy_actors = connection.execute(
+                    f"SELECT rowid, actor_id FROM {table} "
+                    "WHERE actor_id IS NOT NULL AND actor_id NOT LIKE 'sha256:actor:%'"
+                ).fetchall()
+                for row in legacy_actors:
+                    connection.execute(
+                        f"UPDATE {table} SET actor_id = ? WHERE rowid = ?",
+                        (_external_id_digest("actor", row["actor_id"]), row["rowid"]),
+                    )
     finally:
         connection.close()
 
@@ -196,22 +247,31 @@ class FeishuCallbackStoreSession:
         table: str,
         key_column: str,
         receipt_id: str,
+        payload_hash: str,
         created_at: str,
     ) -> ReceiptResult:
         _require_text(key_column, receipt_id)
+        payload_hash = _require_hash("payload_hash", payload_hash)
         _require_text("created_at", created_at)
         with _immediate_transaction(self._connection):
             row = self._connection.execute(
-                f"SELECT status, response_json FROM {table} WHERE {key_column} = ?",
+                f"SELECT status, response_json, payload_hash FROM {table} WHERE {key_column} = ?",
                 (receipt_id,),
             ).fetchone()
             if row is None:
                 self._connection.execute(
-                    f"INSERT INTO {table} ({key_column}, status, created_at) "
-                    "VALUES (?, 'CLAIMED', ?)",
-                    (receipt_id, created_at),
+                    f"INSERT INTO {table} ({key_column}, payload_hash, status, created_at) "
+                    "VALUES (?, ?, 'CLAIMED', ?)",
+                    (receipt_id, payload_hash, created_at),
                 )
                 return ReceiptResult(ReceiptOutcome.CLAIMED)
+            if row["payload_hash"] is None:
+                self._connection.execute(
+                    f"UPDATE {table} SET payload_hash = ? WHERE {key_column} = ?",
+                    (payload_hash, receipt_id),
+                )
+            elif row["payload_hash"] != payload_hash:
+                raise ReceiptConflict(receipt_id)
             if row["status"] == "CLAIMED":
                 return ReceiptResult(ReceiptOutcome.IN_PROGRESS)
             return ReceiptResult(
@@ -219,19 +279,21 @@ class FeishuCallbackStoreSession:
                 _decode_response(row["response_json"]),
             )
 
-    def claim_event(self, event_id: str, *, created_at: str) -> ReceiptResult:
+    def claim_event(self, event_id: str, *, payload_hash: str, created_at: str) -> ReceiptResult:
         return self._claim(
             table="feishu_event_receipts",
             key_column="event_id",
             receipt_id=event_id,
+            payload_hash=payload_hash,
             created_at=created_at,
         )
 
-    def claim_action(self, action_id: str, *, created_at: str) -> ReceiptResult:
+    def claim_action(self, action_id: str, *, payload_hash: str, created_at: str) -> ReceiptResult:
         return self._claim(
             table="feishu_action_receipts",
             key_column="action_id",
             receipt_id=action_id,
+            payload_hash=payload_hash,
             created_at=created_at,
         )
 
@@ -295,13 +357,14 @@ class FeishuCallbackStoreSession:
         actor_id: str,
         completed_at: str,
     ) -> tuple[str, str, dict[str, str], str]:
+        actor_id = _external_id_digest("actor", actor_id)
         return (
             _require_text("action_id", action_id),
             _encode_response(response),
             {
                 "case_id": _require_text("case_id", case_id),
                 "diagnosis_id": _require_text("diagnosis_id", diagnosis_id),
-                "actor_id": _require_text("actor_id", actor_id),
+                "actor_id": actor_id,
             },
             _require_text("completed_at", completed_at),
         )
@@ -340,7 +403,7 @@ class FeishuCallbackStoreSession:
         return ReceiptResult(ReceiptOutcome.COMPLETED, _decode_response(encoded))
 
     def bind_chat_case(self, chat_id: str, case_id: str, *, updated_at: str) -> None:
-        _require_text("chat_id", chat_id)
+        chat_id = _external_id_digest("chat", chat_id)
         _require_text("case_id", case_id)
         _require_text("updated_at", updated_at)
         with _immediate_transaction(self._connection):
@@ -365,7 +428,7 @@ class FeishuCallbackStoreSession:
                 raise ReceiptConflict(chat_id)
 
     def get_chat_case(self, chat_id: str) -> str | None:
-        _require_text("chat_id", chat_id)
+        chat_id = _external_id_digest("chat", chat_id)
         row = self._connection.execute(
             "SELECT case_id FROM feishu_chat_cases WHERE chat_id = ?",
             (chat_id,),
@@ -392,6 +455,7 @@ class FeishuCallbackStoreSession:
             actor_id=actor_id,
             completed_at=occurred_at,
         )
+        actor_id = metadata["actor_id"]
         _require_text("approval_id", approval_id)
         _require_text("result", result)
         try:

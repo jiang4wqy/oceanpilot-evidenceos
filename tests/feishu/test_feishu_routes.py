@@ -127,6 +127,21 @@ def test_duplicate_event_replays_without_second_case(tmp_path):
     assert bound == first.json()["case_id"]
 
 
+def test_duplicate_event_id_with_different_verified_payload_is_rejected(tmp_path):
+    transport = RecordingTransport()
+    app = make_app(tmp_path, transport)
+    first_raw = to_bytes(message_payload(event_id="evt-conflict", chat_id=CHAT_ID, text="one"))
+    second_raw = json.dumps(json.loads(first_raw), indent=2).encode()
+
+    with TestClient(app, raise_server_exceptions=False) as client:
+        first = _post(client, EVENTS_PATH, first_raw)
+        second = _post(client, EVENTS_PATH, second_raw)
+
+    assert first.status_code == 200
+    assert second.status_code == 409
+    assert second.json() == {"code": 409, "msg": "conflict"}
+
+
 def test_bot_message_creates_no_case(tmp_path):
     transport = RecordingTransport()
     app = make_app(tmp_path, transport)
@@ -300,6 +315,62 @@ def test_second_confirmation_of_same_diagnosis_is_rejected(tmp_path):
     assert second.status_code == 409
     assert first_audit is not None
     assert second_audit is None
+
+
+def test_identical_confirmation_callback_replays_without_duplicate_card_or_audit(tmp_path):
+    transport = RecordingTransport()
+    app = make_app(tmp_path, transport)
+    chat = "oc_confirmation_replay"
+    with TestClient(app, raise_server_exceptions=False) as client:
+        case_id, diagnosis_id = _drive_to_confirmable(client, chat, "cr")
+        raw = to_bytes(
+            confirm_payload(
+                event_id="cr-confirm",
+                chat_id=chat,
+                case_id=case_id,
+                diagnosis_id=diagnosis_id,
+            )
+        )
+        first = _post(client, CARD_PATH, raw)
+        sent_after_first = len(transport.sent)
+        with app.state.feishu_store_factory.session() as store:
+            audit_after_first = store.get_approval_audit("cr-confirm")
+
+        second = _post(client, CARD_PATH, raw)
+        with app.state.feishu_store_factory.session() as store:
+            audit_after_second = store.get_approval_audit("cr-confirm")
+
+    assert first.status_code == second.status_code == 200
+    assert first.json() == second.json()
+    assert first.json()["outcome"] == "CONFIRMED"
+    assert len(transport.sent) == sent_after_first
+    assert audit_after_first is not None
+    assert audit_after_second == audit_after_first
+
+
+def test_confirmation_id_with_different_verified_bytes_is_rejected(tmp_path):
+    transport = RecordingTransport()
+    app = make_app(tmp_path, transport)
+    chat = "oc_confirmation_payload_conflict"
+    with TestClient(app, raise_server_exceptions=False) as client:
+        case_id, diagnosis_id = _drive_to_confirmable(client, chat, "cpc")
+        first_raw = to_bytes(
+            confirm_payload(
+                event_id="cpc-confirm",
+                chat_id=chat,
+                case_id=case_id,
+                diagnosis_id=diagnosis_id,
+            )
+        )
+        second_raw = json.dumps(json.loads(first_raw), indent=2).encode()
+
+        first = _post(client, CARD_PATH, first_raw)
+        second = _post(client, CARD_PATH, second_raw)
+
+    assert first.status_code == 200
+    assert first.json()["outcome"] == "CONFIRMED"
+    assert second.status_code == 409
+    assert second.json() == {"code": 409, "msg": "conflict"}
 
 
 def test_responses_and_database_never_leak_secrets(tmp_path):

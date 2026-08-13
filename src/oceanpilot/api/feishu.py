@@ -1,3 +1,4 @@
+import hashlib
 import json
 import sqlite3
 from datetime import UTC, datetime
@@ -184,6 +185,7 @@ def _process_message(
     store_factory: FeishuCallbackStoreFactory,
     client: FeishuOutboundClient,
     envelope: FeishuMessageEnvelope,
+    payload_hash: str,
 ) -> JSONResponse:
     event_id = envelope.header.event_id
     if not event_id:
@@ -195,7 +197,7 @@ def _process_message(
     text = _extract_message_text(message.content)
 
     with store_factory.session() as store:
-        claim = store.claim_event(event_id, created_at=_now_text())
+        claim = store.claim_event(event_id, payload_hash=payload_hash, created_at=_now_text())
         if claim.outcome is ReceiptOutcome.REPLAY:
             return _reply(200, claim.response or _ACK)
         if claim.outcome is ReceiptOutcome.IN_PROGRESS:
@@ -218,6 +220,7 @@ def _process_evidence(
     store: object,
     envelope: FeishuCardActionEnvelope,
     action_id: str,
+    payload_hash: str,
 ) -> JSONResponse | tuple[JSONResponse, OrchestrationOutcome, str]:
     value = envelope.event.action.value
     context = envelope.event.context
@@ -244,7 +247,7 @@ def _process_evidence(
         typed_value=typed_value,
         observed_at=observed_at,
     )
-    claim = store.claim_event(action_id, created_at=_now_text())
+    claim = store.claim_event(action_id, payload_hash=payload_hash, created_at=_now_text())
     if claim.outcome is ReceiptOutcome.REPLAY:
         return _reply(200, claim.response or _ACK)
     if claim.outcome is ReceiptOutcome.IN_PROGRESS:
@@ -261,6 +264,7 @@ def _process_confirmation(
     store: object,
     envelope: FeishuCardActionEnvelope,
     action_id: str,
+    payload_hash: str,
 ) -> JSONResponse | tuple[JSONResponse, OrchestrationOutcome, str]:
     value = envelope.event.action.value
     context = envelope.event.context
@@ -268,7 +272,7 @@ def _process_confirmation(
     actor_id = _actor_of(envelope)
     if not chat_id or not value.case_id or not value.diagnosis_id or not actor_id:
         return _reply(400, _ERR_INVALID)
-    claim = store.claim_action(action_id, created_at=_now_text())
+    claim = store.claim_action(action_id, payload_hash=payload_hash, created_at=_now_text())
     if claim.outcome is ReceiptOutcome.REPLAY:
         return _reply(200, claim.response or _ACK)
     if claim.outcome is ReceiptOutcome.IN_PROGRESS:
@@ -339,6 +343,7 @@ def _process_card_action(
     store_factory: FeishuCallbackStoreFactory,
     client: FeishuOutboundClient,
     envelope: FeishuCardActionEnvelope,
+    payload_hash: str,
 ) -> JSONResponse:
     action_id = envelope.header.event_id
     if not action_id:
@@ -350,9 +355,13 @@ def _process_card_action(
     with store_factory.session() as store:
         try:
             if action_kind == ACTION_SUBMIT_EVIDENCE:
-                processed = _process_evidence(orchestrator, store, envelope, action_id)
+                processed = _process_evidence(
+                    orchestrator, store, envelope, action_id, payload_hash
+                )
             else:
-                processed = _process_confirmation(orchestrator, store, envelope, action_id)
+                processed = _process_confirmation(
+                    orchestrator, store, envelope, action_id, payload_hash
+                )
         except (UnboundChat, CaseBindingMismatch):
             return _reply(400, _ERR_INVALID)
 
@@ -385,6 +394,7 @@ async def _handle(request: Request, mode: str) -> JSONResponse:
         payload = verifier.verify(dict(request.headers), raw)
     except FeishuVerificationError:
         return _reply(401, _ERR_VERIFICATION)
+    payload_hash = hashlib.sha256(raw).hexdigest()
 
     if payload.get("type") == "url_verification":
         challenge = payload.get("challenge")
@@ -398,16 +408,28 @@ async def _handle(request: Request, mode: str) -> JSONResponse:
             if envelope.header.event_type != MESSAGE_RECEIVE_EVENT:
                 return _reply(200, _ACK)
             return await run_in_threadpool(
-                _process_message, orchestrator, store_factory, client, envelope
+                _process_message,
+                orchestrator,
+                store_factory,
+                client,
+                envelope,
+                payload_hash,
             )
         card = FeishuCardActionEnvelope.model_validate(payload)
         if card.header.event_type not in (CARD_ACTION_EVENT, None):
             return _reply(400, _ERR_INVALID)
         return await run_in_threadpool(
-            _process_card_action, orchestrator, store_factory, client, card
+            _process_card_action,
+            orchestrator,
+            store_factory,
+            client,
+            card,
+            payload_hash,
         )
     except ValidationError:
         return _reply(400, _ERR_INVALID)
+    except ReceiptConflict:
+        return _reply(409, _ERR_CONFLICT)
     except sqlite3.Error:
         return _reply(503, _ERR_UNAVAILABLE)
     except Exception:  # noqa: BLE001
