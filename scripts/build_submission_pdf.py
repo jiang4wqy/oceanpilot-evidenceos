@@ -464,7 +464,7 @@ def build_pdf(output_path: pathlib.Path = OUTPUT_PDF) -> pathlib.Path:
     _draw_page_frame(pdf, page_width, page_height, margin)
     draw_paragraph(
         pdf,
-        html.escape("02｜两个 synthetic 纵向切片，共用同一证据内核"),
+        html.escape("02｜两个 synthetic 纵向切片，遵循同一证据驱动原则"),
         margin,
         page_height - margin,
         content_width,
@@ -502,9 +502,9 @@ def build_pdf(output_path: pathlib.Path = OUTPUT_PDF) -> pathlib.Path:
         260,
         content_width,
         76,
-        "共用证据内核｜19 OpenAPI 路径",
-        "Case + Evidence Contract + Readiness Gate + Diagnosis + Routing + Audit；"
-        "三个 SQLite 职责隔离，本地 signed fixture 经过真实验签与回调路由。",
+        "统一证据驱动原则｜19 OpenAPI 路径",
+        "共同遵循 Evidence Contract + Readiness Gate + Diagnosis + Routing + Audit；"
+        "领域模型与三个 SQLite 按职责隔离，本地 signed fixture 经过真实验签与回调路由。",
         accent=TEAL,
     )
 
