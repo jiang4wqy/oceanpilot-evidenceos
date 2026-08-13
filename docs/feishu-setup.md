@@ -1,11 +1,26 @@
 # Feishu (Lark) Integration Setup
 
-OceanPilot exposes two verified callbacks under `/api/v1/integrations/feishu`.
-This guide configures a **minimum-permission enterprise self-built app** to drive
-the synthetic demo. Everything here is for a controlled test tenant. The bot only
-creates synthetic `PAYMENT_INCIDENT` cases and records advisory approvals — it
-never executes any payment, refund, risk-release, configuration, or ticketing
-action.
+OceanPilot exposes two locally verified callbacks under `/api/v1/integrations/feishu`.
+The signed local fixture already exercises their verifier, schemas, routes, stores,
+orchestrator and card rendering without network access. This guide describes the
+separate, still-unverified real test-group setup for a **minimum-permission enterprise
+self-built app**. The bot only creates synthetic `PAYMENT_INCIDENT` cases and records
+advisory approvals; it never executes payment, refund, risk release, fund movement,
+production configuration change, ticket dispatch or real upstream submission.
+
+## 0. Prove the local signed path first
+
+Use a new empty directory:
+
+```bash
+.venv/bin/python -B examples/signed_fixture_demo.py --work-dir work/signed-feishu-run
+```
+
+This generates random runtime credentials/identifiers, signs exact callback bytes,
+drives message intake, seven evidence actions, diagnosis, confirmation, event replay
+and action replay, and uses an in-process outbound transport. A non-empty directory
+fails before mutation. Passing this command is local synthetic evidence only; it is
+not proof of a real Feishu group.
 
 ## 1. Credentials are environment variables only
 
@@ -76,9 +91,9 @@ JSON parse, constant-time verification-token check, DTO validation,
 event/action allowlist, then an idempotent callback claim. Blocking work runs in
 a threadpool.
 
-## 5. Real test-group smoke (deferred, needs authorization)
+## 5. Real test-group smoke (not yet verified)
 
-Once a public HTTPS endpoint exists, verify in a real test group that: one
+Once a public HTTPS endpoint exists, capture timestamped evidence in a real test group that: one
 message creates exactly one case; evidence answers advance readiness item by
 item; a real diagnosis card appears at the threshold; confirmation adds exactly
 one approval audit; repeated events/actions/clicks create no duplicate data; the
@@ -86,3 +101,7 @@ SQLite files and logs contain no Feishu credentials; and the UI clearly marks
 the flow as synthetic with no business action executed. This smoke run needs a
 live tenant and public endpoint and is intentionally out of scope for the
 offline test suite.
+
+Until that evidence exists, documentation and presentation must say **signed local
+fixture verified / real Feishu test group not verified**. It must not claim production
+integration or Gate 4 PASS.

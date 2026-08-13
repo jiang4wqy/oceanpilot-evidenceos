@@ -1,37 +1,53 @@
-# OceanPilot Deferred Work Register
+# OceanPilot Current Status and Deferred Work
 
-> **状态更新（竞赛演示分支）：** Task 9–17 已在 `feat/diagnosis-persistence`、
-> `feat/diagnosis-service-api`、`feat/synthetic-e2e-demo`、`feat/feishu-demo` 与
-> `chore/competition-release` 上完成：诊断 snapshot CAS 持久化与 Gate 2、
-> `CaseService.diagnose()` 编排、真实诊断 API 与 RFC 9457 合同、三个 synthetic
-> E2E 场景、跨表面敏感数据 sentinel、Python 3.12 GitHub Actions，以及经签名校验的
-> 飞书事件/卡片回调链路（建案 → 补问 → 达标诊断 → 人工确认审计）。诊断入口不再返回
-> `501`。剩余为入围后的生产化工作：真实 Oceanpayment/A2A/MCP/工单接入、鉴权限流与
-> 生产日志、公网 HTTPS 部署与飞书真机联调（Task 18 的远程发布证据需用户明确授权）。
-> 下表保留原始计划口径作为里程碑记录。
+本页是 living status，不复述已经过期的 Foundation TODO。当前产品愿景是综合商户成功智能体；仓库已验证支付异常和拒付申诉两个 synthetic 纵向切片，8 月 16 日展示先支付异常。
 
-本清单记录 Foundation 里程碑有意留下的工作。每一行都可单独交给一个技术轨或审查轨，但必须按依赖顺序执行；“当前已有”不表示整条能力已启用。优先级是当前建议顺序：P0 阻断诊断主链，P1 补齐演示与自动化证据，P2 负责最终发布。
+## 已完成的竞赛代码能力
 
-| 模块 | 正式任务 | 优先级 | 当前已有 | 未完成内容 | 不完成的用户影响 | 后续依赖 | 预计改动文件 | 可独立分工工作轨 | 可执行完成验收 |
-|---|---:|---:|---|---|---|---|---|---|---|
-| diagnosis persistence | Task 9 | P0 | 六表 schema、`CaseStoreSession` 端口、诊断通用 hydrator、案件/证据原子事务 | 诊断 snapshot CAS、唯一键 replay、stale 输入优先级、同案证据引用、原子审计和失败回滚 | diagnose 只能返回 501，无法保存或可靠重放诊断 | 已完成 Tasks 7–8；完成后交 Gate 2 | `src/oceanpilot/adapters/persistence/sqlite.py`；`tests/repository/test_diagnosis_store.py`；`test_diagnosis_concurrency.py`；`test_cross_case_references.py` | **Track P9 / Persistence writer**：独占上述 Store 与三份测试；不修改 API/CaseService | `.\.venv\Scripts\python.exe -m pytest tests/repository/test_diagnosis_store.py tests/repository/test_diagnosis_concurrency.py tests/repository/test_cross_case_references.py -q --basetemp .superpowers/sdd/pytest-roadmap-task9` |
-| Persistence Gate 2 | Task 10 | P0 | 案件/证据真实文件 SQLite 测试、rollback/FK/concurrency 证据；Gate 1 已 PASS | 独立审查 Task 9 的连接、事务、CAS、去重、跨案件引用和残留 WAL/SHM，并提交 Gate 2 报告 | 无独立证据证明完整 persistence 边界，后续诊断/API 写窗口不能安全开启 | diagnosis persistence Task 9 clean commit | `docs/reviews/gate-2-persistence.md`；只读审查 `src/oceanpilot/adapters/persistence/**` 与 `tests/repository/**` | **Track G2 / Independent reviewer**：不写技术代码，只在所有证明成立时写 PASS 报告 | `.\.venv\Scripts\python.exe -m pytest tests/repository -q --basetemp .superpowers/sdd/pytest-roadmap-gate2; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; if (-not (Select-String -Quiet -LiteralPath docs/reviews/gate-2-persistence.md -Pattern '\bPASS\b')) { throw 'Gate 2 PASS missing' }` |
-| Full service orchestration | Task 11 | P0 | Foundation `CaseService.create_case/get_case/add_evidence`、commands、规则引擎与 Store port；当前单次 CAS | `diagnose()` 编排、诊断 replay、最多三次 evidence CAS 重算、snapshot 失效与完整竞态语义 | 不能产生可持久化诊断；并发写需要调用方重试 | Task 9 与 Gate 2 PASS | `src/oceanpilot/application/case_service.py`；`tests/domain/test_case_service.py`；`tests/domain/test_diagnose_service.py` | **Track S11 / Service writer**：用 fake Store 锁定调用顺序；不改 SQL 或 HTTP | `.\.venv\Scripts\python.exe -m pytest tests/domain/test_case_service.py tests/domain/test_diagnose_service.py -q --basetemp .superpowers/sdd/pytest-roadmap-task11` |
-| Full API safety contract | Tasks 12–14 | P0 | lifespan、health、五条路径、严格 DTO、固定三字段安全错误、基础 404/405/422/500/503 映射 | RFC 9457 `application/problem+json`、request/trace context 与 header、白名单扩展、完整 OpenAPI error/replay schema、真实 diagnose 路由、对抗 checkpoint | API 可本地演示，但缺少完整可观测性与对抗性合同，不能作为生产接口 | Task 11 完成；Task 14 必须由独立 reviewer 执行 | `src/oceanpilot/{config.py,main.py,api/**}`；`tests/{conftest.py,api/**}`；`docs/reviews/checkpoint-api.md` | **Track A12-13 / API writer** 后接 **Track A14 / API reviewer**；reviewer 只读技术文件 | `.\.venv\Scripts\python.exe -m pytest tests/api -q --basetemp .superpowers/sdd/pytest-roadmap-api; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; if (-not (Select-String -Quiet -LiteralPath docs/reviews/checkpoint-api.md -Pattern 'PASS_CHECKPOINT')) { throw 'API checkpoint missing' }` |
-| Three synthetic E2E cases | Task 15 | P1 | 一个本地 Foundation PowerShell 流程；四条 deterministic rules 已有领域测试 | 3DS/callback、risk decline、configuration mismatch 三个业务组（四个 rule subcases）的 internal synthetic adapter 与 HTTP 闭环；检查 route/ticket/audit/source-quality 差异 | 评委只能看到基础数据链，无法查看三种诊断业务闭环 | API checkpoint PASS 且 diagnose 已启用 | `src/oceanpilot/adapters/evidence/synthetic.py`；`tests/api/test_three_synthetic_cases.py`；`examples/demo.ps1` | **Track E15 / Scenario writer**：独占 synthetic adapter、E2E 测试和演示，不新增 HTTP 来源注入接口 | `.\.venv\Scripts\python.exe -m pytest tests/api/test_three_synthetic_cases.py -q --basetemp .superpowers/sdd/pytest-roadmap-e2e` |
-| security / CI | Tasks 16–17 | P1 | 领域敏感扫描、安全固定错误、当前本地测试与 Task 3 的 717-test 基线 | 五表面 sentinel 回归（响应/日志/审计/DB bytes/serialized snapshots）、最小 Python 3.12 GitHub Actions、正式 Gate 3 E2E/API/security/audit 独立审查 | 敏感数据和主链回归缺少跨表面自动证据；不能声称远程 CI 结果 | Task 15；完整 API；Task 17 必须与 writer 分离 | `tests/security/test_no_sensitive_data_leak.py`；`.github/workflows/ci.yml`；必要时仅修已证明缺陷的窄生产文件；`docs/reviews/gate-3-api-main-chain.md` | **Track S16 / Security writer** 后接 **Track G3 / Independent reviewer**；禁止未由测试证明的广泛 hardening | `.\.venv\Scripts\python.exe -m pytest tests/domain tests/repository tests/api tests/security -q --basetemp .superpowers/sdd/pytest-roadmap-gate3; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; if (-not (Select-String -Quiet -LiteralPath docs/reviews/gate-3-api-main-chain.md -Pattern '\bPASS\b')) { throw 'Gate 3 PASS missing' }` |
-| Final release | Task 18 | P2 | Foundation README、architecture、deferred-work register 与本地 demo；报名段落已冻结 | 全量事实审计、clean-clone 重现、依赖/secret 扫描、最终 demo 文档、报名事实同步、经用户授权的远程身份/空仓校验、匿名公开读取和 Gate 4 报告 | 当前材料不能作为最终提交版本，GitHub URL 不能当作已公开验证地址 | Gate 2、API checkpoint、Gate 3 全部 PASS；远程写入需用户明确授权 | `README.md`；`docs/{architecture.md,demo.md}`；`docs/submission/registration-copy.md`；`docs/reviews/gate-4-release.md`；不创建 `LICENSE`，除非另行授权 | **Track R18 / Release controller**：独占事实文档与远程发布；先只读核验账号、remote 与目标仓，再决定是否写远程 | `.\.venv\Scripts\python.exe -m pytest -q --basetemp .superpowers/sdd/pytest-roadmap-release; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; if (-not (Select-String -Quiet -LiteralPath docs/reviews/gate-4-release.md -Pattern '\bPASS\b')) { throw 'Gate 4 PASS missing' }; if ([string]::IsNullOrWhiteSpace($env:OCEANPILOT_PUBLIC_README_URL)) { throw 'verified public README URL is required' }; $r = Invoke-WebRequest -UseBasicParsing -Uri $env:OCEANPILOT_PUBLIC_README_URL; if ($r.StatusCode -ne 200) { throw 'public README verification failed' }` |
+| Area | Current verified state |
+|---|---|
+| Payment persistence | 诊断 snapshot CAS、identity replay、stale 拒绝、同案证据引用、原子诊断审计和 rollback |
+| Payment service/API | readiness gate、最多三次有限重算、真实严格 DiagnosisResponse、安全 Problem Details 与 request/trace ID |
+| Payment scenarios | 3DS/回调、风控拒绝、商户侧配置不匹配、PSP 侧配置不匹配；HTTP E2E 与 `/demo/payment-incident` |
+| Feishu local path | signed local fixture：消息建案、七次补证、诊断卡、人工确认审计、事件/动作 replay、无外网 |
+| Feishu privacy | 外部 chat/actor 标识哈希、receipt payload hash、callback body/凭据不持久化 |
+| Chargeback slice | 独立持久化智能体集群、SLA、评估、打包、草稿、mock upstream、人工门、审计、指标和 `/demo` |
+| Release automation | Python 3.12 CI 配置、全量测试/lint/format/compile、fixture、PowerShell demo、package/PDF smoke 与 diff gate |
 
-## Sequencing and Ownership Rules
+这些状态只说明当前仓库中的 synthetic 行为已通过相应本地测试/检查；不自动证明目标提交的远程 Actions 绿色、匿名公开可读或正式发布完成。
 
-1. Task 9 writer 完成并停写后，Gate 2 reviewer 才开始；Gate 2 没有 PASS 时不得启动完整诊断编排。
-2. Task 11 先让服务层获得真实 diagnose 语义，再由 API writer 替换 501 占位；API reviewer 与 writer 分离。
-3. 三个 synthetic E2E 场景建立在真实诊断链上，不用内存 snapshot 或伪返回抢跑。
-4. Security writer 只修 sentinel 测试实际暴露的窄缺陷；Gate 3 reviewer 独立复跑主链。
-5. Release controller 最后同步 README、报名文案和公开状态。未通过匿名读取验证前，不把仓库 URL 标为可提交。
+## 尚待完成
 
-## Known Foundation Baseline Debt
+| Priority | Work | Why it remains open | Completion evidence |
+|---:|---|---|---|
+| P0 | 真实飞书测试群 smoke | 当前只有 signed local fixture；缺少公网 HTTPS callback 的真实群证据 | 时间戳、真实测试群消息/卡片、重复事件/点击去重、一次审批审计、安全日志/DB scan |
+| P0 | 最终 clean-copy 与远程 CI | 工作流配置存在不等于 exact head 已远程执行 | clean checkout 全门通过；GitHub Actions 在 exact PR head 绿色 |
+| P0 | 匿名 README 与 PR 审查 | 当前分支还需发布和对 `master` 的无回退核对 | exact commit README 匿名 HTTP 200；PR 不删除 v0.2.1 拒付/console/安全能力 |
+| P1 | 真实 Oceanpayment 数据适配 | 未获得生产接口、数据合同和授权 | 只读 sandbox/测试环境合同、脱敏数据、权限与审计通过验收 |
+| P1 | 真实上游工单/申诉集成 | 当前拒付 submission 只进入 mock | sandbox adapter、人审权限、幂等/补偿、安全审计和业务方验收 |
+| P1 | 鉴权、限流和生产可观测性 | 当前是本地比赛原型 | 身份/权限模型、rate limit、日志/指标/告警、运行手册与演练 |
+| P2 | A2A、MCP、SLA、通知与自动派单 | 属于综合智能体扩展面，当前没有运行证据 | 独立规格、最小切片、测试与真实业务验收 |
+| P2 | 云数据库与部署运维 | 当前三个独立本地 SQLite store | 部署架构、备份恢复、迁移、容量/并发和灾备证据 |
+| P2 | 商业效果验证 | 报名指标是目标，不是实测结果 | 真实基线、试点样本、指标定义、置信区间和业务方确认 |
 
-`ruff format --check src tests` 当前在 19 个 Foundation Task 4 之前已提交的 Python 文件上退出 `1`。本次四文件文档工作不改 Python，因此不会增加格式漂移；格式基线应在独立、可审查的机械提交中处理，不混入上述功能轨。
+## 不会用 demo 文案代替的能力
 
-TestClient 还会报告一条固定依赖组合产生的 Starlette/httpx 弃用警告。依赖升级需独立验证，不能在文档任务中静默改版本。
+- 真实支付、退款、风控放行、资金移动、调账或生产配置变更；
+- Oceanpayment、银行、卡组织或工单系统的真实上游提交；
+- 真实飞书群/生产凭据/生产数据；
+- 已验证 ROI、资料到齐时间或首次责任域命中率；
+- production ready 或 Gate 4 PASS。
+
+## 发布顺序
+
+1. 完成 living docs/PDF 事实一致性和本地全门。
+2. 导出 exact tree 做 clean-copy 重现、依赖/secret/sensitive-data 扫描。
+3. 推送 integration branch，等待 exact head 的 GitHub Actions。
+4. 匿名读取 exact commit README，审查 PR 对 `master` 无反向回退。
+5. 真实飞书群 smoke 单独执行；在此之前 Gate 4 保持未完成。
+
+详细设计与任务依赖见：
+
+- [Payment incident mainline integration design](../superpowers/specs/2026-08-12-payment-incident-mainline-integration-design.md)
+- [Payment incident mainline integration plan](../superpowers/plans/2026-08-13-payment-incident-mainline-integration.md)
+- [Combined checkpoint](../reviews/checkpoint-payment-incident-mainline.md)

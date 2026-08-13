@@ -1,74 +1,121 @@
 # OceanPilot Demo Runbook
 
-Two synthetic demos, both local and offline. No Oceanpayment or Feishu
-production data is touched, and no payment, refund, risk-release, configuration,
-or ticketing action is ever executed.
+比赛版本展示综合商户成功智能体的两个本地 synthetic 切片。8 月 16 日先展示支付异常，再展示拒付申诉。全程不使用 Oceanpayment 或真实飞书生产数据，不执行支付、退款、风控放行、资金移动、生产配置变更或真实上游提交。
 
-## Prerequisites
+## 1. Prerequisites
 
 - Python 3.12
-- A virtual environment with the project installed:
+- 从仓库根目录创建环境并安装：
 
 ```bash
 python3.12 -m venv .venv
-.venv/bin/python -m pip install -e ".[dev]"      # Windows: .\.venv\Scripts\python.exe
+.venv/bin/python -m pip install -e ".[dev]"
 ```
 
-## A. HTTP case → evidence → diagnosis (main chain)
+Windows 将 `.venv/bin/python` 替换为 `.\.venv\Scripts\python.exe`。
 
-Start the local service (binds `127.0.0.1` only):
+## 2. 启动本地服务
 
 ```bash
 export OCEANPILOT_DB_PATH=work/oceanpilot.db
 .venv/bin/python -m uvicorn oceanpilot.main:create_app --factory --host 127.0.0.1 --port 8000
 ```
 
-On Windows, `examples/demo.ps1` runs the whole chain against a running service
-and exits non-zero on failure:
+Windows PowerShell：
+
+```powershell
+$env:OCEANPILOT_DB_PATH = "work/oceanpilot.db"
+.\.venv\Scripts\python.exe -m uvicorn oceanpilot.main:create_app --factory --host 127.0.0.1 --port 8000
+```
+
+## 3. 8 月 16 日主展示：支付异常 cockpit
+
+浏览器打开：
+
+```text
+http://127.0.0.1:8000/demo/payment-incident
+```
+
+建议演示顺序：
+
+1. 指出页面顶部 `SYNTHETIC` 和禁止业务动作边界。
+2. 运行“3DS / 回调未完成”，观察 readiness 从缺证推进到达标。
+3. 展示 API 返回的候选原因、置信度、复核原因、责任域、证据引用、下一动作和审计引用。
+4. Reset 后选“风控拒绝”，说明同一内核可以路由到不同责任域。
+5. 视时间展示商户侧或 PSP 侧配置不匹配。
+6. 点击“返回拒付处理”，进入第二个切片。
+
+cockpit 只调用：
+
+- `POST /api/v1/cases`
+- `POST /api/v1/cases/{case_id}/evidence`
+- `POST /api/v1/cases/{case_id}/diagnose`
+
+所有运行结论来自公开 API；页面不注入 source reliability，不伪造规则、confidence、route、revision 或 audit。任一步失败就停止，不制造下游状态。
+
+## 4. 四规则 HTTP PowerShell demo
+
+服务运行时，在另一个 Windows PowerShell 窗口执行：
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\examples\demo.ps1
 ```
 
-The script verifies, in order: `GET /health`; create a synthetic
-`PAYMENT_INCIDENT` case; append evidence; read the case; and call
-`POST /api/v1/cases/{case_id}/diagnose`, which now returns a real strict
-`DiagnosisResponse` (`201` first time, `200` on identity replay) — no longer the
-old `501`.
+脚本从 health 开始，以全新 synthetic case 顺序验证四个规则子场景；失败时返回非零退出码，不访问外部服务。
 
-The same flow through the public application/HTTP seams is exercised
-deterministically by the offline suites in `tests/e2e/`.
+## 5. Signed local Feishu fallback
 
-## B. Feishu synthetic collaboration flow
-
-The end-to-end Feishu chain (message → create/bind case → role-scoped need-info
-card → structured evidence answers → readiness → real diagnosis card → human
-confirmation → approval audit) is driven at the signed callback seam by
-`tests/feishu/test_feishu_routes.py::test_full_message_to_confirmation_flow`.
-
-Run just the Feishu and security suites:
+无需真实飞书网络或凭据。指定一个不存在或空目录：
 
 ```bash
-.venv/bin/python -m pytest tests/feishu tests/security -q
+.venv/bin/python -B examples/signed_fixture_demo.py --work-dir work/signed-feishu-run
 ```
 
-Because Feishu-submitted evidence is fixed to `MERCHANT / USER_REPORTED /
-synthetic=true` (low source quality), every Feishu-driven diagnosis routes to
-human review, so the diagnosis card always carries a single `confirm_review`
-button. Confirmation records one synthetic approval audit and does **not** change
-case state; a re-clicked button (a new callback id for the same diagnosis) is
-rejected with a fixed `409`.
+runner 使用随机运行时凭据与外部标识，通过真实签名 verifier、callback routes、schemas、orchestrator、stores 和 card renderer，完成：
 
-To drive the flow from a real Feishu test group instead of fixtures, configure
-the console and credentials per [feishu-setup.md](feishu-setup.md) and expose a
-public HTTPS endpoint.
+```text
+signed message
+  -> create/bind case
+  -> seven signed evidence actions
+  -> readiness + diagnosis card
+  -> signed human confirmation
+  -> one approval audit
+  -> message/action replay without duplicate side effects
+```
 
-## Full local gate
+它使用 in-process outbound transport，不访问外网；非空工作目录会在修改前 fail closed。稳定 JSON 摘要必须包含 `business_action_executed:false`、`case_unchanged_by_confirmation:true`、消息 replay、确认 replay 和一次 approval audit。
+
+确认只记录建议审批，不改变 payment core case，也不执行支付、退款、风控放行、资金移动或生产配置变更。
+
+## 6. 拒付申诉切片
+
+打开：
+
+```text
+http://127.0.0.1:8000/demo
+```
+
+选择示例拒付场景并自动补证到评估，展示：原因识别、证据清单/SLA、确定性胜诉评估、责任团队、材料打包、申诉草稿、人工门、审计与安全扫描。
+
+拒付上游是 `MockUpstreamConnector`。即使页面显示 synthetic/mock submission，也不是 Oceanpayment、银行或卡组织真实提交。
+
+## 7. Full local gate
 
 ```bash
 .venv/bin/python -m pytest -p no:cacheprovider -q
-ruff check src tests
-ruff format --check src tests
-.venv/bin/python -m compileall -q src tests
+.venv/bin/ruff check src tests examples scripts
+.venv/bin/ruff format --check src tests examples scripts
+.venv/bin/python -m compileall -q src tests examples scripts
+.venv/bin/python -m pip check
 git diff --check
 ```
+
+API 事实检查：
+
+```bash
+.venv/bin/python -c "from oceanpilot.main import create_app; assert len(create_app().openapi()['paths']) == 19"
+```
+
+## 8. 尚未完成的现场证据
+
+真实飞书测试群需要公网 HTTPS callback、最小权限测试应用和时间戳证据。当前仓库只证明 signed local fixture；未完成真实群 smoke 时不得宣称飞书真机联调或 Gate 4 PASS。
