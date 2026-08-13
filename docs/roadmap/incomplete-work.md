@@ -9,7 +9,7 @@
 | Payment persistence | 诊断 snapshot CAS、identity replay、stale 拒绝、同案证据引用、原子诊断审计和 rollback |
 | Payment service/API | readiness gate、最多三次有限重算、真实严格 DiagnosisResponse、安全 Problem Details 与 request/trace ID |
 | Payment scenarios | 3DS/回调、风控拒绝、商户侧配置不匹配、PSP 侧配置不匹配；HTTP E2E 与 `/demo/payment-incident` |
-| Feishu local path | signed local fixture：消息建案、七次补证、诊断卡、人工确认审计、事件/动作 replay、无外网 |
+| Feishu local path | signed local fixture，以及从真实出站补问卡按钮驱动的公共 callback E2E：消息建案、七次补证、诊断卡、人工确认审计、事件/动作 replay、无外网 |
 | Feishu privacy | 外部 chat/actor 标识哈希、receipt payload hash、callback body/凭据不持久化 |
 | Chargeback slice | 独立持久化智能体集群、SLA、评估、打包、草稿、mock upstream、人工门、审计、指标和 `/demo` |
 | Release automation | Python 3.12 CI 配置、全量测试/lint/format/compile、fixture、PowerShell demo、package/PDF smoke 与 diff gate |
@@ -20,7 +20,7 @@
 
 | Priority | Work | Why it remains open | Completion evidence |
 |---:|---|---|---|
-| P0 | 真实飞书测试群 smoke | 当前只有 signed local fixture；缺少公网 HTTPS callback 的真实群证据 | 时间戳、真实测试群消息/卡片、重复事件/点击去重、一次审批审计、安全日志/DB scan |
+| P0 | 真实飞书测试群 smoke | signed local fixture、可点击卡片 E2E 和公网 callback 预检均已完成；仍缺真实租户发起的群消息/卡片证据 | 时间戳、真实测试群消息/卡片、重复事件/点击去重、一次审批审计、安全日志/DB scan |
 | P0 | 最终 clean-copy 与远程 CI | 工作流配置存在不等于 exact head 已远程执行 | clean checkout 全门通过；GitHub Actions 在 exact PR head 绿色 |
 | P0 | 匿名 README 与 PR 审查 | 当前分支还需发布和对 `master` 的无回退核对 | exact commit README 匿名 HTTP 200；PR 不删除 v0.2.1 拒付/console/安全能力 |
 | P1 | 真实 Oceanpayment 数据适配 | 未获得生产接口、数据合同和授权 | 只读 sandbox/测试环境合同、脱敏数据、权限与审计通过验收 |

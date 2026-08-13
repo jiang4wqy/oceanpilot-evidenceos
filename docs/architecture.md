@@ -75,6 +75,10 @@ signed message callback
 
 `examples/signed_fixture_demo.py` 每次生成随机凭据和 synthetic 外部标识，使用 in-process outbound transport，不访问外网。相同消息与确认 payload replay 不产生重复案件、卡片或审批；非空工作目录在写入前 fail closed。fixture 明确输出 `business_action_executed: false`。
 
+真实测试群的 need-info 卡另带一个严格的“提交当前合成示例”按钮。适配层只按固定 3DS 演示序列
+生成下一项 evidence action，卡片渲染器不决定事实；稳定 evidence ID 使相同旧卡在不同 event ID
+下重复点击也只会 replay。该按钮不接受 source reliability、confidence、route 或业务动作字段。
+
 真实飞书配置继续使用环境变量。未配置完整凭据时，支付/拒付核心和 `/health` 可用，飞书路由返回固定安全 `503`。
 
 ## 6. Chargeback flow

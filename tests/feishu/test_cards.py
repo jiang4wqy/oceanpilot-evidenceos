@@ -7,12 +7,14 @@ from pydantic import ValidationError
 
 from oceanpilot.adapters.feishu.cards import (
     NeedInfoCardInput,
+    SyntheticEvidenceAction,
     render_diagnosis_card,
     render_need_info_card,
 )
 from oceanpilot.domain.enums import (
     CaseStatus,
     DiagnosisStatus,
+    EvidenceCode,
     Priority,
     ResponsibleTeam,
     ReviewReason,
@@ -113,6 +115,15 @@ def test_need_info_card_routes_the_question_to_the_target_role():
         target_role=TargetRole.MERCHANT_TECH,
         next_question="请提供交易参考号和可观察的失败状态。",
         question_reason="这些字段用于定位同一笔交易。",
+        synthetic_action=SyntheticEvidenceAction(
+            action="submit_evidence",
+            case_id=CASE_ID,
+            evidence_id="00000000-0000-4000-8000-000000000101",
+            evidence_code=EvidenceCode.TRANSACTION_REFERENCE,
+            availability="AVAILABLE",
+            typed_value="txn_threeds_001",
+            source_ref="feishu:synthetic-demo:transaction.reference",
+        ),
     )
 
     card = render_need_info_card(card_input)
@@ -122,7 +133,20 @@ def test_need_info_card_routes_the_question_to_the_target_role():
     assert "symptom.signal" in rendered
     assert card_input.next_question in rendered
     assert card_input.question_reason in rendered
-    assert _button_values(card) == []
+    assert _button_values(card) == [
+        {
+            "action": "submit_evidence",
+            "case_id": CASE_ID,
+            "evidence_id": "00000000-0000-4000-8000-000000000101",
+            "evidence_code": "transaction.reference",
+            "availability": "AVAILABLE",
+            "typed_value": "txn_threeds_001",
+            "source_ref": "feishu:synthetic-demo:transaction.reference",
+        }
+    ]
+    assert "提交当前合成示例" in rendered
+    assert "比赛演示（合成数据）" in rendered
+    assert "`transaction.reference` = `txn_threeds_001`" in rendered
     assert render_need_info_card(card_input) == card
 
 

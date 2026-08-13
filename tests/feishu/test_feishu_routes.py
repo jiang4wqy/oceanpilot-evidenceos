@@ -41,6 +41,35 @@ def _post(client, path, raw, *, extra_headers=None):
     return client.post(path, content=raw, headers=headers)
 
 
+def _button_values(value):
+    found = []
+    if isinstance(value, dict):
+        if value.get("tag") == "button" and isinstance(value.get("value"), dict):
+            found.append(value["value"])
+        for child in value.values():
+            found.extend(_button_values(child))
+    elif isinstance(value, list):
+        for child in value:
+            found.extend(_button_values(child))
+    return found
+
+
+def _card_action_payload(*, event_id, chat_id, value):
+    return {
+        "schema": "2.0",
+        "header": {
+            "event_id": event_id,
+            "event_type": "card.action.trigger",
+            "token": TOKEN,
+        },
+        "event": {
+            "operator": {"open_id": "ou_reporter_0001"},
+            "context": {"open_chat_id": chat_id},
+            "action": {"tag": "button", "value": value},
+        },
+    }
+
+
 def test_url_verification_returns_challenge(tmp_path):
     transport = RecordingTransport()
     app = make_app(tmp_path, transport)
@@ -111,6 +140,124 @@ def test_full_message_to_confirmation_flow(tmp_path):
     # a diagnosis card carrying the confirm button was sent to the chat
     contents = [json.loads(msg["content"]) for msg in transport.sent]
     assert any("confirm_review" in json.dumps(card) for card in contents)
+
+
+def test_user_can_complete_synthetic_demo_from_actual_card_buttons(tmp_path):
+    transport = RecordingTransport()
+    app = make_app(tmp_path, transport)
+
+    with TestClient(app, raise_server_exceptions=False) as client:
+        message = _post(
+            client,
+            EVENTS_PATH,
+            to_bytes(
+                message_payload(
+                    event_id="ui-msg-1",
+                    chat_id=CHAT_ID,
+                    text="3DS 验证后支付一直停在处理中，回调也没有收到",
+                )
+            ),
+        )
+        assert message.status_code == 200
+        assert message.json()["outcome"] == "NEED_INFO"
+        case_id = message.json()["case_id"]
+
+        last = None
+        submitted_codes = []
+        for index in range(7):
+            card = json.loads(transport.sent[-1]["content"])
+            actions = [
+                value for value in _button_values(card) if value.get("action") == "submit_evidence"
+            ]
+            assert len(actions) == 1
+            action = actions[0]
+            assert action["case_id"] == case_id
+            assert set(action) == {
+                "action",
+                "case_id",
+                "evidence_id",
+                "evidence_code",
+                "availability",
+                "typed_value",
+                "source_ref",
+            }
+            assert action["availability"] == "AVAILABLE"
+            assert action["source_ref"] == (f"feishu:synthetic-demo:{action['evidence_code']}")
+            submitted_codes.append(action["evidence_code"])
+
+            raw = to_bytes(
+                _card_action_payload(
+                    event_id=f"ui-evidence-{index}",
+                    chat_id=CHAT_ID,
+                    value=action,
+                )
+            )
+            last = _post(client, CARD_PATH, raw)
+            assert last.status_code == 200
+
+            if index == 0:
+                revision_after_first = client.get(f"/api/v1/cases/{case_id}").json()["case"][
+                    "evidence_revision"
+                ]
+                replay = _post(client, CARD_PATH, raw)
+                assert replay.json() == last.json()
+                assert (
+                    client.get(f"/api/v1/cases/{case_id}").json()["case"]["evidence_revision"]
+                    == revision_after_first
+                )
+
+                second_event = to_bytes(
+                    _card_action_payload(
+                        event_id="ui-evidence-0-second-click",
+                        chat_id=CHAT_ID,
+                        value=action,
+                    )
+                )
+                second_click = _post(client, CARD_PATH, second_event)
+                assert second_click.status_code == 200
+                assert (
+                    client.get(f"/api/v1/cases/{case_id}").json()["case"]["evidence_revision"]
+                    == revision_after_first
+                )
+
+        assert submitted_codes == [code for code, _ in FLOW_FACTS]
+        assert last is not None
+        assert last.json()["outcome"] == "DIAGNOSED"
+        diagnosis_id = last.json()["diagnosis_id"]
+
+        diagnosis_card = json.loads(transport.sent[-1]["content"])
+        confirmation_actions = [
+            value
+            for value in _button_values(diagnosis_card)
+            if value.get("action") == "confirm_review"
+        ]
+        assert confirmation_actions == [
+            {
+                "action": "confirm_review",
+                "case_id": case_id,
+                "diagnosis_id": diagnosis_id,
+            }
+        ]
+        case_before_confirmation = client.get(f"/api/v1/cases/{case_id}").json()
+        confirm_raw = to_bytes(
+            _card_action_payload(
+                event_id="ui-confirm-1",
+                chat_id=CHAT_ID,
+                value=confirmation_actions[0],
+            )
+        )
+        confirm = _post(client, CARD_PATH, confirm_raw)
+        confirm_replay = _post(client, CARD_PATH, confirm_raw)
+        case_after_confirmation = client.get(f"/api/v1/cases/{case_id}").json()
+
+        assert confirm.status_code == 200
+        assert confirm.json()["outcome"] == "CONFIRMED"
+        assert confirm_replay.json() == confirm.json()
+        assert case_after_confirmation == case_before_confirmation
+        with app.state.feishu_store_factory.session() as store:
+            audit = store.get_approval_audit("ui-confirm-1")
+        assert audit is not None
+        assert audit.result == "CONFIRMED"
 
 
 def test_duplicate_event_replays_without_second_case(tmp_path):

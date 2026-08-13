@@ -93,14 +93,25 @@ a threadpool.
 
 ## 5. Real test-group smoke (not yet verified)
 
-Once a public HTTPS endpoint exists, capture timestamped evidence in a real test group that: one
-message creates exactly one case; evidence answers advance readiness item by
-item; a real diagnosis card appears at the threshold; confirmation adds exactly
-one approval audit; repeated events/actions/clicks create no duplicate data; the
-SQLite files and logs contain no Feishu credentials; and the UI clearly marks
-the flow as synthetic with no business action executed. This smoke run needs a
-live tenant and public endpoint and is intentionally out of scope for the
-offline test suite.
+Once a public HTTPS endpoint exists, use this fixed rehearsal in a dedicated test group:
+
+1. Send `3DS 验证后支付一直停在处理中，回调也没有收到` once. The bot must return one
+   role-scoped need-info card and create exactly one case.
+2. Click **提交当前合成示例** on each new card. Seven controlled clicks submit, in order,
+   callback status, authentication status, transaction reference, occurrence time, environment,
+   symptom status and integration type. The button is a synthetic-demo aid; it does not represent
+   Oceanpayment data or allow a user to set source reliability, confidence or routing.
+3. The seventh click must produce a diagnosis card showing `THREEDS_INCOMPLETE_V1`, cited
+   evidence, confidence, responsibility and a human-review action.
+4. Click **确认人工复核**. This must add exactly one approval audit and leave the payment-core
+   case unchanged; it must not execute a payment, refund, risk release or configuration change.
+5. Re-send the original event or repeat a card click. The same callback bytes must replay, and a
+   second event ID carrying the same evidence button must not increase the evidence revision.
+
+Capture the group screen, callback access timestamps, final diagnosis card and approval-audit
+count. Also verify that the SQLite files and logs contain no Feishu credentials or raw external
+identifiers. This smoke run needs a live tenant and public endpoint and is intentionally out of
+scope for the offline test suite.
 
 Until that evidence exists, documentation and presentation must say **signed local
 fixture verified / real Feishu test group not verified**. It must not claim production

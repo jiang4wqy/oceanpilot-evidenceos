@@ -87,7 +87,23 @@ signed message
 
 确认只记录建议审批，不改变 payment core case，也不执行支付、退款、风控放行、资金移动或生产配置变更。
 
-## 6. 拒付申诉切片
+## 6. 真实飞书测试群排练（外部门）
+
+完成 [飞书配置指南](feishu-setup.md) 的最小权限应用和公网 HTTPS callback 后，在专用测试群按
+以下台词与点击顺序排练：
+
+1. 主讲人发送：`3DS 验证后支付一直停在处理中，回调也没有收到`。
+2. 解释机器人先建案并按 readiness 补问，不直接猜原因。
+3. 连续点击每张新卡的“提交当前合成示例”，共 7 次；说明这些是服务端受控的演示证据，
+   不是 Oceanpayment 生产数据，也不能由调用方填写可信度或责任域。
+4. 在诊断卡上讲清候选原因、0.87 置信度、证据引用、责任域和 `HUMAN_REVIEW`。
+5. 点击“确认人工复核”；说明这里只新增一条审批审计，案件本身不变，业务动作执行为 false。
+6. 重复点击一次旧补证卡或确认按钮，展示 evidence revision/审批数不增加。
+
+目标时长 90 秒：15 秒描述异常，45 秒补证与解释，20 秒诊断卡，10 秒确认与幂等。若真实飞书
+或公网隧道异常，立即切换上一节 signed local fixture，不把 fallback 说成真实群联调。
+
+## 7. 拒付申诉切片
 
 打开：
 
@@ -99,7 +115,7 @@ http://127.0.0.1:8000/demo
 
 拒付上游是 `MockUpstreamConnector`。即使页面显示 synthetic/mock submission，也不是 Oceanpayment、银行或卡组织真实提交。
 
-## 7. Full local gate
+## 8. Full local gate
 
 ```bash
 .venv/bin/python -m pytest -p no:cacheprovider -q
@@ -116,6 +132,6 @@ API 事实检查：
 .venv/bin/python -c "from oceanpilot.main import create_app; assert len(create_app().openapi()['paths']) == 19"
 ```
 
-## 8. 尚未完成的现场证据
+## 9. 尚未完成的现场证据
 
 真实飞书测试群需要公网 HTTPS callback、最小权限测试应用和时间戳证据。当前仓库只证明 signed local fixture；未完成真实群 smoke 时不得宣称飞书真机联调或 Gate 4 PASS。

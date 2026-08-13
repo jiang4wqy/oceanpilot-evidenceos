@@ -3,7 +3,7 @@ import json
 import sqlite3
 from datetime import UTC, datetime
 from typing import Final
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
@@ -12,6 +12,7 @@ from starlette.concurrency import run_in_threadpool
 
 from oceanpilot.adapters.feishu.cards import (
     NeedInfoCardInput,
+    SyntheticEvidenceAction,
     render_diagnosis_card,
     render_need_info_card,
 )
@@ -64,6 +65,16 @@ _ERR_CONFLICT = {"code": 409, "msg": "conflict"}
 _ERR_INTERNAL = {"code": 500, "msg": "internal error"}
 _ACK = {"code": 0}
 
+_SYNTHETIC_3DS_FACTS: Final = (
+    (EvidenceCode.CALLBACK_DELIVERY_STATUS, "NOT_RECEIVED"),
+    (EvidenceCode.AUTHENTICATION_STATUS, "REQUIRED"),
+    (EvidenceCode.TRANSACTION_REFERENCE, "txn_threeds_001"),
+    (EvidenceCode.TRANSACTION_OCCURRED_AT, "2026-08-05T04:00:00+00:00"),
+    (EvidenceCode.CONTEXT_ENVIRONMENT, "PROD"),
+    (EvidenceCode.SYMPTOM_STATUS, "PENDING"),
+    (EvidenceCode.INTEGRATION_TYPE, "API"),
+)
+
 
 def _reply(status: int, body: dict[str, object]) -> JSONResponse:
     return JSONResponse(status_code=status, content=body)
@@ -104,6 +115,32 @@ def _extract_message_text(content: str | None) -> str:
     return ""
 
 
+def _stable_evidence_id(case_id: str, evidence_code: EvidenceCode) -> str:
+    raw = bytearray(hashlib.sha256(f"{case_id}:{evidence_code.value}".encode()).digest()[:16])
+    raw[6] = (raw[6] & 0x0F) | 0x40
+    raw[8] = (raw[8] & 0x3F) | 0x80
+    return str(UUID(bytes=bytes(raw)))
+
+
+def _synthetic_action(outcome: OrchestrationOutcome) -> SyntheticEvidenceAction | None:
+    view = outcome.case_view
+    if view is None:
+        return None
+    submitted = {item.evidence_code for item in view.evidence}
+    for evidence_code, typed_value in _SYNTHETIC_3DS_FACTS:
+        if evidence_code not in submitted:
+            return SyntheticEvidenceAction(
+                action="submit_evidence",
+                case_id=view.case.case_id,
+                evidence_id=_stable_evidence_id(view.case.case_id, evidence_code),
+                evidence_code=evidence_code,
+                availability="AVAILABLE",
+                typed_value=typed_value,
+                source_ref=f"feishu:synthetic-demo:{evidence_code.value}",
+            )
+    return None
+
+
 def _need_info_card(outcome: OrchestrationOutcome) -> tuple[dict[str, object], str] | None:
     view = outcome.case_view
     if view is None:
@@ -123,6 +160,7 @@ def _need_info_card(outcome: OrchestrationOutcome) -> tuple[dict[str, object], s
             target_role=readiness.target_role,
             next_question=readiness.next_question,
             question_reason=readiness.question_reason or readiness.next_question,
+            synthetic_action=_synthetic_action(outcome),
         )
     )
     return card, f"ni-{view.case.case_id}-{view.case.case_revision}"
