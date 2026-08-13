@@ -1,7 +1,7 @@
 # Payment Incident Mainline Integration Checkpoint
 
-**Date:** 2026-08-13  
-**Branch:** `feat/payment-incident-mainline-integration`  
+**Date:** 2026-08-13
+**Branch:** `feat/payment-incident-mainline-integration`
 **Base:** `origin/master@a16fc65` (`v0.2.1`)
 
 ## Status
