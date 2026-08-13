@@ -17,7 +17,9 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
   "httpx==0.28.1",
+  "pypdf==6.15.0",
   "pytest==9.1.1",
+  "reportlab==4.4.9",
   "ruff==0.15.22",
 ]
 
