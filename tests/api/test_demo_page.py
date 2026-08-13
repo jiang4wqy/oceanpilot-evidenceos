@@ -44,6 +44,14 @@ def test_demo_links_to_api_docs(tmp_path):
     assert 'href="/health"' in body
 
 
+def test_demo_links_to_payment_incident_cockpit_without_replacing_chargeback(tmp_path):
+    with _client(tmp_path) as client:
+        body = client.get("/demo").text
+
+    assert 'href="/demo/payment-incident"' in body
+    assert "/api/v1/chargeback" in body
+
+
 def test_demo_has_scenarios_autorun_and_safety_panel(tmp_path):
     with _client(tmp_path) as client:
         body = client.get("/demo").text

@@ -37,6 +37,7 @@ from oceanpilot.api.dependencies import RequestContext
 from oceanpilot.api.errors import ProblemDetails, register_exception_handlers
 from oceanpilot.api.feishu import router as feishu_router
 from oceanpilot.api.health import router as health_router
+from oceanpilot.api.payment_demo import router as payment_demo_router
 from oceanpilot.application.case_service import CaseService
 from oceanpilot.application.chargeback_agents import (
     ChargebackAssessAgent,
@@ -175,6 +176,7 @@ def create_app(
     application.include_router(feishu_router)
     application.include_router(chargeback_router)
     application.include_router(demo_router)
+    application.include_router(payment_demo_router)
 
     def openapi_schema() -> dict[str, object]:
         if application.openapi_schema is None:

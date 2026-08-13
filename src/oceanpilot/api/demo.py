@@ -210,6 +210,7 @@ _DEMO_HTML = """<!doctype html>
     <div class="top">
       <div class="crumb">拒付处理 <b>/</b> <span id="crumbId" class="id">新建案件</span></div>
       <div class="grow"></div>
+      <a class="tlink" href="/demo/payment-incident">支付异常</a>
       <a class="tlink" href="/docs" target="_blank" rel="noopener">API 文档</a>
       <a class="tlink" href="/health" target="_blank" rel="noopener">健康</a>
       <div class="seg"><button id="loc-zh" class="on" onclick="setLocale('zh')">中文</button>
