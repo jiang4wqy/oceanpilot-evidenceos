@@ -309,6 +309,53 @@ def test_malformed_digest_prefixes_are_treated_as_raw_external_ids(tmp_path):
     assert malformed_actor.encode() not in database_bytes
 
 
+def test_reopen_normalizes_malformed_legacy_digest_prefixes(tmp_path):
+    db_path = tmp_path / "legacy-malformed-digests.db"
+    malformed_chat = "sha256:chat:not-a-real-digest"
+    malformed_actor = "sha256:actor:not-a-real-digest"
+    factory = FeishuCallbackStoreFactory(db_path)
+    with factory.session() as store:
+        store.claim_action(
+            "legacy-malformed-action",
+            payload_hash=PAYLOAD_HASH,
+            created_at=CREATED_AT,
+        )
+        store.commit_confirmation(
+            action_id="legacy-malformed-action",
+            approval_id="legacy-malformed-approval",
+            response={"ok": True},
+            case_id=CASE_ID,
+            diagnosis_id=DIAGNOSIS_ID,
+            actor_id=ACTOR_ID,
+            result="APPROVED",
+            occurred_at=COMPLETED_AT,
+        )
+    with sqlite3.connect(db_path) as connection:
+        connection.execute(
+            "INSERT INTO feishu_chat_cases (chat_id, case_id, updated_at) VALUES (?, ?, ?)",
+            (malformed_chat, CASE_ID, CREATED_AT),
+        )
+        connection.execute(
+            "UPDATE feishu_action_receipts SET actor_id = ? WHERE action_id = ?",
+            (malformed_actor, "legacy-malformed-action"),
+        )
+        connection.execute(
+            "UPDATE feishu_approval_audits SET actor_id = ? WHERE action_id = ?",
+            (malformed_actor, "legacy-malformed-action"),
+        )
+
+    with FeishuCallbackStoreFactory(db_path).session() as store:
+        assert store.get_chat_case(malformed_chat) == CASE_ID
+        audit = store.get_approval_audit("legacy-malformed-action")
+        assert audit is not None
+        assert audit.actor_id.startswith("sha256:actor:")
+        assert audit.actor_id != malformed_actor
+
+    database_bytes = db_path.read_bytes()
+    assert malformed_chat.encode() not in database_bytes
+    assert malformed_actor.encode() not in database_bytes
+
+
 def test_reopen_migrates_legacy_raw_chat_binding_once(tmp_path):
     db_path = tmp_path / "legacy-chat.db"
     FeishuCallbackStoreFactory(db_path)
@@ -324,6 +371,49 @@ def test_reopen_migrates_legacy_raw_chat_binding_once(tmp_path):
 
     database_bytes = db_path.read_bytes()
     assert b"legacy-chat" not in database_bytes
+
+
+def test_reopen_merges_raw_and_digest_chat_binding_for_same_case(tmp_path):
+    db_path = tmp_path / "legacy-chat-duplicate.db"
+    FeishuCallbackStoreFactory(db_path)
+    with sqlite3.connect(db_path) as connection:
+        connection.executemany(
+            "INSERT INTO feishu_chat_cases (chat_id, case_id, updated_at) VALUES (?, ?, ?)",
+            (
+                ("chat-001", CASE_ID, CREATED_AT),
+                (CHAT_DIGEST, CASE_ID, COMPLETED_AT),
+            ),
+        )
+
+    with FeishuCallbackStoreFactory(db_path).session() as store:
+        assert store.get_chat_case("chat-001") == CASE_ID
+        assert store.get_chat_case(CHAT_DIGEST) == CASE_ID
+
+    with sqlite3.connect(db_path) as connection:
+        rows = connection.execute("SELECT chat_id, case_id FROM feishu_chat_cases").fetchall()
+    assert rows == [(CHAT_DIGEST, CASE_ID)]
+
+
+def test_reopen_rejects_conflicting_raw_and_digest_chat_bindings(tmp_path):
+    db_path = tmp_path / "legacy-chat-conflict.db"
+    FeishuCallbackStoreFactory(db_path)
+    with sqlite3.connect(db_path) as connection:
+        connection.executemany(
+            "INSERT INTO feishu_chat_cases (chat_id, case_id, updated_at) VALUES (?, ?, ?)",
+            (
+                ("chat-001", CASE_ID, CREATED_AT),
+                (CHAT_DIGEST, OTHER_CASE_ID, COMPLETED_AT),
+            ),
+        )
+
+    with pytest.raises(ReceiptConflict):
+        FeishuCallbackStoreFactory(db_path)
+
+    with sqlite3.connect(db_path) as connection:
+        rows = connection.execute(
+            "SELECT chat_id, case_id FROM feishu_chat_cases ORDER BY chat_id"
+        ).fetchall()
+    assert rows == [("chat-001", CASE_ID), (CHAT_DIGEST, OTHER_CASE_ID)]
 
 
 def test_reopen_migrates_legacy_raw_actor_ids_once(tmp_path):

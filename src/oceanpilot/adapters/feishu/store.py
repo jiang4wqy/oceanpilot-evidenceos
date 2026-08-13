@@ -216,22 +216,44 @@ def _initialize(path: Path) -> None:
                 if "payload_hash" not in columns:
                     connection.execute(f"ALTER TABLE {table} ADD COLUMN payload_hash TEXT")
             legacy_chats = connection.execute(
-                "SELECT chat_id FROM feishu_chat_cases WHERE chat_id NOT LIKE 'sha256:chat:%'"
+                "SELECT chat_id, case_id, updated_at FROM feishu_chat_cases"
             ).fetchall()
             for row in legacy_chats:
+                chat_digest = _external_id_digest("chat", row["chat_id"])
+                if chat_digest == row["chat_id"]:
+                    continue
+                existing = connection.execute(
+                    "SELECT case_id, updated_at FROM feishu_chat_cases WHERE chat_id = ?",
+                    (chat_digest,),
+                ).fetchone()
+                if existing is None:
+                    connection.execute(
+                        "UPDATE feishu_chat_cases SET chat_id = ? WHERE chat_id = ?",
+                        (chat_digest, row["chat_id"]),
+                    )
+                    continue
+                if existing["case_id"] != row["case_id"]:
+                    raise ReceiptConflict(row["chat_id"])
+                if row["updated_at"] > existing["updated_at"]:
+                    connection.execute(
+                        "UPDATE feishu_chat_cases SET updated_at = ? WHERE chat_id = ?",
+                        (row["updated_at"], chat_digest),
+                    )
                 connection.execute(
-                    "UPDATE feishu_chat_cases SET chat_id = ? WHERE chat_id = ?",
-                    (_external_id_digest("chat", row["chat_id"]), row["chat_id"]),
+                    "DELETE FROM feishu_chat_cases WHERE chat_id = ?",
+                    (row["chat_id"],),
                 )
             for table in ("feishu_action_receipts", "feishu_approval_audits"):
                 legacy_actors = connection.execute(
-                    f"SELECT rowid, actor_id FROM {table} "
-                    "WHERE actor_id IS NOT NULL AND actor_id NOT LIKE 'sha256:actor:%'"
+                    f"SELECT rowid, actor_id FROM {table} WHERE actor_id IS NOT NULL"
                 ).fetchall()
                 for row in legacy_actors:
+                    actor_digest = _external_id_digest("actor", row["actor_id"])
+                    if actor_digest == row["actor_id"]:
+                        continue
                     connection.execute(
                         f"UPDATE {table} SET actor_id = ? WHERE rowid = ?",
-                        (_external_id_digest("actor", row["actor_id"]), row["rowid"]),
+                        (actor_digest, row["rowid"]),
                     )
     finally:
         connection.close()
