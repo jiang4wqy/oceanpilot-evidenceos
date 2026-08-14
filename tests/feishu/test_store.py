@@ -165,6 +165,31 @@ def test_chat_case_binding_is_idempotent_and_never_overwritten(tmp_path):
         assert store.get_chat_case(CHAT_ID) == CASE_ID
 
 
+def test_chargeback_chat_case_binding_allows_multiple_cases_and_hashes_chat_id(tmp_path):
+    factory = FeishuCallbackStoreFactory(tmp_path / "chargeback-chat.db")
+
+    with factory.session() as store:
+        assert store.has_chargeback_chat_case(CHAT_ID, CASE_ID) is False
+        store.bind_chargeback_chat_case(CHAT_ID, CASE_ID, updated_at=CREATED_AT)
+        store.bind_chargeback_chat_case(CHAT_ID, OTHER_CASE_ID, updated_at=COMPLETED_AT)
+        store.bind_chargeback_chat_case(CHAT_ID, CASE_ID, updated_at=COMPLETED_AT)
+        assert store.has_chargeback_chat_case(CHAT_ID, CASE_ID) is True
+        assert store.has_chargeback_chat_case(CHAT_ID, OTHER_CASE_ID) is True
+
+    connection = sqlite3.connect(factory.db_path)
+    try:
+        rows = connection.execute(
+            "SELECT chat_id, case_id FROM feishu_chargeback_chat_cases ORDER BY case_id"
+        ).fetchall()
+    finally:
+        connection.close()
+    assert rows == [
+        (_expected_external_ref("chat_id", CHAT_ID), CASE_ID),
+        (_expected_external_ref("chat_id", CHAT_ID), OTHER_CASE_ID),
+    ]
+    assert CHAT_ID.encode() not in factory.db_path.read_bytes()
+
+
 def test_legacy_raw_external_ids_are_migrated_without_breaking_lookup_or_replay(tmp_path):
     db_path = tmp_path / "legacy-identifiers.db"
     FeishuCallbackStoreFactory(db_path)

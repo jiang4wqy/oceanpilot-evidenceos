@@ -41,6 +41,22 @@ def _post(client, path, raw, *, extra_headers=None):
     return client.post(path, content=raw, headers=headers)
 
 
+def _chargeback_action_payload(*, event_id, chat_id, value, open_id="ou_reviewer_0001"):
+    return {
+        "schema": "2.0",
+        "header": {
+            "event_id": event_id,
+            "event_type": "card.action.trigger",
+            "token": TOKEN,
+        },
+        "event": {
+            "operator": {"open_id": open_id},
+            "context": {"open_chat_id": chat_id},
+            "action": {"tag": "button", "value": value},
+        },
+    }
+
+
 def test_url_verification_returns_challenge(tmp_path):
     transport = RecordingTransport()
     app = make_app(tmp_path, transport)
@@ -50,6 +66,121 @@ def test_url_verification_returns_challenge(tmp_path):
     assert response.status_code == 200
     assert response.json() == {"challenge": "synthetic-challenge-abc123"}
     assert transport.sent == []
+
+
+def test_signed_chargeback_message_and_card_action_use_shared_callback(tmp_path):
+    transport = RecordingTransport()
+    app = make_app(tmp_path, transport)
+    with TestClient(app, raise_server_exceptions=False) as client:
+        raw = to_bytes(
+            message_payload(
+                event_id="cb-msg-1",
+                chat_id="oc_chargeback_flow",
+                text="/chargeback 客户下单后一直没收到货",
+            )
+        )
+        opened = _post(client, EVENTS_PATH, raw)
+        assert opened.status_code == 200
+        assert opened.json()["flow"] == "chargeback"
+        case_id = opened.json()["case_id"]
+
+        card = json.loads(transport.sent[-1]["content"])
+        action_block = next(element for element in card["elements"] if element["tag"] == "action")
+        action_value = action_block["actions"][0]["value"]
+        assert action_value["flow"] == "chargeback"
+        assert action_value["case_id"] == case_id
+
+        advanced = _post(
+            client,
+            CARD_PATH,
+            to_bytes(
+                _chargeback_action_payload(
+                    event_id="cb-action-1",
+                    chat_id="oc_chargeback_flow",
+                    value=action_value,
+                )
+            ),
+        )
+        assert advanced.status_code == 200
+        assert advanced.json()["flow"] == "chargeback"
+        assert advanced.json()["case_id"] == case_id
+        assert len(transport.sent) == 2
+
+
+def test_duplicate_chargeback_event_replays_without_second_case_or_card(tmp_path):
+    transport = RecordingTransport()
+    app = make_app(tmp_path, transport)
+    raw = to_bytes(
+        message_payload(
+            event_id="cb-dup",
+            chat_id="oc_chargeback_dup",
+            text="/chargeback 商品没有收到",
+        )
+    )
+    with TestClient(app, raise_server_exceptions=False) as client:
+        first = _post(client, EVENTS_PATH, raw)
+        second = _post(client, EVENTS_PATH, raw)
+    assert first.status_code == second.status_code == 200
+    assert first.json() == second.json()
+    assert first.json()["flow"] == "chargeback"
+    assert len(transport.sent) == 1
+
+
+def test_empty_chargeback_command_is_rejected_without_creating_case(tmp_path):
+    transport = RecordingTransport()
+    app = make_app(tmp_path, transport)
+    raw = to_bytes(
+        message_payload(
+            event_id="cb-empty",
+            chat_id="oc_chargeback_empty",
+            text="/chargeback",
+        )
+    )
+    with TestClient(app, raise_server_exceptions=False) as client:
+        response = _post(client, EVENTS_PATH, raw)
+    assert response.status_code == 400
+    assert response.json() == {"code": 400, "msg": "invalid callback"}
+    assert transport.sent == []
+
+
+def test_chargeback_card_action_rejects_case_from_another_chat(tmp_path):
+    transport = RecordingTransport()
+    app = make_app(tmp_path, transport)
+    with TestClient(app, raise_server_exceptions=False) as client:
+        opened = _post(
+            client,
+            EVENTS_PATH,
+            to_bytes(
+                message_payload(
+                    event_id="cb-bound-msg",
+                    chat_id="oc_chargeback_owner",
+                    text="/chargeback 商品没有收到",
+                )
+            ),
+        )
+        case_id = opened.json()["case_id"]
+        card = json.loads(transport.sent[-1]["content"])
+        action_block = next(element for element in card["elements"] if element["tag"] == "action")
+        action_value = action_block["actions"][0]["value"]
+
+        forged = _post(
+            client,
+            CARD_PATH,
+            to_bytes(
+                _chargeback_action_payload(
+                    event_id="cb-forged-action",
+                    chat_id="oc_chargeback_other",
+                    value=action_value,
+                )
+            ),
+        )
+        current = client.get(f"/api/v1/chargeback/cases/{case_id}")
+
+    assert forged.status_code == 400
+    assert forged.json() == {"code": 400, "msg": "invalid callback"}
+    assert current.status_code == 200
+    assert current.json()["collected"] == []
+    assert len(transport.sent) == 1
 
 
 def test_full_message_to_confirmation_flow(tmp_path):

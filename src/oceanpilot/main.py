@@ -9,6 +9,7 @@ from uuid import uuid4
 from fastapi import FastAPI, Request
 from fastapi.openapi.utils import get_openapi
 
+from oceanpilot.adapters.channels.feishu.channel import FeishuChannel
 from oceanpilot.adapters.clock import SystemClock
 from oceanpilot.adapters.diagnosis.rules import RuleDiagnosisEngine
 from oceanpilot.adapters.feishu.client import (
@@ -45,6 +46,7 @@ from oceanpilot.application.chargeback_agents import (
     PreventionAgent,
 )
 from oceanpilot.application.chargeback_appeal import AppealAgent
+from oceanpilot.application.chargeback_channel_service import ChargebackChannelService
 from oceanpilot.application.chargeback_deadline import DeadlineTracker
 from oceanpilot.application.chargeback_packager import PackagerAgent
 from oceanpilot.application.chargeback_supervisor import ChargebackSupervisor
@@ -148,6 +150,13 @@ def create_app(
     application.state.chargeback_prevention = PreventionAgent(chargeback_provider)
     # Decision metrics (human-review rate, model-vs-fallback, appeal/prevention mix).
     application.state.chargeback_metrics = DecisionMetrics()
+    application.state.chargeback_channel_service = ChargebackChannelService(
+        application.state.chargeback_supervisor,
+        application.state.chargeback_store,
+        deadline=application.state.chargeback_deadline,
+        metrics=application.state.chargeback_metrics,
+    )
+    application.state.chargeback_feishu_channel = FeishuChannel()
 
     if resolved.feishu is not None:
         _configure_feishu(application, resolved.feishu, case_service, feishu_transport)

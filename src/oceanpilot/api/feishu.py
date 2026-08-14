@@ -9,6 +9,7 @@ from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 from starlette.concurrency import run_in_threadpool
 
+from oceanpilot.adapters.channels.feishu.channel import FeishuChannel
 from oceanpilot.adapters.feishu.cards import (
     NeedInfoCardInput,
     render_diagnosis_card,
@@ -37,6 +38,9 @@ from oceanpilot.api.feishu_schemas import (
     FeishuCardActionEnvelope,
     FeishuMessageEnvelope,
 )
+from oceanpilot.application.channels import Delivery
+from oceanpilot.application.chargeback_channel_service import ChargebackChannelService
+from oceanpilot.application.errors import CaseNotFound, InvalidInbound
 from oceanpilot.application.feishu_models import (
     CaseBindingMismatch,
     ConfirmationRequest,
@@ -62,6 +66,8 @@ _ERR_INVALID = {"code": 400, "msg": "invalid callback"}
 _ERR_CONFLICT = {"code": 409, "msg": "conflict"}
 _ERR_INTERNAL = {"code": 500, "msg": "internal error"}
 _ACK = {"code": 0}
+_CHARGEBACK_FLOW: Final = "chargeback"
+_CHARGEBACK_PREFIX: Final = "/chargeback"
 
 
 def _reply(status: int, body: dict[str, object]) -> JSONResponse:
@@ -101,6 +107,125 @@ def _extract_message_text(content: str | None) -> str:
         if isinstance(text, str):
             return text
     return ""
+
+
+def _chargeback_description(text: str) -> str | None:
+    stripped = text.strip()
+    if stripped == _CHARGEBACK_PREFIX:
+        return ""
+    prefix = f"{_CHARGEBACK_PREFIX} "
+    if stripped.startswith(prefix):
+        return stripped[len(prefix) :].strip()
+    return None
+
+
+def _chargeback_summary(delivery: Delivery) -> dict[str, object]:
+    return {
+        "flow": _CHARGEBACK_FLOW,
+        "outcome": delivery.phase,
+        "case_id": delivery.case_id,
+    }
+
+
+def _send_chargeback_card(
+    client: FeishuOutboundClient,
+    channel: FeishuChannel,
+    chat_id: str,
+    delivery: Delivery,
+) -> None:
+    try:
+        client.send_interactive_card(
+            receive_id=chat_id,
+            receive_id_type=FeishuReceiveIdType.CHAT_ID,
+            card=dict(channel.render(delivery)),
+            idempotency_key=f"cb-{delivery.case_id}-{delivery.phase}-{len(delivery.collected)}",
+        )
+    except FeishuOutboundError:
+        return
+
+
+def _process_chargeback_message(
+    service: ChargebackChannelService,
+    channel: FeishuChannel,
+    store_factory: FeishuCallbackStoreFactory,
+    client: FeishuOutboundClient,
+    envelope: FeishuMessageEnvelope,
+    description: str,
+) -> JSONResponse:
+    event_id = envelope.header.event_id
+    if not event_id or not description:
+        return _reply(400, _ERR_INVALID)
+    sender = envelope.event.sender
+    if sender is not None and sender.sender_type == "app":
+        return _reply(200, _ACK)
+    message = envelope.event.message
+    sender_payload = sender.model_dump(exclude_none=True) if sender is not None else None
+    raw_event: dict[str, object] = {
+        "message": {"content": json.dumps({"text": description})},
+    }
+    if sender_payload is not None:
+        raw_event["sender"] = sender_payload
+    inbound = channel.parse_inbound({"event": raw_event})
+
+    with store_factory.session() as store:
+        claim = store.claim_event(event_id, created_at=_now_text())
+        if claim.outcome is ReceiptOutcome.REPLAY:
+            return _reply(200, claim.response or _ACK)
+        if claim.outcome is ReceiptOutcome.IN_PROGRESS:
+            return _reply(200, _ACK)
+        delivery = service.handle(inbound)
+        store.bind_chargeback_chat_case(
+            message.chat_id,
+            delivery.case_id,
+            updated_at=_now_text(),
+        )
+        summary = _chargeback_summary(delivery)
+        store.complete_event(
+            event_id,
+            response=summary,
+            case_id=delivery.case_id,
+            completed_at=_now_text(),
+        )
+
+    _send_chargeback_card(client, channel, message.chat_id, delivery)
+    return _reply(200, summary)
+
+
+def _process_chargeback_card_action(
+    service: ChargebackChannelService,
+    channel: FeishuChannel,
+    store_factory: FeishuCallbackStoreFactory,
+    client: FeishuOutboundClient,
+    envelope: FeishuCardActionEnvelope,
+) -> JSONResponse:
+    action_id = envelope.header.event_id
+    context = envelope.event.context
+    chat_id = context.open_chat_id if context is not None else None
+    if not action_id or not chat_id:
+        return _reply(400, _ERR_INVALID)
+    inbound = channel.parse_inbound({"action": envelope.event.action.model_dump(exclude_none=True)})
+    if inbound.case_id is None:
+        return _reply(400, _ERR_INVALID)
+
+    with store_factory.session() as store:
+        if not store.has_chargeback_chat_case(chat_id, inbound.case_id):
+            return _reply(400, _ERR_INVALID)
+        claim = store.claim_event(action_id, created_at=_now_text())
+        if claim.outcome is ReceiptOutcome.REPLAY:
+            return _reply(200, claim.response or _ACK)
+        if claim.outcome is ReceiptOutcome.IN_PROGRESS:
+            return _reply(200, _ACK)
+        delivery = service.handle(inbound)
+        summary = _chargeback_summary(delivery)
+        store.complete_event(
+            action_id,
+            response=summary,
+            case_id=delivery.case_id,
+            completed_at=_now_text(),
+        )
+
+    _send_chargeback_card(client, channel, chat_id, delivery)
+    return _reply(200, summary)
 
 
 def _need_info_card(outcome: OrchestrationOutcome) -> tuple[dict[str, object], str] | None:
@@ -366,10 +491,19 @@ def _process_card_action(
 async def _handle(request: Request, mode: str) -> JSONResponse:
     state = request.app.state
     orchestrator = getattr(state, "feishu_orchestrator", None)
+    chargeback_service = getattr(state, "chargeback_channel_service", None)
+    chargeback_channel = getattr(state, "chargeback_feishu_channel", None)
     store_factory = getattr(state, "feishu_store_factory", None)
     verifier: FeishuRequestVerifier | None = getattr(state, "feishu_verifier", None)
     client = getattr(state, "feishu_client", None)
-    if orchestrator is None or store_factory is None or verifier is None or client is None:
+    if (
+        orchestrator is None
+        or chargeback_service is None
+        or chargeback_channel is None
+        or store_factory is None
+        or verifier is None
+        or client is None
+    ):
         return _reply(503, _ERR_UNAVAILABLE)
 
     if not _content_type_ok(request.headers.get("content-type")):
@@ -397,16 +531,38 @@ async def _handle(request: Request, mode: str) -> JSONResponse:
             envelope = FeishuMessageEnvelope.model_validate(payload)
             if envelope.header.event_type != MESSAGE_RECEIVE_EVENT:
                 return _reply(200, _ACK)
+            description = _chargeback_description(
+                _extract_message_text(envelope.event.message.content)
+            )
+            if description is not None:
+                return await run_in_threadpool(
+                    _process_chargeback_message,
+                    chargeback_service,
+                    chargeback_channel,
+                    store_factory,
+                    client,
+                    envelope,
+                    description,
+                )
             return await run_in_threadpool(
                 _process_message, orchestrator, store_factory, client, envelope
             )
         card = FeishuCardActionEnvelope.model_validate(payload)
         if card.header.event_type not in (CARD_ACTION_EVENT, None):
             return _reply(400, _ERR_INVALID)
+        if card.event.action.value.flow == _CHARGEBACK_FLOW:
+            return await run_in_threadpool(
+                _process_chargeback_card_action,
+                chargeback_service,
+                chargeback_channel,
+                store_factory,
+                client,
+                card,
+            )
         return await run_in_threadpool(
             _process_card_action, orchestrator, store_factory, client, card
         )
-    except ValidationError:
+    except (ValidationError, InvalidInbound, CaseNotFound):
         return _reply(400, _ERR_INVALID)
     except sqlite3.Error:
         return _reply(503, _ERR_UNAVAILABLE)
