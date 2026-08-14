@@ -18,7 +18,7 @@ _DEMO_HTML = """<!doctype html>
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>OceanPilot · 跨境拒付申诉控制台</title>
+<title>Oceanpayment · 拒付管理</title>
 <style>
   :root{
     --canvas:#f5f6f8; --surface:#ffffff; --sunken:#eef1f5; --border:#e4e8ef; --border-2:#d7dce5;
@@ -66,23 +66,12 @@ _DEMO_HTML = """<!doctype html>
   .nav a:hover{color:var(--side-ink);background:var(--side-active)}
   .nav a.on{color:#fff;background:var(--side-active)}
   .nav a.on .ic{background:var(--accent);border-color:var(--accent);opacity:1}
-  .sfoot{margin-top:auto;padding:14px}
-  .guard{border:1px solid var(--side-border);border-radius:10px;padding:12px;background:var(--side-2)}
-  .guard .h{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:#5c6577;margin-bottom:8px}
-  .guard .g{display:flex;align-items:center;gap:8px;font-size:12px;color:#c3cad6;margin:5px 0}
-  .gd{width:6px;height:6px;border-radius:50%;background:var(--good)} .gd.r{background:var(--crit)}
-
   .main{display:flex;flex-direction:column;min-width:0}
   .top{display:flex;align-items:center;gap:10px;padding:12px 24px;border-bottom:1px solid var(--border);
     background:var(--surface);position:sticky;top:0;z-index:5;flex-wrap:wrap}
   .crumb{font-size:13px;color:var(--muted)} .crumb b{color:var(--ink);font-weight:600}
   .crumb .id{font-family:var(--mono);font-size:12.5px;color:var(--ink)}
   .grow{flex:1}
-  .tlink{color:var(--muted);font-size:12.5px;text-decoration:none;padding:6px 9px;border-radius:7px}
-  .tlink:hover{color:var(--accent);background:var(--accent-soft)}
-  .seg{display:inline-flex;border:1px solid var(--border);border-radius:8px;overflow:hidden}
-  .seg button{background:var(--surface);border:0;color:var(--muted);padding:6px 11px;font-size:12px;cursor:pointer;font-family:var(--sans)}
-  .seg button.on{background:var(--accent);color:#fff;font-weight:600}
   .tbtn{border:1px solid var(--border);background:var(--surface);color:var(--body);border-radius:8px;padding:7px 12px;
     font-size:12.5px;cursor:pointer;font-family:var(--sans)}
   .tbtn:hover{border-color:var(--border-2)}
@@ -218,12 +207,12 @@ _DEMO_HTML = """<!doctype html>
   .nav a:hover{color:var(--ink);background:var(--side-2)}
   .nav a.on{color:var(--accent);background:var(--side-active);font-weight:700}
   .nav a.on:before{content:"";position:absolute;left:0;top:10px;bottom:10px;width:3px;border-radius:2px;background:var(--accent)}
-  .guard{border-color:var(--side-border);background:var(--side-2);border-radius:8px}
-  .guard .h{color:var(--faint)} .guard .g{color:var(--side-muted);line-height:1.4}
   .top{min-height:64px;padding:0 32px;flex-wrap:nowrap;box-shadow:none}
   .crumb-sep{padding:0 7px;color:var(--faint)}
-  .tlink{font-size:13px}.tbtn,.seg button{min-height:34px}
+  .tbtn{min-height:34px}
   .tbtn{border-radius:8px}.tbtn.primary{background:#02993b;border-color:#02993b}
+  .merchant-account{display:flex;align-items:center;gap:8px;padding-left:14px;margin-left:2px;border-left:1px solid var(--border);white-space:nowrap}
+  .merchant-account span{font-size:11px;color:var(--faint)} .merchant-account strong{font-size:13px;color:var(--ink);font-weight:650}
   .content{width:100%;max-width:1440px;margin:0 auto;padding:28px 32px 40px;
     grid-template-columns:minmax(0,1fr) 320px;gap:20px}
   #v-prev,#v-safe{grid-template-columns:1fr} #v-prev .stack,#v-safe .stack{width:100%;max-width:920px}
@@ -231,9 +220,6 @@ _DEMO_HTML = """<!doctype html>
     margin-bottom:2px;padding-bottom:18px;border-bottom:1px solid var(--border)}
   .page-head h1{margin:3px 0 4px;color:var(--ink);font-size:25px;line-height:1.25;letter-spacing:-.02em}
   .page-head p{margin:0;color:var(--muted);font-size:13.5px}
-  .kicker{font-size:10px;letter-spacing:.15em;color:var(--accent);font-weight:800}
-  .demo-badge{border:1px solid var(--border-2);border-radius:6px;color:var(--muted);background:var(--surface);
-    padding:5px 9px;font-size:11px;white-space:nowrap}
   .stack,.rail{gap:16px}.rail{top:80px}
   .summary,.card{border-radius:10px;box-shadow:var(--sh)}
   .summary{padding:18px 20px}.card .hd{padding:13px 18px}.bd{padding:18px}
@@ -255,8 +241,8 @@ _DEMO_HTML = """<!doctype html>
   .missing-item{border-radius:6px}.missing-item.next{background:#fff9ed}
   .note{line-height:1.65}.agent{align-items:flex-start}.atag{background:var(--accent-soft);color:var(--accent);font-family:var(--sans);font-weight:700}
   @media(max-width:1080px){.content{grid-template-columns:1fr}.page-head{grid-column:1}.rail{position:static}}
-  @media(max-width:840px){.app{grid-template-columns:1fr}.side{display:none}.content{padding:22px 20px 32px}.top{padding:0 20px}.tlink{display:none}}
-  @media(max-width:600px){.seg{display:none}.content{padding:18px 14px 28px}.top{padding:0 14px}.top .tbtn{padding:7px 9px}
+  @media(max-width:840px){.app{grid-template-columns:1fr}.side{display:none}.content{padding:22px 20px 32px}.top{padding:0 20px}}
+  @media(max-width:600px){.content{padding:18px 14px 28px}.top{padding:0 14px}.top .tbtn{padding:7px 9px}.merchant-account{display:none}
     .page-head{align-items:flex-start}.scenario-grid,.risk-form{grid-template-columns:1fr}.amount-field{grid-column:1}.steps{overflow-x:auto;flex-wrap:nowrap;padding-bottom:4px}.step{white-space:nowrap}.sep{min-width:12px;margin:0 4px}}
 </style>
 </head>
@@ -265,7 +251,7 @@ _DEMO_HTML = """<!doctype html>
   <aside class="side">
     <div class="sbrand">
       <div class="ocean-name">Oceanpayment</div>
-      <div class="brand-product">Dispute Operations</div>
+      <div class="brand-product">商户争议管理</div>
     </div>
     <div class="navlbl">业务中心</div>
     <nav class="nav">
@@ -273,30 +259,20 @@ _DEMO_HTML = """<!doctype html>
       <a data-v="prev">交易预警</a>
       <a data-v="safe">规则与运营</a>
     </nav>
-    <div class="sfoot"><div class="guard">
-      <div class="h">演示环境</div>
-      <div class="g"><span class="gd"></span>仅使用合成数据</div>
-      <div class="g"><span class="gd"></span>关键提交需人工确认</div>
-      <div class="g"><span class="gd r"></span>绝不执行真实支付操作</div>
-    </div></div>
   </aside>
 
   <div class="main">
     <div class="top">
       <div class="crumb"><b id="crumbRoot">争议处理</b><span class="crumb-sep">/</span><span id="crumbId" class="id">新建案件</span></div>
       <div class="grow"></div>
-      <a class="tlink" href="/docs" target="_blank" rel="noopener">接口文档</a>
-      <a class="tlink" href="/health" target="_blank" rel="noopener">服务状态</a>
-      <div class="seg"><button id="loc-zh" class="on" onclick="setLocale('zh')">中文</button>
-        <button id="loc-en" onclick="setLocale('en')">EN</button></div>
+      <div class="merchant-account"><span>当前商户</span><strong>OceanStore</strong></div>
       <button class="tbtn primary" onclick="reset()">＋ 新建案件</button>
     </div>
 
     <!-- 拒付处理 -->
     <div class="content view on" id="v-flow">
-      <div class="page-head"><div><div class="kicker">DISPUTE OPERATIONS</div><h1>拒付案件</h1>
-        <p>识别争议原因、补齐关键材料，并生成可复核的申诉材料包。</p></div>
-        <span class="demo-badge">演示数据</span></div>
+      <div class="page-head"><div><h1>拒付案件</h1>
+        <p>识别争议原因、补齐关键材料，并生成可复核的申诉材料包。</p></div></div>
       <div class="stack">
         <div class="summary">
           <div id="caseHead"><span class="empty">尚未建案 · 在下方选择场景开始。</span></div>
@@ -325,7 +301,7 @@ _DEMO_HTML = """<!doctype html>
 
     <!-- 交易前预防 -->
     <div class="content view" id="v-prev">
-      <div class="page-head"><div><div class="kicker">TRANSACTION SCREENING</div><h1>交易预警</h1>
+      <div class="page-head"><div><h1>交易预警</h1>
         <p>在交易完成前识别拒付风险，并提示应提前留存的材料。</p></div></div>
       <div class="stack"><div class="card">
         <div class="hd"><h3>交易信息</h3><span class="eyebrow">实时评估</span></div>
@@ -345,7 +321,7 @@ _DEMO_HTML = """<!doctype html>
 
     <!-- 安全与指标 -->
     <div class="content view" id="v-safe">
-      <div class="page-head"><div><div class="kicker">CONTROL & OPERATIONS</div><h1>规则与运营</h1>
+      <div class="page-head"><div><h1>规则与运营</h1>
         <p>查看信息安全拦截和案件处理概览，确认系统始终在授权边界内运行。</p></div></div>
       <div class="stack">
         <div class="card">
@@ -417,8 +393,6 @@ document.querySelectorAll('.nav a').forEach(a=>a.addEventListener('click',()=>{
   document.querySelectorAll('.view').forEach(x=>x.classList.remove('on'));$('v-'+v).classList.add('on');
   const navCrumb={flow:["争议处理",S.caseId?S.caseId.slice(0,18):"新建案件"],prev:["风险管理","交易预警"],safe:["运营管理","规则与运营"]}[v];
   $('crumbRoot').textContent=navCrumb[0];$('crumbId').textContent=navCrumb[1];}));
-function setLocale(l){S.loc=l;$('loc-zh').classList.toggle('on',l==='zh');$('loc-en').classList.toggle('on',l==='en');
-  if(S.caseId)refreshCase();}
 function reset(){S.caseId=null;S.packaged=false;S.appealed=false;S.last=null;S.cardNetwork="VISA";
   S.scenarioIndex=0;S.autoEvidence=SCENARIOS[0].available.slice();
   $('caseHead').innerHTML='<span class="empty">尚未建案 · 在下方选择场景开始。</span>';
@@ -506,7 +480,7 @@ function renderAction(){const d=S.last;const tag=$('phaseTag');
       +`<span class="missing-count">仍缺 ${labels.length} 项</span></div><div class="missing-list">${missing}</div></div>`
       +(question?`<div style="font-size:15px;color:var(--ink);font-weight:600;margin-top:14px">${esc(question)}</div>`:"")
       +`<div class="actions"><button class="tbtn primary" onclick="submitEvidence('${esc(d.next_evidence)}')">标记为已补交</button>`
-      +`<button class="tbtn" onclick="completeAll()">补齐示例材料</button>`
+      +`<button class="tbtn" onclick="completeAll()">补齐缺失材料</button>`
       +`<button class="tbtn danger" onclick="finalize()">材料不足，提交复核</button></div>`;
   }else if(ph==="ASSESSED"){$('action').innerHTML='<span class="muted">材料收集已完成。请查看下方评估结果并选择下一步。</span>';}
   else $('action').innerHTML=`<span class="muted">阶段：${esc(ph)}</span>`;}
