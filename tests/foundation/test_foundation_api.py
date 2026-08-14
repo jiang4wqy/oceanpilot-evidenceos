@@ -328,6 +328,7 @@ def test_openapi_has_exact_foundation_paths(app: FastAPI):
         "/api/v1/chargeback/metrics",
         "/api/v1/chargeback/prevention/assess",
         "/api/v1/chargeback/safety/scan",
+        "/api/v1/admin/overview",
     }
     assert {path: set(item) for path, item in paths.items()} == {
         "/health": {"get"},
@@ -338,7 +339,7 @@ def test_openapi_has_exact_foundation_paths(app: FastAPI):
         "/api/v1/integrations/feishu/events": {"post"},
         "/api/v1/integrations/feishu/card-actions": {"post"},
         "/api/v1/chargeback/catalog": {"get"},
-        "/api/v1/chargeback/cases": {"post"},
+        "/api/v1/chargeback/cases": {"get", "post"},
         "/api/v1/chargeback/cases/{case_id}": {"get"},
         "/api/v1/chargeback/cases/{case_id}/appeal": {"post"},
         "/api/v1/chargeback/cases/{case_id}/audit": {"get"},
@@ -349,4 +350,5 @@ def test_openapi_has_exact_foundation_paths(app: FastAPI):
         "/api/v1/chargeback/metrics": {"get"},
         "/api/v1/chargeback/prevention/assess": {"post"},
         "/api/v1/chargeback/safety/scan": {"post"},
+        "/api/v1/admin/overview": {"get"},
     }

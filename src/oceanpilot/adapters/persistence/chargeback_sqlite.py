@@ -164,6 +164,25 @@ class SqliteChargebackCaseStore:
 
         return _map_db_errors(operation)
 
+    def list_case_ids(self) -> tuple[str, ...]:
+        """Return only case identifiers that currently exist in durable storage."""
+
+        def operation() -> tuple[str, ...]:
+            connection = connect_sqlite(self._path)
+            try:
+                rows = connection.execute(
+                    """
+                    SELECT case_id
+                    FROM chargeback_cases
+                    ORDER BY created_at DESC, rowid DESC
+                    """
+                ).fetchall()
+            finally:
+                connection.close()
+            return tuple(self._require_text(row["case_id"]) for row in rows)
+
+        return _map_db_errors(operation)
+
     def load(self, case_id: str) -> ChargebackCaseState | None:
         def operation() -> ChargebackCaseState | None:
             connection = connect_sqlite(self._path)

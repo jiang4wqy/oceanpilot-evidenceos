@@ -187,14 +187,17 @@ class FeishuChannel:
             review = "需人工复核" if a.requires_human else "可自动推进"
             elements.append(
                 _field(
-                    f"**胜诉可能性**：{a.win_likelihood}｜**责任域**：{a.responsible_team}｜{review}"
+                    f"**规则证据就绪度**：{a.win_likelihood}｜**责任域**：{a.responsible_team}｜{review}"
                 )
             )
             if a.evidence_breakdown:
                 elements.append(_field("**证据构成**：" + _breakdown_text(a.evidence_breakdown)))
             source = "模型生成" if a.explanation_source == "MODEL" else "确定性兜底"
             elements.append(
-                _field(f"{a.explanation}\n\n_（数字由确定性内核判定；说明文字：{source}）_")
+                _field(
+                    f"{a.explanation}\n\n_（就绪度不是胜诉概率；数字由确定性内核判定；"
+                    f"说明文字：{source}）_"
+                )
             )
 
         return {

@@ -16,9 +16,9 @@ def test_demo_page_is_served_html(tmp_path):
     assert resp.status_code == 200
     assert resp.headers["content-type"].startswith("text/html")
     body = resp.text
-    assert "跨境拒付" in body
+    assert "Oceanpayment · 商户工作台" in body
     assert "/api/v1/chargeback" in body  # the page drives the real API
-    assert "绝不执行" in body  # the safety story is on screen
+    assert "人工确认并模拟提交" in body  # the safety boundary remains in the workflow
 
 
 def test_demo_page_is_not_in_openapi(tmp_path):
@@ -34,20 +34,59 @@ def test_root_redirects_to_demo(tmp_path):
         assert r.headers["location"] == "/demo"
         followed = client.get("/")
     assert followed.status_code == 200
-    assert "跨境拒付" in followed.text
+    assert "Oceanpayment · 商户工作台" in followed.text
 
 
-def test_demo_links_to_api_docs(tmp_path):
+def test_demo_keeps_technical_endpoints_out_of_customer_navigation(tmp_path):
     with _client(tmp_path) as client:
         body = client.get("/demo").text
-    assert 'href="/docs"' in body
-    assert 'href="/health"' in body
+        assert client.get("/docs").status_code == 200
+        assert client.get("/health").status_code == 200
+    assert 'href="/docs"' not in body
+    assert 'href="/health"' not in body
 
 
-def test_demo_has_scenarios_autorun_and_safety_panel(tmp_path):
+def test_demo_separates_case_diagnosis_from_new_case_creation(tmp_path):
     with _client(tmp_path) as client:
         body = client.get("/demo").text
-    assert "示例场景" in body  # one-click scenario picker
-    assert "自动补证" in body  # auto-run to assessment
-    assert "安全护栏" in body and "/safety/scan" in body  # visible PII guardrail
-    assert "如何评审" in body  # evaluator orientation
+    assert "历史案件" in body and "待补资料" in body
+    assert "需要补交的资料" in body and "补交资料" in body
+    assert "1. 选择常见案件模板" in body
+    assert "确认创建案件" in body
+    assert "材料尚未齐全" in body and "仍缺" in body
+    assert "下一项优先补交" in body
+    assert "本次无法提供，提交人工复核" in body
+    assert "客户提出争议，创建案件" not in body
+    assert "载入示例材料" not in body
+    assert "补齐缺失材料" not in body
+    assert "/safety/scan" in body  # PII guardrail remains available to the app
+    assert "Visa 13.1" in body and "Visa 10.4" in body and "Mastercard 4853" in body
+    assert "未收到货" in body and "非本人交易" in body and "商品不符" in body
+    assert 'available:["transaction.receipt","fulfillment.tracking"]' in body
+    assert 'available:["transaction.receipt","product.description"]' in body
+    assert "规则证据就绪度" in body
+    assert "预计胜诉概率" not in body
+    assert 'api("GET","/cases")' in body
+    assert "暂无真实案件记录" in body
+    assert "CASE-20260814" not in body and "OP-20260814" not in body
+
+
+def test_demo_uses_oceanpayment_console_language_without_ai_jargon(tmp_path):
+    with _client(tmp_path) as client:
+        body = client.get("/demo").text
+    assert "Oceanpayment" in body
+    assert "--accent:#087a70" in body
+    assert "案件中心" in body and "新建案件" in body and "交易风险" in body
+    assert "案件诊断" in body and "查看诊断" in body
+    assert "导出当前结果" not in body and "规则与配置" not in body
+    assert "后端已校验" in body and "后端可读" in body
+    assert "需要商户补充" in body
+    assert "已有 1 项 · 仍缺 5 项" in body
+    assert "商户" in body and "OceanStore" in body
+    assert "演示环境" not in body and "演示数据" not in body
+    assert 'id="loc-zh"' not in body and 'id="loc-en"' not in body
+    assert "智能体轨迹" not in body
+    assert "确定性内核" not in body
+    assert "toggleTheme" not in body
+    assert 'class="ocean-logo"' in body
+    assert 'src="data:image/png;base64,' in body

@@ -46,7 +46,7 @@ class NormalizedInbound:
 
 @dataclass(frozen=True)
 class DeliveryEvidenceItem:
-    """One line of the win-likelihood breakdown, channel-neutral."""
+    """One line of the evidence-readiness breakdown, channel-neutral."""
 
     code: str
     label: str
@@ -57,6 +57,8 @@ class DeliveryEvidenceItem:
 
 @dataclass(frozen=True)
 class DeliveryAssessment:
+    # Legacy field name retained for API compatibility. In the synthetic
+    # prototype it is an evidence-readiness score, not a measured win rate.
     win_likelihood: str
     completeness: str
     responsible_team: str

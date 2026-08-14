@@ -8,7 +8,7 @@ def test_transcript_runs_full_http_flow_offline():
     assert "拒付风险" in joined  # prevention
     assert "判定原因" in joined  # intake
     assert "补问" in joined  # evidence loop
-    assert "胜诉可能性" in joined  # assessment
+    assert "规则证据就绪度" in joined  # assessment, explicitly not a real win rate
     assert "证据构成" in joined  # per-evidence breakdown
     assert "representment" in joined  # packaging
     assert "已提交上游(mock)" in joined  # appeal after approval

@@ -21,6 +21,9 @@ def test_create_case_classifies_and_asks_for_evidence(tmp_path):
     assert body["reason_code"] == DisputeReasonCode.PRODUCT_NOT_RECEIVED.value
     assert body["phase"] == "NEED_EVIDENCE"
     assert body["next_evidence"] in body["missing"]
+    assert body["next_evidence_label"] in body["missing_labels"]
+    assert len(body["missing_labels"]) == len(body["missing"])
+    assert all("." not in label for label in body["missing_labels"])
 
 
 def test_full_evidence_flow_reaches_assessment(tmp_path):
@@ -53,6 +56,26 @@ def test_get_case_returns_current_state(tmp_path):
     assert resp.status_code == 200
     assert resp.json()["case_id"] == case_id
     assert resp.json()["reason_code"] == DisputeReasonCode.DUPLICATE_PROCESSING.value
+
+
+def test_list_cases_returns_only_persisted_cases_and_each_detail_resolves(tmp_path):
+    with _client(tmp_path) as client:
+        first = client.post(
+            "/api/v1/chargeback/cases", json={"description": "没收到货，要拒付"}
+        ).json()
+        second = client.post(
+            "/api/v1/chargeback/cases", json={"description": "被重复扣款了"}
+        ).json()
+
+        listed = client.get("/api/v1/chargeback/cases")
+
+        assert listed.status_code == 200
+        bodies = listed.json()
+        assert [item["case_id"] for item in bodies] == [second["case_id"], first["case_id"]]
+        for item in bodies:
+            detail = client.get(f"/api/v1/chargeback/cases/{item['case_id']}")
+            assert detail.status_code == 200
+            assert detail.json()["case_id"] == item["case_id"]
 
 
 def test_unknown_case_returns_safe_404(tmp_path):
@@ -163,6 +186,7 @@ def test_assessment_response_exposes_provenance_and_breakdown(tmp_path):
                 json={"evidence_code": body["next_evidence"]},
             ).json()
     a = body["assessment"]
+    assert a["evidence_readiness"] == a["win_likelihood"]
     assert a["explanation_source"] in ("MODEL", "FALLBACK")
     assert a["evidence_breakdown"]
     assert set(a["evidence_breakdown"][0]) == {"code", "label", "weight", "critical", "present"}
@@ -219,6 +243,20 @@ def test_package_endpoint_returns_labeled_representment(tmp_path):
     first = pkg["ordered_evidence"][0]
     assert set(first) == {"code", "label"}
     assert first["label"] and "." in first["code"]
+
+
+def test_package_endpoint_exposes_visa_rule_provenance(tmp_path):
+    with _client(tmp_path) as client:
+        case_id = _ready_case(client)
+        pkg = client.get(
+            f"/api/v1/chargeback/cases/{case_id}/package",
+            params={"card_network": "VISA"},
+        ).json()
+    assert pkg["scheme_reason_code"] == "13.1"
+    assert pkg["rule_version"] == "June 2024"
+    assert pkg["source_document"] == "Dispute Management Guidelines for Visa Merchants"
+    assert pkg["required_assertions"]
+    assert "不是 Visa 官方申诉期限" in pkg["rule_limitation"]
 
 
 def test_appeal_without_approval_is_blocked_and_never_submits(tmp_path):

@@ -2,7 +2,7 @@
 
 ![OceanPilot：证据驱动的跨境拒付申诉协作 Agent；缺证先补问、过门再评估、高风险步骤由人工确认](docs/assets/submission/oceanpilot-hero.png)
 
-**帮助跨境 PSP 在举证窗口内收齐有效证据、判断是否值得申诉，并生成可审核的拒付申诉材料。** OceanPilot 用一个版本化案件串联拒付理由、证据缺口、胜诉评估、材料打包、人工审批与审计；AI 负责理解、补问和起草，确定性规则与人工负责裁定。
+**帮助跨境 PSP 在举证窗口内收齐有效证据、判断是否值得申诉，并生成可审核的拒付申诉材料。** OceanPilot 用一个版本化案件串联拒付理由、证据缺口、证据就绪评估、材料打包、人工审批与审计；AI 负责理解、补问和起草，确定性规则与人工负责裁定。
 
 > **当前边界：** 产品主线是 synthetic 拒付申诉：HTTP/Web 已跑通“受理 → 补证 → 评估 → 打包 → 人审 → mock 申诉”，签名飞书回调已用显式 `/chargeback` 指令和 namespaced 卡片动作跑通受理与补证。EvidenceOS Foundation 以 `PAYMENT_INCIDENT` 切片验证完整证据、确定性诊断和人工确认，是底层能力证明，不是第二个并列产品。真实飞书 tenant、Oceanpayment 数据、银行规则和上游申诉均未接入，系统不执行任何真实资金或业务动作。
 
@@ -10,7 +10,7 @@
 
 - **拒付案件作为单一协作对象：** 用版本化案件聚合拒付理由、证据状态、评估、审批和审计，减少截图与聊天记录反复转发。
 - **证据门槛先于申诉判断：** 按 reason-code 逐项定位缺口，关键证据不足时不生成乐观结论，转入补证或人工复核。
-- **AI 提议、规则约束、人类裁定：** AI 理解模糊表达并起草材料；确定性规则计算完整度和胜诉评估；人工批准高风险步骤。
+- **AI 提议、规则约束、人类裁定：** AI 理解模糊表达并起草材料；确定性规则计算证据就绪度和缺口；人工批准高风险步骤。
 
 ## What OceanPilot Is
 
@@ -40,7 +40,7 @@ OceanPilot 将一次跨境拒付固定为下面这条业务链。内部可以由
 收到拒付
   → 识别理由      抽取安全事实并提出 reason-code；不确定时由人工确认
   → 补齐证据      按理由逐项提示缺口；关键材料不足时停止评估
-  → 申诉评估      确定性规则计算完整度、胜诉可能性、薄弱点与人工路由
+  → 申诉评估      确定性规则计算证据就绪度、薄弱点与人工路由
   → 材料打包      按银行/卡组织模板组织 representment 材料
   → 人工批准      人类核对依据和申诉草稿
   → 提交与跟进    当前只调用 synthetic mock connector，并记录时限和审计
@@ -53,19 +53,20 @@ OceanPilot 将一次跨境拒付固定为下面这条业务链。内部可以由
 - 给公司的数据需求：[docs/data/2026-08-07-chargeback-data-request.md](docs/data/2026-08-07-chargeback-data-request.md)
 - 离线可跑的演示：`examples/chargeback_demo.py`（agent 集群）、`examples/chargeback_transcript.py`（HTTP 全链路 transcript）
 - 一键起服务：`docker build -t oceanpilot-evidenceos . && docker run --rm -p 127.0.0.1:8000:8000 oceanpilot-evidenceos`
-- Web 演示面板（可视化全链路）：起服务后打开 `http://127.0.0.1:8000/demo`
-- 离线评测报告（分类准确率 + 胜诉率校准）：`python scripts/eval_chargeback.py`
+- 双端控制台：客户端 `http://127.0.0.1:8002/demo`，运行维护端 `http://127.0.0.1:8003/admin`
+- 离线评测报告（分类准确率 + synthetic 规则分离度）：`python scripts/eval_chargeback.py`
 
 ## Web 控制台 / Console
 
-![OceanPilot 拒付申诉控制台：侧栏 + 案件工作台 + 活动流；确定性内核判定的胜诉评估、逐项证据与决策来源](docs/assets/console.png)
+![OceanPilot 拒付申诉控制台：侧栏 + 案件工作台 + 活动流；确定性内核判定的证据就绪度、逐项证据与决策来源](docs/assets/console.png)
 
-统一的单页控制台把整条拒付链串在一屏：识别理由 → 补证（带 SLA 时限）→ 胜诉评估（内核判定 + 逐项证据 + 决策来源）→ 打包 → 人工批准 → mock 申诉 → 审计轨迹。交易前预防是扩展示例，不属于主申诉链；PII / 卡号安全护栏横跨所有步骤。
+客户端以“概览 → 交易 → 诊断”为主路径，同时保留完整拒付链：识别理由 → 补证（带 SLA 时限）→ 证据就绪评估 → 打包 → 人工批准 → mock 申诉 → 审计。运行维护端单独展示 API 状态、滚动请求指标、可解释故障信号和业务积压；两端共享同一 Oceanpayment 海洋绿色卡。
 
-- 服务启动后打开根路径 `/`（自动跳转到 `/demo`）。
+- 客户端启动后打开根路径 `/`（自动跳转到 `/demo`）；维护端根路径跳转到 `/admin`。
 - Docker：`docker run --rm -p 127.0.0.1:8000:8000 oceanpilot-evidenceos`，浏览器开 `http://127.0.0.1:8000/demo`。
 - 远程服务器：SSH 端口转发 `ssh -L 8000:127.0.0.1:8000 <user>@<host>`，本地开 `http://localhost:8000/demo`。
-- 顶栏可切换中/英与深/浅色；「API 文档」指向 Swagger `/docs`。
+- 客户端顶栏提供全局交易搜索（`⌘K`）；技术端点不出现在客户导航中。
+- 双端设计与交互说明：[docs/design/2026-08-14-transaction-diagnostic-dashboards.md](docs/design/2026-08-14-transaction-diagnostic-dashboards.md)。
 
 ## 技术原则：证据先行闭环
 
@@ -146,7 +147,10 @@ Windows PowerShell：
 py -3.12 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -e ".[dev]"
 $env:OCEANPILOT_DB_PATH = "work/oceanpilot.db"
-.\.venv\Scripts\python.exe -m uvicorn oceanpilot.main:create_app --factory --host 127.0.0.1 --port 8000
+.\.venv\Scripts\python.exe -m uvicorn oceanpilot.main:create_app --factory --host 127.0.0.1 --port 8002
+# 新终端：
+$env:OCEANPILOT_CLIENT_BASE_URL = "http://127.0.0.1:8002"
+.\.venv\Scripts\python.exe -m uvicorn oceanpilot.admin:create_admin_app --factory --host 127.0.0.1 --port 8003
 ```
 
 Linux / macOS：
@@ -155,7 +159,10 @@ Linux / macOS：
 python3.12 -m venv .venv
 .venv/bin/python -m pip install -e ".[dev]"
 export OCEANPILOT_DB_PATH=work/oceanpilot.db
-.venv/bin/python -m uvicorn oceanpilot.main:create_app --factory --host 127.0.0.1 --port 8000
+.venv/bin/python -m uvicorn oceanpilot.main:create_app --factory --host 127.0.0.1 --port 8002
+# 新终端：
+OCEANPILOT_CLIENT_BASE_URL=http://127.0.0.1:8002 \
+  .venv/bin/python -m uvicorn oceanpilot.admin:create_admin_app --factory --host 127.0.0.1 --port 8003
 ```
 
 启动过程由 FastAPI lifespan 创建 SQLite schema 并执行一次 Store 健康检查。构造或导入应用本身不会打开数据库连接。飞书回调为可选：设置 `FEISHU_APP_ID/APP_SECRET/VERIFICATION_TOKEN/ENCRYPT_KEY` 后启用（凭据只走环境变量），配置步骤见 [docs/feishu-setup.md](docs/feishu-setup.md)，演示脚本见 [docs/demo.md](docs/demo.md)。未配置飞书时核心 API 与 `/health` 正常，飞书路由返回固定安全 `503`。

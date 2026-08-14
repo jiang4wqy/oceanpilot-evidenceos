@@ -16,6 +16,7 @@ class FeishuSettings:
 class Settings:
     db_path: Path
     host: str = "127.0.0.1"
+    admin_origin: str = "http://127.0.0.1:8003"
     policy_version: str = "POLICY_V1"
     engine_version: str = "RULES_V1"
     feishu: FeishuSettings | None = None
@@ -33,6 +34,7 @@ class Settings:
         chargeback_env = os.getenv("OCEANPILOT_CHARGEBACK_DB_PATH")
         return cls(
             db_path=db_path,
+            admin_origin=os.getenv("OCEANPILOT_ADMIN_ORIGIN", "http://127.0.0.1:8003"),
             feishu=_feishu_from_env(db_path),
             chargeback_db_path=Path(chargeback_env) if chargeback_env else None,
         )

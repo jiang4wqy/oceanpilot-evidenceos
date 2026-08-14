@@ -21,6 +21,12 @@ class BankRuleEntry:
     submission_window_days: int
     notes: str
     source: str  # "bank" | "network" | "default"
+    scheme_reason_code: str | None = None
+    rule_version: str | None = None
+    source_document: str | None = None
+    source_section: str | None = None
+    required_assertions: tuple[str, ...] = ()
+    limitation: str | None = None
 
 
 @runtime_checkable

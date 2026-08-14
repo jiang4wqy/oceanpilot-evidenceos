@@ -84,7 +84,10 @@ def _run(client: TestClient, say: Callable[[str], None]) -> None:
     say("\n【3】评估：确定性内核判定")
     a = body["assessment"]
     review = "需人工复核" if a["requires_human"] else "可自动推进"
-    say(f"  胜诉可能性：{a['win_likelihood']}｜责任域：{a['responsible_team']}｜{review}")
+    say(
+        f"  规则证据就绪度：{a.get('evidence_readiness', a['win_likelihood'])}"
+        f"（非胜诉概率）｜责任域：{a['responsible_team']}｜{review}"
+    )
     checklist = " ".join(
         ("✅" if item["present"] else "❌") + ("⭐" if item["critical"] else "") + item["label"]
         for item in a["evidence_breakdown"]
@@ -93,9 +96,10 @@ def _run(client: TestClient, say: Callable[[str], None]) -> None:
     say(f"  说明（来源={a['explanation_source']}）：{a['explanation']}")
 
     say("\n【4】打包：按银行模板生成 representment")
-    pkg = client.get(f"{_BASE}/cases/{case_id}/package").json()
+    pkg = client.get(f"{_BASE}/cases/{case_id}/package?card_network=VISA").json()
     say(
-        f"  规则来源：{pkg['rule_source']}｜完整度：{pkg['completeness']}"
+        f"  规则来源：{pkg['rule_source']}｜Visa {pkg['scheme_reason_code']}"
+        f"｜完整度：{pkg['completeness']}"
         f"｜可提交：{pkg['ready_to_submit']}"
     )
     say("  随附证据：" + "、".join(e["label"] for e in pkg["ordered_evidence"]))

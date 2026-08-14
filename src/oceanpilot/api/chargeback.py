@@ -99,6 +99,12 @@ def _package_response(
         bank_id=package.bank_id,
         card_network=package.card_network,
         rule_source=package.rule_source,
+        scheme_reason_code=package.scheme_reason_code,
+        rule_version=package.rule_version,
+        source_document=package.source_document,
+        source_section=package.source_section,
+        required_assertions=package.required_assertions,
+        rule_limitation=package.rule_limitation,
         submission_window_days=package.submission_window_days,
         completeness=str(package.completeness),
         ready_to_submit=package.ready_to_submit,
@@ -124,6 +130,7 @@ def _response(delivery: Delivery) -> ChargebackCaseResponse:
         a = delivery.assessment
         assessment = ChargebackAssessmentDTO(
             win_likelihood=a.win_likelihood,
+            evidence_readiness=a.win_likelihood,
             completeness=a.completeness,
             responsible_team=a.responsible_team,
             requires_human=a.requires_human,
@@ -167,8 +174,16 @@ def _response(delivery: Delivery) -> ChargebackCaseResponse:
         collection_finalized=delivery.collection_finalized,
         collected=delivery.collected,
         next_evidence=delivery.next_evidence,
+        next_evidence_label=(
+            label_of(ChargebackEvidenceCode(delivery.next_evidence))
+            if delivery.next_evidence is not None
+            else None
+        ),
         question=delivery.question,
         missing=delivery.missing,
+        missing_labels=tuple(
+            label_of(ChargebackEvidenceCode(code)) for code in (delivery.missing or ())
+        ),
         assessment=assessment,
         deadline=deadline,
         facts=facts,
@@ -197,6 +212,31 @@ def create_case(
         )
     )
     return _response(delivery)
+
+
+@router.get(
+    "/cases",
+    response_model=list[ChargebackCaseResponse],
+    responses={**COMMON_PROBLEMS},
+)
+def list_cases(
+    store: Annotated[ChargebackCaseStore, Depends(get_store)],
+    service: Annotated[ChargebackChannelService, Depends(get_channel_service)],
+) -> list[ChargebackCaseResponse]:
+    """List persisted cases; every item is reloaded through the canonical case path."""
+
+    return [
+        _response(
+            service.handle(
+                NormalizedInbound(
+                    kind=InboundKind.GET_CASE,
+                    channel=_CHANNEL,
+                    case_id=case_id,
+                )
+            )
+        )
+        for case_id in store.list_case_ids()
+    ]
 
 
 @router.post(

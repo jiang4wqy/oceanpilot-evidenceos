@@ -184,17 +184,22 @@ def build_report() -> str:
             lines.append(f"  - “{text}” 期望 {expected}，得到 {got}")
     else:
         lines.append("- 无误分类。")
-    lines.append("\n## 2. 胜诉率校准（确定性内核）")
-    lines.append(f"- 胜诉样本均值：**{cal.won_mean}**；败诉样本均值：**{cal.lost_mean}**")
+    lines.append("\n## 2. Synthetic 规则分离度（确定性内核）")
+    lines.append(
+        f"- 合成 won 标签样本就绪度均值：**{cal.won_mean}**；"
+        f"合成 lost 标签样本就绪度均值：**{cal.lost_mean}**"
+    )
+    lines.append("- 该分数用于验证规则区分，不代表真实胜诉概率或业务效果。")
     lines.append(f"- 分离度（won-lost）：**{cal.separation}**（>0 表示方向正确）")
-    lines.append(f"- 阈值分类准确率（win≥0.5 判胜）：**{cal.threshold_accuracy:.0%}**")
-    lines.append(f"- 败诉样本被标记人工复核比例：**{cal.lost_review_recall:.0%}**")
-    lines.append("\n| 案例 | 理由 | 实际结果 | 胜诉率 | 需人工 |")
+    lines.append(f"- 合成标签阈值分离准确率（readiness≥0.5）：**{cal.threshold_accuracy:.0%}**")
+    lines.append(f"- 合成 lost 标签进入人工复核比例：**{cal.lost_review_recall:.0%}**")
+    lines.append("\n| 案例 | 理由 | 合成标签 | 证据就绪度 | 需人工 |")
     lines.append("|---|---|---|---|---|")
     for ref, reason, outcome, win, requires_human in cal.rows:
         lines.append(f"| {ref} | {reason} | {outcome} | {win} | {requires_human} |")
     lines.append(
-        f"\n> 判胜阈值 WIN_REVIEW_THRESHOLD={WIN_REVIEW_THRESHOLD}。"
+        f"\n> 内部兼容阈值 WIN_REVIEW_THRESHOLD={WIN_REVIEW_THRESHOLD}；"
+        "它仅控制 synthetic 人工路由，不代表判胜。"
         "全部合成、可复现；真实（脱敏）样本经 adapters/ingestion 直接替换即可。"
     )
     return "\n".join(lines)
