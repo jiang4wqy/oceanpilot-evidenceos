@@ -70,6 +70,15 @@ def test_create_persists_empty_case_at_revision_zero(store: SqliteChargebackCase
     assert trail[0].case_revision == 0
 
 
+def test_list_case_ids_returns_only_persisted_cases_newest_first(
+    store: SqliteChargebackCaseStore,
+) -> None:
+    first = store.create()
+    second = store.create()
+
+    assert store.list_case_ids() == (second, first)
+
+
 def test_reason_classification_bumps_revision_and_audits(
     store: SqliteChargebackCaseStore,
 ) -> None:

@@ -214,6 +214,31 @@ def create_case(
     return _response(delivery)
 
 
+@router.get(
+    "/cases",
+    response_model=list[ChargebackCaseResponse],
+    responses={**COMMON_PROBLEMS},
+)
+def list_cases(
+    store: Annotated[ChargebackCaseStore, Depends(get_store)],
+    service: Annotated[ChargebackChannelService, Depends(get_channel_service)],
+) -> list[ChargebackCaseResponse]:
+    """List persisted cases; every item is reloaded through the canonical case path."""
+
+    return [
+        _response(
+            service.handle(
+                NormalizedInbound(
+                    kind=InboundKind.GET_CASE,
+                    channel=_CHANNEL,
+                    case_id=case_id,
+                )
+            )
+        )
+        for case_id in store.list_case_ids()
+    ]
+
+
 @router.post(
     "/cases/{case_id}/confirm",
     response_model=ChargebackCaseResponse,

@@ -58,6 +58,26 @@ def test_get_case_returns_current_state(tmp_path):
     assert resp.json()["reason_code"] == DisputeReasonCode.DUPLICATE_PROCESSING.value
 
 
+def test_list_cases_returns_only_persisted_cases_and_each_detail_resolves(tmp_path):
+    with _client(tmp_path) as client:
+        first = client.post(
+            "/api/v1/chargeback/cases", json={"description": "没收到货，要拒付"}
+        ).json()
+        second = client.post(
+            "/api/v1/chargeback/cases", json={"description": "被重复扣款了"}
+        ).json()
+
+        listed = client.get("/api/v1/chargeback/cases")
+
+        assert listed.status_code == 200
+        bodies = listed.json()
+        assert [item["case_id"] for item in bodies] == [second["case_id"], first["case_id"]]
+        for item in bodies:
+            detail = client.get(f"/api/v1/chargeback/cases/{item['case_id']}")
+            assert detail.status_code == 200
+            assert detail.json()["case_id"] == item["case_id"]
+
+
 def test_unknown_case_returns_safe_404(tmp_path):
     with _client(tmp_path) as client:
         resp = client.get("/api/v1/chargeback/cases/does-not-exist")

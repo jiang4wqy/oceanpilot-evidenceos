@@ -24,6 +24,9 @@ class InMemoryChargebackCaseStore:
         self._cases[case_id] = ChargebackCaseState(created_at=self._clock.now())
         return case_id
 
+    def list_case_ids(self) -> tuple[str, ...]:
+        return tuple(reversed(self._cases))
+
     def load(self, case_id: str) -> ChargebackCaseState | None:
         return self._cases.get(case_id)
 

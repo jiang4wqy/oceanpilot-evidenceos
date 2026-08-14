@@ -49,8 +49,8 @@ def test_demo_keeps_technical_endpoints_out_of_customer_navigation(tmp_path):
 def test_demo_separates_case_diagnosis_from_new_case_creation(tmp_path):
     with _client(tmp_path) as client:
         body = client.get("/demo").text
-    assert "历史案件" in body and "诊断失败" in body
-    assert "需要补交的资料" in body and "提交资料" in body
+    assert "历史案件" in body and "待补资料" in body
+    assert "需要补交的资料" in body and "补交资料" in body
     assert "1. 选择常见案件模板" in body
     assert "确认创建案件" in body
     assert "材料尚未齐全" in body and "仍缺" in body
@@ -66,6 +66,9 @@ def test_demo_separates_case_diagnosis_from_new_case_creation(tmp_path):
     assert 'available:["transaction.receipt","product.description"]' in body
     assert "规则证据就绪度" in body
     assert "预计胜诉概率" not in body
+    assert 'api("GET","/cases")' in body
+    assert "暂无真实案件记录" in body
+    assert "CASE-20260814" not in body and "OP-20260814" not in body
 
 
 def test_demo_uses_oceanpayment_console_language_without_ai_jargon(tmp_path):
@@ -76,8 +79,8 @@ def test_demo_uses_oceanpayment_console_language_without_ai_jargon(tmp_path):
     assert "案件中心" in body and "新建案件" in body and "交易风险" in body
     assert "案件诊断" in body and "查看诊断" in body
     assert "导出当前结果" not in body and "规则与配置" not in body
-    assert "Observed facts" in body and "Recommended action" in body
-    assert "需要商户补充 2 项信息" in body
+    assert "后端已校验" in body and "后端可读" in body
+    assert "需要商户补充" in body
     assert "已有 1 项 · 仍缺 5 项" in body
     assert "商户" in body and "OceanStore" in body
     assert "演示环境" not in body and "演示数据" not in body
@@ -85,3 +88,5 @@ def test_demo_uses_oceanpayment_console_language_without_ai_jargon(tmp_path):
     assert "智能体轨迹" not in body
     assert "确定性内核" not in body
     assert "toggleTheme" not in body
+    assert 'class="ocean-logo"' in body
+    assert 'src="data:image/png;base64,' in body
