@@ -2,15 +2,15 @@
 
 ## 1. Scope
 
-当前系统包含两条彼此分离、只使用合成数据的运行切片：
+当前系统以 **跨境拒付申诉协作** 为唯一产品主线，同时保留一个 Foundation 能力验证切片。两者彼此分离且只使用合成数据：
 
-1. **Foundation `PAYMENT_INCIDENT`：** 健康检查、案件创建/读取、证据追加、
-   确定性诊断 snapshot/CAS/replay，以及经签名校验的飞书事件/卡片回调。
-2. **Synthetic chargeback cluster：** HTTP/Web Intake、理由确认、逐项补证、
+1. **产品主线 — synthetic chargeback cluster：** HTTP/Web Intake、理由确认、逐项补证、
    确定性胜诉评估、银行规则打包、人工闸门后的 mock Appeal、时限计算、
-   预防建议、审计与 agent trace 展示。
+   审计与 agent trace 展示。Prevention advisor 是交易前扩展示例，不属于申诉主链。
+2. **能力验证 — Foundation `PAYMENT_INCIDENT`：** 健康检查、案件创建/读取、证据追加、
+   确定性诊断 snapshot/CAS/replay，以及经签名校验的飞书事件/卡片回调。
 
-两条切片使用不同的应用服务和 SQLite 文件。真实 Oceanpayment 数据、真实银行规则、
+Foundation 用于证明版本化证据、确定性诊断、人工闸门、审计和签名飞书回调等底层能力可以独立运行，不作为第二个产品对外叙述。两条切片使用不同的应用服务和 SQLite 文件。真实 Oceanpayment 数据、真实银行规则、
 外部 A2A/MCP/工单、真实上游申诉和任何资金动作都未接入。Foundation 签名飞书回调
 已经过 synthetic callback seam 验证；chargeback `FeishuChannel` 只是已测试的
 parser/renderer adapter，尚未接入这些签名路由或真实 tenant。
@@ -41,7 +41,7 @@ flowchart LR
     ChargebackAPI --> Appeal["Appeal + human gate"]
     Appeal --> MockUpstream["Mock upstream only"]
     ChargebackAPI --> Deadline["DeadlineTracker"]
-    ChargebackAPI --> Prevention["Prevention advisor"]
+    ChargebackAPI -. extension .-> Prevention["Prevention advisor"]
 
     ChargebackFeishu["Chargeback FeishuChannel (tested seam)"] -. "not wired to signed routes" .-> ChannelService
 ```

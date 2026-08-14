@@ -1,20 +1,20 @@
-# OceanPilot EvidenceOS
+# OceanPilot — 跨境拒付申诉协作 Agent
 
-![OceanPilot EvidenceOS：证据驱动的跨境商户成功协作系统；缺证先补问、过门再判断、高风险动作由人工确认](docs/assets/submission/oceanpilot-hero.png)
+![OceanPilot：证据驱动的跨境拒付申诉协作 Agent；缺证先补问、过门再评估、高风险步骤由人工确认](docs/assets/submission/oceanpilot-hero.png)
 
-**证据驱动的跨境商户成功协作系统。** OceanPilot 用同一份“商户成功案件”串联问题、证据、判断与交接：缺证先补问，达到证据门槛后再进入候选判断，高风险动作由人工确认。
+**帮助跨境 PSP 在举证窗口内收齐有效证据、判断是否值得申诉，并生成可审核的拒付申诉材料。** OceanPilot 用一个版本化案件串联拒付理由、证据缺口、胜诉评估、材料打包、人工审批与审计；AI 负责理解、补问和起草，确定性规则与人工负责裁定。
 
-> **当前边界：** `v0.2.1` 同时提供 Foundation 支付异常链与 synthetic 拒付申诉集群。Foundation 已验证建案、证据存储、确定性诊断、审计，以及经签名校验的飞书事件/卡片回调；拒付集群已通过 HTTP/Web 跑通 Intake → Evidence → Assess → Package → Appeal（mock）、时限计算、预防建议与审计展示。拒付 `FeishuChannel` 目前是已测试的解析/渲染适配器 seam，尚未接入现有签名回调路由或真实 tenant。真实 Oceanpayment 数据、外部 A2A、MCP、工单与上游申诉仍未接入。系统不执行真实支付、退款、风控放行、资金或上游提交动作；Foundation 人工确认只写审计，拒付人工批准最多驱动 synthetic mock connector。
+> **当前边界：** `v0.2.1` 的产品主线是 synthetic 拒付申诉：HTTP/Web 已跑通“受理 → 补证 → 评估 → 打包 → 人审 → mock 申诉”，并展示时限与审计。EvidenceOS Foundation 以 `PAYMENT_INCIDENT` 切片验证版本化证据、确定性诊断、审计和签名飞书回调，是底层能力证明，不是第二个并列产品。拒付飞书适配器尚未接入签名回调或真实 tenant；真实 Oceanpayment 数据、银行规则和上游申诉均未接入，系统不执行任何真实资金或业务动作。
 
 ### 三个核心设计
 
-- **商户成功案件（Merchant Success Case）：** 用持续演进、可版本化的案件聚合问题上下文与协作状态，减少截图和聊天记录反复转发。
-- **案件证据契约（Case Evidence Contract）：** 每条证据绑定来源、时间、版本与引用；资料不足时先定位缺口，不让系统直接猜测。
-- **受控协作闭环：** AI 处理模糊表达和补问，确定性规则约束评估、状态与责任路由，高风险步骤必须人工确认；当前 synthetic 原型已验证 Foundation 内核与拒付集群，但不代表真实业务集成或生产就绪。
+- **拒付案件作为单一协作对象：** 用版本化案件聚合拒付理由、证据状态、评估、审批和审计，减少截图与聊天记录反复转发。
+- **证据门槛先于申诉判断：** 按 reason-code 逐项定位缺口，关键证据不足时不生成乐观结论，转入补证或人工复核。
+- **AI 提议、规则约束、人类裁定：** AI 理解模糊表达并起草材料；确定性规则计算完整度和胜诉评估；人工批准高风险步骤。
 
 ## What OceanPilot Is
 
-OceanPilot EvidenceOS 是一个面向跨境支付异常协作的独立参赛原型。它把零散的问题描述整理为版本化案件，把输入转换为可追溯证据，再由确定性的领域策略计算资料完整度、诊断或拒付胜诉评估。当前运行时包含两条 synthetic 切片：Foundation `PAYMENT_INCIDENT` 内核，以及在其设计口径上扩展的拒付申诉多智能体集群。
+OceanPilot 是一个面向跨境 PSP 拒付运营的独立参赛原型。它把一次拒付处理固定为一条可检查的业务链：识别理由、补齐证据、评估申诉价值、按银行规则打包、人工批准并记录审计。EvidenceOS Foundation 提供证据先行、确定性决策、人工闸门和可追溯审计等底层原则；仓库中的支付异常切片用于验证这些原则可以扩展到其它跨境支付协作场景。
 
 这个版本适合用于代码审查、架构讨论和比赛演示。所有商户、交易、银行规则和证据内容均为合成示例；仓库不包含真实商户数据或外部系统凭据，离线评测结果也只说明 synthetic fixture 上的可重复行为。
 
@@ -22,67 +22,28 @@ OceanPilot EvidenceOS 是一个面向跨境支付异常协作的独立参赛原�
 
 | Capability | Status | Current behavior |
 |---|---|---|
-| Foundation HTTP | Available (synthetic) | 健康检查、`PAYMENT_INCIDENT` 建案/读取/补证、确定性诊断持久化与 identity replay |
-| Foundation Feishu callbacks | Available (synthetic) | 经签名校验的建案、补问、诊断卡和人工确认审计；未配置凭据时固定安全 `503` |
-| Chargeback HTTP cluster | Available (synthetic) | Intake、reason 确认、逐项补证、确定性评估、银行规则打包、mock 申诉、审计、预防建议和安全扫描 |
+| Chargeback mainline | Available (synthetic) | 受理、reason 确认、逐项补证、确定性评估、银行规则打包、人工闸门后的 mock 申诉与审计 |
 | Web console and demos | Available (synthetic) | `/demo`、跨平台 Python transcript、Docker 一键启动与 synthetic 离线评测 |
+| EvidenceOS Foundation | Supporting slice | `PAYMENT_INCIDENT` 建案/补证、确定性诊断持久化与 identity replay，用于验证底层证据与审计能力 |
+| Foundation Feishu callbacks | Supporting slice | 经签名校验的建案、补问、诊断卡和人工确认审计；为拒付飞书接线提供已验证的渠道基础 |
 | Basic observability | Available (synthetic) | PII-free request/trace 日志与进程内决策指标；不是生产日志平台或持久化 metrics backend |
 | Chargeback Feishu adapter | Adapter seam only | 解析/渲染适配器及渠道单测已完成；尚未接入签名事件路由或真实 tenant |
 | Rules and company data | Placeholder only | 当前为确定性 reason-code 表与内存精确规则匹配；真实规则、脱敏案例与 RAG 尚未接入 |
 | Real integrations | Planned | 真实 Oceanpayment、外部 A2A/MCP/工单、上游申诉与公网 Feishu tenant smoke |
 | Production readiness | Not claimed | 尚未完成鉴权、限流、生产可观测性后端、云数据库、备份、部署和运行保障 |
 
-Foundation 公开 HTTP 输入必须使用规范 UUIDv4，`synthetic` 必须是布尔值 `true`。Foundation HTTP 层固定证据来源为 `MERCHANT / USER_REPORTED / synthetic=true`，调用方不能注入来源可信度、状态、revision 或路由结论；拒付入口使用独立的严格 DTO，当前只记录证据类型是否具备。
+## 产品主线：拒付申诉协作 / Chargeback Appeal
 
-## 证据先行闭环
-
-![证据先行：先补齐事实，再给出判断](docs/assets/submission/fig-01-evidence-loop.png)
-
-OceanPilot 的核心不是增加一个信息入口，而是让 AI、确定性规则与人工共同遵守同一套案件证据口径：资料不足先定位缺口，达到门槛后才输出带引用的候选原因，高风险动作始终由人工确认。
-
-> 图例边界：这是报名阶段的 Foundation 规划图。绿色实线为当时的基础原型，海洋蓝虚线为离线规则资产，浅灰虚线与琥珀色节点为当时的规划路径；`v0.2.1` 的实际运行边界以本文状态表与 `docs/architecture.md` 为准。
-
-## 一个合成支付异常如何进入协作案件
-
-![一个支付异常如何变成可追溯的协作案件](docs/assets/submission/fig-03-case-walkthrough.png)
-
-> 报名阶段的合成支付异常交互示意，不代表 `v0.2.1` 的完整运行图。Foundation 诊断与 synthetic 飞书回调现已接入；真实数据适配、外部 Workflow/工单仍未接入，拒付集群的实际链路见下文与 Web 控制台。
-
-## 当前原型与完整方案
-
-![当前可验证原型与入围后完整方案的分层架构](docs/assets/submission/fig-02-layered-architecture.png)
-
-> **事实边界（图为报名期分层规划）：** 图中曾标为规划的 Foundation 诊断主链与飞书回调已实现为 synthetic demo：诊断请求返回持久化结果（不再 `501`），签名事件/卡片回调可端到端跑通。拒付集群另以 HTTP/Web 运行；其飞书适配器尚未接入这条签名回调。真实 Oceanpayment 数据、外部 A2A、MCP、工单与真实 tenant 联调仍未接入。
-
-## Architecture
-
-当前两条运行链路都保持单向依赖：
+OceanPilot 将一次跨境拒付固定为下面这条业务链。内部可以由多个专属处理器完成窄任务，但对用户呈现的是一个连续案件，而不是七个彼此独立的 Agent：
 
 ```text
-Foundation HTTP / signed Feishu callbacks
-    -> CaseService -> domain evidence policies / DiagnosisEngine
-    -> CaseStore port -> foundation SQLite
-
-Chargeback HTTP / Web console
-    -> ChargebackChannelService -> Supervisor / deterministic kernel
-    -> ChargebackCaseStore -> chargeback SQLite
-    -> Packager -> in-memory synthetic bank rules
-    -> Appeal -> human gate -> mock upstream connector
-```
-
-API 只负责严格输入映射、状态码和安全错误；领域/应用层负责 readiness、评估和编排；SQL、事务、revision 条件更新和审计落库由 Store 负责。Foundation 诊断快照会持久化并 replay；拒付 assessment/package/appeal 当前按最新案件状态计算，不声明快照 replay 或生产提交语义。完整组件和数据流见 [docs/architecture.md](docs/architecture.md)。
-
-## 拒付申诉智能体集群 / Chargeback Agent Cluster
-
-在证据内核之上,2026-08 起扩展出**跨境拒付（chargeback）申诉多智能体集群**——本仓库当前的开发重点。它复用同一套"证据先行 + 人工确认"口径,把一次拒付串成可检查的链路：
-
-```text
-描述问题
-  → Intake     抽结构化事实 + 判定拒付理由（不确定→待人工确认/更正）
-  → Evidence   按理由逐项补证（带 SLA 倒计时；可"无法提供→转人工复核"）
-  → Assess     确定性内核算胜诉率（缺关键证据门控）、责任团队、是否需人工
-  → Package    按银行/卡组织模板结构化打包
-  → Appeal     生成 representment 申诉信；人工确认后才提交上游（mock）
+收到拒付
+  → 识别理由      抽取安全事实并提出 reason-code；不确定时由人工确认
+  → 补齐证据      按理由逐项提示缺口；关键材料不足时停止评估
+  → 申诉评估      确定性规则计算完整度、胜诉可能性、薄弱点与人工路由
+  → 材料打包      按银行/卡组织模板组织 representment 材料
+  → 人工批准      人类核对依据和申诉草稿
+  → 提交与跟进    当前只调用 synthetic mock connector，并记录时限和审计
 ```
 
 三条设计取向：**(1) 渠道无关内核**，当前完整链路由 HTTP/Web 驱动，飞书解析/渲染适配器已测试但尚未接入签名回调；**(2) 模型可插拔**，离线运行默认 Scripted/确定性 fallback，只有显式开启 live 开关才按安全档位路由到 Claude 或本地隔离模型；**(3) 混合决策**——确定性内核决策、LLM 只解释/建议、人类拍板。系统绝不执行真实支付、退款、风控或上游提交；人工批准只可能调用 synthetic mock connector。
@@ -99,12 +60,48 @@ API 只负责严格输入映射、状态码和安全错误；领域/应用层负
 
 ![OceanPilot 拒付申诉控制台：侧栏 + 案件工作台 + 活动流；确定性内核判定的胜诉评估、逐项证据与决策来源](docs/assets/console.png)
 
-统一的单页控制台把整条拒付链串在一屏：判定 → 补证（带 SLA 时限）→ 胜诉评估（内核判定 + 逐项证据 + 决策来源）→ 打包 → 申诉（人工确认闸门）→ 审计轨迹 + 智能体轨迹；另含交易前预防与可见的 PII / 卡号安全护栏。自包含单页、纯 HTML + JS、离线可用、深/浅色自适应。
+统一的单页控制台把整条拒付链串在一屏：识别理由 → 补证（带 SLA 时限）→ 胜诉评估（内核判定 + 逐项证据 + 决策来源）→ 打包 → 人工批准 → mock 申诉 → 审计轨迹。交易前预防是扩展示例，不属于主申诉链；PII / 卡号安全护栏横跨所有步骤。
 
 - 服务启动后打开根路径 `/`（自动跳转到 `/demo`）。
 - Docker：`docker run --rm -p 127.0.0.1:8000:8000 oceanpilot-evidenceos`，浏览器开 `http://127.0.0.1:8000/demo`。
 - 远程服务器：SSH 端口转发 `ssh -L 8000:127.0.0.1:8000 <user>@<host>`，本地开 `http://localhost:8000/demo`。
 - 顶栏可切换中/英与深/浅色；「API 文档」指向 Swagger `/docs`。
+
+## 技术原则：证据先行闭环
+
+![证据先行：先补齐事实，再给出判断](docs/assets/submission/fig-01-evidence-loop.png)
+
+OceanPilot 的核心不是增加一个信息入口，而是让 AI、确定性规则与人工共同遵守同一套案件证据口径：资料不足先定位缺口，达到门槛后才输出评估，高风险步骤始终由人工确认。
+
+> 图例边界：这是报名阶段的 Foundation 规划图。绿色实线为当时的基础原型，海洋蓝虚线为离线规则资产，浅灰虚线与琥珀色节点为当时的规划路径；`v0.2.1` 的实际运行边界以本文状态表与 `docs/architecture.md` 为准。
+
+## Architecture
+
+当前运行时包含一条拒付产品主线和一条 Foundation 能力验证切片，两者都保持单向依赖：
+
+```text
+Chargeback HTTP / Web console
+    -> ChargebackChannelService -> Supervisor / deterministic kernel
+    -> ChargebackCaseStore -> chargeback SQLite
+    -> Packager -> in-memory synthetic bank rules
+    -> Appeal -> human gate -> mock upstream connector
+
+Foundation HTTP / signed Feishu callbacks
+    -> CaseService -> domain evidence policies / DiagnosisEngine
+    -> CaseStore port -> foundation SQLite
+```
+
+API 只负责严格输入映射、状态码和安全错误；领域/应用层负责 readiness、评估和编排；SQL、事务、revision 条件更新和审计落库由 Store 负责。Foundation 诊断快照会持久化并 replay；拒付 assessment/package/appeal 当前按最新案件状态计算，不声明 snapshot replay 或生产提交语义。完整组件和数据流见 [docs/architecture.md](docs/architecture.md)。
+
+## Foundation：底层能力验证切片
+
+![一个支付异常如何变成可追溯的协作案件](docs/assets/submission/fig-03-case-walkthrough.png)
+
+Foundation 以合成支付异常验证版本化证据、确定性诊断、审计和签名飞书回调，不是当前产品主线。其公开 HTTP 输入使用严格 UUIDv4 和 `synthetic=true`，调用方不能注入来源可信度、状态、revision 或路由结论。
+
+![当前可验证原型与入围后完整方案的分层架构](docs/assets/submission/fig-02-layered-architecture.png)
+
+> **事实边界（图为报名期分层规划）：** 图中曾标为规划的 Foundation 诊断主链与飞书回调已实现为 synthetic demo；拒付主线另以 HTTP/Web 运行，其飞书适配器尚未接入签名回调。真实 Oceanpayment 数据、外部 A2A/MCP/工单和真实 tenant 均未接入。
 
 ## 开发者指南 / Developer guide
 
