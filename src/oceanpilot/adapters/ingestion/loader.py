@@ -18,7 +18,6 @@ from pydantic import BaseModel, ValidationError
 from oceanpilot.adapters.ingestion.schema import (
     BankRuleRecord,
     CaseSampleRecord,
-    ReasonCodeMappingRecord,
     ReasonPolicyRecord,
 )
 from oceanpilot.adapters.knowledge.bank_rules import InMemoryBankRules
@@ -66,29 +65,10 @@ def load_reason_policies(
     return result
 
 
-def load_reason_code_mappings(
-    records: Iterable[Mapping[str, object]],
-) -> dict[tuple[str, str], DisputeReasonCode]:
-    """Validate external reason-code mappings and key them case-insensitively."""
-
-    result: dict[tuple[str, str], DisputeReasonCode] = {}
-    for record in _validate(ReasonCodeMappingRecord, records):
-        _assert_safe_text(record.card_network, record.network_reason_code, record.notes)
-        key = (
-            record.card_network.strip().upper(),
-            record.network_reason_code.strip().upper(),
-        )
-        if key in result:
-            raise IngestionError()
-        result[key] = record.reason_code
-    return result
-
-
 def load_bank_rules(records: Iterable[Mapping[str, object]]) -> InMemoryBankRules:
     bank_entries: dict[tuple[str, str, DisputeReasonCode], BankRuleEntry] = {}
     network_entries: dict[tuple[str, DisputeReasonCode], BankRuleEntry] = {}
     for record in _validate(BankRuleRecord, records):
-        _assert_safe_text(record.card_network, record.bank_id or "", record.notes)
         entry = BankRuleEntry(
             reason_code=record.reason_code,
             required_evidence=tuple(record.required_evidence),
@@ -116,12 +96,8 @@ def load_case_samples(
 ) -> tuple[CaseSampleRecord, ...]:
     validated = _validate(CaseSampleRecord, records)
     for record in validated:
-        _assert_safe_text(record.case_ref, record.notes)
+        try:
+            assert_no_sensitive_data({"case_ref": record.case_ref, "notes": record.notes})
+        except SensitiveDataRejected:
+            raise IngestionError() from None
     return tuple(validated)
-
-
-def _assert_safe_text(*values: str) -> None:
-    try:
-        assert_no_sensitive_data({"values": list(values)})
-    except SensitiveDataRejected:
-        raise IngestionError() from None

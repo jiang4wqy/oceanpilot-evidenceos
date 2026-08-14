@@ -21,9 +21,6 @@ dev = [
   "ruff==0.15.22",
 ]
 
-[project.scripts]
-oceanpilot-validate-data = "oceanpilot.adapters.ingestion.cli:main"
-
 [tool.setuptools.packages.find]
 where = ["src"]
 
