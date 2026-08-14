@@ -46,14 +46,17 @@ def test_demo_keeps_technical_endpoints_out_of_customer_navigation(tmp_path):
     assert 'href="/health"' not in body
 
 
-def test_demo_guides_case_creation_and_missing_evidence_completion(tmp_path):
+def test_demo_separates_case_diagnosis_from_new_case_creation(tmp_path):
     with _client(tmp_path) as client:
         body = client.get("/demo").text
-    assert "1. 选择客户提出的争议类型" in body
+    assert "历史案件" in body and "诊断失败" in body
+    assert "需要补交的资料" in body and "提交资料" in body
+    assert "1. 选择常见案件模板" in body
     assert "确认创建案件" in body
     assert "材料尚未齐全" in body and "仍缺" in body
     assert "下一项优先补交" in body
     assert "本次无法提供，提交人工复核" in body
+    assert "客户提出争议，创建案件" not in body
     assert "载入示例材料" not in body
     assert "补齐缺失材料" not in body
     assert "/safety/scan" in body  # PII guardrail remains available to the app
@@ -70,8 +73,8 @@ def test_demo_uses_oceanpayment_console_language_without_ai_jargon(tmp_path):
         body = client.get("/demo").text
     assert "Oceanpayment" in body
     assert "--accent:#087a70" in body
-    assert "交易与诊断" in body and "案件中心" in body and "交易风险" in body
-    assert "创建并补全案件" in body and "查看诊断" in body
+    assert "案件中心" in body and "新建案件" in body and "交易风险" in body
+    assert "案件诊断" in body and "查看诊断" in body
     assert "导出当前结果" not in body and "规则与配置" not in body
     assert "Observed facts" in body and "Recommended action" in body
     assert "需要商户补充 2 项信息" in body

@@ -285,6 +285,11 @@ _DEMO_HTML = """<!doctype html>
   .source-case{margin:0 0 14px;padding:12px 13px;background:var(--accent-soft);border:1px solid #b8ddd6;border-radius:8px}.source-case strong{display:block;color:var(--accent);font-size:12.5px}.source-case span{display:block;color:var(--body);font:11.5px var(--mono);margin-top:3px}
   .field-label{display:block;color:var(--ink);font-size:12px;font-weight:700;margin:12px 0 6px}.helper{font-size:11.5px;color:var(--muted);margin-top:7px}.technical{border-top:1px solid var(--border);margin-top:16px;padding-top:12px}.technical summary{cursor:pointer;color:var(--accent);font-size:12.5px;font-weight:700}.technical[open] summary{margin-bottom:12px}
   .case-records{margin-top:0}.case-records summary{cursor:pointer;color:var(--body);font-weight:700}.case-records .record-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:14px}
+  .diagnostic-materials{border-left:4px solid var(--warn)}.diagnostic-materials.complete{border-left-color:var(--good)}
+  .material-notice{padding:12px 13px;border-radius:8px;background:var(--warn-bg);color:#765115;margin-bottom:12px}.material-notice strong{display:block;font-size:13px}.material-notice p{margin:3px 0 0;font-size:12px}.material-notice.complete{background:var(--good-bg);color:var(--good)}
+  .material-list{display:flex;flex-direction:column;gap:8px}.material-row{display:grid;grid-template-columns:26px minmax(0,1fr) auto;gap:10px;align-items:center;border:1px solid var(--border);border-radius:8px;padding:10px 11px}.material-row.done{background:var(--good-bg);border-color:#b9ddca}.material-state{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;background:var(--warn-bg);color:var(--warn);font-size:11px;font-weight:800}.material-row.done .material-state{background:var(--good);color:#fff}.material-row strong{display:block;color:var(--ink);font-size:12.5px}.material-row span{display:block;color:var(--muted);font-size:11px;margin-top:2px}
+  .material-form{display:none;margin-top:12px;padding:14px;border:1px solid var(--border);border-radius:8px;background:var(--sunken)}.material-form.on{display:block}.material-form h3{margin:0 0 4px;color:var(--ink);font-size:13px}.material-form p{margin:0 0 9px;color:var(--muted);font-size:11.5px}.form-error{color:var(--crit);font-size:11.5px;margin-top:6px}
+  .empty-state{text-align:center;padding:28px 20px}.empty-state strong{display:block;color:var(--ink);font-size:15px}.empty-state p{margin:6px auto 14px;max-width:430px;color:var(--muted);font-size:12.5px}
   @media(max-width:1180px){.metric-strip{grid-template-columns:repeat(3,1fr)}.metric-cell:nth-child(3){border-right:0}.metric-cell:nth-child(-n+3){border-bottom:1px solid var(--border)}.ops-grid,.diag-layout{grid-template-columns:1fr}.diag-layout>.rail{display:none}}
   @media(max-width:1180px){.work-grid,.diag-layout.clear{grid-template-columns:1fr}.work-aside{display:grid;grid-template-columns:1fr 1fr}}
   @media(max-width:840px){.global-search{width:100%}.top{height:auto;padding:10px 14px;flex-wrap:wrap}.metric-strip{grid-template-columns:repeat(2,1fr)}.metric-cell{border-bottom:1px solid var(--border)}.fact-grid,.triad,.task-guide{grid-template-columns:1fr}.guide-step{border-right:0;border-bottom:1px solid var(--border)}.guide-step:last-child{border-bottom:0}.work-aside,.case-records .record-grid{grid-template-columns:1fr}.fact{border-right:0;border-bottom:1px solid var(--border)}}
@@ -295,65 +300,67 @@ _DEMO_HTML = """<!doctype html>
   <aside class="side">
     <div class="sbrand">
       <div class="ocean-name">Oceanpayment</div>
-      <div class="brand-product">交易诊断系统</div>
+      <div class="brand-product">案件诊断系统</div>
     </div>
     <div class="navlbl">工作台</div>
     <nav class="nav">
-      <a class="on" data-v="overview">交易与诊断</a>
-      <a data-v="flow">案件中心</a>
+      <a class="on" data-v="overview">案件中心</a>
+      <a data-v="create">新建案件</a>
       <a data-v="prev">交易风险</a>
     </nav>
   </aside>
 
   <div class="main">
     <div class="top">
-      <div class="crumb"><b id="crumbRoot">商户工作台</b><span class="crumb-sep">/</span><span id="crumbId" class="id">交易与诊断</span></div>
+      <div class="crumb"><b id="crumbRoot">商户工作台</b><span class="crumb-sep">/</span><span id="crumbId" class="id">案件中心</span></div>
       <div class="grow"></div>
       <div class="global-search"><input id="globalSearch" placeholder="搜索 Payment ID、订单号、商户" autocomplete="off"><span class="shortcut">⌘K</span></div>
       <div class="merchant-account"><span>商户</span><strong>OceanStore</strong></div>
     </div>
 
-    <!-- 交易与诊断工作台 -->
+    <!-- 案件中心 -->
     <div class="content full view on" id="v-overview">
-      <div class="page-head"><div><div class="eyebrow">Merchant workspace</div><h1>交易与诊断</h1><p>查找一笔交易，查看处理原因；客户提出争议时，再创建案件并补齐材料。</p></div><button class="tbtn primary" onclick="focusTransactionSearch()">查找交易</button></div>
-      <div class="task-guide" aria-label="使用步骤">
-        <div class="guide-step"><span class="guide-no">1</span><div><strong>查找交易</strong><span>输入 Payment ID、订单号或商户</span></div></div>
-        <div class="guide-step"><span class="guide-no">2</span><div><strong>查看诊断</strong><span>点击交易，确认发生了什么和下一步</span></div></div>
-        <div class="guide-step"><span class="guide-no">3</span><div><strong>创建并补全案件</strong><span>系统会逐项列出仍缺的材料</span></div></div>
-      </div>
+      <div class="page-head"><div><div class="eyebrow">Case center</div><h1>案件中心</h1><p>查看历史案件、处理状态和诊断结果；失败案件可进入诊断并补交所缺资料。</p></div><button class="tbtn primary" onclick="openCreate(null)">新建案件</button></div>
       <div class="work-grid">
-        <section class="panel"><div class="panel-hd"><h2>最近交易</h2><div class="grow"></div><span class="muted" id="transactionCount">共 6 笔</span></div><div class="panel-bd">
-          <div class="table-tools"><input id="tableSearch" placeholder="Payment ID、订单号或商户"><select id="statusFilter"><option value="ALL">全部状态</option><option value="FAILED">只看失败</option><option value="SUCCESS">只看成功</option><option value="PENDING">只看处理中</option></select></div>
-          <div style="overflow:auto"><table class="op-table"><thead><tr><th>交易</th><th>金额</th><th>状态</th><th>当前节点</th><th>操作</th></tr></thead><tbody id="transactionRows"></tbody></table></div>
+        <section class="panel"><div class="panel-hd"><h2>历史案件</h2><div class="grow"></div><span class="muted" id="transactionCount">共 6 件</span></div><div class="panel-bd">
+          <div class="table-tools"><input id="tableSearch" placeholder="案件号、Payment ID 或订单号"><select id="statusFilter"><option value="ALL">全部状态</option><option value="FAILED">诊断失败</option><option value="SUCCESS">已完成</option><option value="PENDING">处理中</option></select></div>
+          <div style="overflow:auto"><table class="op-table"><thead><tr><th>案件</th><th>关联交易</th><th>金额</th><th>状态</th><th>操作</th></tr></thead><tbody id="transactionRows"></tbody></table></div>
         </div></section>
         <aside class="work-aside">
-          <section class="panel"><div class="panel-hd"><h2>需要处理</h2><span class="pill p-warn">2 项</span></div><div class="quick-row"><strong>案件材料待补全</strong><p>系统会按优先级提示下一项材料。</p><button class="tbtn" onclick="showView('flow')">进入案件中心</button></div><div class="quick-row"><strong>授权状态待核对</strong><p>1 笔交易不应立即重复扣款。</p><button class="tbtn" onclick="openTransaction('OP-20260814-7156')">查看交易</button></div></section>
-          <section class="panel"><div class="panel-hd"><h2>创建案件</h2></div><div class="panel-bd"><p class="muted" style="margin-top:0">已有 Payment ID 时，先查交易再建案；没有时可直接填写案件说明。</p><button class="tbtn primary" onclick="reset(null)">手动创建案件</button></div></section>
+          <section class="panel"><div class="panel-hd"><h2>待处理案件</h2><span class="pill p-warn">2 件</span></div><div class="quick-row"><strong>CASE-20260814-021</strong><p>诊断失败 · 仍缺 2 项资料</p><button class="tbtn" onclick="openTransaction('OP-20260814-8421')">进入诊断</button></div><div class="quick-row"><strong>CASE-20260814-017</strong><p>授权状态待核对 · 仍缺 1 项资料</p><button class="tbtn" onclick="openTransaction('OP-20260814-7156')">进入诊断</button></div></section>
+          <section class="panel"><div class="panel-hd"><h2>状态说明</h2></div><div class="panel-bd"><div class="row"><span class="pill p-crit">诊断失败</span><span class="muted">需查看原因并补交资料</span></div><div class="row mt"><span class="pill p-warn">处理中</span><span class="muted">系统仍在等待结果</span></div><div class="row mt"><span class="pill p-good">已完成</span><span class="muted">无需继续处理</span></div></div></section>
         </aside>
       </div>
     </div>
 
-    <!-- 交易诊断 -->
+    <!-- 案件诊断 -->
     <div class="content full view" id="v-diagnosis">
-      <div class="page-head"><div><div class="eyebrow">Transaction diagnosis</div><h1>交易诊断</h1><p>先看结论和下一步；技术证据可按需展开。</p></div><button class="tbtn" onclick="showView('overview')">返回交易列表</button></div>
+      <div class="page-head"><div><div class="eyebrow">Case diagnosis</div><h1>案件诊断</h1><p>查看失败原因，并在本页直接补交本次诊断仍缺的资料。</p></div><button class="tbtn" onclick="showView('overview')">返回案件中心</button></div>
       <div class="diag-layout clear"><div class="stack">
         <section class="panel diagnosis-summary" id="diagnosisSummary"><div class="panel-hd"><h2>发生了什么</h2><div class="grow"></div><span class="pill p-crit" id="diagStatus">支付失败</span></div><div class="panel-bd">
           <div class="diagnosis-kicker">诊断结论</div><div class="diagnosis-title" id="diagCause">3DS 挑战未完成，发卡行拒绝授权</div><p class="diagnosis-copy" id="diagMeaning">失败发生在持卡人验证阶段，授权尚未发起，不是重复扣款。</p>
           <div class="fact-grid"><div class="fact"><span>Payment ID</span><strong id="diagId">OP-20260814-8421</strong></div><div class="fact"><span>响应码</span><strong id="diagCode">3DS-201</strong></div><div class="fact"><span>失败阶段</span><strong id="diagStage">3DS Challenge</strong></div><div class="fact"><span>影响</span><strong id="diagImpact">授权未发起</strong></div></div>
           <div class="next-action"><strong>建议下一步</strong><p id="diagAdvice">请客户重新支付并保持验证窗口；若持续出现，再检查 3DS 回调域名。</p></div>
-          <div class="actions"><button class="tbtn primary" onclick="startCaseFromDiagnosis()">客户提出争议，创建案件</button><button class="tbtn" onclick="showView('overview')">查看其他交易</button></div><div class="helper">支付失败不会自动建案；只有客户提出争议或需要提交材料时才创建案件。</div>
           <details class="technical"><summary>查看处理路径与技术证据</summary><div class="path"><div class="path-node"><strong>Checkout</strong><span>请求已接收</span></div><i class="path-link"></i><div class="path-node"><strong>Risk Check</strong><span>通过</span></div><i class="path-link"></i><div class="path-node bad"><strong>3DS Challenge</strong><span>超时 / 未完成</span></div><i class="path-link"></i><div class="path-node"><strong>Authorization</strong><span>未执行</span></div><i class="path-link"></i><div class="path-node"><strong>Capture</strong><span>未执行</span></div></div><div class="triad"><div class="triad-item"><h4>Observed facts</h4><p>challenge_status=timeout；浏览器回调缺失；授权请求未生成。</p></div><div class="triad-item"><h4>System interpretation</h4><p>失败发生在持卡人验证阶段，不是余额不足或商户配置拒绝。</p></div><div class="triad-item actionable"><h4>Recommended action</h4><p>引导客户重新支付并保持验证窗口；若持续出现，检查 3DS 回调域名。</p></div></div></details>
         </div></section>
-      </div><aside class="work-aside"><div class="customer-alert" id="diagnosisAlert"><strong>需要商户补充 2 项信息</strong><p>持卡人账单地址、设备 IP 归属。补全后可继续复核路由异常。</p></div><section class="panel"><div class="panel-hd"><h2>如何创建和补全案件</h2></div><div class="panel-bd"><div class="guide-step" style="padding:0 0 12px;border:0"><span class="guide-no">1</span><div><strong>创建案件</strong><span>带入当前 Payment ID 并选择争议类型</span></div></div><div class="guide-step" style="padding:12px 0;border:0;border-top:1px solid var(--border)"><span class="guide-no">2</span><div><strong>查看缺口</strong><span>系统会明确显示还缺几项、下一项是什么</span></div></div><div class="guide-step" style="padding:12px 0 0;border:0;border-top:1px solid var(--border)"><span class="guide-no">3</span><div><strong>逐项补交</strong><span>每补一项都会自动重新检查</span></div></div></div></section></aside></div>
+        <section class="panel diagnostic-materials" id="diagnosticMaterials"><div class="panel-hd"><h2>需要补交的资料</h2><span class="pill p-warn" id="diagMissingBadge">仍缺 2 项</span></div><div class="panel-bd"><div class="material-notice" id="diagnosisAlert"><strong>需要商户补充 2 项信息</strong><p>请按下方清单逐项补交，提交后系统会立即更新剩余资料。</p></div><div class="material-list" id="diagMaterialRows"></div><div class="material-form" id="diagMaterialForm"><h3 id="diagMaterialFormTitle">补充资料</h3><p id="diagMaterialFormHint"></p><textarea id="diagMaterialInput" rows="3" placeholder="填写资料内容或文件说明"></textarea><div class="form-error" id="diagMaterialError"></div><div class="actions"><button class="tbtn primary" onclick="saveDiagnosticMaterial()">提交资料</button><button class="tbtn" onclick="cancelDiagnosticMaterial()">取消</button></div></div></div></section>
+      </div><aside class="work-aside"><section class="panel"><div class="panel-hd"><h2>本次案件</h2></div><div class="panel-bd"><div class="field"><div class="k">案件号</div><div class="v mono" id="diagCaseId">CASE-20260814-021</div></div><div class="field mt"><div class="k">关联 Payment ID</div><div class="v mono" id="diagSideId">OP-20260814-8421</div></div><div class="field mt"><div class="k">资料状态</div><div class="v" id="diagMaterialState"><span class="pill p-warn">待补交</span></div></div></div></section><section class="panel"><div class="panel-hd"><h2>处理方式</h2></div><div class="panel-bd"><p class="muted" style="margin-top:0">1. 查看诊断结论<br>2. 按清单补交资料<br>3. 系统自动重新诊断</p></div></section></aside></div>
     </div>
 
-    <!-- 拒付处理 -->
+    <!-- 新建案件 -->
+    <div class="content view" id="v-create">
+      <div class="page-head"><div><div class="eyebrow">Create case</div><h1>新建案件</h1><p>选择常见案件模板，确认案件说明后创建；此流程与失败案件诊断互相独立。</p></div><button class="tbtn" onclick="showView('overview')">返回案件中心</button></div>
+      <div class="stack"><div class="card"><div class="hd"><h3>案件信息</h3><span class="eyebrow">创建案件</span></div><div class="bd" id="createAction"></div></div></div>
+      <aside class="rail"><section class="panel"><div class="panel-hd"><h2>创建后</h2></div><div class="panel-bd"><p class="muted" style="margin-top:0">新案件会进入案件详情。系统将识别已有材料，并显示后续案件处理缺口。</p></div></section></aside>
+    </div>
+
+    <!-- 案件详情 -->
     <div class="content view" id="v-flow">
-      <div class="page-head"><div><h1>案件中心</h1>
-        <p>创建案件后，系统会按优先级列出缺失材料，并引导你逐项补全。</p></div><button class="tbtn" onclick="reset(null)">新建案件</button></div>
+      <div class="page-head"><div><h1>案件详情</h1>
+        <p>查看新建案件的处理阶段、材料缺口和评估结果。</p></div><button class="tbtn" onclick="openCreate(null)">新建案件</button></div>
       <div class="stack">
         <div class="summary">
-          <div id="caseHead"><span class="empty">尚未创建案件 · 请在下方选择争议类型。</span></div>
+          <div id="caseHead"><span class="empty">尚未选择案件。</span></div>
           <div class="steps" id="steps"></div>
         </div>
         <div class="card">
@@ -416,7 +423,8 @@ _DEMO_HTML = """<!doctype html>
 <script>
 const BASE="/api/v1/chargeback";
 const S={caseId:null,loc:"zh",packaged:false,appealed:false,last:null,cardNetwork:"VISA",
-  scenarioIndex:0,autoEvidence:["transaction.receipt","fulfillment.tracking"],selectedTransaction:null,sourceTransaction:null};
+  scenarioIndex:0,autoEvidence:["transaction.receipt","fulfillment.tracking"],selectedTransaction:null,sourceTransaction:null,
+  diagnosticSubmissions:{},pendingDiagnosticCode:null};
 const SCENARIOS=[
   {label:"Visa 13.1 · 未收到货",meta:"已有 2 项 · 仍缺 3 项",network:"VISA",
     available:["transaction.receipt","fulfillment.tracking"],
@@ -428,13 +436,20 @@ const SCENARIOS=[
     desc:"客户声称收到的商品与下单页面描述不符；商户目前只有交易收据和商品页面，缺少签收、沟通和政策材料。"},
 ];
 const TRANSACTIONS=[
-  {id:"OP-20260814-8421",order:"ORD-908421",merchant:"OceanStore",amount:"EUR 238.00",status:"FAILED",method:"Visa •••• 1842",stage:"3DS Challenge",code:"3DS-201",time:"20:46:08"},
-  {id:"OP-20260814-8399",order:"ORD-908399",merchant:"OceanStore",amount:"USD 86.40",status:"SUCCESS",method:"Mastercard •••• 6091",stage:"Capture",code:"00",time:"20:43:21"},
-  {id:"OP-20260814-8338",order:"ORD-908338",merchant:"North Peak",amount:"EUR 419.00",status:"FAILED",method:"Visa •••• 3380",stage:"3DS Challenge",code:"3DS-201",time:"20:37:12"},
-  {id:"OP-20260814-8280",order:"ORD-908280",merchant:"OceanStore",amount:"GBP 52.90",status:"PENDING",method:"Apple Pay",stage:"Authorization",code:"—",time:"20:31:57"},
-  {id:"OP-20260814-7156",order:"ORD-907156",merchant:"Luma Market",amount:"USD 1,420.00",status:"FAILED",method:"Mastercard •••• 0517",stage:"Authorization",code:"91",time:"19:18:44"},
-  {id:"OP-20260814-7024",order:"ORD-907024",merchant:"OceanStore",amount:"USD 132.00",status:"SUCCESS",method:"Visa •••• 7288",stage:"Capture",code:"00",time:"19:04:18"},
+  {caseId:"CASE-20260814-021",id:"OP-20260814-8421",order:"ORD-908421",merchant:"OceanStore",amount:"EUR 238.00",status:"FAILED",method:"Visa •••• 1842",stage:"3DS Challenge",code:"3DS-201",time:"20:46:08"},
+  {caseId:"CASE-20260814-020",id:"OP-20260814-8399",order:"ORD-908399",merchant:"OceanStore",amount:"USD 86.40",status:"SUCCESS",method:"Mastercard •••• 6091",stage:"Capture",code:"00",time:"20:43:21"},
+  {caseId:"CASE-20260814-019",id:"OP-20260814-8338",order:"ORD-908338",merchant:"North Peak",amount:"EUR 419.00",status:"FAILED",method:"Visa •••• 3380",stage:"3DS Challenge",code:"3DS-201",time:"20:37:12"},
+  {caseId:"CASE-20260814-018",id:"OP-20260814-8280",order:"ORD-908280",merchant:"OceanStore",amount:"GBP 52.90",status:"PENDING",method:"Apple Pay",stage:"Authorization",code:"—",time:"20:31:57"},
+  {caseId:"CASE-20260814-017",id:"OP-20260814-7156",order:"ORD-907156",merchant:"Luma Market",amount:"USD 1,420.00",status:"FAILED",method:"Mastercard •••• 0517",stage:"Authorization",code:"91",time:"19:18:44"},
+  {caseId:"CASE-20260814-016",id:"OP-20260814-7024",order:"ORD-907024",merchant:"OceanStore",amount:"USD 132.00",status:"SUCCESS",method:"Visa •••• 7288",stage:"Capture",code:"00",time:"19:04:18"},
 ];
+const DIAGNOSTIC_REQUIREMENTS={
+  "3DS-201":[
+    {code:"billing_address",label:"持卡人账单地址",hint:"填写交易时使用的账单地址；请勿提交完整卡号。"},
+    {code:"device_ip_origin",label:"设备 IP 归属说明",hint:"填写设备 IP 的国家/地区及其与持卡人的关系。"},
+  ],
+  "91":[{code:"acquirer_status",label:"上游授权状态查询结果",hint:"填写收单通道返回的最终授权状态或查询工单号。"}],
+};
 const PHASE={NEEDS_INTAKE:["未建案","p-mut","创建案件"],REASON_PROPOSED:["待确认原因","p-warn","确认原因"],
   NEED_EVIDENCE:["补充材料","p-acc","补充材料"],ASSESSED:["评估完成","p-good","评估结果"]};
 const REASON_LABEL={FRAUD_CARD_NOT_PRESENT:"非本人交易",PRODUCT_NOT_RECEIVED:"未收到商品",
@@ -464,40 +479,55 @@ async function api(m,p,b){const o={method:m,headers:{'Content-Type':'application
   if(b!==undefined)o.body=JSON.stringify(b);
   const r=await fetch(BASE+p,o);return{ok:r.ok,status:r.status,data:await r.json().catch(()=>({}))};}
 
-const STATUS_VIEW={FAILED:['失败','p-crit'],SUCCESS:['成功','p-good'],PENDING:['处理中','p-warn']};
+const STATUS_VIEW={FAILED:['诊断失败','p-crit'],SUCCESS:['已完成','p-good'],PENDING:['处理中','p-warn']};
 function showView(v){
   if(v==='transactions')v='overview';
-  const navView=v==='diagnosis'?'overview':v;
+  const navView=(v==='diagnosis'||v==='flow')?'overview':v;
   document.querySelectorAll('.nav a').forEach(x=>x.classList.toggle('on',x.dataset.v===navView));
   document.querySelectorAll('.view').forEach(x=>x.classList.remove('on'));
   const view=$('v-'+v);if(view)view.classList.add('on');
-  const navCrumb={overview:["商户工作台","交易与诊断"],diagnosis:["交易与诊断","诊断结果"],flow:["案件中心",S.caseId?S.caseId.slice(0,18):"新建案件"],prev:["交易风险","实时评估"],safe:["系统管理","安全检查"]}[v]||["商户工作台",v];
+  const navCrumb={overview:["商户工作台","案件中心"],diagnosis:["案件中心",S.selectedTransaction?S.selectedTransaction.caseId:"案件诊断"],create:["案件中心","新建案件"],flow:["案件中心",S.caseId?S.caseId.slice(0,18):"案件详情"],prev:["交易风险","实时评估"],safe:["系统管理","安全检查"]}[v]||["商户工作台",v];
   $('crumbRoot').textContent=navCrumb[0];$('crumbId').textContent=navCrumb[1];
 }
-document.querySelectorAll('.nav a').forEach(a=>a.addEventListener('click',()=>showView(a.dataset.v)));
+document.querySelectorAll('.nav a').forEach(a=>a.addEventListener('click',()=>a.dataset.v==='create'?openCreate(null):showView(a.dataset.v)));
 function renderTransactions(){const query=($('tableSearch').value||'').toLowerCase();const status=$('statusFilter').value;
   const rows=TRANSACTIONS.filter(t=>(status==='ALL'||t.status===status)&&Object.values(t).join(' ').toLowerCase().includes(query));
-  $('transactionCount').textContent=`共 ${rows.length} 笔`;
-  $('transactionRows').innerHTML=rows.map(t=>{const s=STATUS_VIEW[t.status];return `<tr onclick="openTransaction('${t.id}')"><td class="primary-id">${esc(t.id)}<div class="sub-id">${esc(t.order)}</div></td><td class="num">${esc(t.amount)}</td><td><span class="pill ${s[1]}">${s[0]}</span></td><td class="stage-code">${esc(t.stage)}<code>${esc(t.code)}</code></td><td class="action-cell"><button class="tbtn" onclick="event.stopPropagation();openTransaction('${t.id}')">查看诊断</button></td></tr>`;}).join('')||'<tr><td colspan="5" class="empty">没有匹配的交易</td></tr>';}
+  $('transactionCount').textContent=`共 ${rows.length} 件`;
+  $('transactionRows').innerHTML=rows.map(t=>{const s=STATUS_VIEW[t.status];const action=t.status==='FAILED'?'查看诊断':'查看案件';return `<tr onclick="openTransaction('${t.id}')"><td class="primary-id">${esc(t.caseId)}<div class="sub-id">${esc(t.time)}</div></td><td>${esc(t.id)}<div class="sub-id">${esc(t.order)}</div></td><td class="num">${esc(t.amount)}</td><td><span class="pill ${s[1]}">${s[0]}</span><div class="sub-id">${esc(t.stage)}</div></td><td class="action-cell"><button class="tbtn" onclick="event.stopPropagation();openTransaction('${t.id}')">${action}</button></td></tr>`;}).join('')||'<tr><td colspan="5" class="empty">没有匹配的案件</td></tr>';}
 function openTransaction(id){const t=TRANSACTIONS.find(x=>x.id===id)||TRANSACTIONS[0];
   S.selectedTransaction=t;
-  $('diagId').textContent=t.id;$('diagStage').textContent=t.stage;$('diagCode').textContent=t.code;
+  $('diagId').textContent=t.id;$('diagStage').textContent=t.stage;$('diagCode').textContent=t.code;$('diagCaseId').textContent=t.caseId;$('diagSideId').textContent=t.id;
   const summary=$('diagnosisSummary');const status=$('diagStatus');
-  if(t.code==='91'){$('diagCause').textContent='收单通道未及时响应，授权状态仍待核对';$('diagImpact').textContent='不要重复扣款';$('diagMeaning').textContent='上游没有在时限内返回最终状态，目前不能判断授权成功或失败。';$('diagAdvice').textContent='先使用 Payment ID 查询上游最终状态；确认失败后再引导客户重试。';$('diagnosisAlert').innerHTML='<strong>现在不需要补材料</strong><p>请先核对授权状态，避免产生重复扣款。</p>';summary.className='panel diagnosis-summary warn';status.className='pill p-warn';status.textContent='状态待核对';}
-  else if(t.status==='SUCCESS'){$('diagCause').textContent='交易处理完成，未发现支付异常';$('diagImpact').textContent='已成功入账';$('diagMeaning').textContent='授权与请款链路完整；如果客户对商品或交易提出异议，可基于这笔交易创建案件。';$('diagAdvice').textContent='无需处理支付链路。只有收到客户争议时，才创建案件并收集对应材料。';$('diagnosisAlert').innerHTML='<strong>当前无需补充信息</strong><p>交易链路完整；创建案件后，系统会按争议类型列出材料缺口。</p>';summary.className='panel diagnosis-summary good';status.className='pill p-good';status.textContent='支付成功';}
-  else{$('diagCause').textContent='3DS 挑战未完成，发卡行拒绝授权';$('diagImpact').textContent='授权未发起';$('diagMeaning').textContent='失败发生在持卡人验证阶段，授权尚未发起，不是重复扣款。';$('diagAdvice').textContent='请客户重新支付并保持验证窗口；若持续出现，再检查 3DS 回调域名。';$('diagnosisAlert').innerHTML='<strong>需要商户补充 2 项信息</strong><p>持卡人账单地址、设备 IP 归属。补全后可继续复核路由异常。</p>';summary.className='panel diagnosis-summary';status.className='pill p-crit';status.textContent='支付失败';}
+  if(t.code==='91'){$('diagCause').textContent='收单通道未及时响应，授权状态仍待核对';$('diagImpact').textContent='不要重复扣款';$('diagMeaning').textContent='上游没有在时限内返回最终状态，目前不能判断授权成功或失败。';$('diagAdvice').textContent='补交上游授权状态查询结果后，系统将重新判断最终状态。';summary.className='panel diagnosis-summary warn';status.className='pill p-warn';status.textContent='诊断失败';}
+  else if(t.status==='SUCCESS'){$('diagCause').textContent='案件处理完成，未发现支付异常';$('diagImpact').textContent='已成功入账';$('diagMeaning').textContent='授权与请款链路完整，本案件无需继续补交诊断资料。';$('diagAdvice').textContent='无需继续处理；可返回案件中心查看其他案件。';summary.className='panel diagnosis-summary good';status.className='pill p-good';status.textContent='已完成';}
+  else if(t.status==='PENDING'){$('diagCause').textContent='案件仍在处理中，暂未生成最终诊断';$('diagImpact').textContent='等待系统结果';$('diagMeaning').textContent='当前处理链路尚未结束，系统会在取得上游结果后更新本案件。';$('diagAdvice').textContent='暂时无需提交资料，请稍后刷新案件状态。';summary.className='panel diagnosis-summary warn';status.className='pill p-warn';status.textContent='处理中';}
+  else{$('diagCause').textContent='3DS 挑战未完成，发卡行拒绝授权';$('diagImpact').textContent='授权未发起';$('diagMeaning').textContent='失败发生在持卡人验证阶段，授权尚未发起，不是重复扣款。';$('diagAdvice').textContent='补齐下方两项诊断资料后，系统将重新核验路由与持卡人验证信息。';summary.className='panel diagnosis-summary';status.className='pill p-crit';status.textContent='诊断失败';}
+  renderDiagnosticMaterials(t);
   showView('diagnosis');}
 $('tableSearch').addEventListener('input',renderTransactions);$('statusFilter').addEventListener('change',renderTransactions);
 $('globalSearch').addEventListener('keydown',event=>{if(event.key==='Enter'){const q=event.target.value.toLowerCase();const hit=TRANSACTIONS.find(t=>Object.values(t).join(' ').toLowerCase().includes(q));if(hit)openTransaction(hit.id);else{showView('overview');$('tableSearch').value=event.target.value;renderTransactions();}}});
 document.addEventListener('keydown',event=>{if((event.metaKey||event.ctrlKey)&&event.key.toLowerCase()==='k'){event.preventDefault();$('globalSearch').focus();}});
 function focusTransactionSearch(){showView('overview');$('tableSearch').focus();}
-function startCaseFromDiagnosis(){reset(S.selectedTransaction);}
-function reset(source=null){S.caseId=null;S.packaged=false;S.appealed=false;S.last=null;S.cardNetwork="VISA";S.sourceTransaction=source;
-  S.scenarioIndex=0;S.autoEvidence=SCENARIOS[0].available.slice();
-  $('caseHead').innerHTML=source?`<span class="empty">将从交易 ${esc(source.id)} 创建案件。</span>`:'<span class="empty">尚未创建案件 · 请在下方选择争议类型。</span>';
-  $('crumbId').textContent='新建案件';$('verdictCard').style.display='none';
-  $('auditOut').innerHTML='<li class="empty">建案后自动记录。</li>';$('agentOut').innerHTML='<div class="empty">—</div>';
-  renderStages();renderAction();document.querySelector('.nav a[data-v="flow"]').click();}
+function openCreate(source=null){S.sourceTransaction=source;S.scenarioIndex=0;S.autoEvidence=SCENARIOS[0].available.slice();renderCreateForm();showView('create');}
+
+function diagnosticRequirements(t){return t.status==='FAILED'?(DIAGNOSTIC_REQUIREMENTS[t.code]||[]):[];}
+function renderDiagnosticMaterials(t){const requirements=diagnosticRequirements(t);const saved=S.diagnosticSubmissions[t.id]||{};
+  const missing=requirements.filter(item=>!saved[item.code]);const card=$('diagnosticMaterials');const badge=$('diagMissingBadge');
+  card.className=`panel diagnostic-materials${missing.length===0?' complete':''}`;
+  badge.className=`pill ${missing.length?'p-warn':'p-good'}`;badge.textContent=missing.length?`仍缺 ${missing.length} 项`:'资料已齐全';
+  if(!requirements.length){$('diagnosisAlert').className='material-notice complete';$('diagnosisAlert').innerHTML='<strong>本案件无需补交诊断资料</strong><p>当前状态没有待补资料，可以返回案件中心。</p>';}
+  else if(missing.length){$('diagnosisAlert').className='material-notice';$('diagnosisAlert').innerHTML=`<strong>需要商户补充 ${missing.length} 项信息</strong><p>请按下方清单逐项补交，提交后系统会立即更新剩余资料。</p>`;}
+  else{$('diagnosisAlert').className='material-notice complete';$('diagnosisAlert').innerHTML='<strong>诊断资料已补齐</strong><p>系统已收到全部资料，正在重新诊断本案件。</p>';}
+  $('diagMaterialRows').innerHTML=requirements.length?requirements.map(item=>{const done=Boolean(saved[item.code]);return `<div class="material-row${done?' done':''}"><span class="material-state">${done?'✓':'!'}</span><div><strong>${esc(item.label)}</strong><span>${done?'已提交，可修改':esc(item.hint)}</span></div><button class="tbtn" onclick="startDiagnosticMaterial('${esc(item.code)}')">${done?'修改':'补交资料'}</button></div>`;}).join(''):'<div class="empty">没有待补资料。</div>';
+  $('diagMaterialState').innerHTML=missing.length?`<span class="pill p-warn">待补交 ${missing.length} 项</span>`:'<span class="pill p-good">资料已齐全</span>';
+  cancelDiagnosticMaterial();}
+function startDiagnosticMaterial(code){const t=S.selectedTransaction;if(!t)return;const item=diagnosticRequirements(t).find(x=>x.code===code);if(!item)return;
+  S.pendingDiagnosticCode=code;$('diagMaterialFormTitle').textContent=`补交：${item.label}`;$('diagMaterialFormHint').textContent=item.hint;
+  $('diagMaterialInput').value=(S.diagnosticSubmissions[t.id]||{})[code]||'';$('diagMaterialError').textContent='';$('diagMaterialForm').classList.add('on');$('diagMaterialInput').focus();}
+function cancelDiagnosticMaterial(){S.pendingDiagnosticCode=null;$('diagMaterialForm').classList.remove('on');$('diagMaterialError').textContent='';}
+function saveDiagnosticMaterial(){const t=S.selectedTransaction;const code=S.pendingDiagnosticCode;const value=$('diagMaterialInput').value.trim();if(!t||!code)return;
+  if(!value){$('diagMaterialError').textContent='请填写资料内容后再提交。';return;}
+  if(!S.diagnosticSubmissions[t.id])S.diagnosticSubmissions[t.id]={};S.diagnosticSubmissions[t.id][code]=value;renderDiagnosticMaterials(t);}
 
 const STAGES=["创建案件","补全材料","检查结果","生成材料"];
 function stageStatus(){const st=STAGES.map(()=> "");const d=S.last;
@@ -511,10 +541,20 @@ function renderStages(){const stt=stageStatus();let h="";
     h+=`<span class="step ${stt[i]}"><span class="b">${stt[i]==='done'?'✓':(i+1)}</span>${n}</span>`;});
   $('steps').innerHTML=h;}
 
+function renderCreateForm(){const cards=SCENARIOS.map((s,i)=>`<button class="scenario-card${i===0?' on':''}" data-i="${i}" onclick="fillScenario(${i})">`
+    +`<strong>${esc(s.label)}</strong><span>${esc(s.meta)}</span></button>`).join("");
+  const source=S.sourceTransaction?`<div class="source-case"><strong>已带入关联交易</strong><span>${esc(S.sourceTransaction.id)} · ${esc(S.sourceTransaction.order)} · ${esc(S.sourceTransaction.amount)}</span></div>`:"";
+  const initial=(S.sourceTransaction?`交易 ${S.sourceTransaction.id}（订单 ${S.sourceTransaction.order}，${S.sourceTransaction.amount}）。`:"")+SCENARIOS[0].desc;
+  $('createAction').innerHTML=source+`<div style="color:var(--ink);font-weight:700">1. 选择常见案件模板</div>`
+    +`<div class="scenario-grid">${cards}</div>`
+    +`<label class="field-label" for="desc">2. 确认案件说明</label><textarea id="desc" rows="3">${esc(initial)}</textarea>`
+    +`<div class="helper">创建完成后会进入案件详情，并列出案件处理所需材料。</div>`
+    +`<div class="actions"><button class="tbtn primary" onclick="openCase()">确认创建案件</button></div>`;}
+
 async function openCase(loadAvailable=true){const {ok,data}=await api("POST","/cases",{description:$('desc').value.trim()});
-  if(!ok){$('action').innerHTML='<span class="pill p-crit">建案失败：描述不能为空</span>';return;}
+  if(!ok){$('createAction').insertAdjacentHTML('beforeend','<div class="form-error">创建失败：案件说明不能为空。</div>');return;}
   S.caseId=data.case_id;S.packaged=false;S.appealed=false;
-  S.autoEvidence=SCENARIOS[S.scenarioIndex].available.slice();apply(data);
+  S.autoEvidence=SCENARIOS[S.scenarioIndex].available.slice();showView('flow');apply(data);
   if(loadAvailable){while(S.last&&S.last.phase==="NEED_EVIDENCE"&&S.autoEvidence.length){await submitEvidence(S.autoEvidence.shift());}}}
 async function refreshCase(){if(!S.caseId)return;apply((await api("GET",`/cases/${S.caseId}`)).data);}
 async function confirmReason(){const v=$('fix')?$('fix').value:"";apply((await api("POST",`/cases/${S.caseId}/confirm`,v?{reason_code:v}:{})).data);}
@@ -556,16 +596,7 @@ function renderCaseHead(d){
   $('caseHead').innerHTML=h;}
 
 function renderAction(){const d=S.last;const tag=$('phaseTag');
-  if(!S.caseId){if(tag)tag.textContent="创建案件";
-    const cards=SCENARIOS.map((s,i)=>`<button class="scenario-card${i===0?' on':''}" data-i="${i}" onclick="fillScenario(${i})">`
-      +`<strong>${esc(s.label)}</strong><span>${esc(s.meta)}</span></button>`).join("");
-    const source=S.sourceTransaction?`<div class="source-case"><strong>已带入当前交易</strong><span>${esc(S.sourceTransaction.id)} · ${esc(S.sourceTransaction.order)} · ${esc(S.sourceTransaction.amount)}</span></div>`:"";
-    const initial=(S.sourceTransaction?`交易 ${S.sourceTransaction.id}（订单 ${S.sourceTransaction.order}，${S.sourceTransaction.amount}）。`:"")+SCENARIOS[0].desc;
-    $('action').innerHTML=source+`<div style="color:var(--ink);font-weight:700">1. 选择客户提出的争议类型</div>`
-      +`<div class="scenario-grid">${cards}</div>`
-      +`<label class="field-label" for="desc">2. 确认案件说明</label><textarea id="desc" rows="3">${esc(initial)}</textarea>`
-      +`<div class="helper">创建后会自动识别已有材料，并明确显示仍缺什么。</div>`
-      +`<div class="actions"><button class="tbtn primary" onclick="openCase()">确认创建案件</button></div>`;return;}
+  if(!S.caseId){if(tag)tag.textContent="尚未选择";$('action').innerHTML=`<div class="empty-state"><strong>尚未打开案件详情</strong><p>请返回案件中心选择案件，或通过“新建案件”创建一个案件。</p><button class="tbtn primary" onclick="showView('overview')">返回案件中心</button></div>`;return;}
   const ph=d.phase;if(tag)tag.textContent=(PHASE[ph]||["","",""])[2];
   if(ph==="REASON_PROPOSED"){
     $('action').innerHTML=`<div class="muted">${esc(d.question||"")}</div>`
@@ -664,7 +695,7 @@ async function safetyScan(){const {ok,data}=await api("POST","/safety/scan",{tex
   const p=data.accepted?'<span class="pill p-good">✓ 通过</span>':'<span class="pill p-crit">⛔ 已拦截</span>';
   $('safeOut').innerHTML=`<div class="note" style="margin:0">${p} &nbsp;${esc(data.detail)}</div>`;}
 
-renderTransactions();renderStages();renderAction();refreshMetrics();
+renderTransactions();renderCreateForm();renderStages();renderAction();refreshMetrics();
 </script>
 </body>
 </html>
