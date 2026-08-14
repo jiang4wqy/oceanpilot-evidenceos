@@ -16,7 +16,7 @@ def test_demo_page_is_served_html(tmp_path):
     assert resp.status_code == 200
     assert resp.headers["content-type"].startswith("text/html")
     body = resp.text
-    assert "Oceanpayment · 拒付管理" in body
+    assert "Oceanpayment · 交易诊断" in body
     assert "/api/v1/chargeback" in body  # the page drives the real API
     assert "人工确认并模拟提交" in body  # the safety boundary remains in the workflow
 
@@ -34,7 +34,7 @@ def test_root_redirects_to_demo(tmp_path):
         assert r.headers["location"] == "/demo"
         followed = client.get("/")
     assert followed.status_code == 200
-    assert "Oceanpayment · 拒付管理" in followed.text
+    assert "Oceanpayment · 交易诊断" in followed.text
 
 
 def test_demo_keeps_technical_endpoints_out_of_customer_navigation(tmp_path):
@@ -66,10 +66,13 @@ def test_demo_uses_oceanpayment_console_language_without_ai_jargon(tmp_path):
     with _client(tmp_path) as client:
         body = client.get("/demo").text
     assert "Oceanpayment" in body
-    assert "--accent:#02983b" in body
-    assert "拒付案件" in body and "交易预警" in body and "规则与运营" in body
+    assert "--accent:#087a70" in body
+    assert "概览" in body and "交易" in body and "诊断" in body
+    assert "拒付案件" in body and "交易预警" in body and "规则与配置" in body
+    assert "Observed facts" in body and "Recommended action" in body
+    assert "需要商户补充 2 项信息" in body
     assert "已有 1 项 · 仍缺 5 项" in body
-    assert "当前商户" in body and "OceanStore" in body
+    assert "商户" in body and "OceanStore" in body
     assert "演示环境" not in body and "演示数据" not in body
     assert 'id="loc-zh"' not in body and 'id="loc-en"' not in body
     assert "智能体轨迹" not in body

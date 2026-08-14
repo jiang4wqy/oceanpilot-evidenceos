@@ -18,7 +18,8 @@ _DEMO_HTML = """<!doctype html>
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Oceanpayment · 拒付管理</title>
+<script>if(location.hash.includes("figmacapture=")){const s=document.createElement("script");s.src="https://mcp.figma.com/mcp/html-to-design/capture.js";s.async=true;document.head.appendChild(s)}</script>
+<title>Oceanpayment · 交易诊断</title>
 <style>
   :root{
     --canvas:#f5f6f8; --surface:#ffffff; --sunken:#eef1f5; --border:#e4e8ef; --border-2:#d7dce5;
@@ -189,10 +190,10 @@ _DEMO_HTML = """<!doctype html>
     --ink:#17221b; --body:#3d4a41; --muted:#6d786f; --faint:#929b94;
     --side:#fff; --side-2:#f6f8f6; --side-ink:#17221b; --side-muted:#68726b;
     --side-active:#e9f6ee; --side-border:#e3e9e4;
-    --accent:#02983b; --accent-soft:#e8f6ed;
-    --good:#02983b; --good-bg:#e8f6ed; --warn:#a66600; --warn-bg:#fff3dc;
-    --crit:#c43d3d; --crit-bg:#fdecec;
-    --sh:0 6px 20px rgba(32,64,43,.045);
+    --accent:#087a70; --accent-soft:#dff3ef;
+    --good:#178a52; --good-bg:#e5f4ec; --warn:#c88722; --warn-bg:#fff4df;
+    --crit:#c84646; --crit-bg:#fbeaea; --info:#3676a8; --deep:#123b3a;
+    --sh:0 1px 2px rgba(18,59,58,.035),0 8px 20px -16px rgba(18,59,58,.22);
     --sans:ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",sans-serif;
   }
   body{font-size:14px;background:var(--canvas)}
@@ -210,7 +211,7 @@ _DEMO_HTML = """<!doctype html>
   .top{min-height:64px;padding:0 32px;flex-wrap:nowrap;box-shadow:none}
   .crumb-sep{padding:0 7px;color:var(--faint)}
   .tbtn{min-height:34px}
-  .tbtn{border-radius:8px}.tbtn.primary{background:#02993b;border-color:#02993b}
+  .tbtn{border-radius:8px}.tbtn.primary{background:var(--accent);border-color:var(--accent)}
   .merchant-account{display:flex;align-items:center;gap:8px;padding-left:14px;margin-left:2px;border-left:1px solid var(--border);white-space:nowrap}
   .merchant-account span{font-size:11px;color:var(--faint)} .merchant-account strong{font-size:13px;color:var(--ink);font-weight:650}
   .content{width:100%;max-width:1440px;margin:0 auto;padding:28px 32px 40px;
@@ -244,6 +245,33 @@ _DEMO_HTML = """<!doctype html>
   @media(max-width:840px){.app{grid-template-columns:1fr}.side{display:none}.content{padding:22px 20px 32px}.top{padding:0 20px}}
   @media(max-width:600px){.content{padding:18px 14px 28px}.top{padding:0 14px}.top .tbtn{padding:7px 9px}.merchant-account{display:none}
     .page-head{align-items:flex-start}.scenario-grid,.risk-form{grid-template-columns:1fr}.amount-field{grid-column:1}.steps{overflow-x:auto;flex-wrap:nowrap;padding-bottom:4px}.step{white-space:nowrap}.sep{min-width:12px;margin:0 4px}}
+
+  /* Transaction Diagnostic System */
+  .global-search{position:relative;width:min(420px,34vw)}
+  .global-search input{height:38px;padding:8px 58px 8px 35px;border-radius:8px;background:var(--canvas)}
+  .global-search:before{content:"";position:absolute;left:13px;top:12px;width:11px;height:11px;border:1.5px solid var(--muted);border-radius:50%;z-index:1}
+  .global-search:after{content:"";position:absolute;left:23px;top:23px;width:6px;height:1.5px;background:var(--muted);transform:rotate(45deg);z-index:1}
+  .shortcut{position:absolute;right:8px;top:8px;color:var(--muted);font:11px var(--mono);border:1px solid var(--border);border-radius:5px;padding:2px 5px;background:var(--surface)}
+  .env-chip{font-size:11px;font-weight:700;color:var(--accent);background:var(--accent-soft);border:1px solid #b8ddd6;border-radius:5px;padding:4px 8px}
+  .avatar{width:30px;height:30px;border-radius:50%;background:var(--deep);color:#fff;display:grid;place-items:center;font-size:11px;font-weight:750}
+  .content.full{max-width:1440px}.content.full.view{display:none}.content.full.view.on{display:block}.content.full .page-head{display:flex}
+  .metric-strip{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));border:1px solid var(--border);border-radius:10px;background:var(--surface);overflow:hidden;margin-bottom:16px}
+  .metric-cell{padding:14px 16px;border-right:1px solid var(--border)}.metric-cell:last-child{border-right:0}
+  .metric-label{font-size:11.5px;color:var(--muted)}.metric-value{font:700 22px/1.3 var(--sans);color:var(--ink);font-variant-numeric:tabular-nums;margin-top:4px}.metric-delta{font-size:11px;color:var(--muted);margin-top:2px}.down{color:var(--crit)}.up{color:var(--good)}
+  .ops-grid{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(320px,.8fr);gap:16px}.panel{background:var(--surface);border:1px solid var(--border);border-radius:10px}.panel-hd{height:48px;padding:0 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px}.panel-hd h2{font-size:14px;color:var(--ink);margin:0}.panel-bd{padding:16px}
+  .segmented{display:flex;gap:2px;background:var(--sunken);padding:2px;border-radius:6px}.segmented button{border:0;background:transparent;padding:5px 8px;border-radius:4px;color:var(--muted);font-size:11px}.segmented button.on{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.06)}
+  .chart{height:224px;display:flex;align-items:flex-end;gap:7px;padding:18px 6px 26px;border-bottom:1px solid var(--border);position:relative}.chart:before,.chart:after{content:"";position:absolute;left:0;right:0;height:1px;background:var(--border)}.chart:before{top:34%}.chart:after{top:66%}.bar{flex:1;background:#9fd7cf;border-radius:3px 3px 0 0;min-width:8px;z-index:1}.bar.fail{background:#d9e6e3}.chart-caption{display:flex;justify-content:space-between;color:var(--muted);font-size:10px;margin-top:8px}
+  .attention{padding:0}.attention-row{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;padding:13px 16px;border-bottom:1px solid var(--border);cursor:pointer}.attention-row:last-child{border-bottom:0}.attention-row:hover{background:var(--canvas)}.attention-row strong{font-size:12.5px;color:var(--ink)}.attention-row p{font-size:11.5px;color:var(--muted);margin:2px 0 0}.count{font:700 13px var(--mono);color:var(--ink)}
+  .status-dot{width:8px;height:8px;border-radius:50%;background:var(--good)}.status-dot.warn{background:var(--warn)}.status-dot.crit{background:var(--crit)}
+  .table-tools{display:flex;gap:8px;align-items:center;margin-bottom:12px}.table-tools input,.table-tools select{width:auto;height:36px;padding:7px 10px}.table-tools input{min-width:240px}.op-table{width:100%;border-collapse:collapse;background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden}.op-table th{background:#f0f5f3;color:var(--muted);font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;text-align:left;padding:10px 12px;border-bottom:1px solid var(--border);white-space:nowrap}.op-table td{padding:11px 12px;border-bottom:1px solid var(--border);font-size:12px;color:var(--body);white-space:nowrap}.op-table tbody tr{cursor:pointer}.op-table tbody tr:hover{background:#f7faf9}.op-table tbody tr:last-child td{border-bottom:0}.op-table .primary-id{font:600 12px var(--mono);color:var(--accent)}
+  .diag-layout{display:grid;grid-template-columns:minmax(0,1.45fr) 350px;gap:16px}.diag-result{border-top:3px solid var(--crit)}.diag-hero{display:grid;grid-template-columns:1fr auto;gap:20px}.diag-title{font-size:20px;line-height:1.35;color:var(--ink);font-weight:750}.confidence{min-width:112px;text-align:right}.confidence strong{display:block;font:750 30px var(--mono);color:var(--ink)}.confidence span{font-size:11px;color:var(--muted)}
+  .fact-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:0;border:1px solid var(--border);border-radius:8px;margin:15px 0;overflow:hidden}.fact{padding:11px 12px;border-right:1px solid var(--border)}.fact:last-child{border-right:0}.fact span{display:block;color:var(--muted);font-size:10.5px}.fact strong{display:block;color:var(--ink);font-size:12px;margin-top:2px}
+  .path{display:flex;align-items:center;gap:0;overflow-x:auto;padding:6px 0}.path-node{min-width:108px;border:1px solid var(--border);border-radius:7px;padding:9px 10px;background:var(--surface)}.path-node strong{display:block;color:var(--ink);font-size:11.5px}.path-node span{font-size:10.5px;color:var(--muted)}.path-node.bad{border-color:#e1a0a0;background:var(--crit-bg)}.path-link{height:1px;min-width:25px;background:var(--border2)}
+  .triad{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:14px}.triad-item{border:1px solid var(--border);border-radius:8px;padding:12px}.triad-item h4{font-size:11px;color:var(--muted);margin:0 0 7px;text-transform:uppercase;letter-spacing:.05em}.triad-item p{font-size:12px;color:var(--body);margin:0;line-height:1.6}.triad-item.actionable{background:var(--accent-soft);border-color:#b8ddd6}.evidence-line{display:flex;gap:9px;padding:10px 0;border-bottom:1px solid var(--border);font-size:12px}.evidence-line:last-child{border:0}.evidence-line b{color:var(--ink)}.evidence-line span{color:var(--muted)}
+  .customer-alert{border:1px solid #e3bd76;border-left:4px solid var(--warn);background:var(--warn-bg);border-radius:8px;padding:13px 14px;margin-bottom:14px}.customer-alert strong{display:block;color:#765115}.customer-alert p{margin:4px 0 0;color:#85632d;font-size:12px}
+  .secondary-nav{margin-top:auto;border-top:1px solid var(--side-border);padding:10px}.secondary-nav a{font-size:12px}
+  @media(max-width:1180px){.metric-strip{grid-template-columns:repeat(3,1fr)}.metric-cell:nth-child(3){border-right:0}.metric-cell:nth-child(-n+3){border-bottom:1px solid var(--border)}.ops-grid,.diag-layout{grid-template-columns:1fr}.diag-layout>.rail{display:none}}
+  @media(max-width:840px){.global-search{width:100%}.top{height:auto;padding:10px 14px;flex-wrap:wrap}.metric-strip{grid-template-columns:repeat(2,1fr)}.metric-cell{border-bottom:1px solid var(--border)}.fact-grid,.triad{grid-template-columns:1fr}.fact{border-right:0;border-bottom:1px solid var(--border)}}
 </style>
 </head>
 <body>
@@ -251,26 +279,73 @@ _DEMO_HTML = """<!doctype html>
   <aside class="side">
     <div class="sbrand">
       <div class="ocean-name">Oceanpayment</div>
-      <div class="brand-product">商户争议管理</div>
+      <div class="brand-product">交易诊断系统</div>
     </div>
-    <div class="navlbl">业务中心</div>
+    <div class="navlbl">工作台</div>
     <nav class="nav">
-      <a class="on" data-v="flow">拒付案件</a>
-      <a data-v="prev">交易预警</a>
-      <a data-v="safe">规则与运营</a>
+      <a class="on" data-v="overview">概览</a>
+      <a data-v="transactions">交易</a>
+      <a data-v="diagnosis">诊断</a>
+      <a data-v="flow">异常与争议</a>
+      <a data-v="prev">风险</a>
     </nav>
+    <div class="secondary-nav nav">
+      <a data-v="safe">规则与配置</a>
+      <a data-v="safe">审计日志</a>
+      <a data-v="safe">设置</a>
+    </div>
   </aside>
 
   <div class="main">
     <div class="top">
-      <div class="crumb"><b id="crumbRoot">争议处理</b><span class="crumb-sep">/</span><span id="crumbId" class="id">新建案件</span></div>
+      <div class="crumb"><b id="crumbRoot">交易运营</b><span class="crumb-sep">/</span><span id="crumbId" class="id">概览</span></div>
       <div class="grow"></div>
-      <div class="merchant-account"><span>当前商户</span><strong>OceanStore</strong></div>
-      <button class="tbtn primary" onclick="reset()">＋ 新建案件</button>
+      <div class="global-search"><input id="globalSearch" placeholder="搜索 Payment ID、订单号、商户" autocomplete="off"><span class="shortcut">⌘K</span></div>
+      <div class="merchant-account"><span>商户</span><strong>OceanStore</strong></div>
+      <span class="env-chip">Sandbox</span><div class="avatar">OP</div>
+    </div>
+
+    <!-- 交易概览 -->
+    <div class="content full view on" id="v-overview">
+      <div class="page-head"><div><div class="eyebrow">Payment operations</div><h1>交易运营概览</h1><p>从授权表现快速进入异常交易诊断，并处理需要关注的争议与风险。</p></div><button class="tbtn" onclick="showView('transactions')">查看全部交易</button></div>
+      <div class="metric-strip">
+        <div class="metric-cell"><div class="metric-label">授权成功率</div><div class="metric-value">91.8%</div><div class="metric-delta down">较昨日 −1.9%</div></div>
+        <div class="metric-cell"><div class="metric-label">成功交易</div><div class="metric-value">18,426</div><div class="metric-delta up">+3.4%</div></div>
+        <div class="metric-cell"><div class="metric-label">失败交易</div><div class="metric-value">1,247</div><div class="metric-delta down">需关注 186 笔</div></div>
+        <div class="metric-cell"><div class="metric-label">风控拒绝</div><div class="metric-value">3.2%</div><div class="metric-delta">过去 24 小时</div></div>
+        <div class="metric-cell"><div class="metric-label">3DS 失败</div><div class="metric-value">2.1%</div><div class="metric-delta down">+0.7 pp</div></div>
+        <div class="metric-cell"><div class="metric-label">拒付率</div><div class="metric-value">0.74%</div><div class="metric-delta">预警线 0.90%</div></div>
+      </div>
+      <div class="ops-grid">
+        <section class="panel"><div class="panel-hd"><h2>支付表现</h2><div class="grow"></div><div class="segmented"><button class="on">授权率</button><button>失败率</button><button>超时</button></div></div><div class="panel-bd"><div class="chart" aria-label="过去 24 小时授权率趋势"><i class="bar" style="height:63%"></i><i class="bar" style="height:71%"></i><i class="bar" style="height:67%"></i><i class="bar" style="height:76%"></i><i class="bar" style="height:73%"></i><i class="bar fail" style="height:58%"></i><i class="bar fail" style="height:51%"></i><i class="bar" style="height:70%"></i><i class="bar" style="height:78%"></i><i class="bar" style="height:82%"></i><i class="bar" style="height:77%"></i><i class="bar" style="height:86%"></i><i class="bar" style="height:84%"></i><i class="bar" style="height:89%"></i><i class="bar" style="height:87%"></i><i class="bar" style="height:92%"></i></div><div class="chart-caption"><span>00:00</span><span>06:00</span><span>12:00</span><span>18:00</span><span>现在</span></div></div></section>
+        <section class="panel"><div class="panel-hd"><h2>需要关注</h2><div class="grow"></div><span class="pill p-crit">19 项</span></div><div class="attention"><div class="attention-row" onclick="openTransaction('OP-20260814-8421')"><i class="status-dot crit"></i><div><strong>3DS 验证失败明显上升</strong><p>欧洲卡 · 过去 90 分钟 · 较基线 +38%</p></div><span class="count">86</span></div><div class="attention-row" onclick="showView('flow')"><i class="status-dot warn"></i><div><strong>争议材料等待补全</strong><p>7 笔案件将在 72 小时内到期</p></div><span class="count">12</span></div><div class="attention-row" onclick="openTransaction('OP-20260814-7156')"><i class="status-dot warn"></i><div><strong>收单通道响应变慢</strong><p>Ocean Acquiring EU · P95 1.34s</p></div><span class="count">5</span></div></div></section>
+      </div>
+    </div>
+
+    <!-- 交易列表 -->
+    <div class="content full view" id="v-transactions">
+      <div class="page-head"><div><div class="eyebrow">Transactions</div><h1>交易</h1><p>按处理阶段、响应码和商户快速定位异常交易。</p></div><button class="tbtn">导出当前结果</button></div>
+      <div class="table-tools"><input id="tableSearch" placeholder="筛选交易或订单"><select id="statusFilter"><option value="ALL">全部状态</option><option value="FAILED">失败</option><option value="SUCCESS">成功</option><option value="PENDING">处理中</option></select><select><option>过去 24 小时</option><option>过去 7 天</option></select><div class="grow"></div><span class="muted">共 6 笔</span></div>
+      <div style="overflow:auto"><table class="op-table"><thead><tr><th>Payment ID</th><th>订单号</th><th>商户</th><th>金额</th><th>状态</th><th>支付方式</th><th>阶段</th><th>响应码</th><th>时间</th></tr></thead><tbody id="transactionRows"></tbody></table></div>
+    </div>
+
+    <!-- 交易诊断 -->
+    <div class="content full view" id="v-diagnosis">
+      <div class="page-head"><div><div class="eyebrow">Transaction diagnosis</div><h1>交易诊断</h1><p>从处理路径、响应码与可观测证据解释失败原因。</p></div><button class="tbtn" onclick="showView('transactions')">返回交易列表</button></div>
+      <div class="diag-layout"><div class="stack">
+        <div class="customer-alert" id="diagnosisAlert"><strong>需要商户补充 2 项信息</strong><p>请补充持卡人账单地址与设备 IP 归属，补全后可继续复核路由异常。</p></div>
+        <section class="panel diag-result"><div class="panel-hd"><h2>诊断结果</h2><div class="grow"></div><span class="pill p-crit" id="diagStatus">支付失败</span></div><div class="panel-bd">
+          <div class="diag-hero"><div><div class="eyebrow">Root cause</div><div class="diag-title" id="diagCause">3DS 挑战未完成，发卡行拒绝授权</div></div><div class="confidence"><strong id="diagConfidence">94%</strong><span>诊断置信度</span></div></div>
+          <div class="fact-grid"><div class="fact"><span>Payment ID</span><strong id="diagId">OP-20260814-8421</strong></div><div class="fact"><span>响应码</span><strong id="diagCode">3DS-201</strong></div><div class="fact"><span>失败阶段</span><strong id="diagStage">3DS Challenge</strong></div><div class="fact"><span>影响</span><strong id="diagImpact">授权未发起</strong></div></div>
+          <div class="path"><div class="path-node"><strong>Checkout</strong><span>请求已接收</span></div><i class="path-link"></i><div class="path-node"><strong>Risk Check</strong><span>通过</span></div><i class="path-link"></i><div class="path-node bad"><strong>3DS Challenge</strong><span>超时 / 未完成</span></div><i class="path-link"></i><div class="path-node"><strong>Authorization</strong><span>未执行</span></div><i class="path-link"></i><div class="path-node"><strong>Capture</strong><span>未执行</span></div></div>
+          <div class="triad"><div class="triad-item"><h4>Observed facts</h4><p>challenge_status=timeout；浏览器回调缺失；授权请求未生成。</p></div><div class="triad-item"><h4>System interpretation</h4><p>失败发生在持卡人验证阶段，不是余额不足或商户配置拒绝。</p></div><div class="triad-item actionable"><h4>Recommended action</h4><p>引导客户重新支付并保持验证窗口；若持续出现，检查 3DS 回调域名。</p></div></div>
+        </div></section>
+        <section class="panel"><div class="panel-hd"><h2>相似交易</h2><div class="grow"></div><span class="muted">过去 90 分钟</span></div><div style="overflow:auto"><table class="op-table"><thead><tr><th>Payment ID</th><th>国家/地区</th><th>卡组织</th><th>响应码</th><th>结果</th></tr></thead><tbody><tr><td class="primary-id">OP-…8338</td><td>DE</td><td>Visa</td><td>3DS-201</td><td><span class="pill p-crit">失败</span></td></tr><tr><td class="primary-id">OP-…8294</td><td>FR</td><td>Mastercard</td><td>3DS-201</td><td><span class="pill p-crit">失败</span></td></tr><tr><td class="primary-id">OP-…8190</td><td>GB</td><td>Visa</td><td>00</td><td><span class="pill p-good">成功</span></td></tr></tbody></table></div></section>
+      </div><aside class="rail"><section class="panel"><div class="panel-hd"><h2>支持证据</h2><span class="pill p-acc">4 项</span></div><div class="panel-bd"><div class="evidence-line"><i class="status-dot"></i><div><b>3DS 服务日志</b><br><span>挑战创建成功，300 秒后超时</span></div></div><div class="evidence-line"><i class="status-dot"></i><div><b>浏览器回调</b><br><span>未观察到 completion callback</span></div></div><div class="evidence-line"><i class="status-dot"></i><div><b>授权网关</b><br><span>没有对应 authorization request</span></div></div><div class="evidence-line"><i class="status-dot warn"></i><div><b>字段完整性</b><br><span>账单地址、设备 IP 归属待补充</span></div></div></div></section><section class="panel"><div class="panel-hd"><h2>完整时间线</h2></div><div class="panel-bd"><ul class="tl"><li><div class="e">创建支付</div><div class="m">20:41:08.142</div></li><li><div class="e">风控检查通过</div><div class="m">20:41:08.311</div></li><li><div class="e">发起 3DS Challenge</div><div class="m">20:41:08.526</div></li><li><div class="e">Challenge 超时</div><div class="m">20:46:08.529</div></li></ul></div></section></aside></div>
     </div>
 
     <!-- 拒付处理 -->
-    <div class="content view on" id="v-flow">
+    <div class="content view" id="v-flow">
       <div class="page-head"><div><h1>拒付案件</h1>
         <p>识别争议原因、补齐关键材料，并生成可复核的申诉材料包。</p></div></div>
       <div class="stack">
@@ -359,6 +434,14 @@ const SCENARIOS=[
   {label:"原因待确认",meta:"暂无材料 · 需人工判断",network:"VISA",available:[],
     desc:"这是一段无法自动判定的中性描述内容。"},
 ];
+const TRANSACTIONS=[
+  {id:"OP-20260814-8421",order:"ORD-908421",merchant:"OceanStore",amount:"EUR 238.00",status:"FAILED",method:"Visa •••• 1842",stage:"3DS Challenge",code:"3DS-201",time:"20:46:08"},
+  {id:"OP-20260814-8399",order:"ORD-908399",merchant:"OceanStore",amount:"USD 86.40",status:"SUCCESS",method:"Mastercard •••• 6091",stage:"Capture",code:"00",time:"20:43:21"},
+  {id:"OP-20260814-8338",order:"ORD-908338",merchant:"North Peak",amount:"EUR 419.00",status:"FAILED",method:"Visa •••• 3380",stage:"3DS Challenge",code:"3DS-201",time:"20:37:12"},
+  {id:"OP-20260814-8280",order:"ORD-908280",merchant:"OceanStore",amount:"GBP 52.90",status:"PENDING",method:"Apple Pay",stage:"Authorization",code:"—",time:"20:31:57"},
+  {id:"OP-20260814-7156",order:"ORD-907156",merchant:"Luma Market",amount:"USD 1,420.00",status:"FAILED",method:"Mastercard •••• 0517",stage:"Authorization",code:"91",time:"19:18:44"},
+  {id:"OP-20260814-7024",order:"ORD-907024",merchant:"OceanStore",amount:"USD 132.00",status:"SUCCESS",method:"Visa •••• 7288",stage:"Capture",code:"00",time:"19:04:18"},
+];
 const PHASE={NEEDS_INTAKE:["未建案","p-mut","创建案件"],REASON_PROPOSED:["待确认原因","p-warn","确认原因"],
   NEED_EVIDENCE:["补充材料","p-acc","补充材料"],ASSESSED:["评估完成","p-good","评估结果"]};
 const REASON_LABEL={FRAUD_CARD_NOT_PRESENT:"非本人交易",PRODUCT_NOT_RECEIVED:"未收到商品",
@@ -388,11 +471,26 @@ async function api(m,p,b){const o={method:m,headers:{'Content-Type':'application
   if(b!==undefined)o.body=JSON.stringify(b);
   const r=await fetch(BASE+p,o);return{ok:r.ok,status:r.status,data:await r.json().catch(()=>({}))};}
 
-document.querySelectorAll('.nav a').forEach(a=>a.addEventListener('click',()=>{
-  const v=a.dataset.v;document.querySelectorAll('.nav a').forEach(x=>x.classList.remove('on'));a.classList.add('on');
-  document.querySelectorAll('.view').forEach(x=>x.classList.remove('on'));$('v-'+v).classList.add('on');
-  const navCrumb={flow:["争议处理",S.caseId?S.caseId.slice(0,18):"新建案件"],prev:["风险管理","交易预警"],safe:["运营管理","规则与运营"]}[v];
-  $('crumbRoot').textContent=navCrumb[0];$('crumbId').textContent=navCrumb[1];}));
+const STATUS_VIEW={FAILED:['失败','p-crit'],SUCCESS:['成功','p-good'],PENDING:['处理中','p-warn']};
+function showView(v){
+  document.querySelectorAll('.nav a').forEach(x=>x.classList.toggle('on',x.dataset.v===v));
+  document.querySelectorAll('.view').forEach(x=>x.classList.remove('on'));
+  const view=$('v-'+v);if(view)view.classList.add('on');
+  const navCrumb={overview:["交易运营","概览"],transactions:["交易运营","交易"],diagnosis:["交易运营","诊断"],flow:["异常与争议",S.caseId?S.caseId.slice(0,18):"新建案件"],prev:["风险管理","交易预警"],safe:["系统管理","规则与配置"]}[v]||["交易运营",v];
+  $('crumbRoot').textContent=navCrumb[0];$('crumbId').textContent=navCrumb[1];
+}
+document.querySelectorAll('.nav a').forEach(a=>a.addEventListener('click',()=>showView(a.dataset.v)));
+function renderTransactions(){const query=($('tableSearch').value||'').toLowerCase();const status=$('statusFilter').value;
+  const rows=TRANSACTIONS.filter(t=>(status==='ALL'||t.status===status)&&Object.values(t).join(' ').toLowerCase().includes(query));
+  $('transactionRows').innerHTML=rows.map(t=>{const s=STATUS_VIEW[t.status];return `<tr onclick="openTransaction('${t.id}')"><td class="primary-id">${esc(t.id)}</td><td>${esc(t.order)}</td><td>${esc(t.merchant)}</td><td class="num">${esc(t.amount)}</td><td><span class="pill ${s[1]}">${s[0]}</span></td><td>${esc(t.method)}</td><td>${esc(t.stage)}</td><td><code>${esc(t.code)}</code></td><td class="num">${esc(t.time)}</td></tr>`;}).join('')||'<tr><td colspan="9" class="empty">没有匹配的交易</td></tr>';}
+function openTransaction(id){const t=TRANSACTIONS.find(x=>x.id===id)||TRANSACTIONS[0];
+  $('diagId').textContent=t.id;$('diagStage').textContent=t.stage;$('diagCode').textContent=t.code;
+  if(t.code==='91'){$('diagCause').textContent='收单通道未及时响应，授权请求超时';$('diagConfidence').textContent='88%';$('diagImpact').textContent='授权状态待核实';$('diagnosisAlert').innerHTML='<strong>建议先核对授权状态</strong><p>不要立即重复扣款。先使用 Payment ID 查询上游最终状态，避免重复授权。</p>';}else if(t.status==='SUCCESS'){$('diagCause').textContent='交易处理完成，未发现异常';$('diagConfidence').textContent='100%';$('diagImpact').textContent='已成功入账';$('diagnosisAlert').innerHTML='<strong>无需补充信息</strong><p>处理链路完整；如客户反馈异常，请从争议模块创建案件。</p>';}else{$('diagCause').textContent='3DS 挑战未完成，发卡行拒绝授权';$('diagConfidence').textContent='94%';$('diagImpact').textContent='授权未发起';$('diagnosisAlert').innerHTML='<strong>需要商户补充 2 项信息</strong><p>请补充持卡人账单地址与设备 IP 归属，补全后可继续复核路由异常。</p>';}
+  showView('diagnosis');}
+$('tableSearch').addEventListener('input',renderTransactions);$('statusFilter').addEventListener('change',renderTransactions);
+$('globalSearch').addEventListener('keydown',event=>{if(event.key==='Enter'){const q=event.target.value.toLowerCase();const hit=TRANSACTIONS.find(t=>Object.values(t).join(' ').toLowerCase().includes(q));hit?openTransaction(hit.id):showView('transactions');}});
+document.addEventListener('keydown',event=>{if((event.metaKey||event.ctrlKey)&&event.key.toLowerCase()==='k'){event.preventDefault();$('globalSearch').focus();}});
+document.querySelectorAll('.segmented button').forEach(button=>button.addEventListener('click',()=>{button.parentElement.querySelectorAll('button').forEach(x=>x.classList.remove('on'));button.classList.add('on');}));
 function reset(){S.caseId=null;S.packaged=false;S.appealed=false;S.last=null;S.cardNetwork="VISA";
   S.scenarioIndex=0;S.autoEvidence=SCENARIOS[0].available.slice();
   $('caseHead').innerHTML='<span class="empty">尚未建案 · 在下方选择场景开始。</span>';
@@ -565,7 +663,7 @@ async function safetyScan(){const {ok,data}=await api("POST","/safety/scan",{tex
   const p=data.accepted?'<span class="pill p-good">✓ 通过</span>':'<span class="pill p-crit">⛔ 已拦截</span>';
   $('safeOut').innerHTML=`<div class="note" style="margin:0">${p} &nbsp;${esc(data.detail)}</div>`;}
 
-renderStages();renderAction();refreshMetrics();
+renderTransactions();renderStages();renderAction();refreshMetrics();
 </script>
 </body>
 </html>

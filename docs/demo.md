@@ -7,7 +7,9 @@ appeal only reaches the in-process mock connector.
 
 ## Recommended judge path: Web console
 
-The shortest complete walkthrough is the self-contained console at `/demo`.
+The shortest complete walkthrough uses two local consoles: the merchant-facing
+transaction diagnostic workspace at `http://127.0.0.1:8002/demo`, and the
+read-only operations console at `http://127.0.0.1:8003/admin`.
 It covers prevention → intake → evidence collection with SLA → deterministic
 assessment and provenance → bank-rule package → blocked/approved mock appeal →
 audit and agent trace, plus the PII/card-number safety guard.
@@ -19,8 +21,9 @@ docker build -t oceanpilot-evidenceos .
 docker run --rm -p 127.0.0.1:8000:8000 oceanpilot-evidenceos
 ```
 
-Open `http://127.0.0.1:8000/` (redirects to `/demo`) and choose a synthetic
-partial-evidence scenario. Load its existing materials first: the console stops
+Open the client, search `OP-20260814-8421`, and inspect the structured root
+cause, processing path, observed evidence and recommended action. Then open
+“异常与争议” and choose a synthetic partial-evidence scenario. Load its existing materials first: the console stops
 in evidence collection and prominently lists every missing item, with the next
 requested item highlighted. Submit items one by one, use “补齐全部（演示）” to
 continue quickly, or finalize the incomplete case to demonstrate human review.
@@ -32,7 +35,14 @@ Docker is optional. To run from a Python 3.12 virtual environment instead:
 python3.12 -m venv .venv
 .venv/bin/python -m pip install -e ".[dev]"
 export OCEANPILOT_DB_PATH=work/oceanpilot.db
-.venv/bin/python -m uvicorn oceanpilot.main:create_app --factory --host 127.0.0.1 --port 8000
+.venv/bin/python -m uvicorn oceanpilot.main:create_app --factory --host 127.0.0.1 --port 8002
+```
+
+In a second terminal, start the maintenance console:
+
+```bash
+OCEANPILOT_CLIENT_BASE_URL=http://127.0.0.1:8002 \
+  .venv/bin/python -m uvicorn oceanpilot.admin:create_admin_app --factory --host 127.0.0.1 --port 8003
 ```
 
 On Windows, use `.\.venv\Scripts\python.exe` and set `OCEANPILOT_DB_PATH` in

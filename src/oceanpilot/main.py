@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 from uuid import uuid4
 
 from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
 
 from oceanpilot.adapters.channels.feishu.channel import FeishuChannel
@@ -31,6 +32,7 @@ from oceanpilot.adapters.persistence.sqlite import (
     initialize_schema,
 )
 from oceanpilot.adapters.upstream.mock import MockUpstreamConnector
+from oceanpilot.api.admin import router as admin_router
 from oceanpilot.api.cases import router as cases_router
 from oceanpilot.api.chargeback import router as chargeback_router
 from oceanpilot.api.demo import router as demo_router
@@ -53,6 +55,7 @@ from oceanpilot.application.chargeback_supervisor import ChargebackSupervisor
 from oceanpilot.application.feishu_orchestrator import FeishuOrchestrator
 from oceanpilot.application.metrics import DecisionMetrics
 from oceanpilot.application.model_provider import ModelProvider
+from oceanpilot.application.monitoring import RequestMonitor
 from oceanpilot.config import FeishuSettings, Settings
 
 _request_logger = logging.getLogger("oceanpilot.request")
@@ -116,9 +119,16 @@ def create_app(
         yield
 
     application = FastAPI(lifespan=lifespan)
+    application.add_middleware(
+        CORSMiddleware,
+        allow_origins=[resolved.admin_origin],
+        allow_methods=["GET"],
+        allow_headers=["Content-Type"],
+    )
     application.state.settings = resolved
     application.state.store_factory = store_factory
     application.state.case_service = case_service
+    application.state.request_monitor = RequestMonitor()
 
     # Chargeback agent cluster. Offline by default (no API key). An explicit
     # switch (OCEANPILOT_CHARGEBACK_LIVE_MODEL) opts into the live tiered provider
@@ -163,26 +173,40 @@ def create_app(
 
     @application.middleware("http")
     async def request_context(request: Request, call_next):
+        started_at = time.perf_counter()
         context = RequestContext(request_id=str(uuid4()), trace_id=str(uuid4()))
         request.state.request_context = context
-        response = await call_next(request)
-        response.headers["X-Trace-ID"] = context.trace_id
-        # Structured, PII-free request line (method/path/status + correlation ids).
-        _request_logger.info(
-            "request method=%s path=%s status=%s request_id=%s trace_id=%s",
-            request.method,
-            request.url.path,
-            response.status_code,
-            context.request_id,
-            context.trace_id,
-        )
-        return response
+        status_code = 500
+        try:
+            response = await call_next(request)
+            status_code = response.status_code
+            response.headers["X-Trace-ID"] = context.trace_id
+            # Structured, PII-free request line (method/path/status + correlation ids).
+            _request_logger.info(
+                "request method=%s path=%s status=%s request_id=%s trace_id=%s",
+                request.method,
+                request.url.path,
+                response.status_code,
+                context.request_id,
+                context.trace_id,
+            )
+            return response
+        finally:
+            route = getattr(request.scope.get("route"), "path", "/{unmatched}")
+            if route != "/api/v1/admin/overview":
+                application.state.request_monitor.record(
+                    method=request.method,
+                    route=route,
+                    status_code=status_code,
+                    duration_ms=(time.perf_counter() - started_at) * 1000,
+                )
 
     register_exception_handlers(application)
     application.include_router(health_router)
     application.include_router(cases_router)
     application.include_router(feishu_router)
     application.include_router(chargeback_router)
+    application.include_router(admin_router)
     application.include_router(demo_router)
 
     def openapi_schema() -> dict[str, object]:

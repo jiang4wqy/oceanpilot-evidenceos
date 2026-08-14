@@ -53,19 +53,20 @@ OceanPilot 将一次跨境拒付固定为下面这条业务链。内部可以由
 - 给公司的数据需求：[docs/data/2026-08-07-chargeback-data-request.md](docs/data/2026-08-07-chargeback-data-request.md)
 - 离线可跑的演示：`examples/chargeback_demo.py`（agent 集群）、`examples/chargeback_transcript.py`（HTTP 全链路 transcript）
 - 一键起服务：`docker build -t oceanpilot-evidenceos . && docker run --rm -p 127.0.0.1:8000:8000 oceanpilot-evidenceos`
-- Web 演示面板（可视化全链路）：起服务后打开 `http://127.0.0.1:8000/demo`
+- 双端控制台：客户端 `http://127.0.0.1:8002/demo`，运行维护端 `http://127.0.0.1:8003/admin`
 - 离线评测报告（分类准确率 + synthetic 规则分离度）：`python scripts/eval_chargeback.py`
 
 ## Web 控制台 / Console
 
 ![OceanPilot 拒付申诉控制台：侧栏 + 案件工作台 + 活动流；确定性内核判定的证据就绪度、逐项证据与决策来源](docs/assets/console.png)
 
-统一的单页控制台把整条拒付链串在一屏：识别理由 → 补证（带 SLA 时限）→ 证据就绪评估（内核判定 + 逐项证据 + 决策来源）→ 打包 → 人工批准 → mock 申诉 → 审计轨迹。交易前预防是扩展示例，不属于主申诉链；PII / 卡号安全护栏横跨所有步骤。
+客户端以“概览 → 交易 → 诊断”为主路径，同时保留完整拒付链：识别理由 → 补证（带 SLA 时限）→ 证据就绪评估 → 打包 → 人工批准 → mock 申诉 → 审计。运行维护端单独展示 API 状态、滚动请求指标、可解释故障信号和业务积压；两端共享同一 Oceanpayment 海洋绿色卡。
 
-- 服务启动后打开根路径 `/`（自动跳转到 `/demo`）。
+- 客户端启动后打开根路径 `/`（自动跳转到 `/demo`）；维护端根路径跳转到 `/admin`。
 - Docker：`docker run --rm -p 127.0.0.1:8000:8000 oceanpilot-evidenceos`，浏览器开 `http://127.0.0.1:8000/demo`。
 - 远程服务器：SSH 端口转发 `ssh -L 8000:127.0.0.1:8000 <user>@<host>`，本地开 `http://localhost:8000/demo`。
-- 顶栏可切换中/英与深/浅色；「API 文档」指向 Swagger `/docs`。
+- 客户端顶栏提供全局交易搜索（`⌘K`）；技术端点不出现在客户导航中。
+- 双端设计与交互说明：[docs/design/2026-08-14-transaction-diagnostic-dashboards.md](docs/design/2026-08-14-transaction-diagnostic-dashboards.md)。
 
 ## 技术原则：证据先行闭环
 
@@ -146,7 +147,10 @@ Windows PowerShell：
 py -3.12 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -e ".[dev]"
 $env:OCEANPILOT_DB_PATH = "work/oceanpilot.db"
-.\.venv\Scripts\python.exe -m uvicorn oceanpilot.main:create_app --factory --host 127.0.0.1 --port 8000
+.\.venv\Scripts\python.exe -m uvicorn oceanpilot.main:create_app --factory --host 127.0.0.1 --port 8002
+# 新终端：
+$env:OCEANPILOT_CLIENT_BASE_URL = "http://127.0.0.1:8002"
+.\.venv\Scripts\python.exe -m uvicorn oceanpilot.admin:create_admin_app --factory --host 127.0.0.1 --port 8003
 ```
 
 Linux / macOS：
@@ -155,7 +159,10 @@ Linux / macOS：
 python3.12 -m venv .venv
 .venv/bin/python -m pip install -e ".[dev]"
 export OCEANPILOT_DB_PATH=work/oceanpilot.db
-.venv/bin/python -m uvicorn oceanpilot.main:create_app --factory --host 127.0.0.1 --port 8000
+.venv/bin/python -m uvicorn oceanpilot.main:create_app --factory --host 127.0.0.1 --port 8002
+# 新终端：
+OCEANPILOT_CLIENT_BASE_URL=http://127.0.0.1:8002 \
+  .venv/bin/python -m uvicorn oceanpilot.admin:create_admin_app --factory --host 127.0.0.1 --port 8003
 ```
 
 启动过程由 FastAPI lifespan 创建 SQLite schema 并执行一次 Store 健康检查。构造或导入应用本身不会打开数据库连接。飞书回调为可选：设置 `FEISHU_APP_ID/APP_SECRET/VERIFICATION_TOKEN/ENCRYPT_KEY` 后启用（凭据只走环境变量），配置步骤见 [docs/feishu-setup.md](docs/feishu-setup.md)，演示脚本见 [docs/demo.md](docs/demo.md)。未配置飞书时核心 API 与 `/health` 正常，飞书路由返回固定安全 `503`。
