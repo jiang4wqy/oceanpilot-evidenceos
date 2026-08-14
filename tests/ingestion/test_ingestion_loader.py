@@ -6,12 +6,14 @@ from oceanpilot.adapters.ingestion.loader import (
     IngestionError,
     load_bank_rules,
     load_case_samples,
+    load_reason_code_mappings,
     load_reason_policies,
     parse_json_records,
 )
 from oceanpilot.adapters.ingestion.samples import (
     SYNTHETIC_BANK_RULES,
     SYNTHETIC_CASE_SAMPLES,
+    SYNTHETIC_REASON_CODE_MAPPINGS,
     SYNTHETIC_REASON_POLICIES,
 )
 from oceanpilot.application.knowledge_base import KnowledgeBase
@@ -59,6 +61,32 @@ def test_reason_policies_load_and_key_by_reason_code():
     assert any(req.critical for req in fraud.required)
 
 
+def test_reason_code_mappings_normalize_and_resolve():
+    mappings = load_reason_code_mappings(SYNTHETIC_REASON_CODE_MAPPINGS)
+    assert mappings[("VISA", "13.1")] is DisputeReasonCode.PRODUCT_NOT_RECEIVED
+    lower_case = [{**SYNTHETIC_REASON_CODE_MAPPINGS[0], "card_network": "visa"}]
+    assert load_reason_code_mappings(lower_case)[("VISA", "13.1")] is (
+        DisputeReasonCode.PRODUCT_NOT_RECEIVED
+    )
+
+
+def test_duplicate_reason_code_mapping_is_rejected_after_normalization():
+    duplicate = {
+        **SYNTHETIC_REASON_CODE_MAPPINGS[0],
+        "card_network": "visa",
+        "network_reason_code": "13.1",
+    }
+    with pytest.raises(IngestionError):
+        load_reason_code_mappings([SYNTHETIC_REASON_CODE_MAPPINGS[0], duplicate])
+
+
+@pytest.mark.parametrize("field", ["network_reason_code", "notes"])
+def test_reason_code_mapping_rejects_sensitive_free_text(field: str):
+    bad = [{**SYNTHETIC_REASON_CODE_MAPPINGS[0], field: "authorization=Bearer-SECRET"}]
+    with pytest.raises(IngestionError):
+        load_reason_code_mappings(bad)
+
+
 def test_case_samples_load_and_are_synthetic():
     samples = load_case_samples(SYNTHETIC_CASE_SAMPLES)
     assert len(samples) == len(SYNTHETIC_CASE_SAMPLES)
@@ -75,6 +103,12 @@ def test_case_sample_with_sensitive_notes_is_rejected():
     bad = [{**SYNTHETIC_CASE_SAMPLES[0], "notes": "authorization=Bearer-SECRET"}]
     with pytest.raises(IngestionError):
         load_case_samples(bad)
+
+
+def test_bank_rule_with_sensitive_notes_is_rejected():
+    bad = [{**SYNTHETIC_BANK_RULES[0], "notes": "authorization=Bearer-SECRET"}]
+    with pytest.raises(IngestionError):
+        load_bank_rules(bad)
 
 
 def test_unknown_enum_value_is_rejected():

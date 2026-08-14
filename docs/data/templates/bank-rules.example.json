@@ -1,0 +1,19 @@
+[
+  {
+    "reason_code": "PRODUCT_NOT_RECEIVED",
+    "card_network": "VISA",
+    "source": "network",
+    "required_evidence": [
+      "fulfillment.proof_of_delivery",
+      "fulfillment.tracking",
+      "transaction.receipt"
+    ],
+    "template_order": [
+      "fulfillment.proof_of_delivery",
+      "fulfillment.tracking",
+      "transaction.receipt"
+    ],
+    "submission_window_days": 12,
+    "notes": "合成示例；不得粘贴真实订单、持卡人或内部凭据。"
+  }
+]
