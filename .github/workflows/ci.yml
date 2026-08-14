@@ -101,7 +101,7 @@ jobs:
           demo = (runner_temp / "oceanpilot-demo.html").read_text()
 
           assert health == {"status": "ok"}
-          assert "跨境拒付" in demo
+          assert "Oceanpayment · 拒付管理" in demo
           assert "/api/v1/chargeback" in demo
-          assert "绝不执行" in demo
+          assert "人工确认并模拟提交" in demo
           PY
