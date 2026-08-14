@@ -12,6 +12,7 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
@@ -36,3 +37,71 @@ jobs:
 
       - name: Pytest
         run: python -m pytest -p no:cacheprovider -q
+
+      - name: Offline synthetic demo smoke
+        env:
+          OCEANPILOT_CHARGEBACK_LIVE_MODEL: "0"
+        run: |
+          python examples/chargeback_demo.py
+          python examples/chargeback_transcript.py
+          python scripts/eval_chargeback.py
+
+      - name: Build demo image
+        run: docker build --tag oceanpilot-evidenceos:ci .
+
+      - name: Smoke container health and demo page
+        run: |
+          oceanpilot_container="oceanpilot-evidenceos-ci-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          oceanpilot_health_file="${RUNNER_TEMP}/oceanpilot-health.json"
+          oceanpilot_demo_file="${RUNNER_TEMP}/oceanpilot-demo.html"
+
+          oceanpilot_cleanup() {
+            docker rm --force "${oceanpilot_container}" >/dev/null 2>&1 || true
+          }
+          trap oceanpilot_cleanup EXIT
+
+          docker run \
+            --detach \
+            --name "${oceanpilot_container}" \
+            --publish 127.0.0.1:8000:8000 \
+            oceanpilot-evidenceos:ci
+
+          oceanpilot_ready=0
+          for oceanpilot_attempt in {1..30}; do
+            if curl --fail --silent --show-error \
+              http://127.0.0.1:8000/health \
+              --output "${oceanpilot_health_file}"; then
+              oceanpilot_ready=1
+              break
+            fi
+
+            if [ "$(docker inspect --format '{{.State.Running}}' "${oceanpilot_container}")" != "true" ]; then
+              docker logs "${oceanpilot_container}"
+              exit 1
+            fi
+            sleep 1
+          done
+
+          if [ "${oceanpilot_ready}" -ne 1 ]; then
+            docker logs "${oceanpilot_container}"
+            exit 1
+          fi
+
+          curl --fail --silent --show-error \
+            http://127.0.0.1:8000/demo \
+            --output "${oceanpilot_demo_file}"
+
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          runner_temp = Path(os.environ["RUNNER_TEMP"])
+          health = json.loads((runner_temp / "oceanpilot-health.json").read_text())
+          demo = (runner_temp / "oceanpilot-demo.html").read_text()
+
+          assert health == {"status": "ok"}
+          assert "跨境拒付" in demo
+          assert "/api/v1/chargeback" in demo
+          assert "绝不执行" in demo
+          PY
