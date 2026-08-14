@@ -1,3 +1,5 @@
+import hashlib
+import sqlite3
 from concurrent.futures import ThreadPoolExecutor
 from threading import Barrier
 
@@ -15,6 +17,13 @@ CASE_ID = "00000000-0000-4000-8000-000000000010"
 OTHER_CASE_ID = "00000000-0000-4000-8000-000000000011"
 DIAGNOSIS_ID = "00000000-0000-4000-8000-000000000050"
 ACTOR_ID = "ou_synthetic_operator"
+OTHER_ACTOR_ID = "ou_other_synthetic_operator"
+CHAT_ID = "oc_synthetic_chat"
+
+
+def _expected_external_ref(domain: str, value: str) -> str:
+    payload = f"oceanpilot:feishu:{domain}:v1\0{value}".encode()
+    return f"sha256:v1:{hashlib.sha256(payload).hexdigest()}"
 
 
 def test_event_claim_complete_and_replay_survive_reopen(tmp_path):
@@ -133,14 +142,103 @@ def test_chat_case_binding_is_idempotent_and_never_overwritten(tmp_path):
     factory = FeishuCallbackStoreFactory(tmp_path / "chat.db")
 
     with factory.session() as store:
-        assert store.get_chat_case("chat-001") is None
-        store.bind_chat_case("chat-001", CASE_ID, updated_at=CREATED_AT)
-        store.bind_chat_case("chat-001", CASE_ID, updated_at=COMPLETED_AT)
-        assert store.get_chat_case("chat-001") == CASE_ID
+        assert store.get_chat_case(CHAT_ID) is None
+        store.bind_chat_case(CHAT_ID, CASE_ID, updated_at=CREATED_AT)
+        store.bind_chat_case(CHAT_ID, CASE_ID, updated_at=COMPLETED_AT)
+        assert store.get_chat_case(CHAT_ID) == CASE_ID
 
-        with pytest.raises(ReceiptConflict):
-            store.bind_chat_case("chat-001", OTHER_CASE_ID, updated_at=COMPLETED_AT)
-        assert store.get_chat_case("chat-001") == CASE_ID
+        with pytest.raises(ReceiptConflict) as captured:
+            store.bind_chat_case(CHAT_ID, OTHER_CASE_ID, updated_at=COMPLETED_AT)
+        assert str(captured.value) == "chat binding conflict"
+        assert CHAT_ID not in str(captured.value)
+        assert store.get_chat_case(CHAT_ID) == CASE_ID
+
+    connection = sqlite3.connect(factory.db_path)
+    try:
+        stored_chat_id = connection.execute("SELECT chat_id FROM feishu_chat_cases").fetchone()[0]
+    finally:
+        connection.close()
+    assert stored_chat_id == _expected_external_ref("chat_id", CHAT_ID)
+    assert CHAT_ID.encode() not in factory.db_path.read_bytes()
+
+    with FeishuCallbackStoreFactory(factory.db_path).session() as store:
+        assert store.get_chat_case(CHAT_ID) == CASE_ID
+
+
+def test_legacy_raw_external_ids_are_migrated_without_breaking_lookup_or_replay(tmp_path):
+    db_path = tmp_path / "legacy-identifiers.db"
+    FeishuCallbackStoreFactory(db_path)
+    response = {"ok": True, "result": "approved"}
+    encoded_response = '{"ok":true,"result":"approved"}'
+
+    connection = sqlite3.connect(db_path)
+    try:
+        connection.execute(
+            "INSERT INTO feishu_chat_cases (chat_id, case_id, updated_at) VALUES (?, ?, ?)",
+            (CHAT_ID, CASE_ID, CREATED_AT),
+        )
+        connection.execute(
+            """
+            INSERT INTO feishu_action_receipts (
+                action_id, status, response_json, case_id, diagnosis_id, actor_id,
+                created_at, completed_at
+            ) VALUES (?, 'COMPLETED', ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "legacy-action",
+                encoded_response,
+                CASE_ID,
+                DIAGNOSIS_ID,
+                ACTOR_ID,
+                CREATED_AT,
+                COMPLETED_AT,
+            ),
+        )
+        connection.execute(
+            """
+            INSERT INTO feishu_approval_audits (
+                approval_id, action_id, case_id, diagnosis_id, actor_id,
+                result, occurred_at, synthetic
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, 1)
+            """,
+            (
+                "legacy-approval",
+                "legacy-action",
+                CASE_ID,
+                DIAGNOSIS_ID,
+                ACTOR_ID,
+                "APPROVED",
+                COMPLETED_AT,
+            ),
+        )
+        connection.commit()
+    finally:
+        connection.close()
+    legacy_bytes = db_path.read_bytes()
+    assert CHAT_ID.encode() in legacy_bytes
+    assert ACTOR_ID.encode() in legacy_bytes
+
+    migrated = FeishuCallbackStoreFactory(db_path)
+    with migrated.session() as store:
+        assert store.get_chat_case(CHAT_ID) == CASE_ID
+        replay = store.commit_confirmation(
+            action_id="legacy-action",
+            approval_id="legacy-approval",
+            response=response,
+            case_id=CASE_ID,
+            diagnosis_id=DIAGNOSIS_ID,
+            actor_id=ACTOR_ID,
+            result="APPROVED",
+            occurred_at=COMPLETED_AT,
+        )
+        assert replay.outcome is ReceiptOutcome.REPLAY
+        audit = store.get_approval_audit("legacy-action")
+        assert audit is not None
+        assert audit.actor_id == _expected_external_ref("actor_id", ACTOR_ID)
+
+    migrated_bytes = db_path.read_bytes()
+    assert CHAT_ID.encode() not in migrated_bytes
+    assert ACTOR_ID.encode() not in migrated_bytes
 
 
 def test_confirmation_and_approval_audit_commit_atomically_and_replay(tmp_path):
@@ -176,16 +274,47 @@ def test_confirmation_and_approval_audit_commit_atomically_and_replay(tmp_path):
         assert replay.outcome is ReceiptOutcome.REPLAY
         assert replay.response == response
 
+        with pytest.raises(ReceiptConflict):
+            store.commit_confirmation(
+                action_id="action-confirm",
+                approval_id="approval-001",
+                response=response,
+                case_id=CASE_ID,
+                diagnosis_id=DIAGNOSIS_ID,
+                actor_id=OTHER_ACTOR_ID,
+                result="APPROVED",
+                occurred_at=COMPLETED_AT,
+            )
+
     with FeishuCallbackStoreFactory(db_path).session() as store:
         audit = store.get_approval_audit("action-confirm")
         assert audit is not None
         assert audit.approval_id == "approval-001"
         assert audit.case_id == CASE_ID
         assert audit.diagnosis_id == DIAGNOSIS_ID
-        assert audit.actor_id == ACTOR_ID
+        assert audit.actor_id == _expected_external_ref("actor_id", ACTOR_ID)
         assert audit.result == "APPROVED"
         assert audit.occurred_at == COMPLETED_AT
         assert audit.synthetic is True
+
+    connection = sqlite3.connect(db_path)
+    try:
+        action_actor_id = connection.execute(
+            "SELECT actor_id FROM feishu_action_receipts WHERE action_id = ?",
+            ("action-confirm",),
+        ).fetchone()[0]
+        audit_actor_id = connection.execute(
+            "SELECT actor_id FROM feishu_approval_audits WHERE action_id = ?",
+            ("action-confirm",),
+        ).fetchone()[0]
+    finally:
+        connection.close()
+    expected_actor_ref = _expected_external_ref("actor_id", ACTOR_ID)
+    assert action_actor_id == audit_actor_id == expected_actor_ref
+    assert expected_actor_ref != _expected_external_ref("chat_id", ACTOR_ID)
+    database_bytes = db_path.read_bytes()
+    assert ACTOR_ID.encode() not in database_bytes
+    assert OTHER_ACTOR_ID.encode() not in database_bytes
 
 
 def test_confirmation_rolls_back_receipt_when_audit_insert_conflicts(tmp_path):

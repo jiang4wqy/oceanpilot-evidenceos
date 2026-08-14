@@ -1,3 +1,4 @@
+import hashlib
 import json
 import sqlite3
 from collections.abc import Iterator, Mapping
@@ -74,6 +75,8 @@ _FORBIDDEN_RESPONSE_KEYS = frozenset(
         "token",
     }
 )
+_EXTERNAL_ID_REF_PREFIX = "sha256:v1:"
+_LOWER_HEX_DIGITS = frozenset("0123456789abcdef")
 
 
 class ReceiptOutcome(StrEnum):
@@ -113,6 +116,68 @@ def _require_text(name: str, value: str) -> str:
     if not isinstance(value, str) or not value:
         raise ValueError(f"{name} must be non-empty text")
     return value
+
+
+def _external_id_ref(domain: str, value: str) -> str:
+    """Return a stable, domain-separated reference without retaining the raw ID."""
+    raw = _require_text(domain, value)
+    payload = f"oceanpilot:feishu:{domain}:v1\0{raw}".encode()
+    return f"{_EXTERNAL_ID_REF_PREFIX}{hashlib.sha256(payload).hexdigest()}"
+
+
+def _is_external_id_ref(value: object) -> bool:
+    if not isinstance(value, str) or not value.startswith(_EXTERNAL_ID_REF_PREFIX):
+        return False
+    digest = value.removeprefix(_EXTERNAL_ID_REF_PREFIX)
+    return len(digest) == 64 and set(digest) <= _LOWER_HEX_DIGITS
+
+
+def _migrate_chat_ids(connection: sqlite3.Connection) -> None:
+    rows = connection.execute(
+        "SELECT chat_id, case_id, updated_at FROM feishu_chat_cases"
+    ).fetchall()
+    for row in rows:
+        raw_chat_id = row["chat_id"]
+        if _is_external_id_ref(raw_chat_id):
+            continue
+        stored_chat_id = _external_id_ref("chat_id", raw_chat_id)
+        existing = connection.execute(
+            "SELECT case_id, updated_at FROM feishu_chat_cases WHERE chat_id = ?",
+            (stored_chat_id,),
+        ).fetchone()
+        if existing is None:
+            connection.execute(
+                "UPDATE feishu_chat_cases SET chat_id = ? WHERE chat_id = ?",
+                (stored_chat_id, raw_chat_id),
+            )
+            continue
+        if existing["case_id"] != row["case_id"]:
+            raise RuntimeError("feishu external identifier migration conflict")
+        connection.execute(
+            "UPDATE feishu_chat_cases SET updated_at = ? WHERE chat_id = ?",
+            (max(existing["updated_at"], row["updated_at"]), stored_chat_id),
+        )
+        connection.execute("DELETE FROM feishu_chat_cases WHERE chat_id = ?", (raw_chat_id,))
+
+
+def _migrate_actor_ids(connection: sqlite3.Connection) -> None:
+    for table in ("feishu_action_receipts", "feishu_approval_audits"):
+        rows = connection.execute(
+            f"SELECT rowid, actor_id FROM {table} WHERE actor_id IS NOT NULL"
+        ).fetchall()
+        for row in rows:
+            if _is_external_id_ref(row["actor_id"]):
+                continue
+            connection.execute(
+                f"UPDATE {table} SET actor_id = ? WHERE rowid = ?",
+                (_external_id_ref("actor_id", row["actor_id"]), row["rowid"]),
+            )
+
+
+def _migrate_external_ids(connection: sqlite3.Connection) -> None:
+    """Upgrade v0.2.1 callback rows without changing the public raw-ID interface."""
+    _migrate_chat_ids(connection)
+    _migrate_actor_ids(connection)
 
 
 def _reject_sensitive_keys(value: object) -> None:
@@ -160,6 +225,7 @@ def _connect(path: Path) -> sqlite3.Connection:
     )
     connection.row_factory = sqlite3.Row
     connection.execute("PRAGMA busy_timeout=5000")
+    connection.execute("PRAGMA secure_delete=ON")
     return connection
 
 
@@ -182,6 +248,7 @@ def _initialize(path: Path) -> None:
         with _immediate_transaction(connection):
             for statement in _SCHEMA:
                 connection.execute(statement)
+            _migrate_external_ids(connection)
     finally:
         connection.close()
 
@@ -301,7 +368,7 @@ class FeishuCallbackStoreSession:
             {
                 "case_id": _require_text("case_id", case_id),
                 "diagnosis_id": _require_text("diagnosis_id", diagnosis_id),
-                "actor_id": _require_text("actor_id", actor_id),
+                "actor_id": _external_id_ref("actor_id", actor_id),
             },
             _require_text("completed_at", completed_at),
         )
@@ -340,13 +407,13 @@ class FeishuCallbackStoreSession:
         return ReceiptResult(ReceiptOutcome.COMPLETED, _decode_response(encoded))
 
     def bind_chat_case(self, chat_id: str, case_id: str, *, updated_at: str) -> None:
-        _require_text("chat_id", chat_id)
+        stored_chat_id = _external_id_ref("chat_id", chat_id)
         _require_text("case_id", case_id)
         _require_text("updated_at", updated_at)
         with _immediate_transaction(self._connection):
             row = self._connection.execute(
                 "SELECT case_id FROM feishu_chat_cases WHERE chat_id = ?",
-                (chat_id,),
+                (stored_chat_id,),
             ).fetchone()
             if row is None:
                 self._connection.execute(
@@ -354,21 +421,21 @@ class FeishuCallbackStoreSession:
                     INSERT INTO feishu_chat_cases (chat_id, case_id, updated_at)
                     VALUES (?, ?, ?)
                     """,
-                    (chat_id, case_id, updated_at),
+                    (stored_chat_id, case_id, updated_at),
                 )
             elif row["case_id"] == case_id:
                 self._connection.execute(
                     "UPDATE feishu_chat_cases SET updated_at = ? WHERE chat_id = ?",
-                    (updated_at, chat_id),
+                    (updated_at, stored_chat_id),
                 )
             else:
-                raise ReceiptConflict(chat_id)
+                raise ReceiptConflict("chat binding conflict")
 
     def get_chat_case(self, chat_id: str) -> str | None:
-        _require_text("chat_id", chat_id)
+        stored_chat_id = _external_id_ref("chat_id", chat_id)
         row = self._connection.execute(
             "SELECT case_id FROM feishu_chat_cases WHERE chat_id = ?",
-            (chat_id,),
+            (stored_chat_id,),
         ).fetchone()
         return None if row is None else row["case_id"]
 
@@ -416,7 +483,7 @@ class FeishuCallbackStoreSession:
                     approval_id,
                     case_id,
                     diagnosis_id,
-                    actor_id,
+                    metadata["actor_id"],
                     result,
                     occurred_at,
                 )
@@ -439,7 +506,7 @@ class FeishuCallbackStoreSession:
                         action_id,
                         case_id,
                         diagnosis_id,
-                        actor_id,
+                        metadata["actor_id"],
                         result,
                         occurred_at,
                     ),
