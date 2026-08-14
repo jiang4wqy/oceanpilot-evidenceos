@@ -102,8 +102,10 @@ jobs:
 
           assert health == {"status": "ok"}
           assert "Oceanpayment · 商户工作台" in demo
-          assert "Observed facts" in demo
-          assert "需要商户补充 2 项信息" in demo
+          assert "案件中心" in demo
+          assert "新建案件" in demo
+          assert 'class="ocean-logo"' in demo
           assert "/api/v1/chargeback" in demo
+          assert "CASE-20260814" not in demo
           assert "人工确认并模拟提交" in demo
           PY
