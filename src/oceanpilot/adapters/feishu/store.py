@@ -32,6 +32,14 @@ _SCHEMA = (
     )
     """,
     """
+    CREATE TABLE IF NOT EXISTS feishu_chargeback_chat_cases (
+        chat_id TEXT NOT NULL,
+        case_id TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        PRIMARY KEY (chat_id, case_id)
+    )
+    """,
+    """
     CREATE TABLE IF NOT EXISTS feishu_action_receipts (
         action_id TEXT PRIMARY KEY,
         status TEXT NOT NULL CHECK (status IN ('CLAIMED', 'COMPLETED')),
@@ -438,6 +446,40 @@ class FeishuCallbackStoreSession:
             (stored_chat_id,),
         ).fetchone()
         return None if row is None else row["case_id"]
+
+    def bind_chargeback_chat_case(
+        self,
+        chat_id: str,
+        case_id: str,
+        *,
+        updated_at: str,
+    ) -> None:
+        stored_chat_id = _external_id_ref("chat_id", chat_id)
+        _require_text("case_id", case_id)
+        _require_text("updated_at", updated_at)
+        with _immediate_transaction(self._connection):
+            self._connection.execute(
+                """
+                INSERT INTO feishu_chargeback_chat_cases (chat_id, case_id, updated_at)
+                VALUES (?, ?, ?)
+                ON CONFLICT (chat_id, case_id)
+                DO UPDATE SET updated_at = excluded.updated_at
+                """,
+                (stored_chat_id, case_id, updated_at),
+            )
+
+    def has_chargeback_chat_case(self, chat_id: str, case_id: str) -> bool:
+        stored_chat_id = _external_id_ref("chat_id", chat_id)
+        _require_text("case_id", case_id)
+        row = self._connection.execute(
+            """
+            SELECT 1
+            FROM feishu_chargeback_chat_cases
+            WHERE chat_id = ? AND case_id = ?
+            """,
+            (stored_chat_id, case_id),
+        ).fetchone()
+        return row is not None
 
     def commit_confirmation(
         self,

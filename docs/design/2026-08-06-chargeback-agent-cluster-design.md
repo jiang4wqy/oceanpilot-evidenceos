@@ -41,7 +41,7 @@
 ## 2. 范围与非目标
 
 **In scope（`v0.2.1` 已用 synthetic 实现）**
-- 渠道无关内核 + HTTP/API/Web 运行入口 + 飞书解析/渲染适配器 seam（拒付适配器尚未接入签名回调）
+- 渠道无关内核 + HTTP/API/Web 运行入口 + 已接入签名回调的拒付飞书受理/补证 seam
 - 拒付领域模型 + reason-code 确定性规则 + 15/45 天时限状态机
 - 银行规则知识库 port、合成条目与确定性精确匹配（不含 RAG）
 - Agent 集群（Supervisor + 专属处理器），可用 synthetic 端到端跑通
@@ -74,7 +74,7 @@
 
 - 内核只认「归一化输入（NormalizedInbound）」和「归一化输出（Delivery）」，不认飞书/Web/API 细节。
 - 每个 channel adapter 负责：鉴权/验签 → 解析为 NormalizedInbound → 调 CaseService/Agent 编排 → 把结果渲染成该渠道的载体（飞书卡片 / JSON / Web 组件）。
-- HTTP/Web 当前驱动完整拒付链；`FeishuChannel` 已作为 parser/renderer seam 测试，但尚未接入 Foundation 的签名 event/card-action 路由。未配置飞书时其它渠道照常工作。
+- HTTP/Web 当前驱动完整拒付链；`FeishuChannel` 已通过 `/chargeback` 指令和 namespaced 卡片动作接入签名 event/card-action 路由。未配置飞书时其它渠道照常工作；真实 tenant smoke 仍未完成。
 
 ### D3. 可插拔模型层，离线默认、Claude 可显式启用
 
@@ -131,7 +131,7 @@
 依赖方向由外向内，领域/应用层不依赖框架/SDK/渠道（沿用现有 import-boundary 约束）。
 
 ```
-Channels        ┌ HTTP/API + Web ┐ ┌ Feishu adapter seam ┐  ← 飞书尚未接入签名回调
+Channels        ┌ HTTP/API + Web ┐ ┌ Signed Feishu seam ┐  ← 真实 tenant 待验证
                 └────────┬───────┘ └──────────┬──────────┘
                          └────────────────────┘
 Agent 编排       Supervisor / Router（相位机 + 人工闸门）        ← 应用层
@@ -239,7 +239,7 @@ class ModelProvider(Protocol):
 | 分层边界 | ✅ import-boundary 测试；ModelProvider/KB/Clock/Store 均走 port | 真实外部 adapter 仍未接入 |
 | HTTP/Web 渠道 | ✅ 完整 synthetic 闭环与 `/demo` | 不代表真实业务入口 |
 | Foundation 飞书签名回调 | ✅ synthetic `PAYMENT_INCIDENT` 闭环 | 未做真实 tenant smoke |
-| 拒付 `FeishuChannel` | ✅ parser/renderer seam + 渠道单测 | 未接入签名 event/card-action 路由 |
+| 拒付 `FeishuChannel` | ✅ `/chargeback` + namespaced 卡片动作接入签名路由 | 未做真实 tenant smoke |
 | reason-code 与证据规则 | ✅ synthetic 确定性规则表 | #21 等待公司真值校准 |
 | 银行规则知识库 | ✅ `KnowledgeBase` + `InMemoryBankRules` 精确匹配 | 真实规则、RAG/向量库未实现 |
 | 时限 | ✅ Clock + 15/45 天与提醒标志计算 | Scheduler/Messenger、真实通知和状态变更未实现 |
@@ -260,7 +260,7 @@ class ModelProvider(Protocol):
 - **P2 — partially completed synthetic：** 内存精确 BankKB + ④打包 + ⑤起草/mock appeal + ⑥时限计算已完成；RAG、Scheduler/Messenger 和真实通知未完成。
 - **P3 — partially completed synthetic：** shared-case internal A2A、mock 上游、⑦ synthetic 倾向侦测、脱敏与安全分级实现/方案已完成；真实外部 A2A、上游、信号源和生产部署未完成。
 
-当前下一步不是继续扩写 synthetic 能力，而是按独立 Issue 推进：#21 公司数据校准；拒付飞书签名路由与 tenant smoke；RAG（若真实规则体量证明需要）；Scheduler/Messenger；真实外部连接；生产化。任何一项开始前都需先冻结输入、安全边界和验收标准。
+当前下一步不是继续扩写 synthetic 能力，而是按独立 Issue 推进：#21 公司数据校准；拒付飞书真实 tenant smoke；RAG（若真实规则体量证明需要）；Scheduler/Messenger；真实外部连接；生产化。任何一项开始前都需先冻结输入、安全边界和验收标准。
 
 ---
 

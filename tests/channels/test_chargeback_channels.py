@@ -196,6 +196,23 @@ def test_feishu_channel_parses_card_action():
     assert inbound.evidence_code == "fulfillment.tracking"
 
 
+def test_feishu_channel_parses_namespaced_chargeback_card_action():
+    raw = {
+        "action": {
+            "value": {
+                "flow": "chargeback",
+                "action": "submit_evidence",
+                "case_id": "c1",
+                "chargeback_evidence_code": "fulfillment.tracking",
+            }
+        }
+    }
+    inbound = FeishuChannel().parse_inbound(raw)
+    assert inbound.kind is InboundKind.SUBMIT_EVIDENCE
+    assert inbound.case_id == "c1"
+    assert inbound.evidence_code == "fulfillment.tracking"
+
+
 def test_feishu_channel_parses_message_as_open_case_with_actor():
     raw = {
         "event": {
@@ -234,9 +251,10 @@ def test_feishu_channel_renders_need_evidence_card_with_action_button():
     assert len(actions) == 1
     button = actions[0]["actions"][0]
     assert button["value"] == {
+        "flow": "chargeback",
         "action": "submit_evidence",
         "case_id": "c1",
-        "evidence_code": "fulfillment.tracking",
+        "chargeback_evidence_code": "fulfillment.tracking",
     }
 
 

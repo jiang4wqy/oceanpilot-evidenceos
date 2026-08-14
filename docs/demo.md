@@ -92,12 +92,13 @@ synthetic=true`; low source quality therefore routes Foundation diagnosis to
 human review. Confirmation records a synthetic approval audit, does not change
 case state and does not execute a business action.
 
-The chargeback `FeishuChannel` parser/renderer is separately tested in
-`tests/channels/`; it is **not** wired into the signed event/card-action routes.
-Configuring [feishu-setup.md](feishu-setup.md) and a public HTTPS endpoint can
-exercise the Foundation callback flow in a test tenant, but does not turn the
-chargeback cluster into a real Feishu integration. That wiring and real tenant
-smoke remain deferred.
+The same signed event/card-action routes now also drive the chargeback mainline.
+A text message beginning with `/chargeback ` opens a synthetic dispute; every
+generated chargeback button carries `flow=chargeback`, so Foundation callbacks
+remain unchanged. Card actions must match the hashed chat↔case binding created
+by the opening message. Focused coverage is in
+`tests/feishu/test_feishu_routes.py::test_signed_chargeback_message_and_card_action_use_shared_callback`.
+Real tenant smoke remains deferred.
 
 ## Full local gate
 

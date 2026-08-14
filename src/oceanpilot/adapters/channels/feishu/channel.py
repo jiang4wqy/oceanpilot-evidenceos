@@ -77,7 +77,9 @@ class FeishuChannel:
             channel=self.name,
             case_id=_text(value.get("case_id")),
             description=_text(value.get("description")),
-            evidence_code=_text(value.get("evidence_code")),
+            evidence_code=(
+                _text(value.get("chargeback_evidence_code")) or _text(value.get("evidence_code"))
+            ),
             reason_code=_text(value.get("reason_code")),
             actor=_text(value.get("actor")),
         )
@@ -141,6 +143,7 @@ class FeishuChannel:
                             "text": {"tag": "plain_text", "content": "确认该原因"},
                             "type": "primary",
                             "value": {
+                                "flow": "chargeback",
                                 "action": "confirm_reason",
                                 "case_id": delivery.case_id,
                             },
@@ -160,9 +163,10 @@ class FeishuChannel:
                             "text": {"tag": "plain_text", "content": "我已提交该证据"},
                             "type": "primary",
                             "value": {
+                                "flow": "chargeback",
                                 "action": "submit_evidence",
                                 "case_id": delivery.case_id,
-                                "evidence_code": delivery.next_evidence,
+                                "chargeback_evidence_code": delivery.next_evidence,
                             },
                         },
                         {
@@ -170,6 +174,7 @@ class FeishuChannel:
                             "text": {"tag": "plain_text", "content": "无法提供更多，转人工复核"},
                             "type": "danger",
                             "value": {
+                                "flow": "chargeback",
                                 "action": "finalize_evidence",
                                 "case_id": delivery.case_id,
                             },

@@ -12,8 +12,8 @@
 
 Foundation 用于证明版本化证据、确定性诊断、人工闸门、审计和签名飞书回调等底层能力可以独立运行，不作为第二个产品对外叙述。两条切片使用不同的应用服务和 SQLite 文件。真实 Oceanpayment 数据、真实银行规则、
 外部 A2A/MCP/工单、真实上游申诉和任何资金动作都未接入。Foundation 签名飞书回调
-已经过 synthetic callback seam 验证；chargeback `FeishuChannel` 只是已测试的
-parser/renderer adapter，尚未接入这些签名路由或真实 tenant。
+已经过 synthetic callback seam 验证；chargeback `FeishuChannel` 也已通过显式
+`/chargeback` 指令和 namespaced 卡片动作接入相同签名路由，但尚未做真实 tenant smoke。
 
 ## 2. Current Runtime Shape
 
@@ -43,7 +43,8 @@ flowchart LR
     ChargebackAPI --> Deadline["DeadlineTracker"]
     ChargebackAPI -. extension .-> Prevention["Prevention advisor"]
 
-    ChargebackFeishu["Chargeback FeishuChannel (tested seam)"] -. "not wired to signed routes" .-> ChannelService
+    ChargebackFeishu["Chargeback FeishuChannel"] --> Verify
+    Verify --> ChannelService
 ```
 
 所有依赖保持由外向内。领域层不知道 FastAPI、SQLite、飞书 SDK 或 Anthropic SDK；
@@ -181,7 +182,7 @@ Foundation 请求拒绝未知字段、非 UUIDv4 ID、非严格 `true` 的 synth
 `v0.2.1` 已具备 synthetic 演示、Docker 和基础可观测性，但仍不声明生产就绪。后续项为：
 
 - #21 公司流程、保密等级、真实 reason-code/证据模板/银行规则与脱敏案例；
-- chargeback `FeishuChannel` 接入签名 callback、公网 HTTPS 与真实 tenant smoke；
+- 公网 HTTPS 部署与 chargeback 真实 tenant smoke；
 - 在真实规则体量证明需要后再实现 RAG/向量检索；
 - Scheduler/Messenger、出站 SLA 通知与经确认的生产状态流转；
 - 真实 Oceanpayment、外部 A2A/MCP/工单/上游申诉连接；

@@ -2,10 +2,10 @@
 
 OceanPilot exposes two verified callbacks under `/api/v1/integrations/feishu`.
 This guide configures a **minimum-permission enterprise self-built app** to drive
-the synthetic demo. Everything here is for a controlled test tenant. The bot only
-creates synthetic `PAYMENT_INCIDENT` cases and records advisory approvals — it
-never executes any payment, refund, risk-release, configuration, or ticketing
-action.
+the synthetic demo. Everything here is for a controlled test tenant. Normal text
+drives the Foundation `PAYMENT_INCIDENT` demo; text beginning with `/chargeback `
+drives the synthetic chargeback intake and evidence flow. Neither path executes
+payments, refunds, risk release, configuration changes, real appeals, or tickets.
 
 ## 1. Credentials are environment variables only
 
@@ -76,7 +76,22 @@ JSON parse, constant-time verification-token check, DTO validation,
 event/action allowlist, then an idempotent callback claim. Blocking work runs in
 a threadpool.
 
-## 5. Real test-group smoke (deferred, needs authorization)
+## 5. Synthetic chargeback command
+
+In the dedicated test group, send an explicit command so ordinary messages keep
+their existing Foundation behavior:
+
+```text
+/chargeback 客户下单后一直没有收到商品，准备发起拒付
+```
+
+OceanPilot replies with a namespaced interactive card. Reason confirmation and
+evidence buttons reuse the same signed card-action URL. The callback store keeps
+only a domain-separated hash of the chat identifier and rejects a case action
+from any other chat. This proves the callback seam only; it is not a real-tenant
+or production integration claim.
+
+## 6. Real test-group smoke (deferred, needs authorization)
 
 Once a public HTTPS endpoint exists, verify in a real test group that: one
 message creates exactly one case; evidence answers advance readiness item by

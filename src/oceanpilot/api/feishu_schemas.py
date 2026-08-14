@@ -47,6 +47,7 @@ class FeishuMessageEnvelope(_Lenient):
 
 class FeishuActionValue(_Lenient):
     action: StrictStr
+    flow: StrictStr | None = None
     case_id: StrictStr | None = None
     diagnosis_id: StrictStr | None = None
     evidence_id: StrictStr | None = None
@@ -55,6 +56,8 @@ class FeishuActionValue(_Lenient):
     typed_value: StrictStr | StrictBool | None = None
     observed_at: StrictStr | None = None
     source_ref: StrictStr | None = None
+    chargeback_evidence_code: StrictStr | None = None
+    reason_code: StrictStr | None = None
 
 
 class FeishuAction(_Lenient):

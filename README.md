@@ -4,7 +4,7 @@
 
 **帮助跨境 PSP 在举证窗口内收齐有效证据、判断是否值得申诉，并生成可审核的拒付申诉材料。** OceanPilot 用一个版本化案件串联拒付理由、证据缺口、胜诉评估、材料打包、人工审批与审计；AI 负责理解、补问和起草，确定性规则与人工负责裁定。
 
-> **当前边界：** `v0.2.1` 的产品主线是 synthetic 拒付申诉：HTTP/Web 已跑通“受理 → 补证 → 评估 → 打包 → 人审 → mock 申诉”，并展示时限与审计。EvidenceOS Foundation 以 `PAYMENT_INCIDENT` 切片验证版本化证据、确定性诊断、审计和签名飞书回调，是底层能力证明，不是第二个并列产品。拒付飞书适配器尚未接入签名回调或真实 tenant；真实 Oceanpayment 数据、银行规则和上游申诉均未接入，系统不执行任何真实资金或业务动作。
+> **当前边界：** 产品主线是 synthetic 拒付申诉：HTTP/Web 已跑通“受理 → 补证 → 评估 → 打包 → 人审 → mock 申诉”，签名飞书回调已用显式 `/chargeback` 指令和 namespaced 卡片动作跑通受理与补证。EvidenceOS Foundation 以 `PAYMENT_INCIDENT` 切片验证完整证据、确定性诊断和人工确认，是底层能力证明，不是第二个并列产品。真实飞书 tenant、Oceanpayment 数据、银行规则和上游申诉均未接入，系统不执行任何真实资金或业务动作。
 
 ### 三个核心设计
 
@@ -25,9 +25,9 @@ OceanPilot 是一个面向跨境 PSP 拒付运营的独立参赛原型。它把�
 | Chargeback mainline | Available (synthetic) | 受理、reason 确认、逐项补证、确定性评估、银行规则打包、人工闸门后的 mock 申诉与审计 |
 | Web console and demos | Available (synthetic) | `/demo`、跨平台 Python transcript、Docker 一键启动与 synthetic 离线评测 |
 | EvidenceOS Foundation | Supporting slice | `PAYMENT_INCIDENT` 建案/补证、确定性诊断持久化与 identity replay，用于验证底层证据与审计能力 |
-| Foundation Feishu callbacks | Supporting slice | 经签名校验的建案、补问、诊断卡和人工确认审计；为拒付飞书接线提供已验证的渠道基础 |
+| Foundation Feishu callbacks | Supporting slice | 经签名校验的建案、补问、诊断卡和人工确认审计；与拒付主线共享签名与回执基础设施 |
 | Basic observability | Available (synthetic) | PII-free request/trace 日志与进程内决策指标；不是生产日志平台或持久化 metrics backend |
-| Chargeback Feishu adapter | Adapter seam only | 解析/渲染适配器及渠道单测已完成；尚未接入签名事件路由或真实 tenant |
+| Chargeback Feishu callbacks | Available (synthetic) | `/chargeback` 显式建案、理由/补证卡片、签名与 replay 防护、哈希 chat↔case 绑定；未做真实 tenant smoke |
 | Rules and company data | Placeholder only | 当前为确定性 reason-code 表与内存精确规则匹配；真实规则、脱敏案例与 RAG 尚未接入 |
 | Real integrations | Planned | 真实 Oceanpayment、外部 A2A/MCP/工单、上游申诉与公网 Feishu tenant smoke |
 | Production readiness | Not claimed | 尚未完成鉴权、限流、生产可观测性后端、云数据库、备份、部署和运行保障 |
@@ -46,7 +46,7 @@ OceanPilot 将一次跨境拒付固定为下面这条业务链。内部可以由
   → 提交与跟进    当前只调用 synthetic mock connector，并记录时限和审计
 ```
 
-三条设计取向：**(1) 渠道无关内核**，当前完整链路由 HTTP/Web 驱动，飞书解析/渲染适配器已测试但尚未接入签名回调；**(2) 模型可插拔**，离线运行默认 Scripted/确定性 fallback，只有显式开启 live 开关才按安全档位路由到 Claude 或本地隔离模型；**(3) 混合决策**——确定性内核决策、LLM 只解释/建议、人类拍板。系统绝不执行真实支付、退款、风控或上游提交；人工批准只可能调用 synthetic mock connector。
+三条设计取向：**(1) 渠道无关内核**，完整链路由 HTTP/Web 驱动，飞书复用同一 `ChargebackChannelService` 承载受理与补证协作；**(2) 模型可插拔**，离线运行默认 Scripted/确定性 fallback，只有显式开启 live 开关才按安全档位路由到 Claude 或本地隔离模型；**(3) 混合决策**——确定性内核决策、LLM 只解释/建议、人类拍板。系统绝不执行真实支付、退款、风控或上游提交；人工批准只可能调用 synthetic mock connector。
 
 - 设计文档：[docs/design/2026-08-06-chargeback-agent-cluster-design.md](docs/design/2026-08-06-chargeback-agent-cluster-design.md)
 - 安全与部署分级：[docs/security/deployment-tiers.md](docs/security/deployment-tiers.md)
@@ -101,7 +101,7 @@ Foundation 以合成支付异常验证版本化证据、确定性诊断、审计
 
 ![当前可验证原型与入围后完整方案的分层架构](docs/assets/submission/fig-02-layered-architecture.png)
 
-> **事实边界（图为报名期分层规划）：** 图中曾标为规划的 Foundation 诊断主链与飞书回调已实现为 synthetic demo；拒付主线另以 HTTP/Web 运行，其飞书适配器尚未接入签名回调。真实 Oceanpayment 数据、外部 A2A/MCP/工单和真实 tenant 均未接入。
+> **事实边界（图为报名期分层规划）：** 图中曾标为规划的 Foundation 诊断主链与飞书回调已实现为 synthetic demo；拒付主线也已接入同一签名事件/卡片入口，但尚未做真实 tenant smoke。真实 Oceanpayment 数据、外部 A2A/MCP/工单均未接入。
 
 ## 开发者指南 / Developer guide
 
@@ -134,7 +134,7 @@ python -m compileall -q src tests
 - [飞书集成配置指南](docs/feishu-setup.md)
 - [本地演示 runbook](docs/demo.md)
 
-> 公共仓库仅供比赛评审；未授予复用许可。当前原型仅使用合成数据。Foundation 飞书回调已在签名 callback seam 跑通；拒付集群的飞书签名路由接线、真实 tenant smoke 和生产部署仍未完成。
+> 公共仓库仅供比赛评审；未授予复用许可。当前原型仅使用合成数据。Foundation 与拒付主线均已在签名 callback seam 跑通；真实 tenant smoke 和生产部署仍未完成。
 
 ## Quick Start
 
@@ -186,7 +186,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\examples\demo.ps1
 
 - 真实 Oceanpayment 数据/API、真实银行规则、外部 A2A、MCP、工单、上游申诉、自动派单或任何资金动作；
 - RAG/向量检索，以及 company-data 校准；
-- 拒付 `FeishuChannel` 到签名回调路由的接线、公网 HTTPS 部署与真实 tenant smoke；
+- 公网 HTTPS 部署与拒付真实 tenant smoke；
 - 定时任务、出站 SLA 通知和超期后的生产工作流变更；
 - 鉴权、限流、生产可观测性后端、云数据库、备份和发布运维。
 
