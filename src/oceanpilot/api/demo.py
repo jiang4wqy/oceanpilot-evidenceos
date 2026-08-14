@@ -169,6 +169,14 @@ _DEMO_HTML = """<!doctype html>
   textarea:focus,select:focus,input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
   label.chk{display:inline-flex;align-items:center;gap:7px;color:var(--muted);font-size:12.5px;border:1px solid var(--border);border-radius:8px;padding:8px 11px;cursor:pointer;background:var(--surface)}
   .empty{color:var(--faint);font-size:12.5px}
+  .missing-box{margin:12px 0 4px;padding:13px 14px;border:1px solid var(--warn);border-left-width:4px;
+    border-radius:9px;background:var(--sunken)}
+  .missing-head{display:flex;align-items:center;justify-content:space-between;gap:12px;color:var(--ink);font-weight:700}
+  .missing-count{font-family:var(--mono);font-size:12px;color:var(--warn);white-space:nowrap}
+  .missing-list{display:flex;flex-wrap:wrap;gap:7px;margin-top:10px}
+  .missing-item{font-size:12px;color:var(--body);background:var(--surface);border:1px solid var(--border);
+    border-radius:999px;padding:4px 9px}
+  .missing-item.next{color:var(--warn);border-color:var(--warn);font-weight:700}
   :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
   @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
   .schips{display:flex;flex-wrap:wrap;gap:8px;margin:2px 0 12px}
@@ -218,8 +226,8 @@ _DEMO_HTML = """<!doctype html>
       <button class="tbtn primary" onclick="reset()">＋ 新建案件</button>
     </div>
 
-    <div class="howto">如何评审：① 在「拒付处理」选<b>示例场景</b>点「⚡自动补证跑到评估」一键跑完 ·
-      ② 看<b>证据就绪度</b>、规则来源与证据构成，验证「内核决策、模型仅解释」 ·
+    <div class="howto">如何评审：① 选择<b>缺证示例</b>并载入已有材料，先看系统显著提示全部缺口 ·
+      ② 再逐项补证或点「补齐全部（演示）」进入评估，查看<b>证据就绪度</b>与规则来源 ·
       ③ 到「安全与指标」提交一个卡号看<b>安全护栏</b>当场拦截。</div>
 
     <!-- 拒付处理 -->
@@ -292,12 +300,19 @@ _DEMO_HTML = """<!doctype html>
 
 <script>
 const BASE="/api/v1/chargeback";
-const S={caseId:null, loc:"zh", packaged:false, appealed:false, last:null, cardNetwork:"VISA"};
+const S={caseId:null,loc:"zh",packaged:false,appealed:false,last:null,cardNetwork:"VISA",
+  scenarioIndex:0,autoEvidence:["transaction.receipt","fulfillment.tracking"]};
 const SCENARIOS=[
-  {label:"Visa 13.1 · 未收到货",network:"VISA",desc:"客户下单后一直没收到货，现在要求拒付。"},
-  {label:"Visa 10.4 · 无卡欺诈",network:"VISA",desc:"这笔交易不是我本人，是被盗刷的。"},
-  {label:"Mastercard 4853 · 货不对板",network:"MASTERCARD",desc:"收到的商品与下单页面描述不符，现在要求拒付。"},
-  {label:"原因不明 · 人工确认",network:"VISA",desc:"这是一段无法自动判定的中性描述内容。"},
+  {label:"Visa 13.1 · 缺签收证明",network:"VISA",
+    available:["transaction.receipt","fulfillment.tracking"],
+    desc:"客户声称未收到商品；商户目前只有交易收据和物流轨迹，尚未取得签收证明、地址匹配及客服沟通。"},
+  {label:"Visa 10.4 · 缺认证关联",network:"VISA",available:["transaction.receipt"],
+    desc:"持卡人声称这笔交易不是本人、属于盗刷；商户目前只有交易收据，缺少 3DS、AVS/CVV、设备/IP 和历史交易关联。"},
+  {label:"Mastercard 4853 · 缺履约材料",network:"MASTERCARD",
+    available:["transaction.receipt","product.description"],
+    desc:"客户声称收到的商品与下单页面描述不符；商户目前只有交易收据和商品页面，缺少签收、沟通和政策材料。"},
+  {label:"原因不明 · 人工确认",network:"VISA",available:[],
+    desc:"这是一段无法自动判定的中性描述内容。"},
 ];
 const PHASE={NEEDS_INTAKE:["未建案","p-mut","Intake"],REASON_PROPOSED:["待确认原因","p-warn","Confirm"],
   NEED_EVIDENCE:["补证中","p-acc","Evidence"],ASSESSED:["评估完成","p-good","Verdict"]};
@@ -316,6 +331,7 @@ document.querySelectorAll('.nav a').forEach(a=>a.addEventListener('click',()=>{
 function setLocale(l){S.loc=l;$('loc-zh').classList.toggle('on',l==='zh');$('loc-en').classList.toggle('on',l==='en');
   if(S.caseId)refreshCase();}
 function reset(){S.caseId=null;S.packaged=false;S.appealed=false;S.last=null;S.cardNetwork="VISA";
+  S.scenarioIndex=0;S.autoEvidence=SCENARIOS[0].available.slice();
   $('caseHead').innerHTML='<span class="empty">尚未建案 · 在下方选择场景开始。</span>';
   $('crumbId').textContent='新建案件';$('verdictCard').style.display='none';
   $('auditOut').innerHTML='<li class="empty">建案后自动记录。</li>';$('agentOut').innerHTML='<div class="empty">—</div>';
@@ -338,17 +354,22 @@ function renderStages(){const stt=stageStatus();let h="";
 
 async function openCase(){const {ok,data}=await api("POST","/cases",{description:$('desc').value.trim()});
   if(!ok){$('action').innerHTML='<span class="pill p-crit">建案失败：描述不能为空</span>';return;}
-  S.caseId=data.case_id;S.packaged=false;S.appealed=false;apply(data);}
+  S.caseId=data.case_id;S.packaged=false;S.appealed=false;
+  S.autoEvidence=SCENARIOS[S.scenarioIndex].available.slice();apply(data);}
 async function refreshCase(){if(!S.caseId)return;apply((await api("GET",`/cases/${S.caseId}`)).data);}
 async function confirmReason(){const v=$('fix')?$('fix').value:"";apply((await api("POST",`/cases/${S.caseId}/confirm`,v?{reason_code:v}:{})).data);}
 async function submitEvidence(code){apply((await api("POST",`/cases/${S.caseId}/evidence`,{evidence_code:code})).data);}
 async function finalize(){apply((await api("POST",`/cases/${S.caseId}/finalize`)).data);}
-function fillScenario(i){const d=$('desc');if(d)d.value=SCENARIOS[i].desc;S.cardNetwork=SCENARIOS[i].network;
+function fillScenario(i){const d=$('desc');if(d)d.value=SCENARIOS[i].desc;S.scenarioIndex=i;
+  S.cardNetwork=SCENARIOS[i].network;S.autoEvidence=SCENARIOS[i].available.slice();
   document.querySelectorAll('.schip').forEach(c=>c.classList.toggle('on',+c.dataset.i===i));}
 async function autoRun(){if(!S.caseId)await openCase();let g=0;
   while(S.last&&S.last.phase!=="ASSESSED"&&g++<40){
     if(S.last.phase==="REASON_PROPOSED")await confirmReason();
-    else if(S.last.phase==="NEED_EVIDENCE")await submitEvidence(S.last.next_evidence);else break;}}
+    else if(S.last.phase==="NEED_EVIDENCE"&&S.autoEvidence.length){
+      await submitEvidence(S.autoEvidence.shift());}else break;}}
+async function completeAll(){let g=0;while(S.last&&S.last.phase==="NEED_EVIDENCE"&&g++<40){
+  await submitEvidence(S.last.next_evidence);}}
 
 function apply(d){if(!d||!d.case_id)return;S.last=d;
   $('crumbId').textContent=d.case_id.slice(0,18);
@@ -379,16 +400,21 @@ function renderAction(){const d=S.last;const tag=$('phaseTag');
       +`<div class="schips">${chips}</div>`
       +`<textarea id="desc" rows="2">${esc(SCENARIOS[0].desc)}</textarea>`
       +`<div class="actions"><button class="tbtn primary" onclick="openCase()">建案 · 开始</button>`
-      +`<button class="tbtn" onclick="autoRun()">⚡ 自动补证跑到评估</button></div>`;return;}
+      +`<button class="tbtn" onclick="autoRun()">载入该场景已有证据</button></div>`;return;}
   const ph=d.phase;if(tag)tag.textContent=(PHASE[ph]||["","",""])[2];
   if(ph==="REASON_PROPOSED"){
     $('action').innerHTML=`<div class="muted">${esc(d.question||"")}</div>`
       +`<div class="actions"><select id="fix" style="max-width:280px"></select>`
       +`<button class="tbtn primary" onclick="confirmReason()">确认 / 更正</button></div>`;populateReasons();
   }else if(ph==="NEED_EVIDENCE"){
-    $('action').innerHTML=`<div style="font-size:15px;color:var(--ink);font-weight:600">${esc(d.question||"")}</div>`
+    const labels=d.missing_labels||[];const next=d.next_evidence_label||"下一项证据";
+    const missing=labels.map(x=>`<span class="missing-item ${x===next?'next':''}">`
+      +`${x===next?'下一项 · ':''}${esc(x)}</span>`).join("");
+    $('action').innerHTML=`<div class="missing-box"><div class="missing-head"><span>材料尚未齐全</span>`
+      +`<span class="missing-count">仍缺 ${labels.length} 项</span></div><div class="missing-list">${missing}</div></div>`
+      +`<div style="font-size:15px;color:var(--ink);font-weight:600;margin-top:14px">${esc(d.question||"")}</div>`
       +`<div class="actions"><button class="tbtn primary" onclick="submitEvidence('${esc(d.next_evidence)}')">我已提交该证据</button>`
-      +`<button class="tbtn" onclick="autoRun()">⚡ 自动补齐剩余</button>`
+      +`<button class="tbtn" onclick="completeAll()">补齐全部（演示）</button>`
       +`<button class="tbtn danger" onclick="finalize()">无法提供更多 · 转人工</button></div>`;
   }else if(ph==="ASSESSED"){$('action').innerHTML='<span class="muted">证据收集已完成，结论见下方「证据与申诉评估」。</span>';}
   else $('action').innerHTML=`<span class="muted">阶段：${esc(ph)}</span>`;}

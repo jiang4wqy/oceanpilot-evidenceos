@@ -19,9 +19,12 @@ docker build -t oceanpilot-evidenceos .
 docker run --rm -p 127.0.0.1:8000:8000 oceanpilot-evidenceos
 ```
 
-Open `http://127.0.0.1:8000/` (redirects to `/demo`), choose a synthetic
-scenario, then use the automatic evidence run. `/docs` exposes the strict API
-contract and `/health` checks the local stores.
+Open `http://127.0.0.1:8000/` (redirects to `/demo`) and choose a synthetic
+partial-evidence scenario. Load its existing materials first: the console stops
+in evidence collection and prominently lists every missing item, with the next
+requested item highlighted. Submit items one by one, use “补齐全部（演示）” to
+continue quickly, or finalize the incomplete case to demonstrate human review.
+`/docs` exposes the strict API contract and `/health` checks the local stores.
 
 Docker is optional. To run from a Python 3.12 virtual environment instead:
 

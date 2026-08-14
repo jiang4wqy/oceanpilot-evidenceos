@@ -174,8 +174,16 @@ def _response(delivery: Delivery) -> ChargebackCaseResponse:
         collection_finalized=delivery.collection_finalized,
         collected=delivery.collected,
         next_evidence=delivery.next_evidence,
+        next_evidence_label=(
+            label_of(ChargebackEvidenceCode(delivery.next_evidence))
+            if delivery.next_evidence is not None
+            else None
+        ),
         question=delivery.question,
         missing=delivery.missing,
+        missing_labels=tuple(
+            label_of(ChargebackEvidenceCode(code)) for code in (delivery.missing or ())
+        ),
         assessment=assessment,
         deadline=deadline,
         facts=facts,

@@ -21,6 +21,9 @@ def test_create_case_classifies_and_asks_for_evidence(tmp_path):
     assert body["reason_code"] == DisputeReasonCode.PRODUCT_NOT_RECEIVED.value
     assert body["phase"] == "NEED_EVIDENCE"
     assert body["next_evidence"] in body["missing"]
+    assert body["next_evidence_label"] in body["missing_labels"]
+    assert len(body["missing_labels"]) == len(body["missing"])
+    assert all("." not in label for label in body["missing_labels"])
 
 
 def test_full_evidence_flow_reaches_assessment(tmp_path):

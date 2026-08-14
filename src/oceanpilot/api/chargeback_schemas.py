@@ -216,8 +216,10 @@ class ChargebackCaseResponse(BaseModel):
     collection_finalized: StrictBool = False
     collected: tuple[StrictStr, ...] = ()
     next_evidence: StrictStr | None = None
+    next_evidence_label: StrictStr | None = None
     question: StrictStr | None = None
     missing: tuple[StrictStr, ...] | None = None
+    missing_labels: tuple[StrictStr, ...] = ()
     assessment: ChargebackAssessmentDTO | None = None
     deadline: ChargebackDeadlineDTO | None = None
     facts: ChargebackFactsDTO | None = None

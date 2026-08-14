@@ -44,13 +44,18 @@ def test_demo_links_to_api_docs(tmp_path):
     assert 'href="/health"' in body
 
 
-def test_demo_has_scenarios_autorun_and_safety_panel(tmp_path):
+def test_demo_has_partial_scenarios_missing_evidence_and_safety_panel(tmp_path):
     with _client(tmp_path) as client:
         body = client.get("/demo").text
     assert "示例场景" in body  # one-click scenario picker
-    assert "自动补证" in body  # auto-run to assessment
+    assert "载入该场景已有证据" in body
+    assert "材料尚未齐全" in body and "仍缺" in body
+    assert "补齐全部（演示）" in body
     assert "安全护栏" in body and "/safety/scan" in body  # visible PII guardrail
     assert "如何评审" in body  # evaluator orientation
     assert "Visa 13.1" in body and "Visa 10.4" in body and "Mastercard 4853" in body
+    assert "缺签收证明" in body and "缺认证关联" in body and "缺履约材料" in body
+    assert 'available:["transaction.receipt","fulfillment.tracking"]' in body
+    assert 'available:["transaction.receipt","product.description"]' in body
     assert "规则证据就绪度" in body
     assert "预计胜诉概率" not in body
