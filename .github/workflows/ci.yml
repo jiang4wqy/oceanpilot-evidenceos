@@ -101,7 +101,7 @@ jobs:
           demo = (runner_temp / "oceanpilot-demo.html").read_text()
 
           assert health == {"status": "ok"}
-          assert "Oceanpayment · 交易诊断" in demo
+          assert "Oceanpayment · 商户工作台" in demo
           assert "Observed facts" in demo
           assert "需要商户补充 2 项信息" in demo
           assert "/api/v1/chargeback" in demo

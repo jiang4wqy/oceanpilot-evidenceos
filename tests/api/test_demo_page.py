@@ -16,7 +16,7 @@ def test_demo_page_is_served_html(tmp_path):
     assert resp.status_code == 200
     assert resp.headers["content-type"].startswith("text/html")
     body = resp.text
-    assert "Oceanpayment · 交易诊断" in body
+    assert "Oceanpayment · 商户工作台" in body
     assert "/api/v1/chargeback" in body  # the page drives the real API
     assert "人工确认并模拟提交" in body  # the safety boundary remains in the workflow
 
@@ -34,7 +34,7 @@ def test_root_redirects_to_demo(tmp_path):
         assert r.headers["location"] == "/demo"
         followed = client.get("/")
     assert followed.status_code == 200
-    assert "Oceanpayment · 交易诊断" in followed.text
+    assert "Oceanpayment · 商户工作台" in followed.text
 
 
 def test_demo_keeps_technical_endpoints_out_of_customer_navigation(tmp_path):
@@ -46,14 +46,17 @@ def test_demo_keeps_technical_endpoints_out_of_customer_navigation(tmp_path):
     assert 'href="/health"' not in body
 
 
-def test_demo_has_partial_scenarios_missing_evidence_and_safety_panel(tmp_path):
+def test_demo_guides_case_creation_and_missing_evidence_completion(tmp_path):
     with _client(tmp_path) as client:
         body = client.get("/demo").text
-    assert "选择一个常见场景" in body  # one-click scenario picker
-    assert "载入示例材料" in body
+    assert "1. 选择客户提出的争议类型" in body
+    assert "确认创建案件" in body
     assert "材料尚未齐全" in body and "仍缺" in body
-    assert "补齐缺失材料" in body
-    assert "敏感信息检查" in body and "/safety/scan" in body  # visible PII guardrail
+    assert "下一项优先补交" in body
+    assert "本次无法提供，提交人工复核" in body
+    assert "载入示例材料" not in body
+    assert "补齐缺失材料" not in body
+    assert "/safety/scan" in body  # PII guardrail remains available to the app
     assert "Visa 13.1" in body and "Visa 10.4" in body and "Mastercard 4853" in body
     assert "未收到货" in body and "非本人交易" in body and "商品不符" in body
     assert 'available:["transaction.receipt","fulfillment.tracking"]' in body
@@ -67,8 +70,9 @@ def test_demo_uses_oceanpayment_console_language_without_ai_jargon(tmp_path):
         body = client.get("/demo").text
     assert "Oceanpayment" in body
     assert "--accent:#087a70" in body
-    assert "概览" in body and "交易" in body and "诊断" in body
-    assert "拒付案件" in body and "交易预警" in body and "规则与配置" in body
+    assert "交易与诊断" in body and "案件中心" in body and "交易风险" in body
+    assert "创建并补全案件" in body and "查看诊断" in body
+    assert "导出当前结果" not in body and "规则与配置" not in body
     assert "Observed facts" in body and "Recommended action" in body
     assert "需要商户补充 2 项信息" in body
     assert "已有 1 项 · 仍缺 5 项" in body
