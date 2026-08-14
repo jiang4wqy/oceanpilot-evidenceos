@@ -37,15 +37,6 @@ class EvidenceRequirementRecord(_ImportModel):
     critical: StrictBool = False
 
 
-class ReasonCodeMappingRecord(_ImportModel):
-    """Map a card-network reason code to the kernel's closed reason family."""
-
-    card_network: Annotated[StrictStr, Field(min_length=1, max_length=64)]
-    network_reason_code: Annotated[StrictStr, Field(min_length=1, max_length=64)]
-    reason_code: DisputeReasonCode
-    notes: Annotated[StrictStr, Field(max_length=500)] = ""
-
-
 class ReasonPolicyRecord(_ImportModel):
     """A reason-code rule row for the deterministic kernel table."""
 
