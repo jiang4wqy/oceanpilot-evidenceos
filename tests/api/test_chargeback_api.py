@@ -163,6 +163,7 @@ def test_assessment_response_exposes_provenance_and_breakdown(tmp_path):
                 json={"evidence_code": body["next_evidence"]},
             ).json()
     a = body["assessment"]
+    assert a["evidence_readiness"] == a["win_likelihood"]
     assert a["explanation_source"] in ("MODEL", "FALLBACK")
     assert a["evidence_breakdown"]
     assert set(a["evidence_breakdown"][0]) == {"code", "label", "weight", "critical", "present"}
@@ -219,6 +220,20 @@ def test_package_endpoint_returns_labeled_representment(tmp_path):
     first = pkg["ordered_evidence"][0]
     assert set(first) == {"code", "label"}
     assert first["label"] and "." in first["code"]
+
+
+def test_package_endpoint_exposes_visa_rule_provenance(tmp_path):
+    with _client(tmp_path) as client:
+        case_id = _ready_case(client)
+        pkg = client.get(
+            f"/api/v1/chargeback/cases/{case_id}/package",
+            params={"card_network": "VISA"},
+        ).json()
+    assert pkg["scheme_reason_code"] == "13.1"
+    assert pkg["rule_version"] == "June 2024"
+    assert pkg["source_document"] == "Dispute Management Guidelines for Visa Merchants"
+    assert pkg["required_assertions"]
+    assert "不是 Visa 官方申诉期限" in pkg["rule_limitation"]
 
 
 def test_appeal_without_approval_is_blocked_and_never_submits(tmp_path):

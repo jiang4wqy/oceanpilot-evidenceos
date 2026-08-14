@@ -51,3 +51,6 @@ def test_demo_has_scenarios_autorun_and_safety_panel(tmp_path):
     assert "自动补证" in body  # auto-run to assessment
     assert "安全护栏" in body and "/safety/scan" in body  # visible PII guardrail
     assert "如何评审" in body  # evaluator orientation
+    assert "Visa 13.1" in body and "Visa 10.4" in body and "Mastercard 4853" in body
+    assert "规则证据就绪度" in body
+    assert "预计胜诉概率" not in body

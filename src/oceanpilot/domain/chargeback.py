@@ -2,8 +2,8 @@
 
 This is the trustworthy kernel the Assess agent wraps: given a dispute reason
 code and the evidence collected so far, it returns — deterministically, with no
-LLM — the required-evidence checklist, what is present/missing, a rule-based win
-likelihood, the responsible team, the submission deadline, and whether the case
+LLM — the required-evidence checklist, what is present/missing, a synthetic
+evidence-readiness score, the responsible team, the submission deadline, and whether the case
 must go to human review. Agents propose; this decides.
 
 Reason codes, evidence codes, and weights are **synthetic placeholders** modeled
@@ -192,6 +192,8 @@ class ChargebackAssessment:
     missing_evidence: tuple[ChargebackEvidenceCode, ...]
     missing_critical: tuple[ChargebackEvidenceCode, ...]
     completeness: Decimal
+    # Legacy name retained for compatibility. This is a synthetic rule-weight
+    # readiness score and must not be presented as a real-world win probability.
     win_likelihood: Decimal
     responsible_team: ResponsibleTeam
     default_deadline_days: int

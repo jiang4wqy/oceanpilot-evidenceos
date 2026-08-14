@@ -52,8 +52,8 @@ For a narrower direct Supervisor demonstration without HTTP/persistence:
 ```
 
 The offline evaluation harness measures intake classification and deterministic
-win-likelihood separation only on bundled synthetic fixtures. It is reproducible
-engineering evidence, not a real-world accuracy claim:
+readiness-score separation only on bundled synthetic fixtures. It is reproducible
+engineering evidence, not a real-world accuracy or win-rate claim:
 
 ```bash
 .venv/bin/python scripts/eval_chargeback.py

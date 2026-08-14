@@ -47,6 +47,7 @@ class ChargebackAssessmentDTO(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     win_likelihood: StrictStr
+    evidence_readiness: StrictStr
     completeness: StrictStr
     responsible_team: StrictStr
     requires_human: StrictBool
@@ -107,6 +108,12 @@ class ChargebackPackageResponse(BaseModel):
     bank_id: StrictStr | None = None
     card_network: StrictStr | None = None
     rule_source: StrictStr
+    scheme_reason_code: StrictStr | None = None
+    rule_version: StrictStr | None = None
+    source_document: StrictStr | None = None
+    source_section: StrictStr | None = None
+    required_assertions: tuple[StrictStr, ...] = ()
+    rule_limitation: StrictStr | None = None
     submission_window_days: StrictInt
     completeness: StrictStr
     ready_to_submit: StrictBool

@@ -99,6 +99,12 @@ def _package_response(
         bank_id=package.bank_id,
         card_network=package.card_network,
         rule_source=package.rule_source,
+        scheme_reason_code=package.scheme_reason_code,
+        rule_version=package.rule_version,
+        source_document=package.source_document,
+        source_section=package.source_section,
+        required_assertions=package.required_assertions,
+        rule_limitation=package.rule_limitation,
         submission_window_days=package.submission_window_days,
         completeness=str(package.completeness),
         ready_to_submit=package.ready_to_submit,
@@ -124,6 +130,7 @@ def _response(delivery: Delivery) -> ChargebackCaseResponse:
         a = delivery.assessment
         assessment = ChargebackAssessmentDTO(
             win_likelihood=a.win_likelihood,
+            evidence_readiness=a.win_likelihood,
             completeness=a.completeness,
             responsible_team=a.responsible_team,
             requires_human=a.requires_human,

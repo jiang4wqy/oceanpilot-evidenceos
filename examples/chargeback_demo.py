@@ -99,7 +99,7 @@ def run(
     assert step.assessment is not None
     assessment = step.assessment.assessment
     say(
-        f"→ 评估：胜诉率约 {int(assessment.win_likelihood * 100)}%，"
+        f"→ 评估：规则证据就绪度 {int(assessment.win_likelihood * 100)}%（非胜诉概率），"
         f"责任域 {assessment.responsible_team.value}，"
         f"{'需人工复核' if assessment.requires_human else '可自动推进'}"
     )

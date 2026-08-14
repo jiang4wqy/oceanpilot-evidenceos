@@ -137,7 +137,7 @@ def _fallback(a: ChargebackAssessment) -> str:
         nxt = "证据齐备，等待人工确认后打包提交" if a.requires_human else "证据齐备，可进入打包"
     review = "需人工复核" if a.requires_human else "可自动推进"
     return (
-        f"合成评估：预计胜诉可能性约 {percent}%，责任域 {a.responsible_team.value}，"
+        f"合成评估：规则证据就绪度 {percent}%（非胜诉概率），责任域 {a.responsible_team.value}，"
         f"{review}。下一步：{nxt}。（{a.default_deadline_days} 天举证时限）"
     )
 

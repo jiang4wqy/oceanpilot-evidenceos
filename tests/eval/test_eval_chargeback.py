@@ -22,4 +22,5 @@ def test_report_renders_markdown_sections():
     report = build_report()
     assert "离线评测报告" in report
     assert "Intake" in report
-    assert "校准" in report
+    assert "规则分离度" in report
+    assert "不代表真实胜诉概率" in report

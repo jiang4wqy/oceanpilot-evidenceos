@@ -53,6 +53,12 @@ class RepresentmentPackage:
     rule_source: str
     cover_note: str
     cover_note_source: ExplanationSource
+    scheme_reason_code: str | None = None
+    rule_version: str | None = None
+    source_document: str | None = None
+    source_section: str | None = None
+    required_assertions: tuple[str, ...] = ()
+    rule_limitation: str | None = None
 
 
 class PackagerAgent:
@@ -101,6 +107,12 @@ class PackagerAgent:
             completeness=completeness,
             ready_to_submit=not missing,
             rule_source=entry.source,
+            scheme_reason_code=entry.scheme_reason_code,
+            rule_version=entry.rule_version,
+            source_document=entry.source_document,
+            source_section=entry.source_section,
+            required_assertions=entry.required_assertions,
+            rule_limitation=entry.limitation,
             cover_note=note,
             cover_note_source=source,
         )

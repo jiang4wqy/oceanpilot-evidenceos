@@ -45,6 +45,31 @@ def test_bank_template_drives_order_and_window():
     assert pkg.ready_to_submit is True
 
 
+def test_scheme_guidance_exposes_traceable_rule_metadata():
+    agent = _agent(ScriptedModelProvider(default_text="note"))
+    pkg = agent.build(
+        DisputeReasonCode.PRODUCT_NOT_RECEIVED,
+        required_evidence_for(DisputeReasonCode.PRODUCT_NOT_RECEIVED),
+        card_network="VISA",
+    )
+    assert pkg.rule_source == "network-guidance"
+    assert pkg.scheme_reason_code == "13.1"
+    assert pkg.rule_version == "June 2024"
+    assert pkg.source_document == "Dispute Management Guidelines for Visa Merchants"
+    assert "Condition 13.1" in (pkg.source_section or "")
+    assert pkg.required_assertions
+    assert "不是 Visa 官方申诉期限" in (pkg.rule_limitation or "")
+
+
+def test_mastercard_4853_profile_is_scoped_to_not_as_described():
+    agent = _agent(ScriptedModelProvider(default_text="note"))
+    reason = DisputeReasonCode.PRODUCT_NOT_AS_DESCRIBED
+    pkg = agent.build(reason, required_evidence_for(reason), card_network="MASTERCARD")
+    assert pkg.scheme_reason_code == "4853"
+    assert pkg.rule_version == "19 May 2026"
+    assert "适用地区" in (pkg.rule_limitation or "")
+
+
 def test_partial_evidence_reports_missing_and_not_ready():
     reason = DisputeReasonCode.CREDIT_NOT_PROCESSED
     agent = _agent(ScriptedModelProvider(default_text="note"))

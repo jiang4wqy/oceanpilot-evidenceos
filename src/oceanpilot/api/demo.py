@@ -219,7 +219,7 @@ _DEMO_HTML = """<!doctype html>
     </div>
 
     <div class="howto">如何评审：① 在「拒付处理」选<b>示例场景</b>点「⚡自动补证跑到评估」一键跑完 ·
-      ② 看<b>胜诉评估</b>的概率、决策来源与证据构成，验证「内核决策、模型仅解释」 ·
+      ② 看<b>证据就绪度</b>、规则来源与证据构成，验证「内核决策、模型仅解释」 ·
       ③ 到「安全与指标」提交一个卡号看<b>安全护栏</b>当场拦截。</div>
 
     <!-- 拒付处理 -->
@@ -234,7 +234,7 @@ _DEMO_HTML = """<!doctype html>
           <div class="bd" id="action"></div>
         </div>
         <div class="card" id="verdictCard" style="display:none">
-          <div class="hd"><h3>胜诉评估</h3><span class="eyebrow">Kernel-decided</span></div>
+          <div class="hd"><h3>证据与申诉评估</h3><span class="eyebrow">Kernel-decided</span></div>
           <div class="bd" id="verdictBody"></div>
         </div>
       </div>
@@ -292,12 +292,12 @@ _DEMO_HTML = """<!doctype html>
 
 <script>
 const BASE="/api/v1/chargeback";
-const S={caseId:null, loc:"zh", packaged:false, appealed:false, last:null};
+const S={caseId:null, loc:"zh", packaged:false, appealed:false, last:null, cardNetwork:"VISA"};
 const SCENARIOS=[
-  {label:"未收到货（可胜诉）",desc:"客户下单后一直没收到货，现在要求拒付。"},
-  {label:"无卡欺诈（需人工）",desc:"这笔交易不是我本人，是被盗刷的。"},
-  {label:"退款未入账",desc:"我已经申请退款，但一直没有退到账。"},
-  {label:"原因不明（需人工确认）",desc:"这是一段无法自动判定的中性描述内容。"},
+  {label:"Visa 13.1 · 未收到货",network:"VISA",desc:"客户下单后一直没收到货，现在要求拒付。"},
+  {label:"Visa 10.4 · 无卡欺诈",network:"VISA",desc:"这笔交易不是我本人，是被盗刷的。"},
+  {label:"Mastercard 4853 · 货不对板",network:"MASTERCARD",desc:"收到的商品与下单页面描述不符，现在要求拒付。"},
+  {label:"原因不明 · 人工确认",network:"VISA",desc:"这是一段无法自动判定的中性描述内容。"},
 ];
 const PHASE={NEEDS_INTAKE:["未建案","p-mut","Intake"],REASON_PROPOSED:["待确认原因","p-warn","Confirm"],
   NEED_EVIDENCE:["补证中","p-acc","Evidence"],ASSESSED:["评估完成","p-good","Verdict"]};
@@ -315,7 +315,7 @@ document.querySelectorAll('.nav a').forEach(a=>a.addEventListener('click',()=>{
   document.querySelectorAll('.view').forEach(x=>x.classList.remove('on'));$('v-'+v).classList.add('on');}));
 function setLocale(l){S.loc=l;$('loc-zh').classList.toggle('on',l==='zh');$('loc-en').classList.toggle('on',l==='en');
   if(S.caseId)refreshCase();}
-function reset(){S.caseId=null;S.packaged=false;S.appealed=false;S.last=null;
+function reset(){S.caseId=null;S.packaged=false;S.appealed=false;S.last=null;S.cardNetwork="VISA";
   $('caseHead').innerHTML='<span class="empty">尚未建案 · 在下方选择场景开始。</span>';
   $('crumbId').textContent='新建案件';$('verdictCard').style.display='none';
   $('auditOut').innerHTML='<li class="empty">建案后自动记录。</li>';$('agentOut').innerHTML='<div class="empty">—</div>';
@@ -343,7 +343,7 @@ async function refreshCase(){if(!S.caseId)return;apply((await api("GET",`/cases/
 async function confirmReason(){const v=$('fix')?$('fix').value:"";apply((await api("POST",`/cases/${S.caseId}/confirm`,v?{reason_code:v}:{})).data);}
 async function submitEvidence(code){apply((await api("POST",`/cases/${S.caseId}/evidence`,{evidence_code:code})).data);}
 async function finalize(){apply((await api("POST",`/cases/${S.caseId}/finalize`)).data);}
-function fillScenario(i){const d=$('desc');if(d)d.value=SCENARIOS[i].desc;
+function fillScenario(i){const d=$('desc');if(d)d.value=SCENARIOS[i].desc;S.cardNetwork=SCENARIOS[i].network;
   document.querySelectorAll('.schip').forEach(c=>c.classList.toggle('on',+c.dataset.i===i));}
 async function autoRun(){if(!S.caseId)await openCase();let g=0;
   while(S.last&&S.last.phase!=="ASSESSED"&&g++<40){
@@ -390,13 +390,13 @@ function renderAction(){const d=S.last;const tag=$('phaseTag');
       +`<div class="actions"><button class="tbtn primary" onclick="submitEvidence('${esc(d.next_evidence)}')">我已提交该证据</button>`
       +`<button class="tbtn" onclick="autoRun()">⚡ 自动补齐剩余</button>`
       +`<button class="tbtn danger" onclick="finalize()">无法提供更多 · 转人工</button></div>`;
-  }else if(ph==="ASSESSED"){$('action').innerHTML='<span class="muted">证据已达标，结论见下方「胜诉评估」。</span>';}
+  }else if(ph==="ASSESSED"){$('action').innerHTML='<span class="muted">证据收集已完成，结论见下方「证据与申诉评估」。</span>';}
   else $('action').innerHTML=`<span class="muted">阶段：${esc(ph)}</span>`;}
 async function populateReasons(){const {data}=await api("GET",`/catalog?locale=${S.loc}`);const sel=$('fix');if(!sel)return;
   sel.innerHTML='<option value="">（接受系统判定）</option>'+data.reasons.map(r=>`<option value="${esc(r.code)}">${esc(r.label)}</option>`).join("");}
 
 function renderAssess(d){const a=d.assessment;if(!a)return;
-  const pct=Math.round(parseFloat(a.win_likelihood||"0")*100);
+  const pct=Math.round(parseFloat(a.evidence_readiness||a.win_likelihood||"0")*100);
   const col=pct>=60?'var(--good)':(pct>=30?'var(--warn)':'var(--crit)');
   const rev=a.requires_human?'<span class="pill p-warn">需人工复核</span>':'<span class="pill p-good">可自动推进</span>';
   const src=a.explanation_source==="MODEL"?"模型":"确定性兜底";
@@ -404,26 +404,34 @@ function renderAssess(d){const a=d.assessment;if(!a)return;
   const chk=bd.map(i=>`<div class="ei"><span class="tick ${i.present?'y':'n'}">${i.present?'✓':'•'}</span>`
     +`${esc(i.label)}${i.critical?' <span class="crit-tag">关键</span>':''}</div>`).join("");
   $('verdictBody').innerHTML=`<div class="verdict"><div><div class="vnum" style="color:${col}">${pct}%</div>`
-    +`<div class="vcap">预计胜诉概率 · 内核判定</div></div>`
+    +`<div class="vcap">规则证据就绪度 · 非胜诉概率</div></div>`
     +`<div class="vmeta"><div class="row"><span class="pill p-acc">判定 · 确定性内核</span>${rev}`
     +`<span class="pill p-mut">责任域 · ${esc(a.responsible_team)}</span>`
     +`<span class="pill p-mut">说明来源 · ${src}</span></div>`
     +`<div class="cov"><div class="track"><i style="width:${cov}%"></i></div><span class="n">证据 ${have}/${bd.length}</span></div></div></div>`
     +`<div class="ev">${chk}</div>`
-    +`<div class="note">${esc(a.explanation)} <b>数字由确定性内核判定，模型仅生成说明。</b></div>`
-    +`<div class="actions"><button class="tbtn primary" onclick="doPackage()">生成 representment 打包</button>`
+    +`<div class="note">${esc(a.explanation)} <b>该分数仅表示合成规则项的就绪程度，不代表真实胜诉概率；模型仅生成说明。</b></div>`
+    +`<div class="actions"><select id="network" onchange="S.cardNetwork=this.value" style="max-width:180px">`
+    +`<option value="VISA" ${S.cardNetwork==='VISA'?'selected':''}>Visa</option>`
+    +`<option value="MASTERCARD" ${S.cardNetwork==='MASTERCARD'?'selected':''}>Mastercard</option></select>`
+    +`<button class="tbtn primary" onclick="doPackage()">生成 representment 打包</button>`
     +`<button class="tbtn" onclick="doAppeal(false)">生成申诉草稿</button>`
     +`<button class="tbtn danger" onclick="doAppeal(true)">人工批准并提交</button></div>`
     +`<div id="pkgOut" class="mt"></div><div id="appealOut" class="mt"></div>`;}
-async function doPackage(){const {ok,data}=await api("GET",`/cases/${S.caseId}/package?locale=${S.loc}`);
+async function doPackage(){const network=$('network')?$('network').value:S.cardNetwork;S.cardNetwork=network;
+  const {ok,data}=await api("GET",`/cases/${S.caseId}/package?locale=${S.loc}&card_network=${encodeURIComponent(network)}`);
   if(!ok){$('pkgOut').innerHTML='<span class="pill p-warn">案件未就绪</span>';return;}
   S.packaged=true;renderStages();
   $('pkgOut').innerHTML=`<div class="kv"><span class="k">打包</span><span><b style="color:var(--ink)">${esc(data.reason_label)}</b>`
-    +` · 规则 ${esc(data.rule_source)} · 完整度 ${esc(data.completeness)} `
+    +` · ${esc(data.card_network||"")} ${esc(data.scheme_reason_code||"")} · 完整度 ${esc(data.completeness)} `
     +`${data.ready_to_submit?'<span class="pill p-good">可提交</span>':'<span class="pill p-warn">未就绪</span>'}</span></div>`
+    +`<div class="kv"><span class="k">需证明</span><span>${data.required_assertions.map(esc).join("；")||"—"}</span></div>`
     +`<div class="kv"><span class="k">随附</span><span>${data.ordered_evidence.map(e=>esc(e.label)).join("、")||"—"}</span></div>`
-    +`<div class="note">${esc(data.cover_note)}</div>`;}
-async function doAppeal(approve){const {data}=await api("POST",`/cases/${S.caseId}/appeal`,approve?{human_approved:true,actor_id:"ou_reviewer"}:{});
+    +`<div class="kv"><span class="k">依据</span><span>${esc(data.source_document||"合成默认规则")} ${esc(data.rule_version||"")} · ${esc(data.source_section||"")}</span></div>`
+    +`<div class="note">${esc(data.cover_note)}${data.rule_limitation?`<br><b>边界：</b>${esc(data.rule_limitation)}`:""}</div>`;}
+async function doAppeal(approve){const network=$('network')?$('network').value:S.cardNetwork;
+  const base={card_network:network};const payload=approve?{...base,human_approved:true,actor_id:"ou_reviewer"}:base;
+  const {data}=await api("POST",`/cases/${S.caseId}/appeal`,payload);
   if(data.submitted){S.appealed=true;renderStages();}
   const b=data.submitted?'<span class="pill p-good">已提交上游(mock)</span>':`<span class="pill p-warn">未提交 · ${esc(data.blocked_reason||"")}</span>`;
   $('appealOut').innerHTML=`<div class="kv"><span class="k">申诉</span><span>${b}`
