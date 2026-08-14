@@ -47,15 +47,27 @@ def test_demo_links_to_api_docs(tmp_path):
 def test_demo_has_partial_scenarios_missing_evidence_and_safety_panel(tmp_path):
     with _client(tmp_path) as client:
         body = client.get("/demo").text
-    assert "示例场景" in body  # one-click scenario picker
-    assert "载入该场景已有证据" in body
+    assert "选择一个常见场景" in body  # one-click scenario picker
+    assert "载入示例材料" in body
     assert "材料尚未齐全" in body and "仍缺" in body
-    assert "补齐全部（演示）" in body
-    assert "安全护栏" in body and "/safety/scan" in body  # visible PII guardrail
-    assert "如何评审" in body  # evaluator orientation
+    assert "补齐示例材料" in body
+    assert "敏感信息检查" in body and "/safety/scan" in body  # visible PII guardrail
+    assert "演示数据" in body  # evaluator orientation
     assert "Visa 13.1" in body and "Visa 10.4" in body and "Mastercard 4853" in body
-    assert "缺签收证明" in body and "缺认证关联" in body and "缺履约材料" in body
+    assert "未收到货" in body and "非本人交易" in body and "商品不符" in body
     assert 'available:["transaction.receipt","fulfillment.tracking"]' in body
     assert 'available:["transaction.receipt","product.description"]' in body
     assert "规则证据就绪度" in body
     assert "预计胜诉概率" not in body
+
+
+def test_demo_uses_oceanpayment_console_language_without_ai_jargon(tmp_path):
+    with _client(tmp_path) as client:
+        body = client.get("/demo").text
+    assert "Oceanpayment" in body
+    assert "--accent:#02983b" in body
+    assert "拒付案件" in body and "交易预警" in body and "规则与运营" in body
+    assert "已有 1 项 · 仍缺 5 项" in body
+    assert "智能体轨迹" not in body
+    assert "确定性内核" not in body
+    assert "toggleTheme" not in body
