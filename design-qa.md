@@ -13,6 +13,7 @@
   - `/tmp/oceanpilot-client-en-status-wrap-final.png`
   - `/tmp/oceanpilot-client-en-status-readable.png`
   - `/tmp/oceanpilot-client-action-buttons-aligned.png`
+  - `/tmp/oceanpilot-client-en-evidence-labels.png`
   - `/tmp/oceanpilot-admin-en-status-wrap.png`
 - Combined comparison evidence:
   - `/tmp/oceanpilot-brand-comparison.png`
@@ -34,6 +35,7 @@ No actionable P0, P1, or P2 mismatch remains.
 - Language isolation: the merchant and maintenance applications use separate preference namespaces. Switching or reloading either application does not change the other application's language.
 - English status legibility: full status copy is preserved. Merchant case flags never break inside a word and use balanced word-boundary wrapping only when the action column needs space.
 - Action-column consistency: all merchant case actions use the same 118 × 38 px button box; the table header, button box, and label are centered on one axis.
+- Evidence-language completeness: all catalog-backed evidence names, including 3DS, AVS, CVV, device/IP, product description, and duplicate checks, use the selected client language in diagnosis, submission actions, and activity text.
 
 The combined comparison frames place each supplied defect screenshot next to the repaired state. They confirm that the badge overflow and material-index drift are resolved, and that the maintenance brand uses the supplied wordmark.
 
@@ -49,6 +51,7 @@ The combined comparison frames place each supplied defect screenshot next to the
 - Scanned all rendered text, placeholders, titles, and ARIA labels in both English applications; no untranslated Chinese strings remained.
 - Measured every rendered English status badge in both applications; none reported horizontal text overflow. `Assessment complete` remains complete and wraps only between words when needed.
 - Measured both `View diagnosis` and `View case` actions; every sampled button reports 118 px width, 38 px height, centered flex alignment, and centered text.
+- Reopened the reported unauthorized-transaction case in English and scanned the full rendered diagnosis view; no Chinese text remained in evidence labels, buttons, or activity descriptions.
 
 ## Comparison history
 

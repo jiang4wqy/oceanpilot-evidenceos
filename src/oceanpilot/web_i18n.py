@@ -57,19 +57,25 @@ COMMON_TRANSLATIONS = {
     "授权异常": "Authorization error",
     "交易收据": "Transaction receipt",
     "AVS 验证结果": "AVS result",
+    "AVS 地址验证结果": "AVS result",
     "CVV 验证结果": "CVV result",
+    "CVV 校验结果": "CVV result",
     "3DS 认证记录": "3DS authentication record",
+    "3DS 认证结果": "3DS authentication result",
     "设备与 IP 关联": "Device and IP correlation",
+    "设备/IP 匹配": "Device/IP match",
     "物流跟踪号/轨迹": "Tracking number/history",
     "签收证明": "Proof of delivery",
     "收货地址匹配": "Delivery address match",
     "商品页面": "Product page",
+    "商品描述": "Product description",
     "退款记录": "Refund record",
     "条款与退款政策": "Terms and refund policy",
     "客户沟通记录": "Customer communications",
     "取消订阅记录": "Subscription cancellation record",
     "历史交易记录": "Prior transaction history",
     "重复扣款核验": "Duplicate charge verification",
+    "重复扣款核查": "Duplicate-charge check",
 }
 
 
@@ -386,6 +392,7 @@ _RUNTIME = r"""
     if((m=source.match(/^材料就绪度 ([0-9.]+)（规则评估）$/)))return `Evidence readiness ${m[1]} (rule assessment)`;
     if((m=source.match(/^补交：(.+)$/)))return `Submit: ${translate(m[1])}`;
     if((m=source.match(/^下一项优先补交：(.+)$/)))return `Submit next: ${translate(m[1])}`;
+    if((m=source.match(/^请求证据：(.+)$/)))return `Requested evidence: ${translate(m[1])}`;
     if((m=source.match(/^负责团队 · (.+)$/)))return `Owner · ${translate(m[1])}`;
     if((m=source.match(/^说明来源 · (.+)$/)))return `Explanation source · ${translate(m[1])}`;
     if((m=source.match(/^辅助 (\d+) · 规则 (\d+)$/)))return `Assisted ${m[1]} · Rules ${m[2]}`;
