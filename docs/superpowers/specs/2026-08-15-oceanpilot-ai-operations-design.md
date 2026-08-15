@@ -1,312 +1,205 @@
-# OceanPilot 全能 AI 运营中枢与支付异常主线设计
+# OceanPilot AI 总窗口与规则库设计
 
 日期：2026-08-15
 
-状态：已批准直接实施
+状态：用户已批准方案 A，可直接实施
 
-视觉方向：C · Ivory Ledger
+前端基线：当前仓库的 GitHub 前端基线 `26e1fa8`
 
-## 1. 目标
+## 1. 已批准决策
 
-OceanPilot 在比赛 Demo 中呈现为“跨境商户成功全能 AI 助手”，但只把一个能力做深：支付异常识别与争议协作。首屏负责建立产品全貌，深层页面必须用现有 API、持久化状态、确定性规则、人审和审计证明能力，不以静态 KPI 或概念文案冒充实现。
+本轮前端只做一个大型新增：在 `/demo` 增加“全能 AI 总窗口”。
 
-成功标准：
+支付异常是总窗口中唯一重点入口。点击后直接执行 `showView("overview")`，进入 GitHub 基线已有的案件中心。案件中心、新建案件、案件诊断、案件详情和交易风险页面保留原有结构、配色、排版和交互；同时增加一个使用相同视觉体系的规则知识页，用于承接诊断与 Package 的精准条款引用。
 
-1. 评委在 20 秒内看懂 OceanPilot 的能力版图、实现状态和本次主演示入口。
-2. “支付异常”是唯一 Live 焦点，其他未实现能力明确标注“已设计”或“规划接入”。
-3. 主流程符合支付与拒付业务逻辑：只有已捕获/已结算交易收到 Issuer 正式争议通知或人工确认的正式拒付通知后，才允许创建拒付案件。
-4. 复用当前持久化案件闭环，不重写补证、评估、打包、人审、mock 提交或案件审计。
-5. 建立可浏览的独立规则数据库原型，并能从打包结果追溯规则版本和来源。
-6. 所有业务数据和动作明确为 Synthetic Demo；不得声称真实 Oceanpayment 接入、真实胜诉率或真实卡组织提交。
+主路径：
 
-## 2. 已选方案与替代方案
+`AI 总窗口 → 支付异常卡 → 原版案件中心 → 原版新建/补证/评估/打包/人审/mock 流程`
 
-采用“事件驱动单案主线”：
+## 2. 目标与成功标准
 
-`AI 中枢 → 支付异常 → 已结算交易的正式争议通知 → Visa 10.4 → 持久化案件 → 通用补证 → 卡组织规则校验与打包 → 人工批准 → mock 提交 → 案件处理审计 + 本次 mock 回执`
+1. 评委在 20 秒内看懂 OceanPilot 是全能 AI 助手，并能找到唯一的支付异常 Demo 入口。
+2. 新总窗口融入 GitHub 基线视觉，不进行全站换肤。
+3. 点击支付异常直接进入现有 `overview`，不经过额外事件队列。
+4. `overview/create/diagnosis/flow/prev` 的页面主体不因本轮发生结构性变化。
+5. 独立规则数据库、Rules API 和 Package provenance 保留，并提供可搜索、可定位、可返回案件上下文的客户端规则知识页。
+6. 所有数据与动作保持 Synthetic/Mock 边界，不声称真实 Oceanpayment、真实胜诉率或真实卡组织提交。
 
-不采用以下方案：
+## 3. 前端范围
 
-- 3DS 失败直接升级拒付：交易未授权、未捕获、未结算，通常不存在可拒付原交易，业务逻辑错误。
-- 案件中心直达：改动最少，但无法解释案件来源和全能 AI 助手定位。
-- 双控制台全景巡游：覆盖面广，但 3–5 分钟内会稀释主线；运维控制台只作为收尾或评委追问入口。
+### 3.1 主要新增页面
 
-保留一个对照分支：3DS/回调异常进入现有 `PAYMENT_INCIDENT` 诊断与技术支持复核，不创建拒付案件。该分支用于证明 OceanPilot 会正确分流，不进入主演示的完整补证流程。
+新增 `v-hub`，并将其作为 `/demo` 首屏。侧栏只增加“AI 运营中枢”入口，原有“案件中心 / 新建案件 / 交易风险”继续存在。
 
-## 3. 复用原则
+总窗口包括：
 
-### 3.1 直接复用
+- 产品定位与 Synthetic Demo 提示。
+- OceanPilot AI Core 状态。
+- 六个能力域的静态能力卡。
+- 支付异常卡作为唯一 Live 可点击节点。
+- 规则数据库状态卡，显示“9 条摘要 / 3 条 Demo Mapped / Backend Ready”，并可进入规则知识页。
+- 确定性规则、人审、mock connector、审计等底层能力状态。
 
-- HEAD 的 Oceanpayment 品牌外壳、侧栏、顶栏和响应式基础。
-- HEAD 的持久化案件中心、独立新建案件、逐项补证和重新读取。
-- HEAD 的证据就绪度、规则打包、人工闸门、mock connector、案件审计和 Agent 判断依据。
-- HEAD 的交易预警 `/prevention/assess` 与敏感信息阻断 `/safety/scan`。
-- `fe520eb` 的完整导航层级、高密度交易表、Processing Path 和诊断三段式结构。
-- `6de1898` 的任务式引导、从交易进入案件以及来源交易上下文。
-- 现有 `KnowledgeBase → BankRuleEntry → PackagerAgent` 规则注入缝隙。
+总窗口不展示没有来源的交易量、授权率、失败率、胜诉率或增长百分比。
 
-### 3.2 只复用容器，不复用内容
+### 3.2 支付异常入口
 
-- 旧概览指标条、趋势图、关注列表和相似交易区域。
-- 旧交易列表的表格结构。
-- 旧诊断页的卡片、路径和三段式布局。
+支付异常卡只调用：
 
-这些区域原来的授权率、交易量、增长率、固定告警、置信度、时间线和日志均为前端硬编码，不恢复。
+`showView("overview")`
 
-### 3.3 明确不做
+它不创建案件、不预选模板、不修改案件状态，也不进入 `incidents` 中间页。评委进入案件中心后，继续使用基线已有的新建案件与闭环。
 
-- 不回滚任何历史提交或整体替换 `demo.py`。
-- 不接入 RAG、向量库、PDF/OCR 自动导入或规则管理后台。
-- 不增加真实退款、重新扣款、风控放行、工单或卡组织提交。
-- 不把 Evidence Readiness 命名为胜诉率。
-- 不宣称规则数据库驱动了整个补证链。
+### 3.3 规则知识页与精准引用
 
-## 4. 信息架构
+新增 `v-rules`，读取真实 Rules list/detail API，不在 HTML 内复制规则数据。页面支持卡组织筛选、文本搜索、规则列表和详情。
 
-商户端导航恢复为完整但诚实的产品结构：
+诊断或 Package 只能使用后端实际返回的 `rule_version_id` 形成引用，不能仅按 reason code 猜测规则。统一导航调用：
 
-1. **AI 运营中枢**：能力地图、实现状态、Synthetic Demo 边界、唯一 Live 支付异常。
-2. **支付异常**：合成异常交易队列、交易处理路径、事实/解释/建议动作。
-3. **异常与争议**：复用当前案件中心、新建案件、案件诊断和案件详情。
-4. **交易风险**：复用现有交易前风险提示。
-5. **规则知识**：新增 9 条规则摘要的搜索、筛选和详情。
-6. **审计与运维**：复用当前案件审计、安全检查，并提供 8003 运维控制台入口；不伪装成全局审计数据库。
+`showRuleReference(ruleVersionId, returnContext)`
 
-其他能力以能力卡展示，不创建空白可点击页面：商户成功、增长洞察、客户支持、自动化编排和企业集成均标注“已设计/规划接入”。
+该函数必须：
 
-## 5. 视觉系统
+- 清除或协调会遮蔽目标规则的筛选条件。
+- 进入 `v-rules`。
+- 打开同一 `rule_version_id` 的详情。
+- 将键盘焦点移到规则详情并显示短暂高亮。
+- 保存来源案件、来源页面和卡组织，提供“返回案件诊断/案件详情”。
 
-采用 Ivory Ledger：暖象牙白主画布、深石墨侧栏、帝王蓝 AI 主色、朱红异常色。
+诊断页通过当前明确选择的卡组织调用只读 `GET /cases/{case_id}/rule-reference` 解析具体条款；该端点不生成材料包，也不写案件状态。若卡组织未选择、规则未映射或响应没有 `rule_version_id`，显示“未解析到具体条款”，不得制造链接。Package 输出直接复用其响应中的 `rule_version_id`。
 
-核心令牌：
+### 3.4 明确不新增
 
-```css
---canvas: #F5F2EB;
---surface: #FEFCF8;
---sidebar: #171A23;
---text: #1A2030;
---text-muted: #697180;
---border: #D8D4CA;
---ai: #5266EB;
---ai-soft: #E8EAFB;
---critical: #C94E4A;
---critical-soft: #F8E5E2;
---success: #2D7E63;
---warning: #9A6A23;
---rule: #8A6A2F;
-```
+本轮 `/demo` 不包含：
 
-约束：
+- `v-incidents` 或 `data-v="incidents"`。
+- 合成事件队列、Processing Path、三段式事件诊断。
+- 3DS Foundation 的前端执行页。
+- Ivory Ledger 全局令牌覆盖。
 
-- 中性色承担至少 85% 面积。
-- 帝王蓝只用于 AI Core、当前导航、主按钮和推理路径。
-- 支付异常固定使用朱红，不与品牌色混用。
-- 规则来源使用低饱和金棕，成功与警告使用独立语义色。
-- 不使用大面积霓虹、蓝绿渐变或装饰性玻璃拟态。
-- 正文至少 12 px，主要交互具有键盘焦点和非颜色状态说明。
+这些内容需要后续单独讨论，不在方案 A 中暗中保留。
 
-## 6. 主流程与页面状态
+## 4. 视觉与交互
 
-### 6.1 AI 运营中枢
+总窗口和规则知识页复用基线已有的 CSS 令牌、明暗主题、侧栏、顶栏、`panel`、`page-head`、按钮和响应式体系。新增样式只作用于 `v-hub` 能力网格、规则列表/详情和引用高亮，不重定义 `:root` 全局颜色。
 
-首屏展示 OceanPilot AI Core 和六个能力域。支付异常节点显示 `LIVE DEMO · 1 synthetic`，其余节点展示 `已实现`、`已设计` 或 `规划接入`。首屏不展示无来源授权率、失败率、交易量或业务提升百分比。点击支付异常后进入异常队列，并自动聚焦主场景：一笔已捕获、已结算的 Visa CNP 合成交易收到 Issuer 正式“非本人交易”争议通知。
+要求：
 
-### 6.2 支付异常与正确分流
+- 总窗口保持原版深色侧栏、蓝色强调和卡片密度。
+- 支付异常除颜色外必须有“LIVE / 当前演示”文字，不依赖颜色单独表达。
+- 其他能力卡明确标注“已实现 / Backend Ready / 规划接入”，无内容的卡不可伪装成可操作页面。
+- 支付异常入口使用原生按钮，支持键盘、焦点状态和可访问名称。
+- 375、768、1024 和 1440 px 无水平溢出；遵守 `prefers-reduced-motion`。
 
-主演示交易的处理路径：
+## 5. 原版案件闭环
 
-`Checkout ✓ → Risk ✓ → 3DS — 未启用/无认证记录 → Authorization ✓ → Capture ✓ → Settlement ✓ → Issuer Dispute Notice !`
+以下 GitHub 基线能力继续原样承担详细演示：
 
-诊断三段式：
+- 持久化案件中心。
+- 独立新建案件与 Visa 10.4 Synthetic 模板。
+- 原因识别与人工确认。
+- 逐项补证与重新读取。
+- Evidence Readiness（非胜诉概率）。
+- 卡组织规则校验与材料包。
+- 诊断/评估中的条款引用与 Package 引用均可返回同一 Rules DB 详情。
+- 人工闸门与 in-process mock connector。
+- 案件处理审计与本次会话 mock 回执。
+- 交易风险与敏感信息检查。
 
-- Observed Facts：已结算、Visa CNP、收到 Issuer 正式争议通知、当前只有交易收据，无 3DS 认证记录。
-- System Interpretation：支付链路成功；异常是事后欺诈争议，候选 Visa 10.4。
-- Recommended Action：由人工创建争议案件，按内部准备清单收集认证、AVS/CVV、设备/IP 和历史交易；不自动退款或提交。
+本轮不把正式 Issuer 通知或结算状态门禁包装成整个系统已经具备的生产约束。直连建案 API 与 Chargeback 飞书 seam 仍是 synthetic 协作接口，尚未校验交易状态和通知来源。
 
-只有 `CAPTURED/SETTLED` 且存在 `ISSUER_DISPUTE_NOTICE` 或经人工确认的正式拒付通知时显示“升级为争议案件”。普通 `CUSTOMER_COMPLAINT` 只能进入预争议分流，不能直接锁定 Visa 10.4 或生成卡组织申诉包。
+## 6. 独立规则数据库
 
-3DS 对照场景调用现有 Foundation `PAYMENT_INCIDENT` 链：创建 Incident、写入结构化证据、执行确定性诊断、路由技术支持/人工复核。该场景明确显示“不可创建拒付案”。
+规则能力继续使用独立 `oceanpilot-rules.db`，不修改 Foundation 或 Chargeback 现有数据库表集合。
 
-### 6.3 交易到案件的桥
+三表：
 
-点击“升级为争议案件”打开现有新建案件页，并：
+- `rule_documents`：来源文档。
+- `rule_versions`：规则版本、原因码、范围、内部映射、核验状态和限制。
+- `rule_requirements`：断言或证据要求、必要性、顺序和内部 evidence code。
 
-- 预选 Visa 10.4 Synthetic 场景。
-- 将 Payment ID、订单、金额、结算状态和投诉事实填入可编辑描述。
-- 显示“本次会话来源交易”提示。
-- 仍由用户点击“确认创建案件”，绝不自动建案。
+数据库要求：
 
-当前 Chargeback Store 不持久化原始描述或来源交易。V1 保持会话级关联并明确标注，不扩展案件数据库；刷新后案件仍可读取，但来源交易快捷返回可能消失。持久化关联是后续独立数据模型任务。
-
-### 6.4 争议闭环
-
-案件创建后完全复用当前状态机：
-
-`OPEN → NEED_EVIDENCE → ASSESSED → Package Preview → Human Gate → Mock Submitted`
-
-- 主场景描述明确，当前启发式会高置信识别并自动确认 `FRAUD_CARD_NOT_PRESENT`，主线直接进入 `NEED_EVIDENCE`。只有低置信输入才进入 `REASON_PROPOSED → 人工确认/更正` 分支。
-- 起始材料仅包含交易收据，页面显示仍缺 5 项。
-- 逐项补证后重新读取后端状态。
-- Fraud 属于高风险类别，即使证据就绪度达到 100%，仍保留人工复核。
-- 未批准的 mock appeal 必须显示阻断原因；批准需填写 actor ID。
-
-页面必须明确区分两套口径：
-
-- **内部案件准备清单**：当前领域策略的 6 项，用于逐项补证和 Evidence Readiness；AVS/CVV 是内部准备项，不宣称为 Visa 官方必需证据。
-- **卡组织打包摘要**：Rules DB 中 Visa 10.4 的 4 项 Demo 摘要，用于 package 校验和来源追溯。
-
-两者名称、数量和用途必须同时显示，不能合并成一份“Visa 官方必需材料”。
-
-Package、批准和 mock receipt 当前不是 Chargeback SQLite 审计事件。UI 必须称为“案件处理审计 + 本次 mock 回执”，不得称为完整提交审计。
-
-## 7. 专有规则数据库原型
-
-### 7.1 边界
-
-新增独立 `oceanpilot-rules.db`，不向 Foundation 或 Chargeback 现有数据库加表。Foundation 启动会严格校验表集合，独立库可避免破坏现有初始化约束。
-
-V1 真实逻辑是：
-
-`通用 reason 补证 → package 时输入 card_network → 规则库匹配 → Packager 校验/排序/打包 → 规则详情追溯`
-
-逐项补证仍由 `domain.chargeback._POLICIES` 驱动；规则库只在打包阶段参与。页面必须使用“卡组织规则校验与打包”，不能使用“规则库驱动全流程”。
-
-### 7.2 三表模型
-
-`rule_documents`
-
-- `document_id`
-- `scheme`
-- `title`
-- `publisher`
-- `source_url`
-- `source_version`
-
-`rule_versions`
-
-- `rule_version_id`
-- `document_id`
-- `scheme_reason_code`
-- `display_name`
-- `category`
-- `region`
-- `version_label`
-- `source_section`
-- `effective_date`
-- `internal_reason_code`
-- `demo_role`
-- `internal_window_days`
-- `verification_status`
-- `limitation`
-
-`rule_requirements`
-
-- `requirement_id`
-- `rule_version_id`
-- `requirement_type`：`ASSERTION` 或 `EVIDENCE`
-- `necessity`：`REQUIRED` 或 `RECOMMENDED`
-- `sequence`
-- `description_zh`
-- `internal_evidence_code`
-
-所有外键启用，种子使用稳定 ID，初始化幂等，`PRAGMA user_version=1`。`(rule_version_id, requirement_type, sequence)` 唯一，防止要求排序不确定。
-
-### 7.3 首批种子
-
-共 9 条规则摘要、3 个可驱动 Demo 映射、3 家卡组织、3 份来源文档：
-
+- `PRAGMA user_version=1`。
+- 外键开启，稳定 ID，初始化幂等并清理非种子遗留行。
+- 9 条 `UNVERIFIED_SUMMARY`，其中 3 条 `DEMO_MAPPED`。
 - Demo Mapped：Visa 10.4、Visa 13.1、Mastercard 4853。
 - Display Only：Visa 12.6、13.2、13.3、13.6、Amex C04、C05。
+- 未核验的生效日期和官方期限保持空值；15 天只代表内部 Demo 准备窗口。
 
-九条种子全部标记 `UNVERIFIED_SUMMARY`。未经直接核验的 `effective_date` 和官方响应期限保持 `NULL`；`internal_window_days` 只表示 Demo 内部准备窗口。
+规则查找优先级：
 
-外部 Markdown 仅作为人工整理输入，不成为运行时依赖。ACME 银行测试规则、示例案例、VAMP/ECP 和 ODPM 跨渠道映射不进入评委目录。
+`银行 override → Rules DB 的 DEMO_MAPPED 网络规则 → InMemory network/default`
 
-统一免责声明：
+数据库损坏或缺表返回 503，不伪装成 404 或普通未命中。`card_network` 和 `bank_id` 在匹配前统一规范化。
 
-> 演示规则摘要；生产使用前须按卡组织、地区、版本和生效日期，以正式 Standards、后台公告及收单机构有效版本复核。
+## 7. Rules API 与 Package provenance
 
-### 7.4 API
+保留：
 
-- `GET /api/v1/chargeback/rules?scheme=&q=`：返回规则摘要、统计和免责声明。
-- `GET /api/v1/chargeback/rules/{rule_version_id}`：返回来源、版本、断言、证据、内部映射和限制。
-- Package 响应增加 `rule_version_id`、`verification_status` 和 `submission_window_basis=INTERNAL_DEMO`。
+- `GET /api/v1/chargeback/rules?scheme=&q=`。
+- `GET /api/v1/chargeback/rules/{rule_version_id}`。
+- `GET /api/v1/chargeback/cases/{case_id}/rule-reference?card_network=`。
+- Package 响应的 `rule_version_id`、`verification_status`、`submission_window_basis`。
 
-无新增 POST、PUT、DELETE，无管理后台。
+这些后端能力同时驱动 `/demo` 的规则知识页。列表和详情始终来自 API；点击诊断或 Package 引用时，以同一 `rule_version_id` 精确定位，不能依赖前端静态映射。`/docs` 和直接 API 仍可作为技术核验入口。
 
-新增两个边界：Repository 实现现有 `KnowledgeBase.lookup()`；只读 `RuleCatalog` port 提供 `list/get`。`BankRuleEntry → RepresentmentPackage → ChargebackPackageResponse` 逐层透传可选的 `rule_version_id`、`verification_status` 和 `submission_window_basis`。
+`win_likelihood` 仅作为弃用兼容字段存在，OpenAPI 必须说明它等同 Evidence Readiness、不是胜诉预测。申诉响应必须固定声明 `synthetic=true` 与 `connector_kind="IN_PROCESS_MOCK"`。
 
-数据库映射规则：
+## 8. 错误与事实边界
 
-- `lookup()` 只选择 `DEMO_MAPPED`；`DISPLAY_ONLY` 永不驱动 Package。
-- 只有 `EVIDENCE + REQUIRED + internal_evidence_code 非空` 构成 `required_evidence/template_order`。
-- `RECOMMENDED` 不阻断就绪；`ASSERTION` 映射到 `required_assertions`。
-- V1 由 Repository 严格解码 DB 行并直接组装 `BankRuleEntry`。现有 ingestion loader 丢弃 provenance 字段，不用于加载这 9 条富规则。
+- 总窗口固定显示 Synthetic Demo。
+- 支付异常卡只导航，不自动建案或执行资金动作。
+- 案件列表错误继续使用原版安全空态。
+- 规则 API 404/503 不在前端伪造数据。
+- 引用解析失败时保留案件事实并显示“未解析到具体条款”，不跳转到相似规则。
+- 所有规则均为演示摘要，生产使用须按卡组织、地区、版本、生效日期和收单机构有效版本复核。
+- 人工批准只调用进程内 mock connector，不代表真实上游提交。
 
-查找优先级：`现有银行专属 override → Rules DB 的 DEMO_MAPPED 卡组织规则 → 现有 InMemory network/default`。只有最终实际来源是 `default` 时，UI 才显示“内部默认模板”。成功查询但无匹配才允许 InMemory 回退；SQLite 异常映射为 `DatabaseUnavailable / 503`，不得静默伪装成未命中。
+## 9. 评委演示脚本
 
-配置新增 `Settings.rules_db_path: Path | None = None` 和 `OCEANPILOT_RULES_DB_PATH`，默认使用主数据库同目录的 `oceanpilot-rules.db`。独立建表与种子仅在 FastAPI lifespan 内执行，`create_app()` 与模块 import 不创建数据库文件；复用 SQLite 连接和事务配置，但不修改 Foundation `REQUIRED_TABLES`。
+1. `0:00–0:30`：展示 AI 总窗口、能力版图和 Synthetic 边界。
+2. `0:30–0:45`：点击唯一 Live“支付异常”，直接进入原版案件中心。
+3. `0:45–1:30`：从原版新建案件选择 Visa 10.4 Synthetic 模板并创建。
+4. `1:30–2:40`：展示缺失材料、逐项补证与 Evidence Readiness。
+5. `2:40–3:30`：在诊断/评估中打开精准条款引用，返回案件后生成材料包，再从 Package 引用定位到同一规则。
+6. `3:30–4:15`：先展示未批准阻断，再进行人工批准与 mock 回执。
+7. `4:15–4:40`：查看案件审计；如评委追问，继续搜索少量 Visa/Mastercard/Amex 摘要或通过 `/docs` 核验 API。
 
-## 8. 错误与空状态
-
-- AI 中枢和合成交易 fixture 永远显示 `Synthetic Demo`。
-- Payment Incident API 失败时保留已知事实，显示“诊断暂不可用”，不伪造结论。
-- 不符合升级条件的交易禁用建案按钮并解释原因。
-- 案件列表、规则列表或详情读取失败时显示可重试错误，不回退假数据。
-- 规则未命中且最终实际来源为 `default` 时显示内部默认模板与复核提示；数据库不可用显示服务错误，不降级为“未命中”。
-- 规则详情不存在返回安全 404，不回显数据库内部信息。
-- mock 提交未批准、材料未齐或连接器失败时保留当前案件状态，并显示明确阻断原因。
-
-## 9. 3–5 分钟评委脚本
-
-1. `0:00–0:25`：AI 中枢与能力状态；点击唯一 Live 支付异常。
-2. `0:25–1:10`：查看已结算交易路径、事实/解释/建议动作；说明 3DS 失败不会进入拒付。
-3. `1:10–1:35`：人工确认升级，创建 Visa 10.4 合成案件。
-4. `1:35–2:35`：展示内部清单 1 项已有、5 项缺失；逐项补一项后，演示快捷方式继续逐项调用现有 `/evidence` API，并以每次后端返回状态补齐剩余项，绝不在前端直接修改就绪度。
-5. `2:35–3:20`：查看证据就绪度、高风险人工复核和规则详情来源。
-6. `3:20–4:05`：生成材料包；先展示未批准阻断，再人工批准进入 mock connector。
-7. `4:05–4:35`：查看案件审计与本次 mock 回执，返回 AI 中枢。
-
-## 10. 验证与测试
-
-### 后端
-
-- 规则三表 schema、外键、`user_version`、9/3 种子数量与幂等初始化。
-- Repository 精确匹配、要求顺序、未知规则和 InMemory 回退。
-- Rules list/detail API、筛选、搜索和安全 404。
-- Package 的 `rule_version_id` 可反查详情。
-- 更新 `test_lifespan_openapi.py` 的冻结路径集合。
-- Rules DB 在 lifespan 前不存在，进入 lifespan 后才创建。
-- SQLite 故障返回 503，且不触发 InMemory 未命中回退。
-- 现有 InMemory、Packager、案件状态机和持久化测试继续通过。
+## 10. 验收
 
 ### 前端
 
-- Demo HTML 包含完整导航、能力状态、Synthetic Demo、支付异常路径和规则免责声明。
-- 3DS 场景无“升级争议”动作；已结算争议场景有人工建案动作。
-- Visa 10.4 描述能进入现有缺证流程。
-- 规则列表可打开详情，Package 可跳转相同 rule version。
-- 案件中心仍只展示后端可读取的持久化案件。
-- 键盘搜索、焦点、窄屏 1024/768 和 `prefers-reduced-motion` 可用。
+- 存在 `id="v-hub"` 和“AI 运营中枢”。
+- 支付异常按钮直接包含 `showView('overview')`。
+- 不存在 `v-incidents`；存在使用基线视觉的 `v-rules` 与规则导航。
+- 诊断与 Package 引用使用响应中的同一 `rule_version_id`，可聚焦详情并返回案件上下文。
+- 基线 `overview/create/diagnosis/flow/prev` 均保留。
+- 基线全局 CSS 令牌不被 Ivory Ledger 覆盖。
+- 嵌入 JavaScript 语法正确，浏览器控制台无错误。
+
+### 后端
+
+- 规则三表、9/3 种子、幂等和污染清理通过。
+- list/detail、筛选、搜索、安全 404 和数据库 503 通过。
+- Package provenance 可反查规则。
+- mock 响应和 legacy readiness 的 OpenAPI 边界通过。
 
 ### 完整门禁
 
-```text
-pytest
-ruff check src tests
-ruff format --check src tests
-compileall src tests
-git diff --check
-/health、/demo、/admin、rules list/detail HTTP smoke
-浏览器主流程与控制台错误检查
-```
+- `pytest`。
+- `ruff check src tests`。
+- `ruff format --check src tests`。
+- `compileall src tests`。
+- `git diff --check`。
+- HTTP smoke：`/health`、`/demo`、`/admin`、Rules list/detail。
+- 浏览器检查 375/768/1024/1440、键盘入口和主闭环。
 
-## 11. 实施顺序
+## 11. 明确延期
 
-1. 独立规则库 schema、repository、种子、配置和测试。
-2. Rules API 与 Package 追溯字段。
-3. 恢复完整导航和 Ivory Ledger 令牌。
-4. AI 中枢、支付异常页和正确分流。
-5. 将 Visa 10.4 来源上下文接入现有新建案件页。
-6. 规则知识页与 Package 跳转。
-7. 文档、测试、浏览器 QA 和服务启动。
+以下内容等待后续讨论：
+
+- 支付异常事件队列与交易级 Processing Path。
+- 3DS 对照场景的前端诊断。
+- 原始交易到案件的持久化关联。
+- 全局视觉换肤或新的配色系统。

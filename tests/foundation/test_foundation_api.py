@@ -325,8 +325,11 @@ def test_openapi_has_exact_foundation_paths(app: FastAPI):
         "/api/v1/chargeback/cases/{case_id}/evidence",
         "/api/v1/chargeback/cases/{case_id}/finalize",
         "/api/v1/chargeback/cases/{case_id}/package",
+        "/api/v1/chargeback/cases/{case_id}/rule-reference",
         "/api/v1/chargeback/metrics",
         "/api/v1/chargeback/prevention/assess",
+        "/api/v1/chargeback/rules",
+        "/api/v1/chargeback/rules/{rule_version_id}",
         "/api/v1/chargeback/safety/scan",
         "/api/v1/admin/overview",
     }
@@ -347,8 +350,11 @@ def test_openapi_has_exact_foundation_paths(app: FastAPI):
         "/api/v1/chargeback/cases/{case_id}/evidence": {"post"},
         "/api/v1/chargeback/cases/{case_id}/finalize": {"post"},
         "/api/v1/chargeback/cases/{case_id}/package": {"get"},
+        "/api/v1/chargeback/cases/{case_id}/rule-reference": {"get"},
         "/api/v1/chargeback/metrics": {"get"},
         "/api/v1/chargeback/prevention/assess": {"post"},
+        "/api/v1/chargeback/rules": {"get"},
+        "/api/v1/chargeback/rules/{rule_version_id}": {"get"},
         "/api/v1/chargeback/safety/scan": {"post"},
         "/api/v1/admin/overview": {"get"},
     }

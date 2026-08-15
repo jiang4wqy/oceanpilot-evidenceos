@@ -20,7 +20,10 @@ from oceanpilot.adapters.feishu.client import (
 )
 from oceanpilot.adapters.feishu.security import FeishuRequestVerifier
 from oceanpilot.adapters.feishu.store import FeishuCallbackStoreFactory
-from oceanpilot.adapters.knowledge.bank_rules import InMemoryBankRules
+from oceanpilot.adapters.knowledge.rule_repository import (
+    SqliteRuleRepository,
+    initialize_rule_database,
+)
 from oceanpilot.adapters.model.composition import build_chargeback_model_provider
 from oceanpilot.adapters.model.fake import ScriptedModelProvider
 from oceanpilot.adapters.persistence.chargeback_sqlite import (
@@ -107,6 +110,8 @@ def create_app(
     )
 
     chargeback_db_path = resolved.resolved_chargeback_db_path()
+    rules_db_path = resolved.resolved_rules_db_path()
+    rule_repository = SqliteRuleRepository(rules_db_path)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -114,6 +119,7 @@ def create_app(
         with store_factory() as store:
             store.healthcheck()
         initialize_chargeback_schema(chargeback_db_path)
+        initialize_rule_database(rules_db_path)
         if resolved.feishu is not None:
             app.state.feishu_store_factory = FeishuCallbackStoreFactory(resolved.feishu.db_path)
         yield
@@ -154,7 +160,8 @@ def create_app(
     application.state.chargeback_deadline = DeadlineTracker(SystemClock())
     # Representment packaging + appeal drafting (appeal submits only behind a
     # human-approval gate; the upstream connector is a synthetic mock).
-    application.state.chargeback_packager = PackagerAgent(chargeback_provider, InMemoryBankRules())
+    application.state.rule_catalog = rule_repository
+    application.state.chargeback_packager = PackagerAgent(chargeback_provider, rule_repository)
     application.state.chargeback_appeal = AppealAgent(chargeback_provider, MockUpstreamConnector())
     # Pre-dispute prevention advisor (purely advisory; never acts on a payment).
     application.state.chargeback_prevention = PreventionAgent(chargeback_provider)

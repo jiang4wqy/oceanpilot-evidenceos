@@ -1,3 +1,8 @@
+import json
+import re
+import shutil
+import subprocess
+
 from fastapi.testclient import TestClient
 
 from oceanpilot.config import Settings
@@ -7,6 +12,43 @@ from oceanpilot.main import create_app
 def _client(tmp_path):
     return TestClient(
         create_app(Settings(db_path=tmp_path / "api.db")), raise_server_exceptions=False
+    )
+
+
+def _embedded_app_script(body: str) -> str:
+    scripts = re.findall(r"<script[^>]*>(.*?)</script>", body, flags=re.DOTALL)
+    return next(script for script in scripts if 'const BASE="/api/v1/chargeback"' in script)
+
+
+def _js_function(script: str, name: str) -> str:
+    marker = script.index(f"function {name}")
+    start = (
+        marker - len("async ")
+        if script[max(0, marker - len("async ")) : marker] == "async "
+        else marker
+    )
+    opening = script.index("{", start)
+    depth = 0
+    for index in range(opening, len(script)):
+        if script[index] == "{":
+            depth += 1
+        elif script[index] == "}":
+            depth -= 1
+            if depth == 0:
+                return script[start : index + 1]
+    raise AssertionError(f"unterminated JavaScript function: {name}")
+
+
+def _run_node(source: str) -> subprocess.CompletedProcess[str]:
+    node = shutil.which("node")
+    assert node is not None, "Node.js is required to validate the embedded demo script"
+    return subprocess.run(
+        [node, "-"],
+        input=source,
+        text=True,
+        encoding="utf-8",
+        capture_output=True,
+        check=False,
     )
 
 
@@ -67,15 +109,29 @@ def test_demo_separates_case_diagnosis_from_new_case_creation(tmp_path):
     assert "规则证据就绪度" in body
     assert "预计胜诉概率" not in body
     assert 'api("GET","/cases")' in body
-    assert "暂无真实案件记录" in body
+    assert "暂无已持久化的本地演示案件" in body
     assert "CASE-20260814" not in body and "OP-20260814" not in body
 
 
-def test_demo_uses_oceanpayment_console_language_without_ai_jargon(tmp_path):
+def test_demo_keeps_oceanpayment_visual_baseline_with_hub_and_rules(tmp_path):
     with _client(tmp_path) as client:
         body = client.get("/demo").text
     assert "Oceanpayment" in body
+    assert "--canvas:#f5f7f5" in body
+    assert "--side:#fff" in body
     assert "--accent:#087a70" in body
+    assert "--crit:#c84646" in body
+    assert "Ivory Ledger" not in body and "--canvas:#F5F2EB" not in body
+    assert 'class="skip-link" href="#mainContent"' in body
+    assert 'id="mainContent" tabindex="-1"' in body
+    assert "view.focus({preventScroll:true})" in body
+    assert "AI 运营中枢" in body and "支付异常" in body and "规则知识" in body
+    assert "onclick=\"showView('overview')\">进入支付异常主线" in body
+    assert 'id="v-incidents"' not in body and 'data-v="incidents"' not in body
+    assert "异常事件队列" not in body and "Processing Path" not in body
+    assert '<div class="brand-product">案件诊断系统</div>' in body
+    assert 'data-v="overview" role="button" tabindex="0">案件中心' in body
+    assert 'data-v="create" role="button" tabindex="0">新建案件' in body
     assert "案件中心" in body and "新建案件" in body and "交易风险" in body
     assert "案件诊断" in body and "查看诊断" in body
     assert "导出当前结果" not in body and "规则与配置" not in body
@@ -83,10 +139,177 @@ def test_demo_uses_oceanpayment_console_language_without_ai_jargon(tmp_path):
     assert "需要商户补充" in body
     assert "已有 1 项 · 仍缺 5 项" in body
     assert "商户" in body and "OceanStore" in body
-    assert "演示环境" not in body and "演示数据" not in body
+    assert "Synthetic Demo" in body and "UNVERIFIED_SUMMARY" in body
+    assert "Curated rules prototype" in body and "本地规则知识库原型" in body
+    assert "Backend Ready · 9 / 3" in body
+    assert "onclick=\"showView('rules')\"" in body
+    assert "Proprietary rules prototype" not in body and "专有规则数据库" not in body
     assert 'id="loc-zh"' not in body and 'id="loc-en"' not in body
     assert "智能体轨迹" not in body
     assert "确定性内核" not in body
     assert "toggleTheme" not in body
+    assert "--rule:" not in body and "var(--rule)" not in body
+    assert "openAdminConsole" not in body and "openActiveAudit" not in body
     assert 'class="ocean-logo"' in body
     assert 'src="data:image/png;base64,' in body
+
+
+def test_embedded_demo_javascript_parses_independently(tmp_path):
+    with _client(tmp_path) as client:
+        script = _embedded_app_script(client.get("/demo").text)
+    node = shutil.which("node")
+    assert node is not None, "Node.js is required to validate the embedded demo script"
+    result = subprocess.run(
+        [node, "--check", "-"],
+        input=script,
+        text=True,
+        encoding="utf-8",
+        capture_output=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+
+
+def test_rule_reference_helpers_execute_with_exact_ids_and_return_context(tmp_path):
+    with _client(tmp_path) as client:
+        script = _embedded_app_script(client.get("/demo").text)
+    source = "\n".join(
+        (
+            _js_function(script, "ruleReferencePath"),
+            _js_function(script, "ruleDetailPath"),
+            _js_function(script, "normalizeRuleReturnContext"),
+            "console.log(JSON.stringify({",
+            "path:ruleReferencePath('case id/1','visa'),",
+            "blank:ruleReferencePath('case-7',''),",
+            "detail:ruleDetailPath('visa-13-1-demo-v1'),",
+            "context:normalizeRuleReturnContext({sourceView:'diagnosis',caseId:'case-7',cardNetwork:'mc'})",
+            "}));",
+        )
+    )
+    result = _run_node(source)
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout) == {
+        "path": "/cases/case%20id%2F1/rule-reference?card_network=VISA",
+        "blank": "",
+        "detail": "/rules/visa-13-1-demo-v1",
+        "context": {
+            "sourceView": "diagnosis",
+            "caseId": "case-7",
+            "cardNetwork": "MC",
+        },
+    }
+
+
+def test_rule_reference_round_trip_keeps_package_output_and_exact_id(tmp_path):
+    with _client(tmp_path) as client:
+        script = _embedded_app_script(client.get("/demo").text)
+    source = "\n".join(
+        (
+            "const classList={add(){},remove(){},toggle(){}};",
+            "const elements={",
+            "ruleSearch:{value:'old'},ruleScheme:{value:'VISA'},",
+            "pkgOut:{innerHTML:'<package>generated</package>'},",
+            "verdictBody:{innerHTML:'<assessment><package>generated</package></assessment>'},",
+            "ruleDetail:{innerHTML:'',classList},crumbId:{textContent:''}};",
+            "const $=id=>elements[id]||(elements[id]={value:'',innerHTML:''});",
+            "const document={querySelectorAll(){return[]}};",
+            "const S={ruleReturnContext:null,currentRuleId:null,caseId:'case-7',",
+            "last:{case_id:'case-7'},selectedCase:null,cardNetwork:'VISA',",
+            "ruleDetailRequestId:0};",
+            "const shown=[];let applyCalls=0;const opened=[];const apiPaths=[];",
+            "function showView(view){shown.push(view)}",
+            "function apply(){applyCalls+=1;elements.verdictBody.innerHTML='<rerendered>'}",
+            "async function openStoredCase(caseId){opened.push(caseId)}",
+            "async function api(method,path){",
+            "apiPaths.push(path);return{ok:false,status:404,data:{}}}",
+            _js_function(script, "ruleDetailPath"),
+            _js_function(script, "normalizeRuleReturnContext"),
+            _js_function(script, "markRuleSelection"),
+            _js_function(script, "openRule"),
+            _js_function(script, "showRuleReference"),
+            _js_function(script, "returnFromRuleReference"),
+            "(async()=>{",
+            "const packageData={rule_version_id:'visa-13-1-demo-v1'};",
+            "showRuleReference(packageData.rule_version_id,{sourceView:'flow',caseId:'case-7',cardNetwork:'VISA'});",
+            "const selectedId=S.currentRuleId;",
+            "await openRule(selectedId);",
+            "await returnFromRuleReference();",
+            "console.log(JSON.stringify({selectedId,apiPaths,shown,applyCalls,opened,packageHtml:$('pkgOut').innerHTML,verdictHtml:$('verdictBody').innerHTML}));",
+            "})().catch(error=>{console.error(error);process.exit(1)});",
+        )
+    )
+    result = _run_node(source)
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout) == {
+        "selectedId": "visa-13-1-demo-v1",
+        "apiPaths": ["/rules/visa-13-1-demo-v1"],
+        "shown": ["rules", "flow"],
+        "applyCalls": 0,
+        "opened": [],
+        "packageHtml": "<package>generated</package>",
+        "verdictHtml": "<assessment><package>generated</package></assessment>",
+    }
+
+
+def test_unselected_network_does_not_request_or_render_rule_link(tmp_path):
+    with _client(tmp_path) as client:
+        script = _embedded_app_script(client.get("/demo").text)
+    source = "\n".join(
+        (
+            "const elements={network:{value:'VISA'},diagnosisNetwork:{value:''},",
+            "diagnosisRuleReferenceOut:{innerHTML:''}};",
+            "const $=id=>elements[id]||(elements[id]={value:'',innerHTML:''});",
+            "const S={caseId:'case-flow',selectedCase:{case_id:'case-diagnosis'},cardNetwork:''};",
+            "let apiCalls=0;async function api(){apiCalls+=1;return{ok:true,data:{}}}",
+            _js_function(script, "ruleReferenceTarget"),
+            _js_function(script, "resolveCaseRuleReference"),
+            "resolveCaseRuleReference('diagnosis').then(()=>console.log(JSON.stringify({apiCalls,hasLink:$('diagnosisRuleReferenceOut').innerHTML.includes('showRuleReference')}))).catch(error=>{console.error(error);process.exit(1)});",
+        )
+    )
+    result = _run_node(source)
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout) == {"apiCalls": 0, "hasLink": False}
+
+
+def test_demo_deep_links_real_rule_versions_and_preserves_case_context(tmp_path):
+    with _client(tmp_path) as client:
+        body = client.get("/demo").text
+    assert 'cardNetwork:""' in body
+    assert "<option value=\"\" ${S.cardNetwork===''?'selected':''}>请选择卡组织</option>" in body
+    assert 'id="diagnosisNetwork"' in body
+    assert "resolveCaseRuleReference('diagnosis')" in body
+    assert "function ruleReferencePath" in body
+    assert "/rule-reference?card_network=${encodeURIComponent(network)}" in body
+    assert "data.match_status!=='EXACT_MATCH'" in body
+    assert "没有使用相似规则代替" in body
+    assert "function showRuleReference(ruleVersionId,returnContext)" in body
+    assert "$('ruleSearch').value=''" in body and "$('ruleScheme').value=''" in body
+    assert "data-rule-version-id" in body and "rule-selected" in body
+    assert "reference-highlight" in body and "detail.focus({preventScroll:true})" in body
+    assert "function returnFromRuleReference" in body
+    assert "返回案件诊断" in body and "返回案件详情" in body
+    assert "规则数据库暂不可用" in body and "旧详情已清除" in body
+    assert "openRuleFromPackage" not in body
+    assert "showRuleReference('${esc(data.rule_version_id)}',ruleReturnContext('flow'))" in body
+    assert "ruleReturnContext('${target.sourceView}')" in body
+
+
+def test_demo_retains_human_review_and_duplicate_submission_guards(tmp_path):
+    with _client(tmp_path) as client:
+        body = client.get("/demo").text
+    assert "caseCreating:false,evidenceSubmitting:false" in body
+    assert "if(S.caseCreating)return" in body
+    assert "evidenceSubmittingCases:new Set()" in body
+    assert "S.evidenceSubmittingCases.has(caseId)" in body
+    assert "S.selectedCase&&S.selectedCase.case_id===caseId" in body
+    assert "sourceTransaction" not in body and "sourceCaseId" not in body
+    assert 'id="formalNoticeConfirm"' not in body
+    assert "普通客户投诉只能进入预争议分流" not in body
+    assert "建案已阻断" not in body
+    assert 'id="actorId"' in body and "需要复核人 Actor ID" in body
+    assert 'id="appealOut" class="mt" aria-live="polite"' in body
+    assert 'actor_id:"ou_reviewer"' not in body
+    assert 'id="submitAppealButton"' in body and "S.appealed" in body
+    assert 'id="diagnosisAlert" role="status" aria-live="polite"' in body
+    assert 'id="preventionOut" class="mt" aria-live="polite"' in body
+    assert "本次 mock 回执" in body

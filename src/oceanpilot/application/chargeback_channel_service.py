@@ -60,7 +60,7 @@ def _agent_trace(state: ChargebackCaseState, step: SupervisorStep) -> tuple[Agen
         trace.append(
             AgentActivity(
                 agent="AssessAgent",
-                action=f"胜诉评估 {outcome.assessment.win_likelihood}（数字由内核判定）",
+                action=f"材料就绪度 {outcome.assessment.win_likelihood}（数字由内核判定）",
                 source=outcome.explanation_source.value,
             )
         )

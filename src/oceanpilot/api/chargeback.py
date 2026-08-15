@@ -1,11 +1,12 @@
-from typing import Annotated
+from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 
 from oceanpilot.api.cases import COMMON_PROBLEMS, PROBLEM_RESPONSE
 from oceanpilot.api.chargeback_schemas import (
     AgentActivityDTO,
     AppealRequest,
+    CaseRuleReferenceResponse,
     CatalogResponse,
     ChargebackAppealResponse,
     ChargebackAssessmentDTO,
@@ -22,6 +23,12 @@ from oceanpilot.api.chargeback_schemas import (
     MetricsResponse,
     PreventionRequest,
     PreventionResponse,
+    RuleCatalogResponse,
+    RuleDetailResponse,
+    RuleDocumentDTO,
+    RuleReferenceDTO,
+    RuleRequirementDTO,
+    RuleSummaryDTO,
     SafetyScanRequest,
     SafetyScanResponse,
     SubmitEvidenceRequest,
@@ -35,6 +42,13 @@ from oceanpilot.application.chargeback_packager import PackagerAgent, Representm
 from oceanpilot.application.chargeback_ports import ChargebackCaseStore
 from oceanpilot.application.chargeback_supervisor import ChargebackSupervisor
 from oceanpilot.application.errors import CaseNotFound
+from oceanpilot.application.knowledge_base import (
+    RULE_CATALOG_DISCLAIMER,
+    KnowledgeBase,
+    RuleCatalog,
+    RuleCatalogItem,
+    RuleRequirement,
+)
 from oceanpilot.application.metrics import DecisionMetrics
 from oceanpilot.domain.chargeback import ChargebackEvidenceCode, DisputeReasonCode
 from oceanpilot.domain.chargeback_prevention import PreventionSignals
@@ -79,6 +93,14 @@ def get_metrics(request: Request) -> DecisionMetrics:
     return request.app.state.chargeback_metrics
 
 
+def get_rule_catalog(request: Request) -> RuleCatalog:
+    return request.app.state.rule_catalog
+
+
+def get_knowledge_base(request: Request) -> KnowledgeBase:
+    return request.app.state.rule_catalog
+
+
 def _norm_locale(locale: str) -> str:
     return "en" if locale == "en" else "zh"
 
@@ -105,6 +127,9 @@ def _package_response(
         source_section=package.source_section,
         required_assertions=package.required_assertions,
         rule_limitation=package.rule_limitation,
+        rule_version_id=package.rule_version_id,
+        verification_status=package.verification_status,
+        submission_window_basis=package.submission_window_basis,
         submission_window_days=package.submission_window_days,
         completeness=str(package.completeness),
         ready_to_submit=package.ready_to_submit,
@@ -112,6 +137,34 @@ def _package_response(
         missing_evidence=_labeled(package.missing_evidence, locale=locale),
         cover_note=package.cover_note,
         cover_note_source=package.cover_note_source.value,
+    )
+
+
+def _rule_summary(rule: RuleCatalogItem) -> RuleSummaryDTO:
+    return RuleSummaryDTO(
+        rule_version_id=rule.rule_version_id,
+        document_id=rule.document_id,
+        scheme=rule.scheme,
+        scheme_reason_code=rule.scheme_reason_code,
+        display_name=rule.display_name,
+        category=rule.category,
+        region=rule.region,
+        version_label=rule.version_label,
+        demo_role=rule.demo_role,
+        verification_status=rule.verification_status,
+        source_document=rule.source_document,
+        source_url=rule.source_url,
+    )
+
+
+def _rule_requirement(requirement: RuleRequirement) -> RuleRequirementDTO:
+    return RuleRequirementDTO(
+        requirement_id=requirement.requirement_id,
+        requirement_type=requirement.requirement_type,
+        necessity=requirement.necessity,
+        sequence=requirement.sequence,
+        description_zh=requirement.description_zh,
+        internal_evidence_code=requirement.internal_evidence_code,
     )
 
 
@@ -301,6 +354,66 @@ def finalize_evidence(
 
 
 @router.get(
+    "/cases/{case_id}/rule-reference",
+    response_model=CaseRuleReferenceResponse,
+    responses={404: PROBLEM_RESPONSE, 409: PROBLEM_RESPONSE, **COMMON_PROBLEMS},
+)
+def get_case_rule_reference(
+    case_id: str,
+    store: Annotated[ChargebackCaseStore, Depends(get_store)],
+    knowledge_base: Annotated[KnowledgeBase, Depends(get_knowledge_base)],
+    card_network: Literal["VISA", "MASTERCARD", "AMEX"],
+) -> CaseRuleReferenceResponse:
+    """Resolve an exact versioned rule without generating a representment package."""
+
+    state = store.load(case_id)
+    if state is None:
+        raise CaseNotFound()
+    if state.reason_code is None or not state.reason_confirmed:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="case reason is not confirmed",
+        )
+
+    entry = knowledge_base.lookup(state.reason_code, card_network=card_network)
+    if entry.rule_version_id is None:
+        return CaseRuleReferenceResponse(
+            case_id=case_id,
+            card_network=card_network,
+            match_status="NO_EXACT_MAPPING",
+        )
+
+    if (
+        entry.scheme_reason_code is None
+        or entry.verification_status is None
+        or entry.submission_window_basis is None
+        or entry.limitation is None
+    ):
+        # A versioned link is useful only when its provenance boundary is complete.
+        return CaseRuleReferenceResponse(
+            case_id=case_id,
+            card_network=card_network,
+            match_status="NO_EXACT_MAPPING",
+        )
+
+    return CaseRuleReferenceResponse(
+        case_id=case_id,
+        card_network=card_network,
+        match_status="EXACT_MATCH",
+        rule_reference=RuleReferenceDTO(
+            rule_version_id=entry.rule_version_id,
+            scheme_reason_code=entry.scheme_reason_code,
+            rule_version=entry.rule_version,
+            source_document=entry.source_document,
+            source_section=entry.source_section,
+            verification_status=entry.verification_status,
+            submission_window_basis=entry.submission_window_basis,
+            limitation=entry.limitation,
+        ),
+    )
+
+
+@router.get(
     "/cases/{case_id}/package",
     response_model=ChargebackPackageResponse,
     responses={404: PROBLEM_RESPONSE, **COMMON_PROBLEMS},
@@ -350,6 +463,8 @@ def post_appeal(
     )
     metrics.incr("appeal_submitted" if outcome.submitted else "appeal_blocked")
     return ChargebackAppealResponse(
+        synthetic=True,
+        connector_kind="IN_PROCESS_MOCK",
         draft=outcome.draft,
         draft_source=outcome.draft_source.value,
         submitted=outcome.submitted,
@@ -375,6 +490,68 @@ def safety_scan(payload: SafetyScanRequest) -> SafetyScanResponse:
             detail="检出疑似敏感数据（如卡号 / PII），已拦截，不予接收。",
         )
     return SafetyScanResponse(accepted=True, detail="未检出敏感数据。")
+
+
+@router.get(
+    "/rules",
+    response_model=RuleCatalogResponse,
+    responses={**COMMON_PROBLEMS},
+)
+def list_rules(
+    catalog: Annotated[RuleCatalog, Depends(get_rule_catalog)],
+    scheme: str | None = None,
+    q: str | None = None,
+) -> RuleCatalogResponse:
+    rules = catalog.list_rules(scheme=scheme, query=q)
+    return RuleCatalogResponse(
+        items=tuple(_rule_summary(rule) for rule in rules),
+        total=len(rules),
+        demo_mapped=sum(rule.demo_role == "DEMO_MAPPED" for rule in rules),
+        scheme_count=len({rule.scheme for rule in rules}),
+        source_document_count=len({rule.document_id for rule in rules}),
+        disclaimer=RULE_CATALOG_DISCLAIMER,
+    )
+
+
+@router.get(
+    "/rules/{rule_version_id}",
+    response_model=RuleDetailResponse,
+    responses={404: PROBLEM_RESPONSE, **COMMON_PROBLEMS},
+)
+def get_rule(
+    rule_version_id: str,
+    catalog: Annotated[RuleCatalog, Depends(get_rule_catalog)],
+) -> RuleDetailResponse:
+    rule = catalog.get_rule(rule_version_id)
+    if rule is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    return RuleDetailResponse(
+        rule_version_id=rule.rule_version_id,
+        scheme=rule.scheme,
+        scheme_reason_code=rule.scheme_reason_code,
+        display_name=rule.display_name,
+        category=rule.category,
+        region=rule.region,
+        version_label=rule.version_label,
+        source_section=rule.source_section,
+        effective_date=rule.effective_date,
+        internal_reason_code=rule.internal_reason_code,
+        demo_role=rule.demo_role,
+        internal_window_days=rule.internal_window_days,
+        verification_status=rule.verification_status,
+        limitation=rule.limitation,
+        document=RuleDocumentDTO(
+            document_id=rule.document.document_id,
+            scheme=rule.document.scheme,
+            title=rule.document.title,
+            publisher=rule.document.publisher,
+            source_url=rule.document.source_url,
+            source_version=rule.document.source_version,
+        ),
+        assertions=tuple(_rule_requirement(item) for item in rule.assertions),
+        evidence=tuple(_rule_requirement(item) for item in rule.evidence),
+        disclaimer=RULE_CATALOG_DISCLAIMER,
+    )
 
 
 @router.get(

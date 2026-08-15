@@ -59,6 +59,9 @@ class RepresentmentPackage:
     source_section: str | None = None
     required_assertions: tuple[str, ...] = ()
     rule_limitation: str | None = None
+    rule_version_id: str | None = None
+    verification_status: str | None = None
+    submission_window_basis: str | None = None
 
 
 class PackagerAgent:
@@ -113,6 +116,9 @@ class PackagerAgent:
             source_section=entry.source_section,
             required_assertions=entry.required_assertions,
             rule_limitation=entry.limitation,
+            rule_version_id=entry.rule_version_id,
+            verification_status=entry.verification_status,
+            submission_window_basis=entry.submission_window_basis,
             cover_note=note,
             cover_note_source=source,
         )
