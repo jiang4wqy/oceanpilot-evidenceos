@@ -8,9 +8,15 @@
   - `/tmp/oceanpilot-admin-desktop-after.png`
   - `/tmp/oceanpilot-admin-narrow-after.png`
   - `/tmp/oceanpilot-client-material-visible.png`
+  - `/tmp/oceanpilot-client-en-independent.png`
+  - `/tmp/oceanpilot-admin-en-independent.png`
+  - `/tmp/oceanpilot-client-en-status-wrap-final.png`
+  - `/tmp/oceanpilot-client-en-status-readable.png`
+  - `/tmp/oceanpilot-admin-en-status-wrap.png`
 - Combined comparison evidence:
   - `/tmp/oceanpilot-brand-comparison.png`
   - `/tmp/oceanpilot-alignment-comparison.png`
+  - `/tmp/oceanpilot-i18n-comparison.png`
 - Viewports / capture: 1280 × 900 desktop and 660 × 900 narrow-screen states
 - State: maintenance overview and merchant diagnosis, both reading the same persisted case store
 
@@ -23,6 +29,9 @@ No actionable P0, P1, or P2 mismatch remains.
 - Merchant alignment: material numbers have an explicit, selector-safe 24 px circular grid and no longer inherit the descriptive-text block rule.
 - Responsive behavior: at 660 px both applications report `body.scrollWidth` below `innerWidth`; the maintenance sidebar collapses and card grids stack to one column.
 - Information hierarchy: maintenance has a dedicated persisted-case inventory; the customer diagnosis keeps the missing-material count and actions in the primary task area.
+- Language fidelity: every visible label, placeholder, status, dynamically rendered record, document title, and accessibility label switches between Chinese and English without a page reload.
+- Language isolation: the merchant and maintenance applications use separate preference namespaces. Switching or reloading either application does not change the other application's language.
+- English status legibility: full status copy is preserved. Merchant case flags stay on one readable line at laptop widths, never break inside a word, and move the secondary case panels below the table so all five table columns remain visible.
 
 The combined comparison frames place each supplied defect screenshot next to the repaired state. They confirm that the badge overflow and material-index drift are resolved, and that the maintenance brand uses the supplied wordmark.
 
@@ -33,6 +42,10 @@ The combined comparison frames place each supplied defect screenshot next to the
 - Opened maintenance `业务指标` and verified the same durable case IDs, reason, phase, missing count, and creation time are shown.
 - Confirmed the merchant case center refreshes every five seconds and maintenance overview polling returns the persisted case inventory.
 - Checked both browser consoles after interaction; no warnings or errors were emitted.
+- Switched only the merchant workspace to English and confirmed the maintenance center remained Chinese; then switched only the maintenance center to English and confirmed the merchant workspace remained Chinese.
+- Reloaded both applications with different selected languages and confirmed each application restored its own preference.
+- Scanned all rendered text, placeholders, titles, and ARIA labels in both English applications; no untranslated Chinese strings remained.
+- Measured every rendered English status badge in both applications; none reported horizontal text overflow. `Evidence required` and `Assessment complete` render as complete single-line labels at the verified desktop viewport.
 
 ## Comparison history
 

@@ -81,3 +81,20 @@ def test_separate_admin_app_serves_management_console():
         "status": "ok",
         "client_base_url": "http://127.0.0.1:9123",
     }
+
+
+def test_admin_console_has_an_independent_zh_en_language_preference():
+    app = create_admin_app("http://127.0.0.1:9123")
+    with TestClient(app, raise_server_exceptions=False) as client:
+        body = client.get("/admin").text
+
+    assert 'id="languageSelect"' in body
+    assert 'aria-label="语言"' in body
+    assert 'const COOKIE="oceanpilot_admin_language"' in body
+    assert "oceanpilot_client_language" not in body
+    assert '"运行总览":"Operations overview"' in body
+    assert '"业务指标":"Business metrics"' in body
+    assert '"案件库有效实体":"Persisted case entities"' in body
+    assert ".table .badge{min-width:96px;max-width:144px;white-space:normal" in body
+    assert '"评估完成":"Assessment complete"' in body
+    assert "window.addEventListener('oceanpilot:languagechange'" in body
