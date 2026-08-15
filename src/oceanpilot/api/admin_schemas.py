@@ -52,6 +52,19 @@ class FailureSignalDTO(BaseModel):
     recommendation: StrictStr
 
 
+class PersistedCaseDTO(BaseModel):
+    """A case that still resolves from the durable chargeback store."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    case_id: StrictStr
+    phase: StrictStr
+    reason_code: StrictStr | None = None
+    reason_label: StrictStr | None = None
+    missing_count: StrictInt
+    created_at: StrictStr | None = None
+
+
 class AdminOverviewResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -60,6 +73,7 @@ class AdminOverviewResponse(BaseModel):
     service_status: ServiceStatusDTO
     request_summary: RequestSummaryDTO
     endpoints: tuple[EndpointStatusDTO, ...]
+    cases: tuple[PersistedCaseDTO, ...]
     business_counts: dict[StrictStr, StrictInt]
     predictions: tuple[FailureSignalDTO, ...]
     prediction_method: StrictStr

@@ -11,9 +11,11 @@ boundaries remain visible without exposing implementation jargon to merchants.
 from fastapi import APIRouter
 from fastapi.responses import HTMLResponse, RedirectResponse
 
+from oceanpilot.web_i18n import CLIENT_I18N_SCRIPT
+
 router = APIRouter()
 
-_OCEANPAYMENT_LOGO_DATA_URI = (
+OCEANPAYMENT_LOGO_DATA_URI = (
     "data:image/png;base64,"
     "iVBORw0KGgoAAAANSUhEUgAAAygAAADmCAYAAAA+/qGoAAAMT2lDQ1BJQ0MgUHJvZmlsZQAASImVVwdYU8kWnltSIQQIhCIl9CaI"
     "SAkgJYQWQHoRRCUkAUKJMSGo2NFFBdcuIlhWdBXExQ7IoijqqiuLYnctiwUVZV1cFxsqb0IAXfaV7833zZ3//nPmn3POnXvvDAD0"
@@ -646,6 +648,8 @@ _DEMO_HTML = """<!doctype html>
   .tbtn{border-radius:8px}.tbtn.primary{background:var(--accent);border-color:var(--accent)}
   .merchant-account{display:flex;align-items:center;gap:8px;padding-left:14px;margin-left:2px;border-left:1px solid var(--border);white-space:nowrap}
   .merchant-account span{font-size:11px;color:var(--faint)} .merchant-account strong{font-size:13px;color:var(--ink);font-weight:650}
+  .language-control{display:flex;align-items:center;gap:7px;color:var(--muted);font-size:11.5px;white-space:nowrap}
+  .language-control select{width:auto;min-width:92px;height:34px;padding:6px 28px 6px 9px;border-radius:8px;background:var(--surface);color:var(--ink)}
   .content{width:100%;max-width:1440px;margin:0 auto;padding:28px 32px 40px;
     grid-template-columns:minmax(0,1fr) 320px;gap:20px}
   #v-prev,#v-safe{grid-template-columns:1fr} #v-prev .stack,#v-safe .stack{width:100%;max-width:920px}
@@ -675,7 +679,7 @@ _DEMO_HTML = """<!doctype html>
   .note{line-height:1.65}.agent{align-items:flex-start}.atag{background:var(--accent-soft);color:var(--accent);font-family:var(--sans);font-weight:700}
   @media(max-width:1080px){.content{grid-template-columns:1fr}.page-head{grid-column:1}.rail{position:static}}
   @media(max-width:840px){.app{grid-template-columns:1fr}.side{display:none}.content{padding:22px 20px 32px}.top{padding:0 20px}}
-  @media(max-width:600px){.content{padding:18px 14px 28px}.top{padding:0 14px}.top .tbtn{padding:7px 9px}.merchant-account{display:none}
+  @media(max-width:600px){.content{padding:18px 14px 28px}.top{padding:0 14px}.top .tbtn{padding:7px 9px}.merchant-account{display:none}.language-control span{display:none}
     .page-head{align-items:flex-start}.scenario-grid,.risk-form{grid-template-columns:1fr}.amount-field{grid-column:1}.steps{overflow-x:auto;flex-wrap:nowrap;padding-bottom:4px}.step{white-space:nowrap}.sep{min-width:12px;margin:0 4px}}
 
   /* Transaction Diagnostic System */
@@ -696,7 +700,9 @@ _DEMO_HTML = """<!doctype html>
   .attention{padding:0}.attention-row{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;padding:13px 16px;border-bottom:1px solid var(--border);cursor:pointer}.attention-row:last-child{border-bottom:0}.attention-row:hover{background:var(--canvas)}.attention-row strong{font-size:12.5px;color:var(--ink)}.attention-row p{font-size:11.5px;color:var(--muted);margin:2px 0 0}.count{font:700 13px var(--mono);color:var(--ink)}
   .status-dot{width:8px;height:8px;border-radius:50%;background:var(--good)}.status-dot.warn{background:var(--warn)}.status-dot.crit{background:var(--crit)}
   .table-tools{display:flex;gap:8px;align-items:center;margin-bottom:12px}.table-tools input,.table-tools select{width:auto;height:36px;padding:7px 10px}.table-tools input{min-width:240px}.op-table{width:100%;border-collapse:collapse;background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden}.op-table th{background:#f0f5f3;color:var(--muted);font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;text-align:left;padding:10px 12px;border-bottom:1px solid var(--border);white-space:nowrap}.op-table td{padding:11px 12px;border-bottom:1px solid var(--border);font-size:12px;color:var(--body);white-space:nowrap}.op-table tbody tr{cursor:pointer}.op-table tbody tr:hover{background:#f7faf9}.op-table tbody tr:last-child td{border-bottom:0}.op-table .primary-id{font:600 12px var(--mono);color:var(--accent)}
-  .op-table .sub-id{font:10.5px var(--mono);color:var(--muted);margin-top:3px}.op-table .stage-code{font-size:11.5px;color:var(--body)}.op-table .stage-code code{display:block;margin-top:3px;color:var(--muted);background:transparent;padding:0}.op-table .action-cell{width:1%;white-space:nowrap}
+  .op-table .sub-id{font:10.5px var(--mono);color:var(--muted);margin-top:3px}.op-table .stage-code{font-size:11.5px;color:var(--body)}.op-table .stage-code code{display:block;margin-top:3px;color:var(--muted);background:transparent;padding:0}.op-table .action-cell{width:138px;white-space:nowrap;text-align:center}.op-table th:last-child{text-align:center}.op-table .action-cell .tbtn{display:inline-flex;align-items:center;justify-content:center;width:118px;min-height:38px;padding:7px 10px;text-align:center}
+  .op-table .pill{max-width:150px;white-space:normal;overflow-wrap:normal;word-break:keep-all;justify-content:center;text-align:center;font-size:11.5px;line-height:1.3;padding:5px 9px}
+  .op-table td:nth-child(3) .pill{min-width:138px}.op-table td:nth-child(4) .pill{min-width:98px}
   .diag-layout{display:grid;grid-template-columns:minmax(0,1.45fr) 350px;gap:16px}.diag-result{border-top:3px solid var(--crit)}.diag-hero{display:grid;grid-template-columns:1fr auto;gap:20px}.diag-title{font-size:20px;line-height:1.35;color:var(--ink);font-weight:750}.confidence{min-width:112px;text-align:right}.confidence strong{display:block;font:750 30px var(--mono);color:var(--ink)}.confidence span{font-size:11px;color:var(--muted)}
   .fact-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:0;border:1px solid var(--border);border-radius:8px;margin:15px 0;overflow:hidden}.fact{padding:11px 12px;border-right:1px solid var(--border)}.fact:last-child{border-right:0}.fact span{display:block;color:var(--muted);font-size:10.5px}.fact strong{display:block;color:var(--ink);font-size:12px;margin-top:2px}
   .path{display:flex;align-items:center;gap:0;overflow-x:auto;padding:6px 0}.path-node{min-width:108px;border:1px solid var(--border);border-radius:7px;padding:9px 10px;background:var(--surface)}.path-node strong{display:block;color:var(--ink);font-size:11.5px}.path-node span{font-size:10.5px;color:var(--muted)}.path-node.bad{border-color:#e1a0a0;background:var(--crit-bg)}.path-link{height:1px;min-width:25px;background:var(--border2)}
@@ -709,6 +715,8 @@ _DEMO_HTML = """<!doctype html>
   .guide-step strong{display:block;color:var(--ink);font-size:13px}.guide-step span{display:block;color:var(--muted);font-size:11.5px;margin-top:2px}
   .work-grid{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:16px}.work-aside{display:flex;flex-direction:column;gap:16px}
   .quick-row{padding:14px 16px;border-bottom:1px solid var(--border)}.quick-row:last-child{border-bottom:0}.quick-row strong{display:block;color:var(--ink);font-size:13px}.quick-row p{margin:3px 0 9px;color:var(--muted);font-size:11.5px}
+  @media(max-width:1320px){.work-grid{grid-template-columns:1fr}.work-aside{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}}
+  @media(max-width:700px){.work-aside{grid-template-columns:1fr}.op-table td:nth-child(3) .pill{min-width:112px}.op-table td:nth-child(4) .pill{min-width:92px}}
   .diag-layout.clear{grid-template-columns:minmax(0,1fr) 300px}.diag-result{border-top:0}.diagnosis-summary{border-left:4px solid var(--crit)}
   .diagnosis-summary.good{border-left-color:var(--good)}.diagnosis-summary.warn{border-left-color:var(--warn)}
   .diagnosis-kicker{color:var(--muted);font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}.diagnosis-title{font-size:22px;line-height:1.35;color:var(--ink);font-weight:760;margin:5px 0 8px}.diagnosis-copy{font-size:13px;line-height:1.7;color:var(--body);margin:0}
@@ -719,7 +727,7 @@ _DEMO_HTML = """<!doctype html>
   .case-records{margin-top:0}.case-records summary{cursor:pointer;color:var(--body);font-weight:700}.case-records .record-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:14px}
   .diagnostic-materials{border-left:4px solid var(--warn)}.diagnostic-materials.complete{border-left-color:var(--good)}
   .material-notice{padding:12px 13px;border-radius:8px;background:var(--warn-bg);color:#765115;margin-bottom:12px}.material-notice strong{display:block;font-size:13px}.material-notice p{margin:3px 0 0;font-size:12px}.material-notice.complete{background:var(--good-bg);color:var(--good)}
-  .material-list{display:flex;flex-direction:column;gap:8px}.material-row{display:grid;grid-template-columns:26px minmax(0,1fr) auto;gap:10px;align-items:center;border:1px solid var(--border);border-radius:8px;padding:10px 11px}.material-row.done{background:var(--good-bg);border-color:#b9ddca}.material-state{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;background:var(--warn-bg);color:var(--warn);font-size:11px;font-weight:800}.material-row.done .material-state{background:var(--good);color:#fff}.material-row strong{display:block;color:var(--ink);font-size:12.5px}.material-row span{display:block;color:var(--muted);font-size:11px;margin-top:2px}
+  .material-list{display:flex;flex-direction:column;gap:8px}.material-row{display:grid;grid-template-columns:26px minmax(0,1fr) auto;gap:10px;align-items:center;border:1px solid var(--border);border-radius:8px;padding:10px 11px}.material-row.done{background:var(--good-bg);border-color:#b9ddca}.material-row .material-state{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;background:var(--warn-bg);color:var(--warn);font-size:11px;font-weight:800;line-height:1;margin:0}.material-row.done .material-state{background:var(--good);color:#fff}.material-row strong{display:block;color:var(--ink);font-size:12.5px}.material-row div>span{display:block;color:var(--muted);font-size:11px;margin-top:2px}
   .material-form{display:none;margin-top:12px;padding:14px;border:1px solid var(--border);border-radius:8px;background:var(--sunken)}.material-form.on{display:block}.material-form h3{margin:0 0 4px;color:var(--ink);font-size:13px}.material-form p{margin:0 0 9px;color:var(--muted);font-size:11.5px}.form-error{color:var(--crit);font-size:11.5px;margin-top:6px}
   .empty-state{text-align:center;padding:28px 20px}.empty-state strong{display:block;color:var(--ink);font-size:15px}.empty-state p{margin:6px auto 14px;max-width:430px;color:var(--muted);font-size:12.5px}
   @media(max-width:1180px){.metric-strip{grid-template-columns:repeat(3,1fr)}.metric-cell:nth-child(3){border-right:0}.metric-cell:nth-child(-n+3){border-bottom:1px solid var(--border)}.ops-grid,.diag-layout{grid-template-columns:1fr}.diag-layout>.rail{display:none}}
@@ -747,6 +755,7 @@ _DEMO_HTML = """<!doctype html>
       <div class="crumb"><b id="crumbRoot">商户工作台</b><span class="crumb-sep">/</span><span id="crumbId" class="id">案件中心</span></div>
       <div class="grow"></div>
       <div class="global-search"><input id="globalSearch" placeholder="搜索案件号或争议原因" autocomplete="off"><span class="shortcut">⌘K</span></div>
+      <label class="language-control"><span>语言</span><select id="languageSelect" aria-label="语言"><option value="zh">中文</option><option value="en">English</option></select></label>
       <div class="merchant-account"><span>商户</span><strong>OceanStore</strong></div>
     </div>
 
@@ -835,7 +844,7 @@ _DEMO_HTML = """<!doctype html>
         <div class="card">
           <div class="hd"><h3>敏感信息检查</h3><span class="eyebrow">卡号不入库</span></div>
           <div class="bd">
-            <input type="text" id="safeText" value="请退款到卡号 4111 1111 1111 1111">
+            <input type="text" id="safeText" data-i18n-value value="请退款到卡号 4111 1111 1111 1111">
             <div class="actions"><button class="tbtn primary" onclick="safetyScan()">检查内容</button>
               <span class="muted">检测到卡号后立即阻断，结果不会回显原文。</span></div>
             <div id="safeOut" class="mt"></div>
@@ -851,9 +860,10 @@ _DEMO_HTML = """<!doctype html>
   </div>
 </div>
 
+<script>__CLIENT_I18N__</script>
 <script>
 const BASE="/api/v1/chargeback";
-const S={caseId:null,loc:"zh",packaged:false,appealed:false,last:null,cardNetwork:"VISA",
+const S={caseId:null,loc:window.oceanI18n.getLanguage(),packaged:false,appealed:false,last:null,cardNetwork:"VISA",
   scenarioIndex:0,autoEvidence:["transaction.receipt","fulfillment.tracking"],selectedCase:null,cases:[]};
 const SCENARIOS=[
   {label:"Visa 13.1 · 未收到货",meta:"已有 2 项 · 仍缺 3 项",network:"VISA",
@@ -887,6 +897,7 @@ const EVIDENCE_LABEL={"transaction.receipt":"交易收据","auth.avs_result":"AV
   "subscription.cancellation_record":"取消订阅记录","history.prior_transactions":"历史交易记录","billing.duplicate_check":"重复扣款核验"};
 const $=(id)=>document.getElementById(id);
 const esc=(s)=>String(s==null?"":s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+const tr=(s)=>window.oceanI18n.translate(s);
 const cleanCopy=(s)=>String(s||"").replace(/（合成模型输出，仅用于离线演示）/g,"").trim();
 const actionLabel=(s)=>cleanCopy(s).replace(/胜诉评估 ([0-9.]+)（数字由内核判定）/,"材料就绪度 $1（规则评估）");
 const detailLabel=(s)=>REASON_LABEL[s]||EVIDENCE_LABEL[s]||s;
@@ -910,9 +921,9 @@ async function loadCases(){const result=await api("GET","/cases");
   if(!result.ok||!Array.isArray(result.data)){S.cases=[];$('transactionCount').textContent='读取失败';$('transactionRows').innerHTML='<tr><td colspan="5" class="empty">案件库暂时无法读取，请稍后刷新。</td></tr>';return;}
   S.cases=result.data;renderTransactions();}
 function renderTransactions(){const query=($('tableSearch').value||'').toLowerCase();const status=$('statusFilter').value;
-  const rows=S.cases.filter(c=>(status==='ALL'||c.phase===status)&&[c.case_id,c.reason_code,REASON_LABEL[c.reason_code]].join(' ').toLowerCase().includes(query));
-  $('transactionCount').textContent=`共 ${rows.length} 件`;
-  $('transactionRows').innerHTML=rows.map(c=>{const s=STATUS_VIEW[c.phase]||['未知','p-mut'];const missing=(c.missing_labels||[]).length;const action=c.phase==='ASSESSED'?'查看案件':'查看诊断';return `<tr onclick="openStoredCase('${esc(c.case_id)}')"><td class="primary-id">${esc(c.case_id)}<div class="sub-id">后端已校验</div></td><td>${esc(REASON_LABEL[c.reason_code]||c.reason_code||'待确认')}</td><td><span class="pill ${s[1]}">${s[0]}</span></td><td>${missing?`<span class="pill p-warn">仍缺 ${missing} 项</span>`:'<span class="pill p-good">无待补项</span>'}</td><td class="action-cell"><button class="tbtn" onclick="event.stopPropagation();openStoredCase('${esc(c.case_id)}')">${action}</button></td></tr>`;}).join('')||'<tr><td colspan="5" class="empty-state"><strong>暂无真实案件记录</strong><p>列表不使用预置案件。创建案件后，它会在此显示。</p><button class="tbtn primary" onclick="openCreate(null)">新建案件</button></td></tr>';
+  const rows=S.cases.filter(c=>(status==='ALL'||c.phase===status)&&[c.case_id,c.reason_code,REASON_LABEL[c.reason_code],tr(REASON_LABEL[c.reason_code])].join(' ').toLowerCase().includes(query));
+  const synced=new Date().toLocaleTimeString(S.loc==='en'?'en-US':'zh-CN',{hour12:false,hour:'2-digit',minute:'2-digit',second:'2-digit'});$('transactionCount').textContent=`${rows.length} 件有效实体 · 更新于 ${synced}`;
+  $('transactionRows').innerHTML=rows.map(c=>{const s=STATUS_VIEW[c.phase]||['未知','p-mut'];const missing=(c.missing_labels||[]).length;const action=c.phase==='ASSESSED'?'查看案件':'查看诊断';return `<tr onclick="openStoredCase('${esc(c.case_id)}')"><td class="primary-id">${esc(c.case_id)}<div class="sub-id">案件库有效实体</div></td><td>${esc(REASON_LABEL[c.reason_code]||c.reason_code||'待确认')}</td><td><span class="pill ${s[1]}">${s[0]}</span></td><td>${missing?`<span class="pill p-warn">仍缺 ${missing} 项</span>`:'<span class="pill p-good">无待补项</span>'}</td><td class="action-cell"><button class="tbtn" onclick="event.stopPropagation();openStoredCase('${esc(c.case_id)}')">${action}</button></td></tr>`;}).join('')||'<tr><td colspan="5" class="empty-state"><strong>暂无有效案件记录</strong><p>列表不使用预置案件；只有成功写入案件库且可重新读取的案件才会显示。</p><button class="tbtn primary" onclick="openCreate(null)">新建案件</button></td></tr>';
   const pending=S.cases.filter(c=>c.phase!=='ASSESSED');$('pendingCaseCount').textContent=`${pending.length} 件`;
   $('pendingCaseRows').innerHTML=pending.slice(0,3).map(c=>`<div class="quick-row"><strong>${esc(c.case_id)}</strong><p>${esc((STATUS_VIEW[c.phase]||['待处理'])[0])} · 仍缺 ${(c.missing_labels||[]).length} 项资料</p><button class="tbtn" onclick="openStoredCase('${esc(c.case_id)}')">进入诊断</button></div>`).join('')||'<div class="panel-bd empty">暂无待处理案件</div>';}
 async function openStoredCase(caseId){const result=await api("GET",`/cases/${caseId}`);
@@ -923,12 +934,12 @@ async function openStoredCase(caseId){const result=await api("GET",`/cases/${cas
 function renderStoredDiagnosis(c){const s=STATUS_VIEW[c.phase]||['未知','p-mut'];const missing=c.missing_labels||[];
   $('diagnosisSummary').className=`panel diagnosis-summary ${c.phase==='ASSESSED'?'good':'warn'}`;
   $('diagId').textContent=c.case_id;$('diagStage').textContent=s[0];$('diagCode').textContent=REASON_LABEL[c.reason_code]||c.reason_code||'待确认';$('diagCaseId').textContent=c.case_id;
-  $('diagSideId').innerHTML='<span class="pill p-good">后端可读</span>';const status=$('diagStatus');status.className=`pill ${s[1]}`;status.textContent=s[0];
+  $('diagSideId').innerHTML='<span class="pill p-good">案件库可读</span>';const status=$('diagStatus');status.className=`pill ${s[1]}`;status.textContent=s[0];
   if(c.phase==='REASON_PROPOSED'){$('diagCause').textContent='争议原因尚未确认';$('diagMeaning').textContent='系统已给出初步判断，需要人工确认后才能继续收集材料。';$('diagAdvice').textContent='请先确认争议原因，系统将在确认后生成缺失材料清单。';}
   else{$('diagCause').textContent=missing.length?`案件仍缺 ${missing.length} 项材料，暂不能完成评估`:'案件材料已齐全';$('diagMeaning').textContent=missing.length?'当前案件存在明确的证据缺口，下方清单来自后端当前状态。':'当前没有待补资料。';$('diagAdvice').textContent=missing.length?'请按清单逐项补交；每次提交后系统会重新读取案件状态。':'可返回案件中心查看其他案件。';}
   $('diagImpact').textContent=missing.length?`仍缺 ${missing.length} 项`:'无待补项';renderDiagnosticMaterials(c);}
 $('tableSearch').addEventListener('input',renderTransactions);$('statusFilter').addEventListener('change',renderTransactions);
-$('globalSearch').addEventListener('keydown',event=>{if(event.key==='Enter'){const q=event.target.value.toLowerCase();const hit=S.cases.find(c=>[c.case_id,c.reason_code,REASON_LABEL[c.reason_code]].join(' ').toLowerCase().includes(q));if(hit)openStoredCase(hit.case_id);else{showView('overview');$('tableSearch').value=event.target.value;renderTransactions();}}});
+$('globalSearch').addEventListener('keydown',event=>{if(event.key==='Enter'){const q=event.target.value.toLowerCase();const hit=S.cases.find(c=>[c.case_id,c.reason_code,REASON_LABEL[c.reason_code],tr(REASON_LABEL[c.reason_code])].join(' ').toLowerCase().includes(q));if(hit)openStoredCase(hit.case_id);else{showView('overview');$('tableSearch').value=event.target.value;renderTransactions();}}});
 document.addEventListener('keydown',event=>{if((event.metaKey||event.ctrlKey)&&event.key.toLowerCase()==='k'){event.preventDefault();$('globalSearch').focus();}});
 function focusTransactionSearch(){showView('overview');$('tableSearch').focus();}
 function openCreate(){S.scenarioIndex=0;S.autoEvidence=SCENARIOS[0].available.slice();renderCreateForm();showView('create');}
@@ -959,7 +970,7 @@ function renderStages(){const stt=stageStatus();let h="";
 
 function renderCreateForm(){const cards=SCENARIOS.map((s,i)=>`<button class="scenario-card${i===0?' on':''}" data-i="${i}" onclick="fillScenario(${i})">`
     +`<strong>${esc(s.label)}</strong><span>${esc(s.meta)}</span></button>`).join("");
-  const initial=SCENARIOS[0].desc;
+  const initial=tr(SCENARIOS[0].desc);
   $('createAction').innerHTML=`<div style="color:var(--ink);font-weight:700">1. 选择常见案件模板</div>`
     +`<div class="scenario-grid">${cards}</div>`
     +`<label class="field-label" for="desc">2. 确认案件说明</label><textarea id="desc" rows="3">${esc(initial)}</textarea>`
@@ -976,7 +987,7 @@ async function refreshCase(){if(!S.caseId)return;apply((await api("GET",`/cases/
 async function confirmReason(){const v=$('fix')?$('fix').value:"";apply((await api("POST",`/cases/${S.caseId}/confirm`,v?{reason_code:v}:{})).data);}
 async function submitEvidence(code){apply((await api("POST",`/cases/${S.caseId}/evidence`,{evidence_code:code})).data);}
 async function finalize(){apply((await api("POST",`/cases/${S.caseId}/finalize`)).data);}
-function fillScenario(i){const d=$('desc');if(d)d.value=SCENARIOS[i].desc;S.scenarioIndex=i;
+function fillScenario(i){const d=$('desc');if(d)d.value=tr(SCENARIOS[i].desc);S.scenarioIndex=i;
   S.cardNetwork=SCENARIOS[i].network;S.autoEvidence=SCENARIOS[i].available.slice();
   document.querySelectorAll('.scenario-card').forEach(c=>c.classList.toggle('on',+c.dataset.i===i));}
 async function autoRun(){if(!S.caseId)await openCase(false);let g=0;
@@ -1109,7 +1120,8 @@ async function safetyScan(){const {ok,data}=await api("POST","/safety/scan",{tex
   const p=data.accepted?'<span class="pill p-good">✓ 通过</span>':'<span class="pill p-crit">⛔ 已拦截</span>';
   $('safeOut').innerHTML=`<div class="note" style="margin:0">${p} &nbsp;${esc(data.detail)}</div>`;}
 
-loadCases();renderCreateForm();renderStages();renderAction();refreshMetrics();
+window.addEventListener('oceanpilot:languagechange',event=>{const detail=event.detail||{};const desc=$('desc');if(desc){for(const scenario of SCENARIOS){const previous=window.oceanI18n.translateTo(scenario.desc,detail.previousLanguage);if(desc.value===previous){desc.value=window.oceanI18n.translateTo(scenario.desc,detail.language);break;}}}S.loc=detail.language||'zh';renderTransactions();renderStages();renderAction();if(S.selectedCase)renderStoredDiagnosis(S.selectedCase);if(S.last&&S.last.phase==='ASSESSED')renderAssess(S.last);refreshMetrics();window.oceanI18n.apply();});
+loadCases();setInterval(()=>{if($('v-overview').classList.contains('on'))loadCases();},5000);renderCreateForm();renderStages();renderAction();refreshMetrics();
 </script>
 </body>
 </html>
@@ -1123,4 +1135,8 @@ def root() -> RedirectResponse:
 
 @router.get("/demo", include_in_schema=False, response_class=HTMLResponse)
 def demo_page() -> HTMLResponse:
-    return HTMLResponse(_DEMO_HTML.replace("__OCEANPAYMENT_LOGO__", _OCEANPAYMENT_LOGO_DATA_URI))
+    return HTMLResponse(
+        _DEMO_HTML.replace("__OCEANPAYMENT_LOGO__", OCEANPAYMENT_LOGO_DATA_URI).replace(
+            "__CLIENT_I18N__", CLIENT_I18N_SCRIPT
+        )
+    )
