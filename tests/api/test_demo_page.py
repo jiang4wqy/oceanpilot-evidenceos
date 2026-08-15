@@ -119,5 +119,10 @@ def test_demo_supports_complete_zh_en_language_switching(tmp_path):
     )
     assert "@media(max-width:1320px){.work-grid{grid-template-columns:1fr}" in body
     assert '"评估完成":"Assessment complete"' in body
+    assert '"3DS 认证结果":"3DS authentication result"' in body
+    assert '"AVS 地址验证结果":"AVS result"' in body
+    assert '"CVV 校验结果":"CVV result"' in body
+    assert '"设备/IP 匹配":"Device/IP match"' in body
+    assert "Requested evidence: ${translate(m[1])}" in body
     assert "window.addEventListener('oceanpilot:languagechange'" in body
     assert "loc:window.oceanI18n.getLanguage()" in body
