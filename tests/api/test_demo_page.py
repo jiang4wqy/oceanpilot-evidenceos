@@ -113,6 +113,10 @@ def test_demo_supports_complete_zh_en_language_switching(tmp_path):
     assert '"补交资料":"Submit evidence"' in body
     assert ".op-table .pill{max-width:150px;white-space:normal" in body
     assert ".op-table td:nth-child(3) .pill{min-width:138px}" in body
+    assert (
+        ".op-table .action-cell .tbtn{display:inline-flex;align-items:center;"
+        "justify-content:center;width:118px" in body
+    )
     assert "@media(max-width:1320px){.work-grid{grid-template-columns:1fr}" in body
     assert '"评估完成":"Assessment complete"' in body
     assert "window.addEventListener('oceanpilot:languagechange'" in body

@@ -12,6 +12,7 @@
   - `/tmp/oceanpilot-admin-en-independent.png`
   - `/tmp/oceanpilot-client-en-status-wrap-final.png`
   - `/tmp/oceanpilot-client-en-status-readable.png`
+  - `/tmp/oceanpilot-client-action-buttons-aligned.png`
   - `/tmp/oceanpilot-admin-en-status-wrap.png`
 - Combined comparison evidence:
   - `/tmp/oceanpilot-brand-comparison.png`
@@ -31,7 +32,8 @@ No actionable P0, P1, or P2 mismatch remains.
 - Information hierarchy: maintenance has a dedicated persisted-case inventory; the customer diagnosis keeps the missing-material count and actions in the primary task area.
 - Language fidelity: every visible label, placeholder, status, dynamically rendered record, document title, and accessibility label switches between Chinese and English without a page reload.
 - Language isolation: the merchant and maintenance applications use separate preference namespaces. Switching or reloading either application does not change the other application's language.
-- English status legibility: full status copy is preserved. Merchant case flags stay on one readable line at laptop widths, never break inside a word, and move the secondary case panels below the table so all five table columns remain visible.
+- English status legibility: full status copy is preserved. Merchant case flags never break inside a word and use balanced word-boundary wrapping only when the action column needs space.
+- Action-column consistency: all merchant case actions use the same 118 × 38 px button box; the table header, button box, and label are centered on one axis.
 
 The combined comparison frames place each supplied defect screenshot next to the repaired state. They confirm that the badge overflow and material-index drift are resolved, and that the maintenance brand uses the supplied wordmark.
 
@@ -45,7 +47,8 @@ The combined comparison frames place each supplied defect screenshot next to the
 - Switched only the merchant workspace to English and confirmed the maintenance center remained Chinese; then switched only the maintenance center to English and confirmed the merchant workspace remained Chinese.
 - Reloaded both applications with different selected languages and confirmed each application restored its own preference.
 - Scanned all rendered text, placeholders, titles, and ARIA labels in both English applications; no untranslated Chinese strings remained.
-- Measured every rendered English status badge in both applications; none reported horizontal text overflow. `Evidence required` and `Assessment complete` render as complete single-line labels at the verified desktop viewport.
+- Measured every rendered English status badge in both applications; none reported horizontal text overflow. `Assessment complete` remains complete and wraps only between words when needed.
+- Measured both `View diagnosis` and `View case` actions; every sampled button reports 118 px width, 38 px height, centered flex alignment, and centered text.
 
 ## Comparison history
 
