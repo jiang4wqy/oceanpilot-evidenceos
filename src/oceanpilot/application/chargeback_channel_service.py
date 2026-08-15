@@ -182,6 +182,8 @@ class ChargebackChannelService:
             return self._confirm_reason(inbound)
         if inbound.kind is InboundKind.SUBMIT_EVIDENCE:
             return self._submit_evidence(inbound)
+        if inbound.kind is InboundKind.WITHDRAW_LATEST_EVIDENCE:
+            return self._withdraw_latest_evidence(inbound)
         if inbound.kind is InboundKind.FINALIZE_EVIDENCE:
             return self._finalize_evidence(inbound)
         if inbound.kind is InboundKind.GET_CASE:
@@ -230,6 +232,16 @@ class ChargebackChannelService:
         state = self._require_state(inbound.case_id)
         self._supervisor.finalize_evidence(state)
         self._store.save(inbound.case_id, state)
+        return self._deliver(inbound.case_id, state)
+
+    def _withdraw_latest_evidence(self, inbound: NormalizedInbound) -> Delivery:
+        if not inbound.case_id or not inbound.evidence_code:
+            raise InvalidInbound()
+        try:
+            code = ChargebackEvidenceCode(inbound.evidence_code)
+        except ValueError:
+            raise InvalidInbound() from None
+        state = self._store.withdraw_latest_evidence(inbound.case_id, code)
         return self._deliver(inbound.case_id, state)
 
     def _get_case(self, inbound: NormalizedInbound) -> Delivery:

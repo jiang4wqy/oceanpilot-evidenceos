@@ -37,6 +37,7 @@ def test_openapi_freezes_paths_replay_and_problem_contract(tmp_path):
         "/api/v1/chargeback/cases/{case_id}/audit",
         "/api/v1/chargeback/cases/{case_id}/confirm",
         "/api/v1/chargeback/cases/{case_id}/evidence",
+        "/api/v1/chargeback/cases/{case_id}/evidence/withdraw-latest",
         "/api/v1/chargeback/cases/{case_id}/finalize",
         "/api/v1/chargeback/cases/{case_id}/package",
         "/api/v1/chargeback/cases/{case_id}/rule-reference",

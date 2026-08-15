@@ -153,6 +153,87 @@ def test_finalize_routes_to_human_review(tmp_path):
     assert body["assessment"]["requires_human"] is True
 
 
+def test_withdraw_latest_evidence_reopens_collection_and_audits(tmp_path):
+    with _client(tmp_path) as client:
+        body = client.post(
+            "/api/v1/chargeback/cases", json={"description": "没收到货，要拒付"}
+        ).json()
+        case_id = body["case_id"]
+        first = body["next_evidence"]
+        body = client.post(
+            f"/api/v1/chargeback/cases/{case_id}/evidence",
+            json={"evidence_code": first},
+        ).json()
+        second = body["next_evidence"]
+        client.post(
+            f"/api/v1/chargeback/cases/{case_id}/evidence",
+            json={"evidence_code": second},
+        )
+        client.post(f"/api/v1/chargeback/cases/{case_id}/finalize")
+
+        response = client.post(
+            f"/api/v1/chargeback/cases/{case_id}/evidence/withdraw-latest",
+            json={"evidence_code": second},
+        )
+        audit = client.get(f"/api/v1/chargeback/cases/{case_id}/audit").json()
+
+    assert response.status_code == 200
+    withdrawn = response.json()
+    assert withdrawn["phase"] == "NEED_EVIDENCE"
+    assert withdrawn["collection_finalized"] is False
+    assert second not in withdrawn["collected"]
+    assert withdrawn["next_evidence"] == second
+    assert audit["events"][-1]["event_type"] == "EVIDENCE_WITHDRAWN"
+    assert audit["events"][-1]["detail"] == second
+
+
+def test_duplicate_withdrawal_returns_concurrent_conflict(tmp_path):
+    with _client(tmp_path) as client:
+        body = client.post(
+            "/api/v1/chargeback/cases", json={"description": "没收到货，要拒付"}
+        ).json()
+        case_id = body["case_id"]
+        first = body["next_evidence"]
+        body = client.post(
+            f"/api/v1/chargeback/cases/{case_id}/evidence",
+            json={"evidence_code": first},
+        ).json()
+        second = body["next_evidence"]
+        client.post(
+            f"/api/v1/chargeback/cases/{case_id}/evidence",
+            json={"evidence_code": second},
+        )
+        endpoint = f"/api/v1/chargeback/cases/{case_id}/evidence/withdraw-latest"
+        assert client.post(endpoint, json={"evidence_code": second}).status_code == 200
+        duplicate = client.post(endpoint, json={"evidence_code": second})
+
+    assert duplicate.status_code == 409
+    assert duplicate.json()["code"] == "CONCURRENT_CASE_WRITE"
+
+
+def test_withdraw_without_evidence_returns_named_conflict(tmp_path):
+    with _client(tmp_path) as client:
+        case_id = client.post(
+            "/api/v1/chargeback/cases", json={"description": "没收到货，要拒付"}
+        ).json()["case_id"]
+        response = client.post(
+            f"/api/v1/chargeback/cases/{case_id}/evidence/withdraw-latest",
+            json={"evidence_code": "transaction.receipt"},
+        )
+    assert response.status_code == 409
+    assert response.json()["code"] == "NO_EVIDENCE_TO_WITHDRAW"
+
+
+def test_withdraw_unknown_case_returns_safe_404(tmp_path):
+    with _client(tmp_path) as client:
+        response = client.post(
+            "/api/v1/chargeback/cases/does-not-exist/evidence/withdraw-latest",
+            json={"evidence_code": "transaction.receipt"},
+        )
+    assert response.status_code == 404
+    assert response.json()["code"] == "CASE_NOT_FOUND"
+
+
 def test_response_includes_evidence_window_deadline(tmp_path):
     with _client(tmp_path) as client:
         body = client.post(

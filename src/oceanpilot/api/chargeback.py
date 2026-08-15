@@ -32,6 +32,7 @@ from oceanpilot.api.chargeback_schemas import (
     SafetyScanRequest,
     SafetyScanResponse,
     SubmitEvidenceRequest,
+    WithdrawLatestEvidenceRequest,
 )
 from oceanpilot.application.channels import Delivery, InboundKind, NormalizedInbound
 from oceanpilot.application.chargeback_agents import PreventionAgent
@@ -326,6 +327,27 @@ def submit_evidence(
     delivery = service.handle(
         NormalizedInbound(
             kind=InboundKind.SUBMIT_EVIDENCE,
+            channel=_CHANNEL,
+            case_id=case_id,
+            evidence_code=payload.evidence_code.value,
+        )
+    )
+    return _response(delivery)
+
+
+@router.post(
+    "/cases/{case_id}/evidence/withdraw-latest",
+    response_model=ChargebackCaseResponse,
+    responses={404: PROBLEM_RESPONSE, 409: PROBLEM_RESPONSE, **COMMON_PROBLEMS},
+)
+def withdraw_latest_evidence(
+    case_id: str,
+    payload: WithdrawLatestEvidenceRequest,
+    service: Annotated[ChargebackChannelService, Depends(get_channel_service)],
+) -> ChargebackCaseResponse:
+    delivery = service.handle(
+        NormalizedInbound(
+            kind=InboundKind.WITHDRAW_LATEST_EVIDENCE,
             channel=_CHANNEL,
             case_id=case_id,
             evidence_code=payload.evidence_code.value,

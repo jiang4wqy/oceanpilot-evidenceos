@@ -350,6 +350,48 @@ def test_finalize_without_case_id_is_rejected():
         _service().handle(NormalizedInbound(kind=InboundKind.FINALIZE_EVIDENCE, channel="test"))
 
 
+def test_withdraw_latest_evidence_recomputes_the_case():
+    service = _service()
+    opened = service.handle(
+        NormalizedInbound(
+            kind=InboundKind.OPEN_CASE,
+            channel="test",
+            description="没收到货，要拒付",
+        )
+    )
+    submitted = service.handle(
+        NormalizedInbound(
+            kind=InboundKind.SUBMIT_EVIDENCE,
+            channel="test",
+            case_id=opened.case_id,
+            evidence_code=opened.next_evidence,
+        )
+    )
+    withdrawn = service.handle(
+        NormalizedInbound(
+            kind=InboundKind.WITHDRAW_LATEST_EVIDENCE,
+            channel="test",
+            case_id=opened.case_id,
+            evidence_code=opened.next_evidence,
+        )
+    )
+    assert withdrawn.phase == "NEED_EVIDENCE"
+    assert withdrawn.collection_finalized is False
+    assert withdrawn.collected == ()
+    assert submitted.collected != withdrawn.collected
+
+
+def test_withdraw_latest_evidence_requires_case_and_code():
+    with pytest.raises(InvalidInbound):
+        _service().handle(
+            NormalizedInbound(
+                kind=InboundKind.WITHDRAW_LATEST_EVIDENCE,
+                channel="test",
+                case_id="case-only",
+            )
+        )
+
+
 def test_feishu_evidence_card_offers_a_finalize_button():
     service = _service()
     opened = service.handle(

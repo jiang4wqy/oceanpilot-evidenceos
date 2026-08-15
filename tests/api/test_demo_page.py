@@ -410,3 +410,76 @@ def test_demo_supports_complete_zh_en_language_switching(tmp_path):
     assert "Requested evidence: ${translate(m[1])}" in body
     assert "window.addEventListener('oceanpilot:languagechange'" in body
     assert "loc:window.oceanI18n.getLanguage()" in body
+
+
+def test_evidence_modal_requires_explicit_confirmation_and_stays_synthetic(tmp_path):
+    with _client(tmp_path) as client:
+        script = _embedded_app_script(client.get("/demo").text)
+        body = client.get("/demo").text
+
+    assert 'id="evidenceModal"' in body
+    assert 'id="evidenceFile"' in body
+    assert 'id="evidenceSubmitButton"' in body
+    assert "使用 Synthetic 演示文件" in body
+    assert "不读取文件内容、不上传对象存储" in body
+    assert 'id="evidenceSubmitProgress" aria-live="polite"' in body
+    assert ".modal-backdrop" in body
+    assert "event.key==='Escape'" in body
+    assert "closeEvidenceModal()" in body
+
+    open_function = _js_function(script, "openEvidenceModalForCase")
+    select_function = _js_function(script, "useSyntheticEvidenceFile")
+    confirm_function = _js_function(script, "submitEvidenceModal")
+    assert "api(" not in open_function
+    assert "api(" not in select_function
+    assert "evidenceDraft.fileName" in select_function
+    assert "api('POST',`/cases/${draft.caseId}/evidence`" in confirm_function
+    assert "{evidence_code:draft.code}" in confirm_function
+    assert "evidenceReceipt" in confirm_function
+
+
+def test_latest_evidence_reconstruction_handles_withdrawal_history(tmp_path):
+    with _client(tmp_path) as client:
+        script = _embedded_app_script(client.get("/demo").text)
+    source = "\n".join(
+        (
+            "const S={auditByCase:new Map([['case-1',[",
+            "{event_type:'EVIDENCE_ADDED',detail:'a'},",
+            "{event_type:'EVIDENCE_ADDED',detail:'b'},",
+            "{event_type:'EVIDENCE_WITHDRAWN',detail:'b'},",
+            "{event_type:'EVIDENCE_ADDED',detail:'c'}]]])};",
+            _js_function(script, "latestActiveEvidence"),
+            "console.log(latestActiveEvidence('case-1',['a','c']));",
+        )
+    )
+    result = _run_node(source)
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "c"
+
+
+def test_withdrawal_ui_is_two_step_and_sends_the_expected_code(tmp_path):
+    with _client(tmp_path) as client:
+        body = client.get("/demo").text
+        script = _embedded_app_script(body)
+    assert 'id="withdrawModal"' in body
+    assert "确认撤回最近资料" in body
+    assert "撤回会写入审计" in body
+    assert "撤回最近资料" in body
+    assert 'EVIDENCE_WITHDRAWN:"材料已撤回"' in body
+    open_function = _js_function(script, "openWithdrawModal")
+    confirm_function = _js_function(script, "confirmEvidenceWithdrawal")
+    assert "classList.add('on')" in open_function
+    assert "api(" not in open_function
+    assert "/evidence/withdraw-latest`" in confirm_function
+    assert "{evidence_code:state.code}" in confirm_function
+    assert "CONCURRENT_CASE_WRITE" in confirm_function
+
+
+def test_return_to_case_center_is_navigation_only(tmp_path):
+    with _client(tmp_path) as client:
+        body = client.get("/demo").text
+        script = _embedded_app_script(body)
+    function = _js_function(script, "returnToCaseCenter")
+    assert function == "function returnToCaseCenter(){showView('overview');}"
+    assert "api(" not in function
+    assert body.count('onclick="returnToCaseCenter()"') >= 2

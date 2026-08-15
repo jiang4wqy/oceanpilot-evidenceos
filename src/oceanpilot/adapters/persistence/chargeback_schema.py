@@ -33,7 +33,7 @@ CREATE TABLE IF NOT EXISTS chargeback_audit (
     event_type TEXT NOT NULL CHECK (
         event_type IN (
             'CASE_OPENED','REASON_CLASSIFIED','REASON_CONFIRMED',
-            'EVIDENCE_ADDED','COLLECTION_FINALIZED'
+            'EVIDENCE_ADDED','EVIDENCE_WITHDRAWN','COLLECTION_FINALIZED'
         )
     ),
     detail TEXT,

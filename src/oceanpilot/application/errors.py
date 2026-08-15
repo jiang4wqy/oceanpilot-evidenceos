@@ -58,6 +58,10 @@ class ConcurrentCaseWrite(ApplicationError):
     message = "case changed during write"
 
 
+class NoEvidenceToWithdraw(ApplicationError):
+    message = "case has no evidence to withdraw"
+
+
 class DiagnosisInputStale(ApplicationError):
     message = "diagnosis input is stale"
 

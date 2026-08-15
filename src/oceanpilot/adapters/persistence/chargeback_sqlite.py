@@ -36,6 +36,7 @@ from oceanpilot.application.errors import (
     CaseNotFound,
     ConcurrentCaseWrite,
     DatabaseUnavailable,
+    NoEvidenceToWithdraw,
     PersistenceInvariantViolation,
 )
 from oceanpilot.domain.chargeback import ChargebackEvidenceCode, DisputeReasonCode
@@ -48,6 +49,7 @@ class ChargebackAuditEventType(StrEnum):
     REASON_CLASSIFIED = "REASON_CLASSIFIED"
     REASON_CONFIRMED = "REASON_CONFIRMED"
     EVIDENCE_ADDED = "EVIDENCE_ADDED"
+    EVIDENCE_WITHDRAWN = "EVIDENCE_WITHDRAWN"
     COLLECTION_FINALIZED = "COLLECTION_FINALIZED"
 
 
@@ -81,6 +83,7 @@ def _map_db_errors[T](operation: Callable[[], T]) -> T:
     except (
         CaseNotFound,
         ConcurrentCaseWrite,
+        NoEvidenceToWithdraw,
         PersistenceInvariantViolation,
         DatabaseUnavailable,
     ):
@@ -97,6 +100,42 @@ def initialize_chargeback_schema(path: Path) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
         connection = connect_sqlite(path)
         connection.executescript(f"BEGIN IMMEDIATE;\n{CHARGEBACK_SCHEMA_SQL}\nCOMMIT;")
+        audit_sql_row = connection.execute(
+            "SELECT sql FROM sqlite_schema WHERE type = 'table' AND name = 'chargeback_audit'"
+        ).fetchone()
+        audit_sql = audit_sql_row["sql"] if audit_sql_row is not None else None
+        if type(audit_sql) is not str:
+            raise DatabaseUnavailable()
+        if "EVIDENCE_WITHDRAWN" not in audit_sql:
+            connection.executescript(
+                """
+                BEGIN IMMEDIATE;
+                ALTER TABLE chargeback_audit RENAME TO chargeback_audit_legacy;
+                CREATE TABLE chargeback_audit (
+                    case_id TEXT NOT NULL,
+                    seq INTEGER NOT NULL CHECK (seq >= 0),
+                    event_type TEXT NOT NULL CHECK (
+                        event_type IN (
+                            'CASE_OPENED','REASON_CLASSIFIED','REASON_CONFIRMED',
+                            'EVIDENCE_ADDED','EVIDENCE_WITHDRAWN','COLLECTION_FINALIZED'
+                        )
+                    ),
+                    detail TEXT,
+                    case_revision INTEGER NOT NULL CHECK (case_revision >= 0),
+                    occurred_at TEXT NOT NULL,
+                    synthetic INTEGER NOT NULL CHECK (synthetic = 1),
+                    PRIMARY KEY (case_id, seq),
+                    FOREIGN KEY (case_id) REFERENCES chargeback_cases(case_id)
+                );
+                INSERT INTO chargeback_audit (
+                    case_id, seq, event_type, detail, case_revision, occurred_at, synthetic
+                )
+                SELECT case_id, seq, event_type, detail, case_revision, occurred_at, synthetic
+                FROM chargeback_audit_legacy;
+                DROP TABLE chargeback_audit_legacy;
+                COMMIT;
+                """
+            )
         table_names = frozenset(
             row["name"]
             for row in connection.execute(
@@ -196,6 +235,93 @@ class SqliteChargebackCaseStore:
 
     def save(self, case_id: str, state: ChargebackCaseState) -> None:
         self._save(case_id, state, expected_revision=None)
+
+    def withdraw_latest_evidence(
+        self,
+        case_id: str,
+        expected_evidence_code: ChargebackEvidenceCode,
+    ) -> ChargebackCaseState:
+        """Atomically withdraw the expected latest evidence item.
+
+        ``save`` intentionally remains append-only. This explicit command owns
+        the exceptional delete, its revision bump, finalization reset, and audit
+        event in one transaction. Requiring the caller's expected code prevents
+        two identical concurrent requests from removing two different items.
+        """
+        if not isinstance(expected_evidence_code, ChargebackEvidenceCode):
+            raise PersistenceInvariantViolation()
+
+        def operation() -> ChargebackCaseState:
+            connection = connect_sqlite(self._path)
+            try:
+                with immediate_transaction(connection):
+                    case_row = connection.execute(
+                        "SELECT revision FROM chargeback_cases WHERE case_id = ?",
+                        (case_id,),
+                    ).fetchone()
+                    if case_row is None:
+                        raise CaseNotFound()
+                    current_revision = self._require_int(case_row["revision"])
+                    evidence_row = connection.execute(
+                        """
+                        SELECT evidence_code
+                        FROM chargeback_evidence
+                        WHERE case_id = ?
+                        ORDER BY added_at_revision DESC, rowid DESC
+                        LIMIT 1
+                        """,
+                        (case_id,),
+                    ).fetchone()
+                    if evidence_row is None:
+                        raise NoEvidenceToWithdraw()
+                    latest_code = ChargebackEvidenceCode(
+                        self._require_text(evidence_row["evidence_code"])
+                    )
+                    if latest_code is not expected_evidence_code:
+                        raise ConcurrentCaseWrite()
+
+                    new_revision = current_revision + 1
+                    update_cursor = connection.execute(
+                        """
+                        UPDATE chargeback_cases
+                        SET collection_finalized = 0, revision = ?, updated_at = ?
+                        WHERE case_id = ? AND revision = ?
+                        """,
+                        (
+                            new_revision,
+                            _encode_dt(self._clock()),
+                            case_id,
+                            current_revision,
+                        ),
+                    )
+                    if update_cursor.rowcount != 1:
+                        raise ConcurrentCaseWrite()
+                    delete_cursor = connection.execute(
+                        """
+                        DELETE FROM chargeback_evidence
+                        WHERE case_id = ? AND evidence_code = ?
+                        """,
+                        (case_id, latest_code.value),
+                    )
+                    if delete_cursor.rowcount != 1:
+                        raise ConcurrentCaseWrite()
+                    self._insert_audit(
+                        connection,
+                        case_id=case_id,
+                        seq=self._next_seq(connection, case_id),
+                        event_type=ChargebackAuditEventType.EVIDENCE_WITHDRAWN,
+                        detail=latest_code.value,
+                        case_revision=new_revision,
+                        moment=self._clock(),
+                    )
+                    loaded = self._load_state(connection, case_id)
+                    if loaded is None:
+                        raise PersistenceInvariantViolation()
+                    return loaded[0]
+            finally:
+                connection.close()
+
+        return _map_db_errors(operation)
 
     # -- richer capabilities (used by store-level tests / callers) ---------
 

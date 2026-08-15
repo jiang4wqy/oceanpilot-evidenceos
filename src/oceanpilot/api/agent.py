@@ -45,6 +45,7 @@ class AgentTurnRequest(_StrictModel):
         "CASE_OPENED",
         "REASON_CONFIRMED",
         "EVIDENCE_SUBMITTED",
+        "EVIDENCE_WITHDRAWN",
         "REVIEW_CONFIRMED",
     ] = "USER_MESSAGE"
 

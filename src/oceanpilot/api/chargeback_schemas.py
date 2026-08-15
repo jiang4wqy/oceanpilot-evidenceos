@@ -28,6 +28,10 @@ class SubmitEvidenceRequest(_StrictRequest):
     evidence_code: ChargebackEvidenceCode
 
 
+class WithdrawLatestEvidenceRequest(_StrictRequest):
+    evidence_code: ChargebackEvidenceCode
+
+
 class ConfirmReasonRequest(_StrictRequest):
     # Optional correction; when omitted the human confirms the proposed reason.
     reason_code: DisputeReasonCode | None = None
