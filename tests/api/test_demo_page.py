@@ -67,7 +67,7 @@ def test_demo_separates_case_diagnosis_from_new_case_creation(tmp_path):
     assert "规则证据就绪度" in body
     assert "预计胜诉概率" not in body
     assert 'api("GET","/cases")' in body
-    assert "暂无真实案件记录" in body
+    assert "暂无有效案件记录" in body
     assert "CASE-20260814" not in body and "OP-20260814" not in body
 
 
@@ -79,7 +79,7 @@ def test_demo_uses_oceanpayment_console_language_without_ai_jargon(tmp_path):
     assert "案件中心" in body and "新建案件" in body and "交易风险" in body
     assert "案件诊断" in body and "查看诊断" in body
     assert "导出当前结果" not in body and "规则与配置" not in body
-    assert "后端已校验" in body and "后端可读" in body
+    assert "案件库有效实体" in body and "案件库可读" in body
     assert "需要商户补充" in body
     assert "已有 1 项 · 仍缺 5 项" in body
     assert "商户" in body and "OceanStore" in body
@@ -90,3 +90,7 @@ def test_demo_uses_oceanpayment_console_language_without_ai_jargon(tmp_path):
     assert "toggleTheme" not in body
     assert 'class="ocean-logo"' in body
     assert 'src="data:image/png;base64,' in body
+    assert ".material-row .material-state" in body
+    assert (
+        "setInterval(()=>{if($('v-overview').classList.contains('on'))loadCases();},5000)" in body
+    )

@@ -6,6 +6,8 @@ import os
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse, RedirectResponse
 
+from oceanpilot.api.demo import OCEANPAYMENT_LOGO_DATA_URI
+
 _ADMIN_HTML = """<!doctype html>
 <html lang="zh">
 <head>
@@ -19,11 +21,10 @@ _ADMIN_HTML = """<!doctype html>
 --good:#178a52;--goodBg:#e5f4ec;--warn:#c88722;--warnBg:#fff4df;--crit:#c84646;--critBg:#fbeaea;--info:#3676a8;--shadow:0 1px 2px rgba(18,59,58,.035),0 8px 20px -16px rgba(18,59,58,.22);
 --sans:ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",sans-serif;
 --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace}
-*{box-sizing:border-box}body{margin:0;background:var(--canvas);color:var(--body);font-family:var(--sans);font-size:14px;line-height:1.55}
+*{box-sizing:border-box}body{margin:0;overflow-x:hidden;background:var(--canvas);color:var(--body);font-family:var(--sans);font-size:14px;line-height:1.55}
 button,select{font:inherit}.app{display:grid;grid-template-columns:220px minmax(0,1fr);min-height:100vh}
-.side{background:#fff;border-right:1px solid var(--border);height:100vh;position:sticky;top:0}
-.brand{padding:24px 22px 18px;border-bottom:1px solid var(--border)}.brand strong{display:block;color:var(--accent);font-size:20px;letter-spacing:-.5px}
-.brand span{display:block;margin-top:7px;color:var(--muted);font-size:11px;letter-spacing:.08em}.navlabel{padding:22px 20px 7px;color:var(--faint);font-size:10px;letter-spacing:.12em}
+.side{min-width:0;background:#fff;border-right:1px solid var(--border);height:100vh;position:sticky;top:0}
+.brand{padding:24px 22px 18px;border-bottom:1px solid var(--border)}.brand img{display:block;width:174px;max-width:100%;height:auto;object-fit:contain;object-position:left center}.brand span{display:block;margin-top:7px;color:var(--muted);font-size:11px;letter-spacing:.08em;text-transform:uppercase}.navlabel{padding:22px 20px 7px;color:var(--faint);font-size:10px;letter-spacing:.12em}
 .nav{padding:4px 10px}.nav button{display:block;width:100%;border:0;background:transparent;text-align:left;color:var(--muted);padding:11px 12px;border-radius:8px;cursor:pointer}
 .nav button:hover{background:#f6f8f6;color:var(--ink)}.nav button.on{background:var(--accentSoft);color:var(--accent);font-weight:700;border-left:3px solid var(--accent)}
 .main{min-width:0}.top{height:64px;background:#fff;border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 32px;gap:14px;position:sticky;top:0;z-index:4}
@@ -33,28 +34,28 @@ button,select{font:inherit}.app{display:grid;grid-template-columns:220px minmax(
 .pagehead{display:flex;justify-content:space-between;gap:24px;align-items:flex-end;padding-bottom:18px;border-bottom:1px solid var(--border);margin-bottom:20px}
 .pagehead h1{margin:0 0 4px;color:var(--ink);font-size:25px;letter-spacing:-.02em}.pagehead p{margin:0;color:var(--muted)}
 .updated{font-size:12px;color:var(--muted);white-space:nowrap}.banner{display:none;margin-bottom:16px;padding:12px 14px;border-radius:8px;border:1px solid #e2a2a2;background:var(--critBg);color:var(--crit);font-weight:650}
-.banner.on{display:block}.cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));margin-bottom:18px;background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden}.card{background:#fff;border:1px solid var(--border);border-radius:10px;box-shadow:var(--shadow)}
+.banner.on{display:block}.cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));margin-bottom:18px;background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden}.card{min-width:0;background:#fff;border:1px solid var(--border);border-radius:10px;box-shadow:var(--shadow)}
 .metric{padding:15px 17px;border:0;border-right:1px solid var(--border);border-radius:0;box-shadow:none}.metric:last-child{border-right:0}.metric .label{font-size:12px;color:var(--muted)}.metric .value{margin-top:7px;color:var(--ink);font-size:23px;font-weight:750;font-variant-numeric:tabular-nums}
 .metric .hint{margin-top:3px;font-size:11.5px;color:var(--faint)}.grid2{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(320px,.85fr);gap:18px}
 .hd{padding:13px 18px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}.hd h2{font-size:14px;margin:0;color:var(--ink)}
-.bd{padding:16px 18px}.badge{display:inline-flex;padding:3px 8px;border-radius:5px;font-size:11px;font-weight:700;white-space:nowrap}.healthy{color:var(--good);background:var(--goodBg)}.info{color:var(--info);background:#e8f0f6}
+.bd{min-width:0;padding:16px 18px}.badge{display:inline-flex;padding:3px 8px;border-radius:5px;font-size:11px;font-weight:700;white-space:nowrap}.healthy{color:var(--good);background:var(--goodBg)}.info{color:var(--info);background:#e8f0f6}
 .watch,.warning{color:var(--warn);background:var(--warnBg)}.degraded,.critical{color:var(--crit);background:var(--critBg)}.notcalled{color:var(--muted);background:var(--sunken)}
 .signal{padding:13px 0;border-bottom:1px solid var(--border)}.signal:last-child{border-bottom:0}.signaltop{display:flex;align-items:center;gap:9px}.signal strong{color:var(--ink)}
-.signal p{margin:6px 0 0;color:var(--body);font-size:12.5px}.signal .advice{color:var(--muted)}.endpointmini{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)}
-.endpointmini:last-child{border-bottom:0}.endpointmini .name{flex:1;color:var(--ink);font-weight:650}.endpointmini .meta{font-family:var(--mono);font-size:11px;color:var(--muted)}
+.signal p{margin:6px 0 0;color:var(--body);font-size:12.5px}.signal .advice{color:var(--muted)}.endpointmini{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)}
+.endpointmini:last-child{border-bottom:0}.endpointmini>div{min-width:0}.endpointmini .name{color:var(--ink);font-weight:650}.endpointmini .meta{font-family:var(--mono);font-size:11px;color:var(--muted);overflow-wrap:anywhere}.endpointmini .badge{align-self:center}
 .toolbar{display:flex;justify-content:flex-end;margin-bottom:12px}.toolbar select{width:220px;border:1px solid var(--border2);border-radius:8px;background:#fff;padding:8px 10px;color:var(--ink)}
 .tablewrap{overflow:auto}.table{width:100%;border-collapse:collapse;min-width:920px}.table th{text-align:left;padding:11px 14px;background:var(--sunken);color:var(--muted);font-size:11px;font-weight:650;border-bottom:1px solid var(--border)}
 .table td{padding:12px 14px;border-bottom:1px solid var(--border);font-size:12.5px}.table tr:last-child td{border-bottom:0}.route{font-family:var(--mono);font-size:11.5px;color:var(--body)}
 .method{font-family:var(--mono);font-size:11px;color:var(--accent);font-weight:750}.num{font-variant-numeric:tabular-nums}.business{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
 .businessitem{border:1px solid var(--border);border-radius:8px;padding:13px 14px}.businessitem span{display:block;color:var(--muted);font-size:12px}.businessitem strong{display:block;margin-top:5px;color:var(--ink);font-size:21px}
-.methodnote{margin-top:14px;padding:12px 14px;background:var(--sunken);border-radius:8px;color:var(--muted);font-size:12px}.empty{color:var(--faint);font-size:12.5px}.scopegrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.scopeitem{border:1px solid var(--border);border-radius:8px;padding:14px}.scopeitem strong{display:block;color:var(--ink);font-size:13px}.scopeitem p{margin:5px 0 0;color:var(--muted);font-size:12px}.env{font-size:11px;color:var(--accent);background:var(--accentSoft);border:1px solid #b8ddd6;border-radius:5px;padding:4px 8px;font-weight:700}
+.methodnote{margin-top:14px;padding:12px 14px;background:var(--sunken);border-radius:8px;color:var(--muted);font-size:12px}.empty{color:var(--faint);font-size:12.5px}.scopegrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.scopeitem{border:1px solid var(--border);border-radius:8px;padding:14px}.scopeitem strong{display:block;color:var(--ink);font-size:13px}.scopeitem p{margin:5px 0 0;color:var(--muted);font-size:12px}.env{font-size:11px;color:var(--accent);background:var(--accentSoft);border:1px solid #b8ddd6;border-radius:5px;padding:4px 8px;font-weight:700}.caseboard{margin-top:18px}.case-id{font:11.5px var(--mono);color:var(--accent);font-weight:700}.case-meta{margin-top:3px;color:var(--muted);font-size:11px}.live-note{color:var(--good);font-size:11px;font-weight:700}
 @media(max-width:1100px){.cards{grid-template-columns:repeat(2,1fr)}.grid2{grid-template-columns:1fr}}
 @media(max-width:760px){.app{grid-template-columns:1fr}.side{display:none}.top{padding:0 16px}.source{display:none}.content{padding:20px 14px 32px}.cards,.business{grid-template-columns:1fr}.pagehead{align-items:flex-start}.updated{display:none}}
 </style>
 </head>
 <body>
 <div class="app">
-<aside class="side"><div class="brand"><strong>Oceanpayment</strong><span>运行维护中心</span></div><div class="navlabel">监控中心</div>
+<aside class="side"><div class="brand"><img src="__OCEANPAYMENT_LOGO__" alt="Oceanpayment"><span>运行维护中心</span></div><div class="navlabel">监控中心</div>
 <nav class="nav"><button class="on" data-view="overview">运行总览</button><button data-view="api">API 监控</button><button data-view="prediction">故障预判</button><button data-view="business">业务指标</button><button data-view="audit">审计与配置</button></nav></aside>
 <main class="main"><header class="top"><div class="crumb"><b>运行维护</b> / <span id="crumb">运行总览</span></div><div class="grow"></div><span class="env">Sandbox</span><div class="source">监控客户服务 <span id="sourceHost"></span></div><button class="refresh" id="refresh" onclick="loadOverview()">立即刷新</button></header>
 <div class="content"><div class="banner" id="offline">客户服务暂时不可达。请确认 8002 端口已启动，再检查网络和服务日志。</div>
@@ -74,8 +75,9 @@ button,select{font:inherit}.app{display:grid;grid-template-columns:220px minmax(
 <section class="view" id="view-prediction"><div class="pagehead"><div><h1>故障预判</h1><p>在明显报错前发现延迟、错误率和业务积压的上升信号。</p></div><div class="updated" id="updatedPrediction">等待首次刷新</div></div>
 <div class="card"><div class="hd"><h2>当前预警</h2><span class="badge notcalled">可解释规则</span></div><div class="bd" id="allSignals"><span class="empty">等待数据</span></div></div><div class="methodnote" id="predictionNote">预判只使用确定性阈值，不是故障概率。</div></section>
 
-<section class="view" id="view-business"><div class="pagehead"><div><h1>业务指标</h1><p>观察人工复核、申诉阻断和交易风险等流程指标。</p></div><div class="updated" id="updatedBusiness">等待首次刷新</div></div>
-<div class="card"><div class="hd"><h2>拒付处理指标</h2><span class="badge notcalled">当前进程</span></div><div class="bd"><div class="business" id="businessMetrics"><span class="empty">尚无业务数据</span></div></div></div></section>
+<section class="view" id="view-business"><div class="pagehead"><div><h1>业务指标</h1><p>观察有效案件实体、人工复核、申诉阻断和交易风险等流程指标。</p></div><div class="updated" id="updatedBusiness">等待首次刷新</div></div>
+<div class="card"><div class="hd"><h2>拒付处理指标</h2><span class="badge notcalled">当前进程</span></div><div class="bd"><div class="business" id="businessMetrics"><span class="empty">尚无业务数据</span></div></div></div>
+<div class="card caseboard"><div class="hd"><h2>案件库有效实体</h2><span class="live-note">每 5 秒重新读取</span></div><div class="tablewrap"><table class="table"><thead><tr><th>案件</th><th>争议原因</th><th>状态</th><th>待补资料</th><th>创建时间</th></tr></thead><tbody id="caseRows"><tr><td colspan="5" class="empty">等待数据</td></tr></tbody></table></div></div></section>
 
 <section class="view" id="view-audit"><div class="pagehead"><div><h1>审计与配置</h1><p>确认监控采集边界、运行参数和外部连接状态。</p></div><div class="updated" id="updatedAudit">只读</div></div>
 <div class="card"><div class="hd"><h2>监控边界</h2><span class="badge healthy">已启用</span></div><div class="bd"><div class="scopegrid"><div class="scopeitem"><strong>请求遥测</strong><p>仅记录规范化路由、方法、状态码和耗时；不记录请求正文、卡号或原始 URL。</p></div><div class="scopeitem"><strong>滚动窗口</strong><p>近 15 分钟进程内统计；服务重启后自动清空，不声明长期历史。</p></div><div class="scopeitem"><strong>故障预判</strong><p>使用可解释阈值识别 5xx、错误率、P95 延迟及业务积压，不输出虚构概率。</p></div><div class="scopeitem"><strong>外部连接</strong><p>Oceanpayment 真实 API、生产数据和上游申诉接口尚未接入；当前为本地合成链路。</p></div></div></div></div></section>
@@ -87,15 +89,16 @@ const $=id=>document.getElementById(id);
 const esc=value=>String(value==null?"":value).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
 const STATUS={HEALTHY:["正常","healthy"],WATCH:["关注","watch"],DEGRADED:["异常","degraded"],NOT_CALLED:["未调用","notcalled"]};
 const SEVERITY={INFO:["提示","info"],WARNING:["预警","warning"],CRITICAL:["严重","critical"]};
+const CASE_PHASE={NEEDS_INTAKE:["待识别","notcalled"],REASON_PROPOSED:["待确认原因","watch"],NEED_EVIDENCE:["待补资料","watch"],ASSESSED:["评估完成","healthy"]};
 const METRIC_LABEL={assessments_total:"评估次数",requires_human_true:"需人工复核",requires_human_false:"无需人工复核",appeal_submitted:"申诉已提交",appeal_blocked:"申诉被阻断",prevention_risk_LOW:"低风险交易",prevention_risk_MEDIUM:"中风险交易",prevention_risk_HIGH:"高风险交易",explanation_source_MODEL:"辅助说明",explanation_source_FALLBACK:"规则说明"};
 function badge(value,map=STATUS){const item=map[value]||[value,"notcalled"];return `<span class="badge ${item[1]}">${esc(item[0])}</span>`;}
 document.querySelectorAll('.nav button').forEach(button=>button.addEventListener('click',()=>{document.querySelectorAll('.nav button').forEach(x=>x.classList.remove('on'));button.classList.add('on');document.querySelectorAll('.view').forEach(x=>x.classList.remove('on'));$('view-'+button.dataset.view).classList.add('on');$('crumb').textContent=button.textContent;}));
 function signalHtml(item){return `<div class="signal"><div class="signaltop">${badge(item.severity,SEVERITY)}<strong>${esc(item.title)}</strong></div><p>${esc(item.evidence)}</p><p class="advice">建议：${esc(item.recommendation)}</p></div>`;}
-function endpointHtml(item){return `<div class="endpointmini"><div><div class="name">${esc(item.name)}</div><div class="meta">${esc(item.method)} ${esc(item.route)}</div></div><div class="grow"></div>${badge(item.status)}</div>`;}
+function endpointHtml(item){return `<div class="endpointmini"><div><div class="name">${esc(item.name)}</div><div class="meta">${esc(item.method)} ${esc(item.route)}</div></div>${badge(item.status)}</div>`;}
 function renderOverview(){const d=DATA;if(!d)return;const status=STATUS[d.service_status.overall]||STATUS.NOT_CALLED;$('serviceValue').innerHTML=badge(d.service_status.overall);$('requestValue').textContent=d.request_summary.total;$('latencyValue').textContent=Math.round(d.request_summary.p95_latency_ms)+' ms';$('errorValue').textContent=d.request_summary.server_errors;$('overviewSignals').innerHTML=d.predictions.slice(0,3).map(signalHtml).join('');$('keyEndpoints').innerHTML=d.endpoints.slice(0,6).map(endpointHtml).join('');void status;}
 function renderEndpoints(){if(!DATA)return;const selected=$('apiGroup').value;const rows=DATA.endpoints.filter(item=>selected==='ALL'||item.group===selected);$('endpointRows').innerHTML=rows.map(item=>`<tr><td><strong>${esc(item.name)}</strong><div class="route"><span class="method">${esc(item.method)}</span> ${esc(item.route)}</div></td><td>${badge(item.status)}</td><td class="num">${item.total}</td><td class="num">${item.client_errors}</td><td class="num">${item.server_errors}</td><td class="num">${(item.error_rate*100).toFixed(1)}%</td><td class="num">${Math.round(item.average_latency_ms)} ms</td><td class="num">${Math.round(item.p95_latency_ms)} ms</td><td class="num">${item.last_status||'—'}</td></tr>`).join('');}
 function renderPredictions(){if(!DATA)return;$('allSignals').innerHTML=DATA.predictions.map(signalHtml).join('');$('predictionNote').textContent=DATA.prediction_disclaimer;}
-function renderBusiness(){if(!DATA)return;const entries=Object.entries(DATA.business_counts);$('businessMetrics').innerHTML=entries.length?entries.map(([key,value])=>`<div class="businessitem"><span>${esc(METRIC_LABEL[key]||key)}</span><strong>${value}</strong></div>`).join(''):'<span class="empty">尚无业务数据；客户端产生评估或申诉后会自动出现。</span>';}
+function renderBusiness(){if(!DATA)return;const entries=Object.entries(DATA.business_counts);$('businessMetrics').innerHTML=entries.length?entries.map(([key,value])=>`<div class="businessitem"><span>${esc(METRIC_LABEL[key]||key)}</span><strong>${value}</strong></div>`).join(''):'<span class="empty">尚无业务数据；客户端产生评估或申诉后会自动出现。</span>';const cases=DATA.cases||[];$('caseRows').innerHTML=cases.length?cases.map(item=>{const phase=CASE_PHASE[item.phase]||[item.phase,'notcalled'];const created=item.created_at?new Date(item.created_at).toLocaleString('zh-CN',{hour12:false}):'—';return `<tr><td><div class="case-id">${esc(item.case_id)}</div><div class="case-meta">案件库可重新读取</div></td><td>${esc(item.reason_label||item.reason_code||'待确认')}</td><td><span class="badge ${phase[1]}">${esc(phase[0])}</span></td><td class="num">${item.missing_count}</td><td class="num">${esc(created)}</td></tr>`;}).join(''):'<tr><td colspan="5" class="empty">当前案件库暂无有效实体；维护端不会生成占位案件。</td></tr>';}
 function configureGroups(){const select=$('apiGroup');if(select.options.length>1)return;[...new Set(DATA.endpoints.map(item=>item.group))].forEach(group=>{const option=document.createElement('option');option.value=group;option.textContent=group;select.appendChild(option);});}
 async function loadOverview(){const button=$('refresh');button.disabled=true;$('offline').classList.remove('on');try{const response=await fetch(CLIENT_BASE+'/api/v1/admin/overview',{headers:{Accept:'application/json'}});if(!response.ok)throw new Error('status');DATA=await response.json();configureGroups();renderOverview();renderEndpoints();renderPredictions();renderBusiness();const stamp=new Date(DATA.generated_at).toLocaleTimeString('zh-CN',{hour12:false});['updatedOverview','updatedApi','updatedPrediction','updatedBusiness'].forEach(id=>$(id).textContent='更新于 '+stamp);$('sourceHost').textContent=new URL(CLIENT_BASE).host;}catch(error){$('offline').classList.add('on');$('serviceValue').innerHTML=badge('DEGRADED');void error;}finally{button.disabled=false;}}
 loadOverview();setInterval(loadOverview,5000);
@@ -106,7 +109,9 @@ loadOverview();setInterval(loadOverview,5000);
 
 def create_admin_app(client_base_url: str | None = None) -> FastAPI:
     base_url = client_base_url or os.getenv("OCEANPILOT_CLIENT_BASE_URL", "http://127.0.0.1:8002")
-    page = _ADMIN_HTML.replace("__CLIENT_BASE__", json.dumps(base_url.rstrip("/")))
+    page = _ADMIN_HTML.replace("__CLIENT_BASE__", json.dumps(base_url.rstrip("/"))).replace(
+        "__OCEANPAYMENT_LOGO__", OCEANPAYMENT_LOGO_DATA_URI
+    )
     application = FastAPI(
         title="Oceanpayment Operations Console",
         docs_url=None,

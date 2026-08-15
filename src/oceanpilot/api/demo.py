@@ -13,7 +13,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 
 router = APIRouter()
 
-_OCEANPAYMENT_LOGO_DATA_URI = (
+OCEANPAYMENT_LOGO_DATA_URI = (
     "data:image/png;base64,"
     "iVBORw0KGgoAAAANSUhEUgAAAygAAADmCAYAAAA+/qGoAAAMT2lDQ1BJQ0MgUHJvZmlsZQAASImVVwdYU8kWnltSIQQIhCIl9CaI"
     "SAkgJYQWQHoRRCUkAUKJMSGo2NFFBdcuIlhWdBXExQ7IoijqqiuLYnctiwUVZV1cFxsqb0IAXfaV7833zZ3//nPmn3POnXvvDAD0"
@@ -719,7 +719,7 @@ _DEMO_HTML = """<!doctype html>
   .case-records{margin-top:0}.case-records summary{cursor:pointer;color:var(--body);font-weight:700}.case-records .record-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:14px}
   .diagnostic-materials{border-left:4px solid var(--warn)}.diagnostic-materials.complete{border-left-color:var(--good)}
   .material-notice{padding:12px 13px;border-radius:8px;background:var(--warn-bg);color:#765115;margin-bottom:12px}.material-notice strong{display:block;font-size:13px}.material-notice p{margin:3px 0 0;font-size:12px}.material-notice.complete{background:var(--good-bg);color:var(--good)}
-  .material-list{display:flex;flex-direction:column;gap:8px}.material-row{display:grid;grid-template-columns:26px minmax(0,1fr) auto;gap:10px;align-items:center;border:1px solid var(--border);border-radius:8px;padding:10px 11px}.material-row.done{background:var(--good-bg);border-color:#b9ddca}.material-state{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;background:var(--warn-bg);color:var(--warn);font-size:11px;font-weight:800}.material-row.done .material-state{background:var(--good);color:#fff}.material-row strong{display:block;color:var(--ink);font-size:12.5px}.material-row span{display:block;color:var(--muted);font-size:11px;margin-top:2px}
+  .material-list{display:flex;flex-direction:column;gap:8px}.material-row{display:grid;grid-template-columns:26px minmax(0,1fr) auto;gap:10px;align-items:center;border:1px solid var(--border);border-radius:8px;padding:10px 11px}.material-row.done{background:var(--good-bg);border-color:#b9ddca}.material-row .material-state{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;background:var(--warn-bg);color:var(--warn);font-size:11px;font-weight:800;line-height:1;margin:0}.material-row.done .material-state{background:var(--good);color:#fff}.material-row strong{display:block;color:var(--ink);font-size:12.5px}.material-row div>span{display:block;color:var(--muted);font-size:11px;margin-top:2px}
   .material-form{display:none;margin-top:12px;padding:14px;border:1px solid var(--border);border-radius:8px;background:var(--sunken)}.material-form.on{display:block}.material-form h3{margin:0 0 4px;color:var(--ink);font-size:13px}.material-form p{margin:0 0 9px;color:var(--muted);font-size:11.5px}.form-error{color:var(--crit);font-size:11.5px;margin-top:6px}
   .empty-state{text-align:center;padding:28px 20px}.empty-state strong{display:block;color:var(--ink);font-size:15px}.empty-state p{margin:6px auto 14px;max-width:430px;color:var(--muted);font-size:12.5px}
   @media(max-width:1180px){.metric-strip{grid-template-columns:repeat(3,1fr)}.metric-cell:nth-child(3){border-right:0}.metric-cell:nth-child(-n+3){border-bottom:1px solid var(--border)}.ops-grid,.diag-layout{grid-template-columns:1fr}.diag-layout>.rail{display:none}}
@@ -911,8 +911,8 @@ async function loadCases(){const result=await api("GET","/cases");
   S.cases=result.data;renderTransactions();}
 function renderTransactions(){const query=($('tableSearch').value||'').toLowerCase();const status=$('statusFilter').value;
   const rows=S.cases.filter(c=>(status==='ALL'||c.phase===status)&&[c.case_id,c.reason_code,REASON_LABEL[c.reason_code]].join(' ').toLowerCase().includes(query));
-  $('transactionCount').textContent=`共 ${rows.length} 件`;
-  $('transactionRows').innerHTML=rows.map(c=>{const s=STATUS_VIEW[c.phase]||['未知','p-mut'];const missing=(c.missing_labels||[]).length;const action=c.phase==='ASSESSED'?'查看案件':'查看诊断';return `<tr onclick="openStoredCase('${esc(c.case_id)}')"><td class="primary-id">${esc(c.case_id)}<div class="sub-id">后端已校验</div></td><td>${esc(REASON_LABEL[c.reason_code]||c.reason_code||'待确认')}</td><td><span class="pill ${s[1]}">${s[0]}</span></td><td>${missing?`<span class="pill p-warn">仍缺 ${missing} 项</span>`:'<span class="pill p-good">无待补项</span>'}</td><td class="action-cell"><button class="tbtn" onclick="event.stopPropagation();openStoredCase('${esc(c.case_id)}')">${action}</button></td></tr>`;}).join('')||'<tr><td colspan="5" class="empty-state"><strong>暂无真实案件记录</strong><p>列表不使用预置案件。创建案件后，它会在此显示。</p><button class="tbtn primary" onclick="openCreate(null)">新建案件</button></td></tr>';
+  const synced=new Date().toLocaleTimeString('zh-CN',{hour12:false,hour:'2-digit',minute:'2-digit',second:'2-digit'});$('transactionCount').textContent=`${rows.length} 件有效实体 · 更新于 ${synced}`;
+  $('transactionRows').innerHTML=rows.map(c=>{const s=STATUS_VIEW[c.phase]||['未知','p-mut'];const missing=(c.missing_labels||[]).length;const action=c.phase==='ASSESSED'?'查看案件':'查看诊断';return `<tr onclick="openStoredCase('${esc(c.case_id)}')"><td class="primary-id">${esc(c.case_id)}<div class="sub-id">案件库有效实体</div></td><td>${esc(REASON_LABEL[c.reason_code]||c.reason_code||'待确认')}</td><td><span class="pill ${s[1]}">${s[0]}</span></td><td>${missing?`<span class="pill p-warn">仍缺 ${missing} 项</span>`:'<span class="pill p-good">无待补项</span>'}</td><td class="action-cell"><button class="tbtn" onclick="event.stopPropagation();openStoredCase('${esc(c.case_id)}')">${action}</button></td></tr>`;}).join('')||'<tr><td colspan="5" class="empty-state"><strong>暂无有效案件记录</strong><p>列表不使用预置案件；只有成功写入案件库且可重新读取的案件才会显示。</p><button class="tbtn primary" onclick="openCreate(null)">新建案件</button></td></tr>';
   const pending=S.cases.filter(c=>c.phase!=='ASSESSED');$('pendingCaseCount').textContent=`${pending.length} 件`;
   $('pendingCaseRows').innerHTML=pending.slice(0,3).map(c=>`<div class="quick-row"><strong>${esc(c.case_id)}</strong><p>${esc((STATUS_VIEW[c.phase]||['待处理'])[0])} · 仍缺 ${(c.missing_labels||[]).length} 项资料</p><button class="tbtn" onclick="openStoredCase('${esc(c.case_id)}')">进入诊断</button></div>`).join('')||'<div class="panel-bd empty">暂无待处理案件</div>';}
 async function openStoredCase(caseId){const result=await api("GET",`/cases/${caseId}`);
@@ -923,7 +923,7 @@ async function openStoredCase(caseId){const result=await api("GET",`/cases/${cas
 function renderStoredDiagnosis(c){const s=STATUS_VIEW[c.phase]||['未知','p-mut'];const missing=c.missing_labels||[];
   $('diagnosisSummary').className=`panel diagnosis-summary ${c.phase==='ASSESSED'?'good':'warn'}`;
   $('diagId').textContent=c.case_id;$('diagStage').textContent=s[0];$('diagCode').textContent=REASON_LABEL[c.reason_code]||c.reason_code||'待确认';$('diagCaseId').textContent=c.case_id;
-  $('diagSideId').innerHTML='<span class="pill p-good">后端可读</span>';const status=$('diagStatus');status.className=`pill ${s[1]}`;status.textContent=s[0];
+  $('diagSideId').innerHTML='<span class="pill p-good">案件库可读</span>';const status=$('diagStatus');status.className=`pill ${s[1]}`;status.textContent=s[0];
   if(c.phase==='REASON_PROPOSED'){$('diagCause').textContent='争议原因尚未确认';$('diagMeaning').textContent='系统已给出初步判断，需要人工确认后才能继续收集材料。';$('diagAdvice').textContent='请先确认争议原因，系统将在确认后生成缺失材料清单。';}
   else{$('diagCause').textContent=missing.length?`案件仍缺 ${missing.length} 项材料，暂不能完成评估`:'案件材料已齐全';$('diagMeaning').textContent=missing.length?'当前案件存在明确的证据缺口，下方清单来自后端当前状态。':'当前没有待补资料。';$('diagAdvice').textContent=missing.length?'请按清单逐项补交；每次提交后系统会重新读取案件状态。':'可返回案件中心查看其他案件。';}
   $('diagImpact').textContent=missing.length?`仍缺 ${missing.length} 项`:'无待补项';renderDiagnosticMaterials(c);}
@@ -1109,7 +1109,7 @@ async function safetyScan(){const {ok,data}=await api("POST","/safety/scan",{tex
   const p=data.accepted?'<span class="pill p-good">✓ 通过</span>':'<span class="pill p-crit">⛔ 已拦截</span>';
   $('safeOut').innerHTML=`<div class="note" style="margin:0">${p} &nbsp;${esc(data.detail)}</div>`;}
 
-loadCases();renderCreateForm();renderStages();renderAction();refreshMetrics();
+loadCases();setInterval(()=>{if($('v-overview').classList.contains('on'))loadCases();},5000);renderCreateForm();renderStages();renderAction();refreshMetrics();
 </script>
 </body>
 </html>
@@ -1123,4 +1123,4 @@ def root() -> RedirectResponse:
 
 @router.get("/demo", include_in_schema=False, response_class=HTMLResponse)
 def demo_page() -> HTMLResponse:
-    return HTMLResponse(_DEMO_HTML.replace("__OCEANPAYMENT_LOGO__", _OCEANPAYMENT_LOGO_DATA_URI))
+    return HTMLResponse(_DEMO_HTML.replace("__OCEANPAYMENT_LOGO__", OCEANPAYMENT_LOGO_DATA_URI))
