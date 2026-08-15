@@ -109,7 +109,7 @@ def test_demo_separates_case_diagnosis_from_new_case_creation(tmp_path):
     assert "规则证据就绪度" in body
     assert "预计胜诉概率" not in body
     assert 'api("GET","/cases")' in body
-    assert "暂无已持久化的本地演示案件" in body
+    assert "暂无有效案件记录" in body
     assert "CASE-20260814" not in body and "OP-20260814" not in body
 
 
@@ -135,7 +135,7 @@ def test_demo_keeps_oceanpayment_visual_baseline_with_hub_and_rules(tmp_path):
     assert "案件中心" in body and "新建案件" in body and "交易风险" in body
     assert "案件诊断" in body and "查看诊断" in body
     assert "导出当前结果" not in body and "规则与配置" not in body
-    assert "后端已校验" in body and "后端可读" in body
+    assert "案件库有效实体" in body and "案件库可读" in body
     assert "需要商户补充" in body
     assert "已有 1 项 · 仍缺 5 项" in body
     assert "商户" in body and "OceanStore" in body
@@ -152,6 +152,10 @@ def test_demo_keeps_oceanpayment_visual_baseline_with_hub_and_rules(tmp_path):
     assert "openAdminConsole" not in body and "openActiveAudit" not in body
     assert 'class="ocean-logo"' in body
     assert 'src="data:image/png;base64,' in body
+    assert ".material-row .material-state" in body
+    assert (
+        "setInterval(()=>{if($('v-overview').classList.contains('on'))loadCases();},5000)" in body
+    )
 
 
 def test_embedded_demo_javascript_parses_independently(tmp_path):
@@ -313,3 +317,35 @@ def test_demo_retains_human_review_and_duplicate_submission_guards(tmp_path):
     assert 'id="diagnosisAlert" role="status" aria-live="polite"' in body
     assert 'id="preventionOut" class="mt" aria-live="polite"' in body
     assert "本次 mock 回执" in body
+
+
+def test_demo_supports_complete_zh_en_language_switching(tmp_path):
+    app = create_app(Settings(db_path=tmp_path / "demo.db"))
+    with TestClient(app, raise_server_exceptions=False) as client:
+        body = client.get("/demo").text
+
+    assert 'id="languageSelect"' in body
+    assert '<option value="zh">中文</option>' in body
+    assert '<option value="en">English</option>' in body
+    assert 'const COOKIE="oceanpilot_client_language"' in body
+    assert "oceanpilot_admin_language" not in body
+    assert 'document.cookie=COOKIE+"="' in body
+    assert "setInterval(()=>{const cookieLanguage=readLanguage()" in body
+    assert 'title_en="Oceanpayment · Merchant Workspace"' not in body
+    assert '"案件中心":"Case center"' in body
+    assert '"补交资料":"Submit evidence"' in body
+    assert ".op-table .pill{max-width:150px;white-space:normal" in body
+    assert ".op-table td:nth-child(3) .pill{min-width:138px}" in body
+    assert (
+        ".op-table .action-cell .tbtn{display:inline-flex;align-items:center;"
+        "justify-content:center;width:118px" in body
+    )
+    assert "@media(max-width:1320px){.work-grid{grid-template-columns:1fr}" in body
+    assert '"评估完成":"Assessment complete"' in body
+    assert '"3DS 认证结果":"3DS authentication result"' in body
+    assert '"AVS 地址验证结果":"AVS result"' in body
+    assert '"CVV 校验结果":"CVV result"' in body
+    assert '"设备/IP 匹配":"Device/IP match"' in body
+    assert "Requested evidence: ${translate(m[1])}" in body
+    assert "window.addEventListener('oceanpilot:languagechange'" in body
+    assert "loc:window.oceanI18n.getLanguage()" in body

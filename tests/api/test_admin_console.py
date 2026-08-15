@@ -25,6 +25,7 @@ def test_admin_overview_exposes_api_health_and_threshold_predictions(tmp_path):
         item["route"] == "/boom" and item["status"] == "DEGRADED" for item in body["endpoints"]
     )
     assert any(item["severity"] == "CRITICAL" for item in body["predictions"])
+    assert body["cases"] == []
     assert body["prediction_method"] == "DETERMINISTIC_THRESHOLDS_V1"
     assert "不是故障概率" in body["prediction_disclaimer"]
 
@@ -44,6 +45,20 @@ def test_client_allows_read_only_admin_origin(tmp_path):
     assert response.headers["access-control-allow-origin"] == "http://127.0.0.1:8003"
 
 
+def test_admin_lists_only_persisted_cases_that_resolve_from_the_case_api(tmp_path):
+    app = create_app(Settings(db_path=tmp_path / "api.db"))
+    with TestClient(app, raise_server_exceptions=False) as client:
+        created = client.post(
+            "/api/v1/chargeback/cases", json={"description": "没收到货，要拒付"}
+        ).json()
+        overview = client.get("/api/v1/admin/overview").json()
+
+        assert [item["case_id"] for item in overview["cases"]] == [created["case_id"]]
+        assert overview["cases"][0]["phase"] == created["phase"]
+        assert overview["cases"][0]["missing_count"] == len(created["missing"])
+        assert client.get(f"/api/v1/chargeback/cases/{created['case_id']}").status_code == 200
+
+
 def test_separate_admin_app_serves_management_console():
     app = create_admin_app("http://127.0.0.1:9123")
     with TestClient(app, raise_server_exceptions=False) as client:
@@ -56,9 +71,30 @@ def test_separate_admin_app_serves_management_console():
     assert "Oceanpayment · 维护中心" in page.text
     assert "API 监控" in page.text and "故障预判" in page.text and "业务指标" in page.text
     assert "审计与配置" in page.text and "--accent:#087a70" in page.text
+    assert 'alt="Oceanpayment"' in page.text
+    assert 'src="data:image/png;base64,' in page.text
+    assert "案件库有效实体" in page.text
+    assert ".endpointmini{display:grid" in page.text
     assert 'const CLIENT_BASE="http://127.0.0.1:9123"' in page.text
     assert "不是故障概率" in page.text
     assert health.json() == {
         "status": "ok",
         "client_base_url": "http://127.0.0.1:9123",
     }
+
+
+def test_admin_console_has_an_independent_zh_en_language_preference():
+    app = create_admin_app("http://127.0.0.1:9123")
+    with TestClient(app, raise_server_exceptions=False) as client:
+        body = client.get("/admin").text
+
+    assert 'id="languageSelect"' in body
+    assert 'aria-label="语言"' in body
+    assert 'const COOKIE="oceanpilot_admin_language"' in body
+    assert "oceanpilot_client_language" not in body
+    assert '"运行总览":"Operations overview"' in body
+    assert '"业务指标":"Business metrics"' in body
+    assert '"案件库有效实体":"Persisted case entities"' in body
+    assert ".table .badge{min-width:96px;max-width:144px;white-space:normal" in body
+    assert '"评估完成":"Assessment complete"' in body
+    assert "window.addEventListener('oceanpilot:languagechange'" in body
