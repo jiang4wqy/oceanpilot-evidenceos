@@ -1,24 +1,10 @@
 # OceanPilot — 跨境商户成功 AI 运营中枢
 
-![OceanPilot：证据驱动的跨境拒付申诉协作 Agent；缺证先补问、过门再评估、高风险步骤由人工确认](docs/assets/submission/oceanpilot-hero.png)
+![OceanPilot：AI 驱动的跨境支付全生命周期商户成功智能体（拒付是验证底座的高复杂度样本，不是产品边界）](docs/assets/deck/deck-lifecycle-overview.png)
 
 **面向跨境商户成功与支付运营建立统一 AI 工作入口，并用“支付异常 → 争议协作”证明一条可运行的深度主线。** OceanPilot 用一个版本化案件串联拒付理由、证据缺口、证据就绪评估、规则校验与打包、人工审批和案件处理审计；AI 负责理解、补问和起草，确定性规则与人工负责裁定。
 
 > **当前边界：** 全部业务数据和动作均为 Synthetic Demo。Web 主演示从 AI 总窗口进入原版案件中心，由演示者选择 Visa 10.4 合成模板，完成“受理 → 通用补证 → 评估 → 条款引用与打包 → 人审 → mock 申诉”。3DS 失败或回调异常仍只属于 Foundation `PAYMENT_INCIDENT` 支持分支；Web 入口和直连建案 API 尚未接入真实交易状态或 Issuer 通知来源校验。真实飞书 tenant、Oceanpayment 数据、经生产核验的卡组织规则和上游申诉均未接入，系统不执行任何真实资金或业务动作。
-
-## 方案展示
-
-![OceanPilot：AI 驱动的跨境支付全生命周期商户成功智能体（拒付是验证底座的高复杂度样本，不是产品边界）](docs/assets/showcase/oceanpilot-lifecycle-overview.png)
-
-> **项目简介：** OceanPilot 先把一次跨境支付问题组织成版本化案件，再用证据契约识别缺口；资料过门后才形成带依据、规则版本、责任域和下一动作的判断，让 AI 提议、规则约束、人工裁定。本次比赛只把“支付异常 → 拒付申诉”做成端到端 Live Demo；全生命周期是同一底座之上的推广路径，不是当前已实现能力。
-
-![AI 应用创新性对比：从聊天里猜答案到围绕证据形成可审计决策](docs/assets/showcase/oceanpilot-ai-innovation-comparison.png)
-
-> **插图 1｜AI 应用创新性对比：** 从“聊天里猜答案”到“围绕证据形成可审计决策”。
-
-![业务价值直观对比：同一个拒付案件的协作摩擦如何被收敛](docs/assets/showcase/oceanpilot-business-value-comparison.png)
-
-> **插图 2｜业务价值直观对比：** 同一个拒付案件，协作摩擦如何被收敛。图中企业试点指标为试点目标，非当前已实现收益。
 
 ### 三个核心设计
 
@@ -42,7 +28,7 @@ OceanPilot 是一个面向跨境 PSP 与商户运营的独立参赛原型。AI �
 | Foundation Feishu callbacks | Supporting slice | 经签名校验的建案、补问、诊断卡和人工确认审计；与拒付主线共享签名与回执基础设施 |
 | Basic observability | Available (synthetic) | PII-free request/trace 日志与进程内决策指标；不是生产日志平台或持久化 metrics backend |
 | Chargeback Feishu callbacks | Available (synthetic) | `/chargeback` 显式建案、理由/补证卡片、签名与 replay 防护、哈希 chat↔case 绑定；未做真实 tenant smoke |
-| Rules knowledge prototype | Available (unverified summaries) | 独立 SQLite 规则库原型提供 9 条可浏览摘要，其中 3 条可参与 Demo 打包；通用补证仍由领域策略驱动，真实规则、脱敏案例与 RAG 尚未接入 |
+| Rules knowledge prototype | Available (unverified summaries) | 独立 SQLite 规则库原型提供 10 条可浏览摘要，其中 3 条可参与 Demo 打包；通用补证仍由领域策略驱动，真实规则、脱敏案例与 RAG 尚未接入 |
 | Real integrations | Planned | 真实 Oceanpayment、外部 A2A/MCP/工单、上游申诉与公网 Feishu tenant smoke |
 | Production readiness | Not claimed | 尚未完成鉴权、限流、生产可观测性后端、云数据库、备份、部署和运行保障 |
 
@@ -75,23 +61,26 @@ OceanPilot 主演示 Web 界面以“AI 总窗口 → 支付异常 → 原版案
 
 ## Web 控制台 / Console
 
-![OceanPilot 拒付申诉控制台：侧栏 + 案件工作台 + 活动流；确定性内核判定的证据就绪度、逐项证据与决策来源](docs/assets/console.png)
+![OceanPilot AI 运营中枢：一个中枢协同跨境商户运营，能力地图如实标注各模块实现状态，仅“支付异常”为本次 Live Demo](docs/assets/screenshots/web-ai-hub.png)
 
-客户端以“AI 运营中枢 → 支付异常 → 原版案件中心”为主演示路径。首屏展示完整能力版图和实现状态，但只有支付异常标记为 `LIVE DEMO · synthetic`；点击只做导航，不自动建案。案件诊断或评估在明确选择卡组织后通过只读端点解析实际 `rule_version_id`，Package 复用同一版本引用；两处均可进入规则知识页并返回案件上下文，返回后已生成的 Package 不会丢失。规则知识页提供 9 条 `UNVERIFIED_SUMMARY` 摘要及来源追溯。
+![新建案件：选择常见案件模板（Visa 13.1 / Visa 10.4 / Mastercard 4853）并确认案件说明；与失败案件诊断互相独立](docs/assets/screenshots/web-create-case.png)
+
+客户端以“AI 运营中枢 → 支付异常 → 原版案件中心”为主演示路径。首屏展示完整能力版图和实现状态，但只有支付异常标记为 `LIVE DEMO · synthetic`；点击只做导航，不自动建案。案件诊断或评估在明确选择卡组织后通过只读端点解析实际 `rule_version_id`，Package 复用同一版本引用；两处均可进入规则知识页并返回案件上下文，返回后已生成的 Package 不会丢失。规则知识页提供 10 条 `UNVERIFIED_SUMMARY` 摘要及来源追溯。
 
 - 启动后打开根路径 `/`（自动跳转到 `/demo`）。
 - Docker：`docker run --rm -p 127.0.0.1:8000:8000 oceanpilot-evidenceos`，浏览器开 `http://127.0.0.1:8000/demo`。
 - 远程服务器：SSH 端口转发 `ssh -L 8000:127.0.0.1:8000 <user>@<host>`，本地开 `http://localhost:8000/demo`。
-- 客户端顶栏提供全局搜索（`⌘K`）；技术端点不出现在客户导航中。
+- 运行维护端：另起一个进程 `http://127.0.0.1:8003/admin`（`oceanpilot.admin:create_admin_app`），集中展示运行总览、关键接口与故障风险预判。
+- 客户端顶栏提供全局搜索（快捷键 Cmd/Ctrl + K）；技术端点不出现在客户导航中。
 - 当前 AI 总窗口、原版案件主线与规则知识交互说明：[docs/superpowers/specs/2026-08-15-oceanpilot-ai-operations-design.md](docs/superpowers/specs/2026-08-15-oceanpilot-ai-operations-design.md)。
 
 ## 技术原则：证据先行闭环
 
-![证据先行：先补齐事实，再给出判断](docs/assets/submission/fig-01-evidence-loop.png)
+![AI 应用创新性对比：从聊天里猜答案到围绕证据形成可审计决策](docs/assets/deck/deck-ai-innovation-comparison.png)
 
 OceanPilot 的核心不是增加一个信息入口，而是让 AI、确定性规则与人工共同遵守同一套案件证据口径：资料不足先定位缺口，达到门槛后才输出评估，高风险步骤始终由人工确认。
 
-> 图例边界：这是报名阶段的 Foundation 规划图。绿色实线为当时的基础原型，海洋蓝虚线为离线规则资产，浅灰虚线与琥珀色节点为当时的规划路径；`v0.2.1` 的实际运行边界以本文状态表与 `docs/architecture.md` 为准。
+> **插图 1｜AI 应用创新性对比：** 从“聊天里猜答案”到“围绕证据形成可审计决策”。当前实际运行边界以本文状态表与 `docs/architecture.md` 为准。
 
 ## Architecture
 
@@ -114,13 +103,11 @@ API 只负责严格输入映射、状态码和安全错误；领域/应用层负
 
 ## Foundation：底层能力验证切片
 
-![一个支付异常如何变成可追溯的协作案件](docs/assets/submission/fig-03-case-walkthrough.png)
+![业务价值直观对比：同一个拒付案件的协作摩擦如何被收敛](docs/assets/deck/deck-business-value-comparison.png)
 
-Foundation 以合成支付异常验证版本化证据、确定性诊断、审计和签名飞书回调，不是当前产品主线。其公开 HTTP 输入使用严格 UUIDv4 和 `synthetic=true`，调用方不能注入来源可信度、状态、revision 或路由结论。
+> **插图 2｜业务价值直观对比：** 同一个拒付案件，协作摩擦如何被收敛。图中企业试点指标为试点目标，非当前已实现收益。
 
-![当前可验证原型与入围后完整方案的分层架构](docs/assets/submission/fig-02-layered-architecture.png)
-
-> **事实边界（图为报名期分层规划）：** 图中曾标为规划的 Foundation 诊断主链与飞书回调已实现为 synthetic demo；拒付主线也已接入同一签名事件/卡片入口，但尚未做真实 tenant smoke。真实 Oceanpayment 数据、外部 A2A/MCP/工单均未接入。
+Foundation 以合成支付异常验证版本化证据、确定性诊断、审计和签名飞书回调，不是当前产品主线。其公开 HTTP 输入使用严格 UUIDv4 和 `synthetic=true`，调用方不能注入来源可信度、状态、revision 或路由结论。Foundation 诊断主链与飞书回调已实现为 synthetic demo；拒付主线也已接入同一签名事件/卡片入口，但尚未做真实 tenant smoke。真实 Oceanpayment 数据、外部 A2A/MCP/工单均未接入。
 
 ## 开发者指南 / Developer guide
 
@@ -168,6 +155,13 @@ $env:OCEANPILOT_DB_PATH = "work/oceanpilot.db"
 .\.venv\Scripts\python.exe -m uvicorn oceanpilot.main:create_app --factory --host 127.0.0.1 --port 8002
 ```
 
+新终端启动运行维护端：
+
+```powershell
+$env:OCEANPILOT_CLIENT_BASE_URL = "http://127.0.0.1:8002"
+.\.venv\Scripts\python.exe -m uvicorn oceanpilot.admin:create_admin_app --factory --host 127.0.0.1 --port 8003
+```
+
 需要启用 DeepSeek 时，将 `.env.example` 复制为不会被 Git 跟踪的 `.env`，填写
 `DEEPSEEK_API_KEY`，并设置 `OCEANPILOT_MODEL_PROVIDER=deepseek`、
 `OCEANPILOT_CHARGEBACK_LIVE_MODEL=1`。启动时显式加载该文件：
@@ -185,6 +179,12 @@ python3.12 -m venv .venv
 .venv/bin/python -m pip install -e ".[dev]"
 export OCEANPILOT_DB_PATH=work/oceanpilot.db
 .venv/bin/python -m uvicorn oceanpilot.main:create_app --factory --host 127.0.0.1 --port 8002
+```
+
+新终端启动运行维护端：
+
+```bash
+OCEANPILOT_CLIENT_BASE_URL=http://127.0.0.1:8002 .venv/bin/python -m uvicorn oceanpilot.admin:create_admin_app --factory --host 127.0.0.1 --port 8003
 ```
 
 启动过程由 FastAPI lifespan 创建 SQLite schema 并执行一次 Store 健康检查。构造或导入应用本身不会打开数据库连接。飞书回调为可选：设置 `FEISHU_APP_ID/APP_SECRET/VERIFICATION_TOKEN/ENCRYPT_KEY` 后启用（凭据只走环境变量），配置步骤见 [docs/feishu-setup.md](docs/feishu-setup.md)，演示脚本见 [docs/demo.md](docs/demo.md)。未配置飞书时核心 API 与 `/health` 正常，飞书路由返回固定安全 `503`。
@@ -209,7 +209,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\examples\demo.ps1 -Bas
 
 ## What Is Deliberately Deferred
 
-已完成（截至 `v0.2.1`）：Foundation 诊断快照 CAS 持久化、identity replay、stale 检查与原子审计；RFC 9457 Problem Details、request/trace 关联头与 OpenAPI 错误矩阵；经签名校验的 Foundation 飞书事件/卡片回调；synthetic 拒付 Supervisor、补证、评估、打包、mock 申诉、时限计算、预防建议、审计/agent trace；Web 控制台、Docker、跨平台 transcript、基础结构化日志/进程内指标和离线评测。
+已完成（截至当前主线）：Foundation 诊断快照 CAS 持久化、identity replay、stale 检查与原子审计；RFC 9457 Problem Details、request/trace 关联头与 OpenAPI 错误矩阵；经签名校验的 Foundation 飞书事件/卡片回调；synthetic 拒付 Supervisor、补证、评估、打包、mock 申诉、时限计算、预防建议、审计/agent trace；案件诊断 Agent（确定性快照分析、执行轨迹与人工闸门）、证据原子撤回、卡组织持久化与审核审计恢复、只读规则引用（版本 ID 可追溯）；Web 控制台、Docker、跨平台 transcript、基础结构化日志/进程内指标和离线评测。
 
 仍然延期：
 
@@ -223,7 +223,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\examples\demo.ps1 -Bas
 
 ## Verification
 
-`v0.2.1` 标签的本地全量套件基线为 `1095 passed, 3 skipped`：无 PowerShell 环境跳过一个 `demo.ps1` 语法测试，无 `ANTHROPIC_API_KEY` 跳过两个可选 live Claude 测试。Ruff lint、`ruff format --check`、compileall、19 路径 OpenAPI 合同与 diff 检查均通过；TestClient 运行会出现一条来自固定版本 Starlette/httpx 组合的上游弃用警告。GitHub Actions（Python 3.12）在 [`.github/workflows/ci.yml`](.github/workflows/ci.yml) 中定义；分支新增测试后的准确数量与远程结果以对应 commit 的实际门禁为准。
+当前主线的本地全量套件基线为 `1197 passed, 6 skipped`：无 PowerShell 环境跳过 `demo.ps1` 语法测试，无 `ANTHROPIC_API_KEY` 跳过两个可选 live Claude 测试，无 `DEEPSEEK_API_KEY` 跳过两个可选 live DeepSeek 测试和一个 live Agent 回合测试。Ruff lint、`ruff format --check`、compileall、OpenAPI 合同与 diff 检查均通过；TestClient 运行会出现一条来自固定版本 Starlette/httpx 组合的上游弃用警告。GitHub Actions（Python 3.12）在 [`.github/workflows/ci.yml`](.github/workflows/ci.yml) 中定义；分支新增测试后的准确数量与远程结果以对应 commit 的实际门禁为准。
 
 可重复执行（Linux / macOS；Windows 用 `.\.venv\Scripts\python.exe`）：
 
