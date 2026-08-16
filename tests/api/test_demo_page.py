@@ -108,6 +108,8 @@ def test_demo_separates_case_diagnosis_from_new_case_creation(tmp_path):
     assert 'available:["transaction.receipt","product.description"]' in body
     assert "规则证据就绪度" in body
     assert "预计胜诉概率" not in body
+    assert "cleanCopy(a.explanation)" not in body
+    assert "AI 说明不会改变材料就绪度、责任团队或人工闸门" in body
     assert 'api("GET","/cases")' in body
     assert "暂无有效案件记录" in body
     assert "CASE-20260814" not in body and "OP-20260814" not in body
@@ -141,12 +143,13 @@ def test_demo_keeps_oceanpayment_visual_baseline_with_hub_and_rules(tmp_path):
     assert "商户" in body and "OceanStore" in body
     assert "Synthetic Demo" in body and "UNVERIFIED_SUMMARY" in body
     assert "Curated rules prototype" in body and "本地规则知识库原型" in body
-    assert "Backend Ready · 9 / 3" in body
+    assert "Backend Ready · 10 / 3" in body
     assert "onclick=\"showView('rules')\"" in body
     assert "Proprietary rules prototype" not in body and "专有规则数据库" not in body
     assert 'id="loc-zh"' not in body and 'id="loc-en"' not in body
     assert "智能体轨迹" not in body
-    assert "确定性内核" not in body
+    assert "确定性规则约束" in body
+    assert "不展示思维链" in body
     assert "toggleTheme" not in body
     assert "--rule:" not in body and "var(--rule)" not in body
     assert "openAdminConsole" not in body and "openActiveAudit" not in body
@@ -305,7 +308,7 @@ def test_demo_retains_human_review_and_duplicate_submission_guards(tmp_path):
     assert "if(S.caseCreating)return" in body
     assert "evidenceSubmittingCases:new Set()" in body
     assert "S.evidenceSubmittingCases.has(caseId)" in body
-    assert "S.selectedCase&&S.selectedCase.case_id===caseId" in body
+    assert "S.selectedCase&&S.selectedCase.case_id===draft.caseId" in body
     assert "sourceTransaction" not in body and "sourceCaseId" not in body
     assert 'id="formalNoticeConfirm"' not in body
     assert "普通客户投诉只能进入预争议分流" not in body
@@ -317,6 +320,64 @@ def test_demo_retains_human_review_and_duplicate_submission_guards(tmp_path):
     assert 'id="diagnosisAlert" role="status" aria-live="polite"' in body
     assert 'id="preventionOut" class="mt" aria-live="polite"' in body
     assert "本次 mock 回执" in body
+
+
+def test_demo_exposes_copilot_judgment_and_agent_trace(tmp_path):
+    with _client(tmp_path) as client:
+        body = client.get("/demo").text
+    assert "OceanPilot Agent" in body
+    assert "/api/v1/agent/turns" in body
+    assert "AI 判断总结" in body
+    assert "Agent 可视化执行轨迹" in body
+    assert "DeepSeek Live" in body and "Offline Fallback" in body
+    assert 'id="agentTurnStatus" role="status" aria-live="polite"' in body
+    assert "Agent 正在分析…" in body
+    assert "请勿输入真实卡号" in body
+
+
+def test_case_diagnosis_hosts_context_agent_and_explicit_evidence_submission(tmp_path):
+    with _client(tmp_path) as client:
+        body = client.get("/demo").text
+    hub = body.split('id="v-hub"', 1)[1].split('id="v-overview"', 1)[0]
+    overview = body.split('id="v-overview"', 1)[1].split('id="v-diagnosis"', 1)[0]
+    diagnosis = body.split('id="v-diagnosis"', 1)[1].split('id="v-create"', 1)[0]
+    assert "OceanPilot Agent" not in hub
+    assert "OceanPilot Agent" not in overview
+    assert "OceanPilot Agent" in diagnosis and "围绕当前案件持续分析与建议" in diagnosis
+    assert "进入 AI 分析" in overview and "后续提问不会重复建案" in body
+    assert "case_id:caseId" in body
+    assert 'id="agentHistory"' in body and "appendAgentMessage('assistant'" in body
+    assert "确认写入案件" in body and "confirmAgentReview" in body
+    assert "EVIDENCE_SUBMITTED" in body and "REVIEW_CONFIRMED" in body
+    assert 'id="evidenceModal" role="dialog" aria-modal="true"' in body
+    assert 'type="file" id="evidenceFile"' in body
+    assert "使用 Synthetic 演示文件" in body
+    assert "3. 确认提交资料" in body
+    assert "形式校验" in body and "写入案件资料状态" in body and "重新执行规则检查" in body
+    assert "资料提交成功" in body
+    assert "submitDiagnosticEvidence" not in body
+
+
+def test_demo_queues_agent_input_and_releases_evidence_modal_before_reanalysis(tmp_path):
+    with _client(tmp_path) as client:
+        body = client.get("/demo").text
+
+    assert "pendingAgentTurn:null" in body
+    assert "你的输入已排队，将在当前分析完成后自动发送" in body
+    assert "function acceptAgentUserMessage(message)" in body
+    assert "if(input.value.trim()===message)input.value=''" in body
+    assert "已有一条人工输入等待分析；当前输入已保留" in body
+    release = body.index("S.evidenceSubmittingCases.delete(draft.caseId)")
+    reanalysis = body.index("await bindAgentCase(draft.caseId,false)")
+    assert release < reanalysis
+
+
+def test_demo_does_not_claim_materials_are_complete_before_reason_confirmation(tmp_path):
+    with _client(tmp_path) as client:
+        body = client.get("/demo").text
+
+    assert "awaitingReason?'待确认原因'" in body
+    assert "确认原因后生成材料清单</span>" in body
 
 
 def test_demo_supports_complete_zh_en_language_switching(tmp_path):

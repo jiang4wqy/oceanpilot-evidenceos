@@ -120,7 +120,7 @@ Foundation 以合成支付异常验证版本化证据、确定性诊断、审计
 | HTTP 接口 | [`src/oceanpilot/api/README.md`](src/oceanpilot/api/README.md) |
 | 测试与门禁 | [`tests/README.md`](tests/README.md) |
 
-**配置**：所有环境变量见根目录 [`.env.example`](.env.example)(存储路径、Claude、本地模型、飞书凭据);凭据只经环境变量注入,绝不入库。运行/安装见下方 Quick Start。
+**配置**：所有环境变量见根目录 [`.env.example`](.env.example)(存储路径、DeepSeek/Claude、本地模型、飞书凭据);凭据只经环境变量注入,绝不入库。运行/安装见下方 Quick Start。
 
 **提交前门禁**(与 CI 一致)：
 
@@ -153,6 +153,16 @@ py -3.12 -m venv .venv
 $env:OCEANPILOT_DB_PATH = "work/oceanpilot.db"
 .\.venv\Scripts\python.exe -m uvicorn oceanpilot.main:create_app --factory --host 127.0.0.1 --port 8002
 ```
+
+需要启用 DeepSeek 时，将 `.env.example` 复制为不会被 Git 跟踪的 `.env`，填写
+`DEEPSEEK_API_KEY`，并设置 `OCEANPILOT_MODEL_PROVIDER=deepseek`、
+`OCEANPILOT_CHARGEBACK_LIVE_MODEL=1`。启动时显式加载该文件：
+
+```powershell
+.\.venv\Scripts\python.exe -m uvicorn oceanpilot.main:create_app --factory --env-file .env --host 127.0.0.1 --port 8002
+```
+
+密钥存放、轮换、live 测试和安全路由见 [DeepSeek 本地接入指南](docs/deepseek-setup.md)。
 
 Linux / macOS：
 

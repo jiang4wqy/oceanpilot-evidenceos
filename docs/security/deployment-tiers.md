@@ -11,7 +11,7 @@
 
 ## 1. 核心原则
 
-1. **确定性内核决策，模型只解释/起草**：胜诉评估、路由、是否人工、拒付风险分级都由 `domain/chargeback*.py` 的规则内核确定；模型（Claude/本地）只产出解释文字与文书草稿。模型不可用时有确定性兜底。因此**即使模型被攻破也不会改变业务判定**。
+1. **确定性内核决策，模型只解释/起草**：证据就绪度、路由、是否人工、拒付风险分级都由 `domain/chargeback*.py` 的规则内核确定；模型（DeepSeek/Claude/本地）只产出解释文字与文书草稿。模型不可用时有确定性兜底。因此**即使模型被攻破也不会改变业务判定**。
 2. **数据不出域优先**：触及原始 PII / 交易明细的推理走本地隔离模型；必须调用外部模型时**先脱敏**。
 3. **凭据只走环境变量**：不入库、不进日志、不进审计、不进 Git。
 4. **纯建议、不执行业务动作**：系统从不执行支付/退款/风控放行/资金操作/真实配置变更；最强动作是「建议人工复核」。
@@ -25,8 +25,8 @@
 | 等级 | 触及原始 PII/交易明细 | 推理/起草 | 部署实现 | 代码路由目标 |
 |---|---|---|---|---|
 | **高 HIGH** | 本地隔离模型（内网/VPC，独立节点，数据不出域） | 本地隔离模型 | `LocalModelProvider`（OpenAI 兼容端点，自持 vLLM/llama.cpp/TGI/Ollama） | `RoutingModelProvider[HIGH]` |
-| **中 MEDIUM** | 先脱敏/打码去隐私 | 脱敏后调外部模型（Claude/云网关） | `RedactingModelProvider(ClaudeProvider, RegexRedactor)` | `RoutingModelProvider[MEDIUM]` |
-| **低 LOW** | 无原始 PII（模板/文案/结构化事实） | 外部模型 | `ClaudeProvider`（`claude-opus-4-8`，adaptive thinking + effort） | `RoutingModelProvider[LOW]` |
+| **中 MEDIUM** | 先脱敏/打码去隐私 | 脱敏后调所选外部模型 | `RedactingModelProvider(DeepSeek/Claude, RegexRedactor)` | `RoutingModelProvider[MEDIUM]` |
+| **低 LOW** | 无原始 PII（模板/文案/结构化事实） | 所选外部模型 | `DeepSeek` 或 `ClaudeProvider` | `RoutingModelProvider[LOW]` |
 
 **兜底不确定性**：`build_chargeback_model_provider()` 在未配置本地端点时，将 **HIGH 也接到脱敏路径**（而非明文外发），保证「宁可降级也不泄露」。生产高保密场景**必须**配置本地端点，见 §5。
 
@@ -56,7 +56,7 @@ flowchart LR
     REDACT[脱敏 RegexRedactor]
   end
   subgraph External[外部模型]
-    CLAUDE[Claude API / 云网关]
+    CLAUDE[DeepSeek / Claude API / 云网关]
   end
 
   RAW --> KERNEL
@@ -103,7 +103,7 @@ flowchart LR
 
 ### 4.3 访问控制
 - 最小权限：Agent 服务账号只读「受限/脱敏视图」，无原始区写权限；HDFS 加密区按角色（RBAC）+ Ranger/ACL 授权。
-- 凭据：`ANTHROPIC_API_KEY`、`FEISHU_APP_SECRET`、`FEISHU_ENCRYPT_KEY`、`FEISHU_VERIFICATION_TOKEN`、本地模型 `API_KEY` **只经环境变量注入**；密钥托管用 Vault/KMS，定期轮换。
+- 凭据：`DEEPSEEK_API_KEY`、`ANTHROPIC_API_KEY`、`FEISHU_APP_SECRET`、`FEISHU_ENCRYPT_KEY`、`FEISHU_VERIFICATION_TOKEN`、本地模型 `API_KEY` **只经环境变量注入**；密钥托管用 Vault/KMS，定期轮换。
 - 人在环闸门：⑤提交、⑥超期判负必须人工确认（「确认建议并记录，不执行业务动作」）。
 
 ### 4.4 日志/审计/留痕
@@ -118,7 +118,11 @@ flowchart LR
 | 环境变量 | 作用 | 缺省 |
 |---|---|---|
 | `OCEANPILOT_CHARGEBACK_LIVE_MODEL` | 组合根总开关：`1/true/yes/on` 启用实时分级模型；否则离线合成 Provider | 关（离线） |
-| `ANTHROPIC_API_KEY` | Claude 凭据；未设置时 `build_chargeback_model_provider()` 返回 `None`（回退离线） | 无 |
+| `OCEANPILOT_MODEL_PROVIDER` | 外部模型供应商：`claude` 或 `deepseek` | `claude` |
+| `ANTHROPIC_API_KEY` | Claude 凭据 | 无 |
+| `DEEPSEEK_API_KEY` | DeepSeek 凭据 | 无 |
+| `DEEPSEEK_API_BASE` | DeepSeek API base；Provider 自动追加 `/chat/completions` | `https://api.deepseek.com` |
+| `DEEPSEEK_MODEL` | DeepSeek 模型 | `deepseek-chat` |
 | `OCEANPILOT_LOCAL_MODEL_ENDPOINT` | 本地/隔离模型端点（OpenAI 兼容 `/v1/chat/completions`）；HIGH 档路由目标 | 无（HIGH 退回脱敏路径） |
 | `OCEANPILOT_LOCAL_MODEL_NAME` | 本地模型名 | `local-isolated-model` |
 | `OCEANPILOT_LOCAL_MODEL_API_KEY` | 本地端点鉴权（可选） | 无 |
@@ -128,7 +132,7 @@ flowchart LR
 **部署建议档位**：
 
 - **高保密生产**：`OCEANPILOT_CHARGEBACK_LIVE_MODEL=1` + 配置 `OCEANPILOT_LOCAL_MODEL_ENDPOINT`（本地隔离）；Intake/Packager 档位上调至 HIGH；HDFS TDE + 加密卷。
-- **中等**：启用 Claude + 脱敏（MEDIUM），不配本地端点（HIGH 自动走脱敏兜底）。
+- **中等**：启用 DeepSeek 或 Claude + 脱敏（MEDIUM），不配本地端点（HIGH 自动走脱敏兜底）。
 - **演示/离线**：默认关，全程走 `ScriptedModelProvider`，无需任何 key，CI 全绿。
 
 ---
@@ -139,7 +143,7 @@ flowchart LR
 |---|---|---|
 | 高保密走本地隔离模型 | `LocalModelProvider` + `RoutingModelProvider[HIGH]` | ✅ T8 |
 | 中保密先脱敏再外发 | `RedactingModelProvider` + `RegexRedactor` | ✅ T7 |
-| 低保密直连外部 | `ClaudeProvider` | ✅ |
+| 低保密直连外部 | DeepSeek 或 `ClaudeProvider` | ✅ |
 | 按数据敏感度路由 | `TaskSpec.security_tier` → `RoutingModelProvider` | ✅ |
 | 可注入配置开关 | `build_chargeback_model_provider()` + 环境变量 | ✅ T10 |
 | 凭据仅环境变量、日志/审计无敏感 | 审计表仅枚举/revision；凭据 env 注入 | ✅ T9 |

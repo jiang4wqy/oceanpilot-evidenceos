@@ -38,6 +38,23 @@ def test_draft_uses_model_then_falls_back():
     assert draft == "尊敬的银行：随附证据…"
     assert source is ExplanationSource.MODEL
 
+
+def test_appeal_parses_the_json_draft_contract():
+    upstream = MockUpstreamConnector()
+    model = ScriptedModelProvider(
+        [
+            '{"draft":"尊敬的银行：随附证据。","claims":["交易真实"],'
+            '"evidence_references":["交易收据"],"disclaimer":"需人工确认"}'
+        ]
+    )
+
+    draft, source = AppealAgent(model, upstream).draft(_package(ready=True))
+
+    assert draft == "尊敬的银行：随附证据。"
+    assert source is ExplanationSource.MODEL
+    assert "evidence_references" in (model.requests[0].system or "")
+    assert "ONLY valid JSON" in (model.requests[0].system or "")
+
     model_down = AppealAgent(ScriptedModelProvider(error=ModelProviderError()), upstream)
     draft2, source2 = model_down.draft(_package(ready=True))
     assert source2 is ExplanationSource.FALLBACK

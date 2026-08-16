@@ -15,6 +15,22 @@ def test_model_label_is_used_when_valid():
     assert outcome.source is ClassificationSource.MODEL
 
 
+def test_model_parses_the_json_intake_contract():
+    model = ScriptedModelProvider(
+        [
+            '{"reason_code":"PRODUCT_NOT_RECEIVED","confidence":0.94,'
+            '"case_summary":"客户未收到商品","needs_human_confirmation":false}'
+        ]
+    )
+
+    outcome = IntakeAgent(model).classify("客户下单后一直没收到货")
+
+    assert outcome.reason_code is DisputeReasonCode.PRODUCT_NOT_RECEIVED
+    assert outcome.confident is True
+    assert "needs_human_confirmation" in (model.requests[0].system or "")
+    assert "ONLY valid JSON" in (model.requests[0].system or "")
+
+
 def test_intake_uses_medium_tier_by_default():
     model = ScriptedModelProvider(["DUPLICATE_PROCESSING"])
     IntakeAgent(model).classify("被扣了两次")

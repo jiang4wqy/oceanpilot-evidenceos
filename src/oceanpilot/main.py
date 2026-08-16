@@ -26,6 +26,7 @@ from oceanpilot.adapters.knowledge.rule_repository import (
 )
 from oceanpilot.adapters.model.composition import build_chargeback_model_provider
 from oceanpilot.adapters.model.fake import ScriptedModelProvider
+from oceanpilot.adapters.persistence.chargeback_review_sqlite import SqliteCaseReviewStore
 from oceanpilot.adapters.persistence.chargeback_sqlite import (
     SqliteChargebackCaseStore,
     initialize_chargeback_schema,
@@ -36,6 +37,7 @@ from oceanpilot.adapters.persistence.sqlite import (
 )
 from oceanpilot.adapters.upstream.mock import MockUpstreamConnector
 from oceanpilot.api.admin import router as admin_router
+from oceanpilot.api.agent import router as agent_router
 from oceanpilot.api.cases import router as cases_router
 from oceanpilot.api.chargeback import router as chargeback_router
 from oceanpilot.api.demo import router as demo_router
@@ -43,6 +45,7 @@ from oceanpilot.api.dependencies import RequestContext
 from oceanpilot.api.errors import ProblemDetails, register_exception_handlers
 from oceanpilot.api.feishu import router as feishu_router
 from oceanpilot.api.health import router as health_router
+from oceanpilot.application.case_copilot import CaseCopilotAgent
 from oceanpilot.application.case_service import CaseService
 from oceanpilot.application.chargeback_agents import (
     ChargebackAssessAgent,
@@ -141,18 +144,47 @@ def create_app(
     # so tests/CI stay deterministic even when an ANTHROPIC_API_KEY is present;
     # `chargeback_model` injection always wins.
     chargeback_provider: ModelProvider | None = chargeback_model
+    agent_runtime = {
+        "mode": "INJECTED_MODEL",
+        "provider": "INJECTED",
+        "model": type(chargeback_model).__name__,
+    }
     if chargeback_provider is None and _truthy(os.getenv("OCEANPILOT_CHARGEBACK_LIVE_MODEL")):
         chargeback_provider = build_chargeback_model_provider()
+        provider_name = os.getenv("OCEANPILOT_MODEL_PROVIDER", "claude").strip().lower()
+        if chargeback_provider is not None and provider_name == "deepseek":
+            agent_runtime = {
+                "mode": "DEEPSEEK_LIVE",
+                "provider": "DEEPSEEK",
+                "model": os.getenv("DEEPSEEK_MODEL", "deepseek-chat"),
+            }
+        elif chargeback_provider is not None:
+            agent_runtime = {
+                "mode": "CLAUDE_LIVE",
+                "provider": "CLAUDE",
+                "model": os.getenv("ANTHROPIC_MODEL", "claude"),
+            }
     if chargeback_provider is None:
         chargeback_provider = ScriptedModelProvider(default_text="（合成模型输出，仅用于离线演示）")
+        agent_runtime = {
+            "mode": "OFFLINE_FALLBACK",
+            "provider": "DETERMINISTIC",
+            "model": "offline-rules",
+        }
+    application.state.agent_runtime = agent_runtime
     application.state.chargeback_supervisor = ChargebackSupervisor(
         intake=IntakeAgent(chargeback_provider),
         evidence=EvidenceAgent(chargeback_provider),
         assess=ChargebackAssessAgent(chargeback_provider),
     )
+    application.state.case_copilot = CaseCopilotAgent(chargeback_provider)
     # Durable store: chargeback cases survive across requests/restarts with an
     # atomic audit trail and optimistic CAS. Its own file, initialized in lifespan.
     application.state.chargeback_store = SqliteChargebackCaseStore(
+        chargeback_db_path,
+        clock=lambda: datetime.now(UTC),
+    )
+    application.state.case_review_store = SqliteCaseReviewStore(
         chargeback_db_path,
         clock=lambda: datetime.now(UTC),
     )
@@ -213,6 +245,7 @@ def create_app(
     application.include_router(cases_router)
     application.include_router(feishu_router)
     application.include_router(chargeback_router)
+    application.include_router(agent_router)
     application.include_router(admin_router)
     application.include_router(demo_router)
 

@@ -1,11 +1,11 @@
 """SQLite schema for the read-only card-scheme rule catalog prototype."""
 
-RULE_SCHEMA_VERSION = 1
+RULE_SCHEMA_VERSION = 2
 
 RULE_SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS rule_documents (
     document_id TEXT NOT NULL PRIMARY KEY,
-    scheme TEXT NOT NULL CHECK (scheme IN ('VISA', 'MASTERCARD', 'AMEX')),
+    scheme TEXT NOT NULL CHECK (scheme IN ('VISA', 'MASTERCARD', 'AMEX', 'OCEANPAYMENT')),
     title TEXT NOT NULL CHECK (length(title) BETWEEN 1 AND 300),
     publisher TEXT NOT NULL CHECK (length(publisher) BETWEEN 1 AND 120),
     source_url TEXT NOT NULL CHECK (length(source_url) BETWEEN 1 AND 1000),

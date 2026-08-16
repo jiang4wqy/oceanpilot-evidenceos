@@ -97,6 +97,14 @@ RULE_DOCUMENT_SEEDS = (
         ),
         source_version=None,
     ),
+    RuleDocumentSeed(
+        document_id="oceanpayment-threeds-developer-doc",
+        scheme="OCEANPAYMENT",
+        title="Oceanpayment 3DS Developer Documentation",
+        publisher="Oceanpayment",
+        source_url="https://dev.oceanpayment.com/en/docs/compliance-and-security/threeds/",
+        source_version=None,
+    ),
 )
 
 
@@ -253,6 +261,24 @@ RULE_VERSION_SEEDS = (
         internal_window_days=None,
         verification_status=_UNVERIFIED,
         limitation=("American Express 规则演示摘要；地区、版本、适用条件及正式期限尚未核验。"),
+    ),
+    RuleVersionSeed(
+        rule_version_id="oceanpayment-threeds-doc",
+        document_id="oceanpayment-threeds-developer-doc",
+        scheme_reason_code="3DS_CONTEXT",
+        display_name="3DS 认证技术背景",
+        category="TECHNICAL_CONTEXT",
+        region="GLOBAL",
+        version_label=None,
+        source_section="3DS",
+        effective_date=None,
+        internal_reason_code=None,
+        demo_role="DISPLAY_ONLY",
+        internal_window_days=None,
+        verification_status=_UNVERIFIED,
+        limitation=(
+            "仅用于解释 3DS 接入与材料留存语境；不参与卡组织争议资格、责任转移或期限判定。"
+        ),
     ),
 )
 
@@ -412,6 +438,15 @@ RULE_REQUIREMENT_SEEDS = (
         4,
         "争议交易收据",
         "transaction.receipt",
+        necessity="RECOMMENDED",
+    ),
+    # Oceanpayment 3DS product documentation — technical context only.
+    _requirement(
+        "oceanpayment-threeds-doc",
+        "EVIDENCE",
+        1,
+        "保留 Synthetic 3DS 认证结果作为案件技术上下文",
+        "auth.threeds",
         necessity="RECOMMENDED",
     ),
 )

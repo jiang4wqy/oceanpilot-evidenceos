@@ -30,7 +30,7 @@ _DEMO_MAPPED = "DEMO_MAPPED"
 _ASSERTION = "ASSERTION"
 _EVIDENCE = "EVIDENCE"
 _REQUIRED = "REQUIRED"
-_SCHEMES = frozenset({"VISA", "MASTERCARD", "AMEX"})
+_SCHEMES = frozenset({"VISA", "MASTERCARD", "AMEX", "OCEANPAYMENT"})
 _DEMO_ROLES = frozenset({_DEMO_MAPPED, "DISPLAY_ONLY"})
 _VERIFICATION_STATUSES = frozenset({"UNVERIFIED_SUMMARY", "VERIFIED_SOURCE", "SUPERSEDED"})
 _REQUIREMENT_TYPES = frozenset({_ASSERTION, _EVIDENCE})
@@ -245,8 +245,21 @@ def initialize_rule_database(path: Path) -> None:
         if not existing_tables.issubset(RULE_REQUIRED_TABLES):
             raise DatabaseUnavailable()
         version_row = connection.execute("PRAGMA user_version").fetchone()
-        if version_row is None or _require_int(version_row[0]) not in (0, RULE_SCHEMA_VERSION):
+        if version_row is None:
             raise DatabaseUnavailable()
+        schema_version = _require_int(version_row[0])
+        if schema_version not in (0, 1, RULE_SCHEMA_VERSION):
+            raise DatabaseUnavailable()
+        if schema_version == 1:
+            connection.executescript(
+                """
+                BEGIN IMMEDIATE;
+                DROP TABLE IF EXISTS rule_requirements;
+                DROP TABLE IF EXISTS rule_versions;
+                DROP TABLE IF EXISTS rule_documents;
+                COMMIT;
+                """
+            )
         connection.executescript(f"BEGIN IMMEDIATE;\n{RULE_SCHEMA_SQL}\nCOMMIT;")
         with immediate_transaction(connection):
             _seed(connection)

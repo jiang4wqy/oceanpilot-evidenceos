@@ -12,6 +12,7 @@ from enum import StrEnum
 
 from oceanpilot.application.chargeback_agents import ExplanationSource
 from oceanpilot.application.chargeback_packager import RepresentmentPackage
+from oceanpilot.application.model_output import json_text
 from oceanpilot.application.model_provider import (
     Effort,
     ModelMessage,
@@ -26,12 +27,14 @@ from oceanpilot.domain.evidence_catalog import label_of, rebuttal_line
 from oceanpilot.domain.reason_catalog import reason_label
 
 _APPEAL_SYSTEM = (
-    "You draft a structured Chinese chargeback representment appeal letter from "
-    "the enclosed package. You are given the dispute reason and, for each "
-    "enclosed item, its human label and how it rebuts the dispute — argue each "
-    "one. Use only the listed evidence; invent nothing; never show a raw "
-    "evidence-code token. Synthetic data; never claim any business action was "
-    "taken."
+    "Draft a structured Chinese chargeback representment letter from the enclosed "
+    "package. Use only listed evidence, invent nothing, and never expose raw code "
+    "tokens. Return ONLY valid JSON with exactly these fields: "
+    '{"draft":"structured Chinese letter",'
+    '"claims":["claim supported by the package"],'
+    '"evidence_references":["human-readable evidence label"],'
+    '"disclaimer":"Chinese synthetic and human-approval boundary"}. '
+    "Never claim any business action was taken."
 )
 
 
@@ -87,6 +90,11 @@ class AppealAgent:
             return _fallback_letter(package), ExplanationSource.FALLBACK
         text = result.text.strip()
         if not text:
+            return _fallback_letter(package), ExplanationSource.FALLBACK
+        structured = json_text(text, "draft")
+        if structured is not None:
+            return structured, ExplanationSource.MODEL
+        if text.startswith("{"):
             return _fallback_letter(package), ExplanationSource.FALLBACK
         return text, ExplanationSource.MODEL
 

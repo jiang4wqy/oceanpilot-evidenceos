@@ -51,3 +51,23 @@ def test_composes_tiered_router_with_injected_claude(monkeypatch):
     # HIGH with no local endpoint falls back to the redacting path (never clear).
     provider.complete(TaskSpec(kind="k", security_tier=SecurityTier.HIGH, effort=Effort.LOW), _MSGS)
     assert "4111 1111 1111 1111" not in recorder.contents[-1]
+
+
+def test_composes_tiered_router_with_injected_deepseek(monkeypatch):
+    monkeypatch.setenv("OCEANPILOT_MODEL_PROVIDER", "deepseek")
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "test-only-key")
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("OCEANPILOT_LOCAL_MODEL_ENDPOINT", raising=False)
+    recorder = _RecordingProvider()
+
+    provider = build_chargeback_model_provider(deepseek=recorder)
+
+    assert isinstance(provider, RoutingModelProvider)
+    provider.complete(TaskSpec(kind="k", security_tier=SecurityTier.LOW), _MSGS)
+    assert recorder.contents[-1] == "card 4111 1111 1111 1111"
+
+    provider.complete(TaskSpec(kind="k", security_tier=SecurityTier.MEDIUM), _MSGS)
+    assert "4111 1111 1111 1111" not in recorder.contents[-1]
+
+    provider.complete(TaskSpec(kind="k", security_tier=SecurityTier.HIGH), _MSGS)
+    assert "4111 1111 1111 1111" not in recorder.contents[-1]

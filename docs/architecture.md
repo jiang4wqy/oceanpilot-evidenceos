@@ -77,6 +77,8 @@ factory 也在 lifespan 中挂载。
 - Feishu callback DB 仅在完整凭据配置后启用，由 `OCEANPILOT_FEISHU_DB_PATH` 覆盖。
 - Chargeback 模型默认是离线 `ScriptedModelProvider`。只有显式开启
   `OCEANPILOT_CHARGEBACK_LIVE_MODEL` 才构造分级 live provider；凭据只走环境变量。
+  `OCEANPILOT_MODEL_PROVIDER` 可选择 `claude`（缺省）或 `deepseek`；两者均复用
+  LOW 直连、MEDIUM 脱敏、HIGH 本地隔离或脱敏兜底的安全路由。
 
 ## 5. Foundation Data Flows
 

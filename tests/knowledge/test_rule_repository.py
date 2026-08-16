@@ -35,9 +35,9 @@ def test_initializer_creates_three_versioned_seed_tables(rules_path: Path) -> No
             )
         }
         assert tables == {"rule_documents", "rule_versions", "rule_requirements"}
-        assert connection.execute("PRAGMA user_version").fetchone()[0] == 1
-        assert connection.execute("SELECT COUNT(*) FROM rule_documents").fetchone()[0] == 3
-        assert connection.execute("SELECT COUNT(*) FROM rule_versions").fetchone()[0] == 9
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 2
+        assert connection.execute("SELECT COUNT(*) FROM rule_documents").fetchone()[0] == 4
+        assert connection.execute("SELECT COUNT(*) FROM rule_versions").fetchone()[0] == 10
         assert (
             connection.execute(
                 "SELECT COUNT(*) FROM rule_versions WHERE demo_role = 'DEMO_MAPPED'"
@@ -53,8 +53,8 @@ def test_initializer_is_idempotent(rules_path: Path) -> None:
     initialize_rule_database(rules_path)
     connection = connect_sqlite(rules_path)
     try:
-        assert connection.execute("SELECT COUNT(*) FROM rule_documents").fetchone()[0] == 3
-        assert connection.execute("SELECT COUNT(*) FROM rule_versions").fetchone()[0] == 9
+        assert connection.execute("SELECT COUNT(*) FROM rule_documents").fetchone()[0] == 4
+        assert connection.execute("SELECT COUNT(*) FROM rule_versions").fetchone()[0] == 10
         requirement_count = connection.execute("SELECT COUNT(*) FROM rule_requirements").fetchone()[
             0
         ]
@@ -121,8 +121,8 @@ def test_initializer_exactly_resynchronizes_stable_seed_ids(rules_path: Path) ->
 
     connection = sqlite3.connect(rules_path)
     try:
-        assert connection.execute("SELECT COUNT(*) FROM rule_documents").fetchone()[0] == 3
-        assert connection.execute("SELECT COUNT(*) FROM rule_versions").fetchone()[0] == 9
+        assert connection.execute("SELECT COUNT(*) FROM rule_documents").fetchone()[0] == 4
+        assert connection.execute("SELECT COUNT(*) FROM rule_versions").fetchone()[0] == 10
         assert (
             connection.execute("SELECT COUNT(*) FROM rule_requirements").fetchone()[0]
             == baseline_requirement_count
@@ -166,14 +166,19 @@ def test_repository_satisfies_both_read_ports(repository: SqliteRuleRepository) 
     assert isinstance(repository, RuleCatalog)
 
 
-def test_catalog_lists_nine_rules_and_filters_without_fake_rows(
+def test_catalog_lists_ten_rules_and_filters_without_fake_rows(
     repository: SqliteRuleRepository,
 ) -> None:
     all_rules = repository.list_rules()
-    assert len(all_rules) == 9
+    assert len(all_rules) == 10
     assert sum(rule.demo_role == "DEMO_MAPPED" for rule in all_rules) == 3
-    assert {rule.scheme for rule in all_rules} == {"VISA", "MASTERCARD", "AMEX"}
-    assert len({rule.document_id for rule in all_rules}) == 3
+    assert {rule.scheme for rule in all_rules} == {
+        "VISA",
+        "MASTERCARD",
+        "AMEX",
+        "OCEANPAYMENT",
+    }
+    assert len({rule.document_id for rule in all_rules}) == 4
 
     visa = repository.list_rules(scheme="visa")
     assert len(visa) == 6
