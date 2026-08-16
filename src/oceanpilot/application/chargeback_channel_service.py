@@ -27,7 +27,7 @@ from oceanpilot.application.chargeback_supervisor import (
 )
 from oceanpilot.application.errors import CaseNotFound, InvalidInbound
 from oceanpilot.application.metrics import DecisionMetrics
-from oceanpilot.domain.chargeback import ChargebackEvidenceCode, DisputeReasonCode
+from oceanpilot.domain.chargeback import CardNetwork, ChargebackEvidenceCode, DisputeReasonCode
 from oceanpilot.domain.evidence_catalog import label_of
 from oceanpilot.domain.reason_catalog import confirm_prompt, reason_label
 
@@ -115,6 +115,8 @@ def _delivery(
     return Delivery(
         case_id=case_id,
         phase=step.phase.value,
+        revision=state.revision,
+        card_network=state.card_network.value if state.card_network else None,
         reason_code=state.reason_code.value if state.reason_code else None,
         reason_confirmed=state.reason_confirmed,
         collection_finalized=state.collection_finalized,
@@ -184,6 +186,8 @@ class ChargebackChannelService:
             return self._submit_evidence(inbound)
         if inbound.kind is InboundKind.WITHDRAW_LATEST_EVIDENCE:
             return self._withdraw_latest_evidence(inbound)
+        if inbound.kind is InboundKind.SET_CARD_NETWORK:
+            return self._set_card_network(inbound)
         if inbound.kind is InboundKind.FINALIZE_EVIDENCE:
             return self._finalize_evidence(inbound)
         if inbound.kind is InboundKind.GET_CASE:
@@ -198,6 +202,12 @@ class ChargebackChannelService:
         self._supervisor.intake(state, inbound.description)
         facts = self._supervisor.extract_facts(inbound.description)
         self._store.save(case_id, state)
+        if inbound.card_network is not None:
+            try:
+                network = CardNetwork(inbound.card_network)
+            except ValueError:
+                raise InvalidInbound() from None
+            state = self._store.set_card_network(case_id, network, state.revision)
         return self._deliver(case_id, state, facts)
 
     def _confirm_reason(self, inbound: NormalizedInbound) -> Delivery:
@@ -242,6 +252,24 @@ class ChargebackChannelService:
         except ValueError:
             raise InvalidInbound() from None
         state = self._store.withdraw_latest_evidence(inbound.case_id, code)
+        return self._deliver(inbound.case_id, state)
+
+    def _set_card_network(self, inbound: NormalizedInbound) -> Delivery:
+        if (
+            not inbound.case_id
+            or not inbound.card_network
+            or type(inbound.expected_revision) is not int
+        ):
+            raise InvalidInbound()
+        try:
+            network = CardNetwork(inbound.card_network)
+        except ValueError:
+            raise InvalidInbound() from None
+        state = self._store.set_card_network(
+            inbound.case_id,
+            network,
+            inbound.expected_revision,
+        )
         return self._deliver(inbound.case_id, state)
 
     def _get_case(self, inbound: NormalizedInbound) -> Delivery:

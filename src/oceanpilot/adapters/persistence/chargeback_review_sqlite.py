@@ -172,7 +172,9 @@ class SqliteCaseReviewStore:
 
         return _database_call(operation)
 
-    def latest_decision(self, case_id: str) -> ReviewDecision | None:
+    def latest_decision(
+        self, case_id: str, case_revision: int | None = None
+    ) -> ReviewDecision | None:
         def operation() -> ReviewDecision | None:
             connection = connect_sqlite(self._path)
             try:
@@ -182,11 +184,11 @@ class SqliteCaseReviewStore:
                            confirmed_materials_json, citation_ids_json, case_revision,
                            confirmed_by, confirmed_at, audit_event_id
                     FROM chargeback_review_decisions
-                    WHERE case_id = ?
+                    WHERE case_id = ? AND (? IS NULL OR case_revision = ?)
                     ORDER BY confirmed_at DESC, rowid DESC
                     LIMIT 1
                     """,
-                    (case_id,),
+                    (case_id, case_revision, case_revision),
                 ).fetchone()
             finally:
                 connection.close()

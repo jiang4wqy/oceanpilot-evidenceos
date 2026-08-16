@@ -47,6 +47,10 @@ _UUID_IDENTIFIER_FIELDS = frozenset(
         "request_id",
         "trace_id",
         "correlation_id",
+        "turn_id",
+        "source_turn_id",
+        "decision_id",
+        "audit_event_id",
     }
 )
 # Fields holding a list/tuple of UUID4 identifiers (not scalars). Their elements

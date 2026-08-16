@@ -11,7 +11,7 @@ from datetime import datetime
 from typing import Protocol
 
 from oceanpilot.application.chargeback_supervisor import ChargebackCaseState
-from oceanpilot.domain.chargeback import ChargebackEvidenceCode
+from oceanpilot.domain.chargeback import CardNetwork, ChargebackEvidenceCode
 
 
 @dataclass(frozen=True)
@@ -38,6 +38,13 @@ class ChargebackCaseStore(Protocol):
         self,
         case_id: str,
         expected_evidence_code: ChargebackEvidenceCode,
+    ) -> ChargebackCaseState: ...
+
+    def set_card_network(
+        self,
+        case_id: str,
+        card_network: CardNetwork,
+        expected_revision: int,
     ) -> ChargebackCaseState: ...
 
     def audit_trail(self, case_id: str) -> tuple[ChargebackAuditEvent, ...]: ...

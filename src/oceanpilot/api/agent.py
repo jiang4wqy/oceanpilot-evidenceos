@@ -14,7 +14,12 @@ from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictInt, Strict
 
 from oceanpilot.api.cases import COMMON_PROBLEMS, PROBLEM_RESPONSE
 from oceanpilot.application.case_copilot import CaseCopilotAgent, CopilotOutcome
-from oceanpilot.application.case_review import AgentTurnRecord, CaseReviewStore, ReviewStatus
+from oceanpilot.application.case_review import (
+    AgentTurnRecord,
+    CaseReviewStore,
+    ReviewDecision,
+    ReviewStatus,
+)
 from oceanpilot.application.channels import Delivery, InboundKind, NormalizedInbound
 from oceanpilot.application.chargeback_channel_service import ChargebackChannelService
 from oceanpilot.application.knowledge_base import KnowledgeBase, RuleCatalog
@@ -124,6 +129,15 @@ class AgentReviewProposalDTO(_StrictModel):
     requires_confirmation: Literal[True]
 
 
+class AgentReviewDecisionDTO(_StrictModel):
+    decision_id: StrictStr
+    status: Literal["NEEDS_MORE_INFO", "APPROVED", "REJECTED"]
+    revision: StrictInt
+    confirmed_by: StrictStr
+    confirmed_at: StrictStr
+    audit_event_id: StrictStr
+
+
 class AgentTurnResponse(_StrictModel):
     synthetic: Literal[True]
     result: Literal["CREATED", "REPLAYED"] = "CREATED"
@@ -141,6 +155,7 @@ class AgentTurnResponse(_StrictModel):
     decision_reason: StrictStr
     citations: tuple[AgentCitationDTO, ...]
     review_proposal: AgentReviewProposalDTO | None = None
+    review_decision: AgentReviewDecisionDTO | None = None
     human_boundary: StrictStr
     runtime: AgentRuntimeDTO
     judgment: AgentJudgmentDTO
@@ -552,6 +567,19 @@ def _save_turn(store: CaseReviewStore, response: AgentTurnResponse) -> None:
     )
 
 
+def _review_decision(decision: ReviewDecision | None) -> AgentReviewDecisionDTO | None:
+    if decision is None:
+        return None
+    return AgentReviewDecisionDTO(
+        decision_id=decision.decision_id,
+        status=decision.status.value,
+        revision=decision.case_revision,
+        confirmed_by=decision.confirmed_by,
+        confirmed_at=decision.confirmed_at.isoformat(),
+        audit_event_id=decision.audit_event_id,
+    )
+
+
 @router.post(
     "/turns",
     response_model=AgentTurnResponse,
@@ -576,6 +604,7 @@ def create_agent_turn(
                 kind=InboundKind.OPEN_CASE,
                 channel="agent",
                 description=payload.message,
+                card_network=payload.card_network,
             )
         )
         judgment = _judgment(delivery, locale=locale)
@@ -585,7 +614,7 @@ def create_agent_turn(
             turn_kind="CASE_CREATED",
             source_turn_id=str(uuid4()),
             case_id=delivery.case_id,
-            card_network=payload.card_network,
+            card_network=delivery.card_network,
             case_revision=revision,
             trigger=payload.trigger,
             intent="OPEN_CASE",
@@ -596,7 +625,7 @@ def create_agent_turn(
             decision_reason=_decision_reason(judgment, "UNREVIEWED"),
             citations=_citations(
                 DisputeReasonCode(delivery.reason_code) if delivery.reason_code else None,
-                payload.card_network,
+                delivery.card_network,
                 knowledge_base,
                 rule_catalog,
             ),
@@ -616,15 +645,25 @@ def create_agent_turn(
             case_id=payload.case_id,
         )
     )
+    if payload.card_network is not None and delivery.card_network != payload.card_network:
+        delivery = service.handle(
+            NormalizedInbound(
+                kind=InboundKind.SET_CARD_NETWORK,
+                channel="agent",
+                case_id=delivery.case_id,
+                card_network=payload.card_network,
+                expected_revision=delivery.revision,
+            )
+        )
     judgment = _judgment(delivery, locale=locale)
-    revision = review_store.current_revision(delivery.case_id)
+    revision = delivery.revision
     if payload.trigger != "USER_MESSAGE":
         replayed = review_store.latest_turn_payload(delivery.case_id, revision)
         if replayed is not None:
             replayed_response = AgentTurnResponse.model_validate_json(replayed)
-            if replayed_response.card_network == payload.card_network:
+            if replayed_response.card_network == delivery.card_network:
                 return replayed_response.model_copy(update={"result": "REPLAYED"})
-    latest_decision = review_store.latest_decision(delivery.case_id)
+    latest_decision = review_store.latest_decision(delivery.case_id, revision)
     review_status = (
         latest_decision.status.value if latest_decision is not None else "UNREVIEWED"
     )
@@ -641,7 +680,7 @@ def create_agent_turn(
     )
     citations = _citations(
         DisputeReasonCode(delivery.reason_code) if delivery.reason_code else None,
-        payload.card_network,
+        delivery.card_network,
         knowledge_base,
         rule_catalog,
     )
@@ -650,7 +689,7 @@ def create_agent_turn(
         turn_kind="CASE_ANALYZED",
         source_turn_id=str(uuid4()),
         case_id=delivery.case_id,
-        card_network=payload.card_network,
+        card_network=delivery.card_network,
         case_revision=revision,
         trigger=payload.trigger,
         intent=outcome.intent.value,
@@ -661,6 +700,7 @@ def create_agent_turn(
         decision_reason=_decision_reason(judgment, review_status),
         citations=citations,
         review_proposal=_review_proposal(payload.message, outcome, judgment),
+        review_decision=_review_decision(latest_decision),
         human_boundary="Agent 只提出建议；案件变更必须由操作人员明确确认。",
         runtime=runtime,
         judgment=judgment,

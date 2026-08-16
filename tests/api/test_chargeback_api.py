@@ -307,7 +307,10 @@ def _ready_case(client):
     """Open a PRODUCT_NOT_RECEIVED case and submit its full checklist."""
     from oceanpilot.domain.chargeback import DisputeReasonCode, required_evidence_for
 
-    body = client.post("/api/v1/chargeback/cases", json={"description": "没收到货，要拒付"}).json()
+    body = client.post(
+        "/api/v1/chargeback/cases",
+        json={"description": "没收到货，要拒付", "card_network": "VISA"},
+    ).json()
     case_id = body["case_id"]
     for code in required_evidence_for(DisputeReasonCode.PRODUCT_NOT_RECEIVED):
         client.post(
@@ -411,22 +414,12 @@ def test_rule_reference_resolves_exact_package_and_detail_version(tmp_path):
     assert detail.json()["source_section"] == body["rule_reference"]["source_section"]
 
 
-def test_rule_reference_requires_explicit_card_network(tmp_path):
+def test_rule_reference_uses_persisted_card_network(tmp_path):
     with _client(tmp_path) as client:
         case_id = _ready_case(client)
-        responses = [
-            client.get(f"/api/v1/chargeback/cases/{case_id}/rule-reference"),
-            client.get(
-                f"/api/v1/chargeback/cases/{case_id}/rule-reference",
-                params={"card_network": ""},
-            ),
-            client.get(
-                f"/api/v1/chargeback/cases/{case_id}/rule-reference",
-                params={"card_network": "   "},
-            ),
-        ]
-    assert all(response.status_code == 422 for response in responses)
-    assert all(response.json()["code"] == "INVALID_REQUEST" for response in responses)
+        response = client.get(f"/api/v1/chargeback/cases/{case_id}/rule-reference")
+    assert response.status_code == 200
+    assert response.json()["card_network"] == "VISA"
 
 
 def test_rule_reference_rejects_unconfirmed_reason(tmp_path):
@@ -449,10 +442,38 @@ def test_rule_reference_does_not_guess_across_card_networks(tmp_path):
             f"/api/v1/chargeback/cases/{case_id}/rule-reference",
             params={"card_network": "MASTERCARD"},
         )
-    assert response.status_code == 200
-    assert response.json()["match_status"] == "NO_EXACT_MAPPING"
-    assert response.json()["rule_reference"] is None
+    assert response.status_code == 409
     assert "visa-13-1-demo-v1" not in response.text
+
+
+def test_card_network_selection_is_cas_and_idempotent(tmp_path):
+    with _client(tmp_path) as client:
+        created = client.post(
+            "/api/v1/chargeback/cases",
+            json={"description": "没收到货，要拒付"},
+        ).json()
+        selected = client.put(
+            f"/api/v1/chargeback/cases/{created['case_id']}/card-network",
+            json={"card_network": "VISA", "expected_revision": created["revision"]},
+        )
+        replayed = client.put(
+            f"/api/v1/chargeback/cases/{created['case_id']}/card-network",
+            json={"card_network": "VISA", "expected_revision": created["revision"]},
+        )
+        stale = client.put(
+            f"/api/v1/chargeback/cases/{created['case_id']}/card-network",
+            json={"card_network": "MASTERCARD", "expected_revision": created["revision"]},
+        )
+        audit = client.get(
+            f"/api/v1/chargeback/cases/{created['case_id']}/audit"
+        ).json()
+    assert selected.status_code == 200
+    assert replayed.status_code == 200
+    assert replayed.json()["revision"] == selected.json()["revision"]
+    assert stale.status_code == 409
+    assert [event["event_type"] for event in audit["events"]].count(
+        "CARD_NETWORK_SELECTED"
+    ) == 1
 
 
 def test_rule_reference_returns_503_when_rule_database_fails(tmp_path):

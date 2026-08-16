@@ -11,7 +11,7 @@ from oceanpilot.application.errors import (
     PersistenceInvariantViolation,
 )
 from oceanpilot.application.scheduling import Clock
-from oceanpilot.domain.chargeback import ChargebackEvidenceCode
+from oceanpilot.domain.chargeback import CardNetwork, ChargebackEvidenceCode
 
 
 def _snapshot(state: ChargebackCaseState) -> ChargebackCaseState:
@@ -23,6 +23,8 @@ def _snapshot(state: ChargebackCaseState) -> ChargebackCaseState:
         reason_confident=state.reason_confident,
         reason_confirmed=state.reason_confirmed,
         collection_finalized=state.collection_finalized,
+        card_network=state.card_network,
+        revision=state.revision,
     )
 
 
@@ -92,6 +94,7 @@ class InMemoryChargebackCaseStore:
             if changed:
                 self._revision[case_id] += 1
             revision = self._revision[case_id]
+            state.revision = revision
             self._cases[case_id] = _snapshot(state)
             for code in new_codes:
                 self._evidence_order[case_id].append(code)
@@ -118,11 +121,39 @@ class InMemoryChargebackCaseStore:
             state.collected.remove(latest)
             state.collection_finalized = False
             self._revision[case_id] += 1
+            state.revision = self._revision[case_id]
             self._append_audit(
                 case_id,
                 "EVIDENCE_WITHDRAWN",
                 latest.value,
                 self._revision[case_id],
+            )
+            return _snapshot(state)
+
+    def set_card_network(
+        self,
+        case_id: str,
+        card_network: CardNetwork,
+        expected_revision: int,
+    ) -> ChargebackCaseState:
+        if not isinstance(card_network, CardNetwork) or type(expected_revision) is not int:
+            raise PersistenceInvariantViolation()
+        with self._lock:
+            state = self._cases.get(case_id)
+            if state is None:
+                raise CaseNotFound()
+            if state.card_network is card_network:
+                return _snapshot(state)
+            if self._revision[case_id] != expected_revision:
+                raise ConcurrentCaseWrite()
+            self._revision[case_id] += 1
+            state.card_network = card_network
+            state.revision = self._revision[case_id]
+            self._append_audit(
+                case_id,
+                "CARD_NETWORK_SELECTED",
+                card_network.value,
+                state.revision,
             )
             return _snapshot(state)
 

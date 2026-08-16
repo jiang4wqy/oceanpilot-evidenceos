@@ -61,7 +61,9 @@ class CaseReviewStore(Protocol):
 
     def latest_turn_payload(self, case_id: str, case_revision: int) -> str | None: ...
 
-    def latest_decision(self, case_id: str) -> ReviewDecision | None: ...
+    def latest_decision(
+        self, case_id: str, case_revision: int | None = None
+    ) -> ReviewDecision | None: ...
 
     def confirm_review(
         self,

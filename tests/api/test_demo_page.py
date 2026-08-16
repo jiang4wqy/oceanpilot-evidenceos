@@ -284,6 +284,8 @@ def test_demo_deep_links_real_rule_versions_and_preserves_case_context(tmp_path)
     assert 'cardNetwork:""' in body
     assert "<option value=\"\" ${S.cardNetwork===''?'selected':''}>请选择卡组织</option>" in body
     assert 'id="diagnosisNetwork"' in body
+    assert "/card-network`" in body
+    assert "expected_revision:current.revision" in body
     assert "resolveCaseRuleReference('diagnosis')" in body
     assert "function ruleReferencePath" in body
     assert "/rule-reference?card_network=${encodeURIComponent(network)}" in body
@@ -320,6 +322,8 @@ def test_demo_retains_human_review_and_duplicate_submission_guards(tmp_path):
     assert 'id="diagnosisAlert" role="status" aria-live="polite"' in body
     assert 'id="preventionOut" class="mt" aria-live="polite"' in body
     assert "本次 mock 回执" in body
+    assert "function agentReviewDecision" in body
+    assert "decision.audit_event_id" in body
 
 
 def test_demo_exposes_copilot_judgment_and_agent_trace(tmp_path):

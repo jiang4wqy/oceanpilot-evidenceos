@@ -145,6 +145,34 @@ def test_agent_review_proposal_requires_confirmation_and_replays(tmp_path, monke
                 "confirmed_by": "judge_reviewer_01",
             },
         )
+        restored = client.post(
+            "/api/v1/agent/turns",
+            json={
+                "message": "重新打开案件并恢复当前审核状态",
+                "case_id": case["case_id"],
+                "trigger": "REVIEW_CONFIRMED",
+            },
+        )
+        audit = client.get(
+            f"/api/v1/chargeback/cases/{case['case_id']}/audit"
+        ).json()
+        latest_code = next(
+            event["detail"]
+            for event in reversed(audit["events"])
+            if event["event_type"] == "EVIDENCE_ADDED"
+        )
+        withdrawn = client.post(
+            f"/api/v1/chargeback/cases/{case['case_id']}/evidence/withdraw-latest",
+            json={"evidence_code": latest_code},
+        )
+        after_withdrawal = client.post(
+            "/api/v1/agent/turns",
+            json={
+                "message": "资料撤回后重新分析",
+                "case_id": case["case_id"],
+                "trigger": "EVIDENCE_WITHDRAWN",
+            },
+        )
 
     assert turn_response.status_code == 201
     assert turn["intent"] == "PROPOSE_REVIEW_DECISION"
@@ -161,6 +189,15 @@ def test_agent_review_proposal_requires_confirmation_and_replays(tmp_path, monke
     assert replayed.status_code == 200
     assert replayed.json()["result"] == "REPLAYED"
     assert replayed.json()["decision_id"] == created.json()["decision_id"]
+    assert restored.status_code == 201
+    assert restored.json()["card_network"] == "VISA"
+    assert restored.json()["review_decision"]["audit_event_id"] == created.json()[
+        "audit_event_id"
+    ]
+    assert withdrawn.status_code == 200
+    assert after_withdrawal.status_code == 201
+    assert after_withdrawal.json()["review_decision"] is None
+    assert after_withdrawal.json()["review_status"] == "UNREVIEWED"
 
 
 def test_agent_downgrades_approval_when_evidence_is_missing(tmp_path, monkeypatch):

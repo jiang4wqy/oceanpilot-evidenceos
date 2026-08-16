@@ -42,6 +42,12 @@ class DisputeReasonCode(StrEnum):
     AUTHORIZATION_ERROR = "AUTHORIZATION_ERROR"
 
 
+class CardNetwork(StrEnum):
+    VISA = "VISA"
+    MASTERCARD = "MASTERCARD"
+    AMEX = "AMEX"
+
+
 class ChargebackEvidenceCode(StrEnum):
     TRANSACTION_RECEIPT = "transaction.receipt"
     AVS_RESULT = "auth.avs_result"

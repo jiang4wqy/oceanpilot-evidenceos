@@ -20,7 +20,7 @@ from oceanpilot.application.chargeback_agents import (
     IntakeAgent,
     IntakeOutcome,
 )
-from oceanpilot.domain.chargeback import ChargebackEvidenceCode, DisputeReasonCode
+from oceanpilot.domain.chargeback import CardNetwork, ChargebackEvidenceCode, DisputeReasonCode
 
 
 @dataclass
@@ -39,6 +39,8 @@ class ChargebackCaseState:
     # are still missing ("I can't provide more"): the loop stops asking and the
     # case goes to assessment / human review instead of looping forever.
     collection_finalized: bool = False
+    card_network: CardNetwork | None = None
+    revision: int = 0
 
 
 class SupervisorPhase(StrEnum):

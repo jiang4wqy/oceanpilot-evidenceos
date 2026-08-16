@@ -11,7 +11,7 @@ from pydantic import (
     model_validator,
 )
 
-from oceanpilot.domain.chargeback import ChargebackEvidenceCode, DisputeReasonCode
+from oceanpilot.domain.chargeback import CardNetwork, ChargebackEvidenceCode, DisputeReasonCode
 
 
 class _StrictRequest(BaseModel):
@@ -22,6 +22,12 @@ class _StrictRequest(BaseModel):
 
 class CreateChargebackRequest(_StrictRequest):
     description: Annotated[StrictStr, Field(min_length=1, max_length=2000)]
+    card_network: CardNetwork | None = None
+
+
+class SetCardNetworkRequest(_StrictRequest):
+    card_network: CardNetwork
+    expected_revision: Annotated[StrictInt, Field(ge=0)]
 
 
 class SubmitEvidenceRequest(_StrictRequest):
@@ -236,7 +242,7 @@ class CaseRuleReferenceResponse(BaseModel):
 
 class AppealRequest(_StrictRequest):
     bank_id: StrictStr | None = None
-    card_network: StrictStr | None = None
+    card_network: CardNetwork | None = None
     human_approved: StrictBool = False
     actor_id: StrictStr | None = None
 
@@ -324,6 +330,8 @@ class ChargebackCaseResponse(BaseModel):
 
     case_id: StrictStr
     phase: StrictStr
+    revision: StrictInt
+    card_network: CardNetwork | None = None
     reason_code: StrictStr | None = None
     reason_confirmed: StrictBool = False
     collection_finalized: StrictBool = False

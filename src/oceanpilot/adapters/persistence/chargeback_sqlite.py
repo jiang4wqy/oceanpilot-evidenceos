@@ -39,7 +39,7 @@ from oceanpilot.application.errors import (
     NoEvidenceToWithdraw,
     PersistenceInvariantViolation,
 )
-from oceanpilot.domain.chargeback import ChargebackEvidenceCode, DisputeReasonCode
+from oceanpilot.domain.chargeback import CardNetwork, ChargebackEvidenceCode, DisputeReasonCode
 
 _TIMESTAMP_FORMAT = "%Y-%m-%dT%H:%M:%S.%fZ"
 
@@ -48,6 +48,7 @@ class ChargebackAuditEventType(StrEnum):
     CASE_OPENED = "CASE_OPENED"
     REASON_CLASSIFIED = "REASON_CLASSIFIED"
     REASON_CONFIRMED = "REASON_CONFIRMED"
+    CARD_NETWORK_SELECTED = "CARD_NETWORK_SELECTED"
     EVIDENCE_ADDED = "EVIDENCE_ADDED"
     EVIDENCE_WITHDRAWN = "EVIDENCE_WITHDRAWN"
     COLLECTION_FINALIZED = "COLLECTION_FINALIZED"
@@ -100,13 +101,21 @@ def initialize_chargeback_schema(path: Path) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
         connection = connect_sqlite(path)
         connection.executescript(f"BEGIN IMMEDIATE;\n{CHARGEBACK_SCHEMA_SQL}\nCOMMIT;")
+        case_columns = {
+            row["name"] for row in connection.execute("PRAGMA table_info(chargeback_cases)")
+        }
+        if "card_network" not in case_columns:
+            connection.execute(
+                "ALTER TABLE chargeback_cases ADD COLUMN card_network TEXT "
+                "CHECK (card_network IN ('VISA', 'MASTERCARD', 'AMEX'))"
+            )
         audit_sql_row = connection.execute(
             "SELECT sql FROM sqlite_schema WHERE type = 'table' AND name = 'chargeback_audit'"
         ).fetchone()
         audit_sql = audit_sql_row["sql"] if audit_sql_row is not None else None
         if type(audit_sql) is not str:
             raise DatabaseUnavailable()
-        if "EVIDENCE_WITHDRAWN" not in audit_sql:
+        if "EVIDENCE_WITHDRAWN" not in audit_sql or "CARD_NETWORK_SELECTED" not in audit_sql:
             connection.executescript(
                 """
                 BEGIN IMMEDIATE;
@@ -117,6 +126,7 @@ def initialize_chargeback_schema(path: Path) -> None:
                     event_type TEXT NOT NULL CHECK (
                         event_type IN (
                             'CASE_OPENED','REASON_CLASSIFIED','REASON_CONFIRMED',
+                            'CARD_NETWORK_SELECTED',
                             'EVIDENCE_ADDED','EVIDENCE_WITHDRAWN','COLLECTION_FINALIZED'
                         )
                     ),
@@ -323,6 +333,74 @@ class SqliteChargebackCaseStore:
 
         return _map_db_errors(operation)
 
+    def set_card_network(
+        self,
+        case_id: str,
+        card_network: CardNetwork,
+        expected_revision: int,
+    ) -> ChargebackCaseState:
+        if not isinstance(card_network, CardNetwork) or type(expected_revision) is not int:
+            raise PersistenceInvariantViolation()
+
+        def operation() -> ChargebackCaseState:
+            connection = connect_sqlite(self._path)
+            try:
+                with immediate_transaction(connection):
+                    row = connection.execute(
+                        "SELECT card_network, revision FROM chargeback_cases WHERE case_id = ?",
+                        (case_id,),
+                    ).fetchone()
+                    if row is None:
+                        raise CaseNotFound()
+                    current = (
+                        CardNetwork(self._require_text(row["card_network"]))
+                        if row["card_network"] is not None
+                        else None
+                    )
+                    current_revision = self._require_int(row["revision"])
+                    if current is card_network:
+                        loaded = self._load_state(connection, case_id)
+                        if loaded is None:
+                            raise PersistenceInvariantViolation()
+                        return loaded[0]
+                    if current_revision != expected_revision:
+                        raise ConcurrentCaseWrite()
+                    new_revision = current_revision + 1
+                    moment = self._clock()
+                    cursor = connection.execute(
+                        """
+                        UPDATE chargeback_cases
+                        SET card_network = ?, revision = ?, updated_at = ?
+                        WHERE case_id = ? AND revision = ?
+                        """,
+                        (
+                            card_network.value,
+                            new_revision,
+                            _encode_dt(moment),
+                            case_id,
+                            current_revision,
+                        ),
+                    )
+                    if cursor.rowcount != 1:
+                        raise ConcurrentCaseWrite()
+                    self._insert_audit(
+                        connection,
+                        case_id=case_id,
+                        seq=self._next_seq(connection, case_id),
+                        event_type=ChargebackAuditEventType.CARD_NETWORK_SELECTED,
+                        detail=card_network.value,
+                        case_revision=new_revision,
+                        moment=moment,
+                    )
+                    loaded = self._load_state(connection, case_id)
+                    if loaded is None:
+                        raise PersistenceInvariantViolation()
+                    return loaded[0]
+            finally:
+                connection.close()
+
+        return _map_db_errors(operation)
+
     # -- richer capabilities (used by store-level tests / callers) ---------
 
     def load_with_revision(self, case_id: str) -> tuple[ChargebackCaseState, int] | None:
@@ -397,6 +475,9 @@ class SqliteChargebackCaseStore:
             raise PersistenceInvariantViolation()
         incoming_confirmed = bool(state.reason_confirmed)
         incoming_finalized = bool(state.collection_finalized)
+        incoming_network = state.card_network
+        if incoming_network is not None and not isinstance(incoming_network, CardNetwork):
+            raise PersistenceInvariantViolation()
 
         def operation() -> int:
             connection = connect_sqlite(self._path)
@@ -404,7 +485,8 @@ class SqliteChargebackCaseStore:
                 with immediate_transaction(connection):
                     row = connection.execute(
                         """
-                        SELECT reason_code, reason_confirmed, collection_finalized, revision
+                        SELECT reason_code, card_network, reason_confirmed,
+                               collection_finalized, revision
                         FROM chargeback_cases WHERE case_id = ?
                         """,
                         (case_id,),
@@ -419,6 +501,11 @@ class SqliteChargebackCaseStore:
                     )
                     current_confirmed = bool(self._require_int(row["reason_confirmed"]))
                     current_finalized = bool(self._require_int(row["collection_finalized"]))
+                    current_network = (
+                        CardNetwork(self._require_text(row["card_network"]))
+                        if row["card_network"] is not None
+                        else None
+                    )
                     if expected_revision is not None and current_revision != expected_revision:
                         raise ConcurrentCaseWrite()
 
@@ -444,6 +531,8 @@ class SqliteChargebackCaseStore:
                         raise PersistenceInvariantViolation()
                     if current_finalized and not incoming_finalized:
                         raise PersistenceInvariantViolation()
+                    if incoming_network is not current_network:
+                        raise PersistenceInvariantViolation()
 
                     reason_changed = (
                         incoming_reason is not None and incoming_reason != current_reason
@@ -459,6 +548,7 @@ class SqliteChargebackCaseStore:
                         and not finalized_now
                         and not new_codes
                     ):
+                        state.revision = current_revision
                         return current_revision  # idempotent replay
 
                     new_revision = current_revision + 1
@@ -538,6 +628,7 @@ class SqliteChargebackCaseStore:
                             moment=moment,
                         )
                         seq += 1
+                    state.revision = new_revision
                     return new_revision
             finally:
                 connection.close()
@@ -551,7 +642,8 @@ class SqliteChargebackCaseStore:
     ) -> tuple[ChargebackCaseState, int] | None:
         row = connection.execute(
             """
-            SELECT reason_code, reason_confirmed, collection_finalized, created_at, revision
+            SELECT reason_code, card_network, reason_confirmed, collection_finalized,
+                   created_at, revision
             FROM chargeback_cases WHERE case_id = ?
             """,
             (case_id,),
@@ -576,6 +668,12 @@ class SqliteChargebackCaseStore:
             reason_confirmed=bool(self._require_int(row["reason_confirmed"])),
             collection_finalized=bool(self._require_int(row["collection_finalized"])),
             created_at=_decode_dt(row["created_at"]),
+            card_network=(
+                CardNetwork(self._require_text(row["card_network"]))
+                if row["card_network"] is not None
+                else None
+            ),
+            revision=self._require_int(row["revision"]),
         )
         return state, self._require_int(row["revision"])
 

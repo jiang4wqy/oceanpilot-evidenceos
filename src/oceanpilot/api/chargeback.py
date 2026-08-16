@@ -31,6 +31,7 @@ from oceanpilot.api.chargeback_schemas import (
     RuleSummaryDTO,
     SafetyScanRequest,
     SafetyScanResponse,
+    SetCardNetworkRequest,
     SubmitEvidenceRequest,
     WithdrawLatestEvidenceRequest,
 )
@@ -51,7 +52,7 @@ from oceanpilot.application.knowledge_base import (
     RuleRequirement,
 )
 from oceanpilot.application.metrics import DecisionMetrics
-from oceanpilot.domain.chargeback import ChargebackEvidenceCode, DisputeReasonCode
+from oceanpilot.domain.chargeback import CardNetwork, ChargebackEvidenceCode, DisputeReasonCode
 from oceanpilot.domain.chargeback_prevention import PreventionSignals
 from oceanpilot.domain.errors import SensitiveDataRejected
 from oceanpilot.domain.evidence_catalog import label_of
@@ -64,6 +65,27 @@ router = APIRouter(prefix="/api/v1/chargeback")
 # to a NormalizedInbound, runs the shared ChargebackChannelService, and renders
 # the resulting Delivery as JSON. Feishu / other channels reuse the same core.
 _CHANNEL = "http"
+
+
+def _case_network(
+    state: object,
+    requested: str | None = None,
+    *,
+    required: bool = False,
+) -> str | None:
+    selected = getattr(state, "card_network", None)
+    persisted = selected.value if isinstance(selected, CardNetwork) else None
+    if requested is not None and requested != persisted:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="card network must be persisted on the current case revision first",
+        )
+    if required and persisted is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="card network has not been selected for this case",
+        )
+    return persisted
 
 
 def get_supervisor(request: Request) -> ChargebackSupervisor:
@@ -223,6 +245,8 @@ def _response(delivery: Delivery) -> ChargebackCaseResponse:
     return ChargebackCaseResponse(
         case_id=delivery.case_id,
         phase=delivery.phase,
+        revision=delivery.revision,
+        card_network=delivery.card_network,
         reason_code=delivery.reason_code,
         reason_confirmed=delivery.reason_confirmed,
         collection_finalized=delivery.collection_finalized,
@@ -263,6 +287,7 @@ def create_case(
             kind=InboundKind.OPEN_CASE,
             channel=_CHANNEL,
             description=payload.description,
+            card_network=payload.card_network.value if payload.card_network else None,
         )
     )
     return _response(delivery)
@@ -356,6 +381,28 @@ def withdraw_latest_evidence(
     return _response(delivery)
 
 
+@router.put(
+    "/cases/{case_id}/card-network",
+    response_model=ChargebackCaseResponse,
+    responses={404: PROBLEM_RESPONSE, 409: PROBLEM_RESPONSE, **COMMON_PROBLEMS},
+)
+def set_card_network(
+    case_id: str,
+    payload: SetCardNetworkRequest,
+    service: Annotated[ChargebackChannelService, Depends(get_channel_service)],
+) -> ChargebackCaseResponse:
+    delivery = service.handle(
+        NormalizedInbound(
+            kind=InboundKind.SET_CARD_NETWORK,
+            channel=_CHANNEL,
+            case_id=case_id,
+            card_network=payload.card_network.value,
+            expected_revision=payload.expected_revision,
+        )
+    )
+    return _response(delivery)
+
+
 @router.post(
     "/cases/{case_id}/finalize",
     response_model=ChargebackCaseResponse,
@@ -384,7 +431,7 @@ def get_case_rule_reference(
     case_id: str,
     store: Annotated[ChargebackCaseStore, Depends(get_store)],
     knowledge_base: Annotated[KnowledgeBase, Depends(get_knowledge_base)],
-    card_network: Literal["VISA", "MASTERCARD", "AMEX"],
+    card_network: Literal["VISA", "MASTERCARD", "AMEX"] | None = None,
 ) -> CaseRuleReferenceResponse:
     """Resolve an exact versioned rule without generating a representment package."""
 
@@ -396,12 +443,14 @@ def get_case_rule_reference(
             status_code=status.HTTP_409_CONFLICT,
             detail="case reason is not confirmed",
         )
+    selected_network = _case_network(state, card_network, required=True)
+    assert selected_network is not None
 
-    entry = knowledge_base.lookup(state.reason_code, card_network=card_network)
+    entry = knowledge_base.lookup(state.reason_code, card_network=selected_network)
     if entry.rule_version_id is None:
         return CaseRuleReferenceResponse(
             case_id=case_id,
-            card_network=card_network,
+            card_network=selected_network,
             match_status="NO_EXACT_MAPPING",
         )
 
@@ -414,13 +463,13 @@ def get_case_rule_reference(
         # A versioned link is useful only when its provenance boundary is complete.
         return CaseRuleReferenceResponse(
             case_id=case_id,
-            card_network=card_network,
+            card_network=selected_network,
             match_status="NO_EXACT_MAPPING",
         )
 
     return CaseRuleReferenceResponse(
         case_id=case_id,
-        card_network=card_network,
+        card_network=selected_network,
         match_status="EXACT_MATCH",
         rule_reference=RuleReferenceDTO(
             rule_version_id=entry.rule_version_id,
@@ -445,14 +494,18 @@ def get_package(
     store: Annotated[ChargebackCaseStore, Depends(get_store)],
     packager: Annotated[PackagerAgent, Depends(get_packager)],
     bank_id: str | None = None,
-    card_network: str | None = None,
+    card_network: Literal["VISA", "MASTERCARD", "AMEX"] | None = None,
     locale: str = "zh",
 ) -> ChargebackPackageResponse:
     state = store.load(case_id)
     if state is None or state.reason_code is None:
         raise CaseNotFound()
+    selected_network = _case_network(state, card_network)
     package = packager.build(
-        state.reason_code, state.collected, bank_id=bank_id, card_network=card_network
+        state.reason_code,
+        state.collected,
+        bank_id=bank_id,
+        card_network=selected_network,
     )
     return _package_response(case_id, package, locale=_norm_locale(locale))
 
@@ -473,12 +526,16 @@ def post_appeal(
     state = store.load(case_id)
     if state is None or state.reason_code is None:
         raise CaseNotFound()
+    selected_network = _case_network(
+        state,
+        payload.card_network.value if payload.card_network else None,
+    )
     # AppealRequest already enforces actor_id when human_approved.
     package = packager.build(
         state.reason_code,
         state.collected,
         bank_id=payload.bank_id,
-        card_network=payload.card_network,
+        card_network=selected_network,
     )
     outcome = appeal.submit(
         package, human_approved=payload.human_approved, actor_id=payload.actor_id or ""
