@@ -153,9 +153,7 @@ def test_agent_review_proposal_requires_confirmation_and_replays(tmp_path, monke
                 "trigger": "REVIEW_CONFIRMED",
             },
         )
-        audit = client.get(
-            f"/api/v1/chargeback/cases/{case['case_id']}/audit"
-        ).json()
+        audit = client.get(f"/api/v1/chargeback/cases/{case['case_id']}/audit").json()
         latest_code = next(
             event["detail"]
             for event in reversed(audit["events"])
@@ -191,9 +189,7 @@ def test_agent_review_proposal_requires_confirmation_and_replays(tmp_path, monke
     assert replayed.json()["decision_id"] == created.json()["decision_id"]
     assert restored.status_code == 201
     assert restored.json()["card_network"] == "VISA"
-    assert restored.json()["review_decision"]["audit_event_id"] == created.json()[
-        "audit_event_id"
-    ]
+    assert restored.json()["review_decision"]["audit_event_id"] == created.json()["audit_event_id"]
     assert withdrawn.status_code == 200
     assert after_withdrawal.status_code == 201
     assert after_withdrawal.json()["review_decision"] is None

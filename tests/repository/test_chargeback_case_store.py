@@ -439,15 +439,19 @@ def test_failed_withdrawal_rolls_back_delete_revision_and_audit(cb_path: Path) -
 
 def test_initialize_migrates_legacy_audit_constraint_without_data_loss(tmp_path: Path) -> None:
     path = tmp_path / "legacy-chargeback.db"
-    legacy_sql = CHARGEBACK_SCHEMA_SQL.replace(
-        "    card_network TEXT CHECK (card_network IN ('VISA', 'MASTERCARD', 'AMEX')),\n",
-        "",
-    ).replace(
-        "'CASE_OPENED','REASON_CLASSIFIED','REASON_CONFIRMED','CARD_NETWORK_SELECTED',",
-        "'CASE_OPENED','REASON_CLASSIFIED','REASON_CONFIRMED',",
-    ).replace(
-        "'EVIDENCE_ADDED','EVIDENCE_WITHDRAWN','COLLECTION_FINALIZED'",
-        "'EVIDENCE_ADDED','COLLECTION_FINALIZED'",
+    legacy_sql = (
+        CHARGEBACK_SCHEMA_SQL.replace(
+            "    card_network TEXT CHECK (card_network IN ('VISA', 'MASTERCARD', 'AMEX')),\n",
+            "",
+        )
+        .replace(
+            "'CASE_OPENED','REASON_CLASSIFIED','REASON_CONFIRMED','CARD_NETWORK_SELECTED',",
+            "'CASE_OPENED','REASON_CLASSIFIED','REASON_CONFIRMED',",
+        )
+        .replace(
+            "'EVIDENCE_ADDED','EVIDENCE_WITHDRAWN','COLLECTION_FINALIZED'",
+            "'EVIDENCE_ADDED','COLLECTION_FINALIZED'",
+        )
     )
     connection = sqlite3.connect(path)
     connection.executescript(legacy_sql)

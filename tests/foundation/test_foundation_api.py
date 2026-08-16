@@ -321,6 +321,7 @@ def test_openapi_has_exact_foundation_paths(app: FastAPI):
         "/api/v1/chargeback/cases/{case_id}",
         "/api/v1/chargeback/cases/{case_id}/appeal",
         "/api/v1/chargeback/cases/{case_id}/audit",
+        "/api/v1/chargeback/cases/{case_id}/card-network",
         "/api/v1/chargeback/cases/{case_id}/confirm",
         "/api/v1/chargeback/cases/{case_id}/evidence",
         "/api/v1/chargeback/cases/{case_id}/evidence/withdraw-latest",
@@ -333,6 +334,8 @@ def test_openapi_has_exact_foundation_paths(app: FastAPI):
         "/api/v1/chargeback/rules/{rule_version_id}",
         "/api/v1/chargeback/safety/scan",
         "/api/v1/admin/overview",
+        "/api/v1/agent/turns",
+        "/api/v1/agent/cases/{case_id}/review-decisions",
     }
     assert {path: set(item) for path, item in paths.items()} == {
         "/health": {"get"},
@@ -347,6 +350,7 @@ def test_openapi_has_exact_foundation_paths(app: FastAPI):
         "/api/v1/chargeback/cases/{case_id}": {"get"},
         "/api/v1/chargeback/cases/{case_id}/appeal": {"post"},
         "/api/v1/chargeback/cases/{case_id}/audit": {"get"},
+        "/api/v1/chargeback/cases/{case_id}/card-network": {"put"},
         "/api/v1/chargeback/cases/{case_id}/confirm": {"post"},
         "/api/v1/chargeback/cases/{case_id}/evidence": {"post"},
         "/api/v1/chargeback/cases/{case_id}/evidence/withdraw-latest": {"post"},
@@ -359,4 +363,6 @@ def test_openapi_has_exact_foundation_paths(app: FastAPI):
         "/api/v1/chargeback/rules/{rule_version_id}": {"get"},
         "/api/v1/chargeback/safety/scan": {"post"},
         "/api/v1/admin/overview": {"get"},
+        "/api/v1/agent/turns": {"post"},
+        "/api/v1/agent/cases/{case_id}/review-decisions": {"post"},
     }

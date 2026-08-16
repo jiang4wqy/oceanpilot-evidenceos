@@ -56,7 +56,10 @@ def _run(client: TestClient, say: Callable[[str], None]) -> None:
     say("\n【1】建案：商户描述问题")
     description = "客户下单后一直没收到货，现在要求拒付。"
     say(f"  商户：{description}")
-    case = client.post(f"{_BASE}/cases", json={"description": description}).json()
+    case = client.post(
+        f"{_BASE}/cases",
+        json={"description": description, "card_network": "VISA"},
+    ).json()
     case_id = case["case_id"]
     say(f"  案件：{case_id}")
     say(f"  判定原因：{case['reason_code']}（已确认={case['reason_confirmed']}）")

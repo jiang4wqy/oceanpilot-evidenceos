@@ -348,17 +348,17 @@ def test_package_endpoint_exposes_visa_rule_provenance(tmp_path):
     assert pkg["submission_window_basis"] == "INTERNAL_DEMO"
 
 
-def test_rules_catalog_exposes_nine_curated_summaries(tmp_path):
+def test_rules_catalog_exposes_ten_curated_summaries(tmp_path):
     with _client(tmp_path) as client:
         response = client.get("/api/v1/chargeback/rules")
     assert response.status_code == 200
     body = response.json()
-    assert body["total"] == 9
+    assert body["total"] == 10
     assert body["demo_mapped"] == 3
-    assert body["scheme_count"] == 3
-    assert body["source_document_count"] == 3
+    assert body["scheme_count"] == 4
+    assert body["source_document_count"] == 4
     assert "生产使用前" in body["disclaimer"]
-    assert len(body["items"]) == 9
+    assert len(body["items"]) == 10
     assert all(item["verification_status"] == "UNVERIFIED_SUMMARY" for item in body["items"])
 
 
@@ -464,16 +464,12 @@ def test_card_network_selection_is_cas_and_idempotent(tmp_path):
             f"/api/v1/chargeback/cases/{created['case_id']}/card-network",
             json={"card_network": "MASTERCARD", "expected_revision": created["revision"]},
         )
-        audit = client.get(
-            f"/api/v1/chargeback/cases/{created['case_id']}/audit"
-        ).json()
+        audit = client.get(f"/api/v1/chargeback/cases/{created['case_id']}/audit").json()
     assert selected.status_code == 200
     assert replayed.status_code == 200
     assert replayed.json()["revision"] == selected.json()["revision"]
     assert stale.status_code == 409
-    assert [event["event_type"] for event in audit["events"]].count(
-        "CARD_NETWORK_SELECTED"
-    ) == 1
+    assert [event["event_type"] for event in audit["events"]].count("CARD_NETWORK_SELECTED") == 1
 
 
 def test_rule_reference_returns_503_when_rule_database_fails(tmp_path):

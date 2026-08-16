@@ -664,9 +664,7 @@ def create_agent_turn(
             if replayed_response.card_network == delivery.card_network:
                 return replayed_response.model_copy(update={"result": "REPLAYED"})
     latest_decision = review_store.latest_decision(delivery.case_id, revision)
-    review_status = (
-        latest_decision.status.value if latest_decision is not None else "UNREVIEWED"
-    )
+    review_status = latest_decision.status.value if latest_decision is not None else "UNREVIEWED"
     outcome = copilot.respond(
         payload.message,
         problem_type=judgment.problem_type,

@@ -308,6 +308,7 @@ def test_demo_retains_human_review_and_duplicate_submission_guards(tmp_path):
         body = client.get("/demo").text
     assert "caseCreating:false,evidenceSubmitting:false" in body
     assert "if(S.caseCreating)return" in body
+    assert "while(current.phase==='NEED_EVIDENCE'&&S.autoEvidence.length)" in body
     assert "evidenceSubmittingCases:new Set()" in body
     assert "S.evidenceSubmittingCases.has(caseId)" in body
     assert "S.selectedCase&&S.selectedCase.case_id===draft.caseId" in body
@@ -436,6 +437,9 @@ def test_evidence_modal_requires_explicit_confirmation_and_stays_synthetic(tmp_p
     confirm_function = _js_function(script, "submitEvidenceModal")
     assert "api(" not in open_function
     assert "api(" not in select_function
+    assert "button.disabled=true" in open_function
+    assert "S.dialogTrigger=document.activeElement" in open_function
+    assert "evidenceSubmitButton').disabled=false" in select_function
     assert "evidenceDraft.fileName" in select_function
     assert "api('POST',`/cases/${draft.caseId}/evidence`" in confirm_function
     assert "{evidence_code:draft.code}" in confirm_function
