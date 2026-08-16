@@ -88,6 +88,33 @@ def test_demo_keeps_technical_endpoints_out_of_customer_navigation(tmp_path):
     assert 'href="/health"' not in body
 
 
+def test_demo_removes_decorative_navigation_badges_but_keeps_real_status(tmp_path):
+    with _client(tmp_path) as client:
+        body = client.get("/demo").text
+
+    assert 'class="nav-badge"' not in body
+    assert 'class="shortcut"' not in body
+    assert ">CORE<" not in body and ">LIVE<" not in body and ">DB<" not in body
+    assert "⌘K" not in body
+    assert '<span class="env-chip">Synthetic Demo</span>' in body
+    assert '<button class="on" type="button" data-v="hub">AI 运营中枢</button>' in body
+    assert "document.querySelectorAll('.nav button,.mobile-nav button')" in body
+    assert "event.key.toLowerCase()==='k'" in body
+
+
+def test_global_search_stays_in_context_and_reports_no_case_match(tmp_path):
+    with _client(tmp_path) as client:
+        body = client.get("/demo").text
+
+    assert 'id="globalSearchStatus" role="status" aria-live="polite"' in body
+    assert "S.currentView==='rules'" in body
+    assert "$('ruleSearch').value=raw;clearGlobalSearchStatus();loadRules()" in body
+    assert "未找到匹配案件，请检查案件号或争议原因。" in body
+    assert "No matching case found. Check the case ID or dispute reason." in body
+    assert "if(event.key==='Escape')" in body
+    assert "$('ruleSearch').value=raw;showView('rules')" not in body
+
+
 def test_demo_separates_case_diagnosis_from_new_case_creation(tmp_path):
     with _client(tmp_path) as client:
         body = client.get("/demo").text
@@ -132,8 +159,8 @@ def test_demo_keeps_oceanpayment_visual_baseline_with_hub_and_rules(tmp_path):
     assert 'id="v-incidents"' not in body and 'data-v="incidents"' not in body
     assert "异常事件队列" not in body and "Processing Path" not in body
     assert '<div class="brand-product">案件诊断系统</div>' in body
-    assert 'data-v="overview" role="button" tabindex="0">案件中心' in body
-    assert 'data-v="create" role="button" tabindex="0">新建案件' in body
+    assert '<button type="button" data-v="overview">案件中心</button>' in body
+    assert '<button type="button" data-v="create">新建案件</button>' in body
     assert "案件中心" in body and "新建案件" in body and "交易风险" in body
     assert "案件诊断" in body and "查看诊断" in body
     assert "导出当前结果" not in body and "规则与配置" not in body
@@ -424,6 +451,7 @@ def test_evidence_modal_requires_explicit_confirmation_and_stays_synthetic(tmp_p
 
     assert 'id="evidenceModal"' in body
     assert 'id="evidenceFile"' in body
+    assert 'id="evidenceCancelButton"' in body
     assert 'id="evidenceSubmitButton"' in body
     assert "使用 Synthetic 演示文件" in body
     assert "不读取文件内容、不上传对象存储" in body
@@ -444,6 +472,14 @@ def test_evidence_modal_requires_explicit_confirmation_and_stays_synthetic(tmp_p
     assert "api('POST',`/cases/${draft.caseId}/evidence`" in confirm_function
     assert "{evidence_code:draft.code}" in confirm_function
     assert "evidenceReceipt" in confirm_function
+    assert "cancel.textContent='完成并返回案件'" in confirm_function
+    assert "cancel.disabled=true" in confirm_function
+    assert "cancel.disabled=false" in confirm_function
+    assert "cancel.focus()" in confirm_function
+    assert "button.textContent='提交成功'" in confirm_function
+    assert '"提交成功":"Submitted"' in body
+    assert '"完成并返回案件":"Done and return to case"' in body
+    assert "补交：${esc(label)}" in body
 
 
 def test_latest_evidence_reconstruction_handles_withdrawal_history(tmp_path):

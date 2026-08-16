@@ -497,12 +497,12 @@ _DEMO_HTML = """<!doctype html>
   .sbrand .rl{font-size:11px;color:var(--side-muted)}
   .navlbl{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:#5c6577;padding:12px 15px 6px}
   .nav{padding:6px 8px}
-  .nav a{display:flex;align-items:center;gap:10px;padding:9px 11px;border-radius:8px;color:var(--side-muted);
-    text-decoration:none;font-size:13px;cursor:pointer;user-select:none}
-  .nav a .ic{width:15px;height:15px;border:1.6px solid currentColor;border-radius:4px;opacity:.7}
-  .nav a:hover{color:var(--side-ink);background:var(--side-active)}
-  .nav a.on{color:#fff;background:var(--side-active)}
-  .nav a.on .ic{background:var(--accent);border-color:var(--accent);opacity:1}
+  .nav button{display:flex;align-items:center;gap:10px;width:100%;border:0;padding:9px 11px;border-radius:8px;
+    background:transparent;color:var(--side-muted);text-align:left;font:13px var(--sans);cursor:pointer;user-select:none}
+  .nav button .ic{width:15px;height:15px;border:1.6px solid currentColor;border-radius:4px;opacity:.7}
+  .nav button:hover{color:var(--side-ink);background:var(--side-active)}
+  .nav button.on{color:#fff;background:var(--side-active)}
+  .nav button.on .ic{background:var(--accent);border-color:var(--accent);opacity:1}
   .main{display:flex;flex-direction:column;min-width:0}
   .top{display:flex;align-items:center;gap:10px;padding:12px 24px;border-bottom:1px solid var(--border);
     background:var(--surface);position:sticky;top:0;z-index:5;flex-wrap:wrap}
@@ -640,10 +640,10 @@ _DEMO_HTML = """<!doctype html>
   .brand-product{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--side-muted);margin-top:7px}
   .navlbl{color:var(--faint);padding:22px 20px 6px;letter-spacing:.12em}
   .nav{padding:4px 10px}
-  .nav a{position:relative;color:var(--side-muted);padding:11px 12px;border-radius:8px;font-size:14px}
-  .nav a:hover{color:var(--ink);background:var(--side-2)}
-  .nav a.on{color:var(--accent);background:var(--side-active);font-weight:700}
-  .nav a.on:before{content:"";position:absolute;left:0;top:10px;bottom:10px;width:3px;border-radius:2px;background:var(--accent)}
+  .nav button{position:relative;color:var(--side-muted);padding:11px 12px;border-radius:8px;font-size:14px}
+  .nav button:hover{color:var(--ink);background:var(--side-2)}
+  .nav button.on{color:var(--accent);background:var(--side-active);font-weight:700}
+  .nav button.on:before{content:"";position:absolute;left:0;top:10px;bottom:10px;width:3px;border-radius:2px;background:var(--accent)}
   .top{min-height:64px;padding:0 32px;flex-wrap:nowrap;box-shadow:none}
   .crumb-sep{padding:0 7px;color:var(--faint)}
   .tbtn{min-height:34px}
@@ -686,10 +686,13 @@ _DEMO_HTML = """<!doctype html>
 
   /* Transaction Diagnostic System */
   .global-search{position:relative;width:min(420px,34vw)}
-  .global-search input{height:38px;padding:8px 58px 8px 35px;border-radius:8px;background:var(--canvas)}
+  .global-search input{height:38px;padding:8px 12px 8px 35px;border-radius:8px;background:var(--canvas)}
   .global-search:before{content:"";position:absolute;left:13px;top:12px;width:11px;height:11px;border:1.5px solid var(--muted);border-radius:50%;z-index:1}
   .global-search:after{content:"";position:absolute;left:23px;top:23px;width:6px;height:1.5px;background:var(--muted);transform:rotate(45deg);z-index:1}
-  .shortcut{position:absolute;right:8px;top:8px;color:var(--muted);font:11px var(--mono);border:1px solid var(--border);border-radius:5px;padding:2px 5px;background:var(--surface)}
+  .global-search-status{display:none;position:absolute;left:0;right:0;top:calc(100% + 6px);z-index:20;
+    padding:8px 10px;border:1px solid var(--border);border-radius:7px;background:var(--surface);box-shadow:var(--sh);
+    color:var(--muted);font-size:11.5px;line-height:1.45}
+  .global-search-status.on{display:block}
   .env-chip{font-size:11px;font-weight:700;color:var(--accent);background:var(--accent-soft);border:1px solid var(--accent-border);border-radius:5px;padding:4px 8px}
   .avatar{width:30px;height:30px;border-radius:50%;background:var(--deep);color:#fff;display:grid;place-items:center;font-size:11px;font-weight:750}
   .content.full{max-width:1440px}.content.full.view{display:none}.content.full.view.on{display:block}.content.full .page-head{display:flex}
@@ -711,7 +714,7 @@ _DEMO_HTML = """<!doctype html>
   .path{display:flex;align-items:center;gap:0;overflow-x:auto;padding:6px 0}.path-node{min-width:108px;border:1px solid var(--border);border-radius:7px;padding:9px 10px;background:var(--surface)}.path-node strong{display:block;color:var(--ink);font-size:11.5px}.path-node span{font-size:10.5px;color:var(--muted)}.path-node.bad{border-color:#e1a0a0;background:var(--crit-bg)}.path-link{height:1px;min-width:25px;background:var(--border-2)}
   .triad{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:14px}.triad-item{border:1px solid var(--border);border-radius:8px;padding:12px}.triad-item h4{font-size:11px;color:var(--muted);margin:0 0 7px;text-transform:uppercase;letter-spacing:.05em}.triad-item p{font-size:12px;color:var(--body);margin:0;line-height:1.6}.triad-item.actionable{background:var(--accent-soft);border-color:var(--accent-border)}.evidence-line{display:flex;gap:9px;padding:10px 0;border-bottom:1px solid var(--border);font-size:12px}.evidence-line:last-child{border:0}.evidence-line b{color:var(--ink)}.evidence-line span{color:var(--muted)}
   .customer-alert{border:1px solid #e3bd76;border-left:4px solid var(--warn);background:var(--warn-bg);border-radius:8px;padding:13px 14px;margin-bottom:14px}.customer-alert strong{display:block;color:#765115}.customer-alert p{margin:4px 0 0;color:#85632d;font-size:12px}
-  .secondary-nav{margin-top:auto;border-top:1px solid var(--side-border);padding:10px}.secondary-nav a{font-size:12px}
+  .secondary-nav{margin-top:auto;border-top:1px solid var(--side-border);padding:10px}.secondary-nav button{font-size:12px}
   .task-guide{display:grid;grid-template-columns:repeat(3,1fr);gap:0;background:var(--surface);border:1px solid var(--border);border-radius:10px;margin-bottom:16px;overflow:hidden}
   .guide-step{display:grid;grid-template-columns:30px 1fr;gap:10px;padding:15px 16px;border-right:1px solid var(--border)}.guide-step:last-child{border-right:0}
   .guide-no{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;background:var(--accent-soft);color:var(--accent);font-weight:750}
@@ -739,7 +742,6 @@ _DEMO_HTML = """<!doctype html>
   .empty-state{text-align:center;padding:28px 20px}.empty-state strong{display:block;color:var(--ink);font-size:15px}.empty-state p{margin:6px auto 14px;max-width:430px;color:var(--muted);font-size:12.5px}
   .mobile-nav{display:none}
   .nav-live{margin-left:auto;width:7px;height:7px;border-radius:50%;background:var(--crit);box-shadow:0 0 0 3px rgba(201,78,74,.16)}
-  .nav-badge{margin-left:auto;font-size:9px;letter-spacing:.08em;color:var(--side-muted);border:1px solid var(--side-border);border-radius:4px;padding:1px 5px}
   .boundary-banner{display:flex;align-items:flex-start;gap:10px;padding:11px 13px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--body);font-size:12px;margin-bottom:16px}
   .boundary-banner strong{color:var(--ink);white-space:nowrap}.boundary-banner .dot{width:8px;height:8px;border-radius:50%;background:var(--crit);margin-top:5px;flex:0 0 auto}
   .hub-hero{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:28px;align-items:end;padding:28px;border:1px solid var(--border);border-radius:12px;background:var(--surface);box-shadow:var(--sh);margin-bottom:18px}
@@ -787,23 +789,23 @@ _DEMO_HTML = """<!doctype html>
     </div>
     <div class="navlbl">全能 AI 助手</div>
     <nav class="nav">
-      <a class="on" data-v="hub" role="button" tabindex="0">AI 运营中枢<span class="nav-badge">CORE</span></a>
+      <button class="on" type="button" data-v="hub">AI 运营中枢</button>
     </nav>
     <div class="navlbl">工作台</div>
     <nav class="nav">
-      <a data-v="overview" role="button" tabindex="0">案件中心<span class="nav-badge">LIVE</span></a>
-      <a data-v="create" role="button" tabindex="0">新建案件</a>
-      <a data-v="prev" role="button" tabindex="0">交易风险</a>
-      <a data-v="rules" role="button" tabindex="0">规则知识<span class="nav-badge">DB</span></a>
+      <button type="button" data-v="overview">案件中心</button>
+      <button type="button" data-v="create">新建案件</button>
+      <button type="button" data-v="prev">交易风险</button>
+      <button type="button" data-v="rules">规则知识</button>
     </nav>
-    <nav class="secondary-nav nav"><a data-v="safe" role="button" tabindex="0">规则与运营</a></nav>
+    <nav class="secondary-nav nav"><button type="button" data-v="safe">规则与运营</button></nav>
   </aside>
 
   <main class="main" id="mainContent" tabindex="-1">
     <div class="top">
       <div class="crumb"><b id="crumbRoot">OceanPilot</b><span class="crumb-sep">/</span><span id="crumbId" class="id">AI 运营中枢</span></div>
       <div class="grow"></div>
-      <div class="global-search"><input id="globalSearch" aria-label="全局搜索" placeholder="搜索案件号、争议原因或规则" autocomplete="off"><span class="shortcut">⌘K</span></div>
+      <div class="global-search"><input id="globalSearch" aria-label="全局搜索" placeholder="搜索案件号或争议原因" autocomplete="off" aria-describedby="globalSearchStatus"><div class="global-search-status" id="globalSearchStatus" role="status" aria-live="polite"></div></div>
       <span class="env-chip">Synthetic Demo</span>
       <label class="language-control"><span>语言</span><select id="languageSelect" aria-label="语言"><option value="zh">中文</option><option value="en">English</option></select></label>
       <div class="merchant-account"><span>商户</span><strong>OceanStore</strong></div>
@@ -971,7 +973,7 @@ _DEMO_HTML = """<!doctype html>
       <div class="form-error" id="evidenceModalError" role="alert"></div>
       <div id="evidenceReceipt" aria-live="polite"></div>
     </div>
-    <div class="modal-ft"><button class="tbtn" onclick="closeEvidenceModal()">取消</button><button class="tbtn primary" id="evidenceSubmitButton" onclick="submitEvidenceModal()">3. 确认提交资料</button></div>
+    <div class="modal-ft"><button class="tbtn" id="evidenceCancelButton" onclick="closeEvidenceModal()">取消</button><button class="tbtn primary" id="evidenceSubmitButton" onclick="submitEvidenceModal()">3. 确认提交资料</button></div>
   </section>
 </div>
 
@@ -990,7 +992,7 @@ _DEMO_HTML = """<!doctype html>
 <script>__CLIENT_I18N__</script>
 <script>
 const BASE="/api/v1/chargeback";
-const S={caseId:null,loc:window.oceanI18n.getLanguage(),packaged:false,appealed:false,caseCreating:false,evidenceSubmitting:false,evidenceSubmittingCases:new Set(),evidenceDraft:null,agentSubmitting:false,pendingAgentTurn:null,agentCase:null,agentMessages:[],pendingReview:null,lastAgentInput:"",last:null,cardNetwork:"",expectedReason:null,
+const S={caseId:null,loc:window.oceanI18n.getLanguage(),currentView:"hub",packaged:false,appealed:false,caseCreating:false,evidenceSubmitting:false,evidenceSubmittingCases:new Set(),evidenceDraft:null,agentSubmitting:false,pendingAgentTurn:null,agentCase:null,agentMessages:[],pendingReview:null,lastAgentInput:"",last:null,cardNetwork:"",expectedReason:null,
   scenarioIndex:0,autoEvidence:["transaction.receipt","fulfillment.tracking"],selectedCase:null,cases:[],
   rules:[],currentRuleId:null,ruleReturnContext:null,rulesRequestId:0,ruleDetailRequestId:0,
   auditByCase:new Map(),withdrawDraft:null,dialogTrigger:null};
@@ -1079,20 +1081,21 @@ $('agentMessage').addEventListener('keydown',event=>{if((event.ctrlKey||event.me
 const STATUS_VIEW={REASON_PROPOSED:['待确认原因','p-warn'],NEED_EVIDENCE:['待补资料','p-acc'],ASSESSED:['评估完成','p-good'],NEEDS_INTAKE:['待识别','p-mut']};
 function showView(v){
   if(v==='transactions')v='overview';
+  S.currentView=v;clearGlobalSearchStatus();
   const navView=(v==='diagnosis'||v==='flow')?'overview':v;
-  document.querySelectorAll('.nav a,.mobile-nav button').forEach(x=>{const active=x.dataset.v===navView;x.classList.toggle('on',active);if(active)x.setAttribute('aria-current','page');else x.removeAttribute('aria-current');});
+  document.querySelectorAll('.nav button,.mobile-nav button').forEach(x=>{const active=x.dataset.v===navView;x.classList.toggle('on',active);if(active)x.setAttribute('aria-current','page');else x.removeAttribute('aria-current');});
   document.querySelectorAll('.view').forEach(x=>x.classList.remove('on'));
   const view=$('v-'+v);if(view)view.classList.add('on');
   if(view){view.setAttribute('tabindex','-1');view.focus({preventScroll:true});}
   const navCrumb={hub:["OceanPilot","AI 运营中枢"],overview:["商户工作台","案件中心"],diagnosis:["案件中心",S.selectedCase?S.selectedCase.case_id.slice(0,18):"案件诊断"],create:["案件中心","新建案件"],flow:["案件中心",S.caseId?S.caseId.slice(0,18):"案件详情"],prev:["交易风险","实时评估"],rules:["规则知识",S.currentRuleId||"规则目录"],safe:["规则与运营","安全边界"]}[v]||["OceanPilot",v];
   $('crumbRoot').textContent=navCrumb[0];$('crumbId').textContent=navCrumb[1];
-  const placeholders={hub:"搜索案件号、争议原因或规则",overview:"搜索案件号或争议原因",rules:"搜索规则原因码、名称或来源"};
-  $('globalSearch').placeholder=placeholders[navView]||"搜索案件号、争议原因或规则";
+  const placeholders={rules:"搜索规则原因码、名称或来源"};
+  $('globalSearch').placeholder=placeholders[navView]||"搜索案件号或争议原因";
   if(v==='overview')loadCases();
   if(v==='rules')loadRules();
 }
 function navigateTo(view){if(view==='create'){openCreate();return;}showView(view);}
-document.querySelectorAll('.nav a,.mobile-nav button').forEach(a=>{a.addEventListener('click',()=>navigateTo(a.dataset.v));a.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();navigateTo(a.dataset.v);}});});
+document.querySelectorAll('.nav button,.mobile-nav button').forEach(button=>button.addEventListener('click',()=>navigateTo(button.dataset.v)));
 async function loadCases(){const result=await api("GET","/cases");
   if(!result.ok||!Array.isArray(result.data)){S.cases=[];$('transactionCount').textContent='读取失败';$('transactionRows').innerHTML='<tr><td colspan="5" class="empty">案件库暂时无法读取，请稍后刷新。</td></tr>';return;}
   S.cases=result.data;renderTransactions();}
@@ -1116,7 +1119,9 @@ function renderStoredDiagnosis(c){const s=STATUS_VIEW[c.phase]||['未知','p-mut
   $('diagImpact').textContent=c.phase==='REASON_PROPOSED'?'待确认原因':(missing.length?`仍缺 ${missing.length} 项`:'无待补项');const network=$('diagnosisNetwork');if(network)network.value=S.cardNetwork;const ruleOut=$('diagnosisRuleReferenceOut');if(ruleOut)ruleOut.innerHTML='';renderDiagnosticMaterials(c);}
 $('tableSearch').addEventListener('input',renderTransactions);$('statusFilter').addEventListener('change',renderTransactions);
 $('ruleSearch').addEventListener('keydown',event=>{if(event.key==='Enter')loadRules();});$('ruleScheme').addEventListener('change',loadRules);
-$('globalSearch').addEventListener('keydown',event=>{if(event.key!=='Enter')return;const raw=event.target.value.trim(),q=raw.toLowerCase();if(!q)return;const hit=S.cases.find(c=>[c.case_id,c.reason_code,REASON_LABEL[c.reason_code],tr(REASON_LABEL[c.reason_code])].join(' ').toLowerCase().includes(q));if(hit){openStoredCase(hit.case_id);return;}$('ruleSearch').value=raw;showView('rules');});
+function clearGlobalSearchStatus(){const status=$('globalSearchStatus');status.textContent='';status.classList.remove('on');}
+function setGlobalSearchStatus(message){const status=$('globalSearchStatus');status.textContent=message;status.classList.add('on');}
+const globalSearch=$('globalSearch');globalSearch.addEventListener('input',clearGlobalSearchStatus);globalSearch.addEventListener('keydown',event=>{if(event.key==='Escape'){event.preventDefault();event.target.value='';clearGlobalSearchStatus();return;}if(event.key!=='Enter')return;const raw=event.target.value.trim();if(!raw)return;if(S.currentView==='rules'){$('ruleSearch').value=raw;clearGlobalSearchStatus();loadRules();return;}const q=raw.toLowerCase();const hit=S.cases.find(c=>[c.case_id,c.reason_code,REASON_LABEL[c.reason_code],tr(REASON_LABEL[c.reason_code])].join(' ').toLowerCase().includes(q));if(hit){clearGlobalSearchStatus();openStoredCase(hit.case_id);return;}setGlobalSearchStatus('未找到匹配案件，请检查案件号或争议原因。');});
 document.addEventListener('keydown',event=>{if((event.metaKey||event.ctrlKey)&&event.key.toLowerCase()==='k'){event.preventDefault();$('globalSearch').focus();}});
 function focusTransactionSearch(){showView('overview');$('tableSearch').focus();}
 function openCreate(){S.scenarioIndex=0;S.cardNetwork=SCENARIOS[0].network;S.expectedReason=SCENARIOS[0].reason;S.autoEvidence=SCENARIOS[0].available.slice();renderCreateForm();showView('create');}
@@ -1128,7 +1133,7 @@ function renderDiagnosticMaterials(c){const codes=c.missing||[],labels=c.missing
   else if(missing.length){$('diagnosisAlert').className='material-notice';$('diagnosisAlert').innerHTML=`<strong>需要商户补充 ${missing.length} 项信息</strong><p>清单来自案件后端；提交后会立即重新校验。</p>`;}
   else{$('diagnosisAlert').className='material-notice complete';$('diagnosisAlert').innerHTML='<strong>本案件暂无待补资料</strong><p>当前状态以后端返回结果为准。</p>';}
   const latest=latestActiveEvidence(c.case_id,c.collected);const withdraw=latest?`<div class="material-row done"><span class="material-state">✓</span><div><strong>最近已补交：${esc(EVIDENCE_LABEL[latest]||latest)}</strong><span>可撤回这一项；操作会留痕并重新计算案件状态</span></div><button class="tbtn withdraw-action" onclick="openWithdrawModal('diagnosis')">撤回最近资料</button></div>`:'';
-  $('diagMaterialRows').innerHTML=(c.phase==='REASON_PROPOSED'?'<div class="material-row"><span class="material-state">!</span><div><strong>确认或更正争议原因</strong><span>模板案件会预选对应原因，确认后再继续补交材料</span><select id="diagReasonFix" aria-label="确认或更正争议原因" style="margin-top:7px"></select></div><button class="tbtn primary" onclick="confirmDiagnosisReason()">确认原因</button></div>':(missing.length?missing.map((label,i)=>`<div class="material-row"><span class="material-state">${i+1}</span><div><strong>${esc(label)}</strong><span>进入独立提交界面核对并明确提交</span></div><button class="tbtn primary" onclick="openEvidenceModal('${esc(codes[i])}','${esc(label)}')">补交资料</button></div>`).join(''):'<div class="empty">没有待补资料。</div>'))+withdraw;
+  $('diagMaterialRows').innerHTML=(c.phase==='REASON_PROPOSED'?'<div class="material-row"><span class="material-state">!</span><div><strong>确认或更正争议原因</strong><span>模板案件会预选对应原因，确认后再继续补交材料</span><select id="diagReasonFix" aria-label="确认或更正争议原因" style="margin-top:7px"></select></div><button class="tbtn primary" onclick="confirmDiagnosisReason()">确认原因</button></div>':(missing.length?missing.map((label,i)=>`<div class="material-row"><span class="material-state">${i+1}</span><div><strong>${esc(label)}</strong><span>进入独立提交界面核对并明确提交</span></div><button class="tbtn primary" onclick="openEvidenceModal('${esc(codes[i])}','${esc(label)}')">补交：${esc(label)}</button></div>`).join(''):'<div class="empty">没有待补资料。</div>'))+withdraw;
   if(c.phase==='REASON_PROPOSED')populateDiagnosisReasons(c.reason_code);
   $('diagMaterialState').innerHTML=awaitingReason?'<span class="pill p-warn">确认原因后生成材料清单</span>':(missing.length?`<span class="pill p-warn">待补交 ${missing.length} 项</span>`:'<span class="pill p-good">资料已齐全</span>');
 }
@@ -1136,12 +1141,12 @@ async function populateDiagnosisReasons(currentReason){const result=await api("G
 function resetEvidenceProgress(){document.querySelectorAll('#evidenceSubmitProgress .progress-step').forEach(step=>step.className='progress-step');}
 function setEvidenceProgress(name,state){const step=document.querySelector(`#evidenceSubmitProgress [data-step="${name}"]`);if(step)step.className=`progress-step ${state}`;}
 function openEvidenceModal(code,label){const caseId=S.selectedCase&&S.selectedCase.case_id;if(caseId)openEvidenceModalForCase(caseId,code,label);}
-function openEvidenceModalForCase(caseId,code,label){if(!caseId||!code)return;S.dialogTrigger=document.activeElement;S.evidenceDraft={caseId,code,label:label||EVIDENCE_LABEL[code]||code,fileName:"",synthetic:false};$('evidenceModalCase').textContent=caseId;$('evidenceModalLabel').textContent=S.evidenceDraft.label;$('evidenceFile').value='';$('selectedEvidenceFile').textContent='尚未选择文件';$('evidenceModalError').textContent='';$('evidenceReceipt').innerHTML='';resetEvidenceProgress();const button=$('evidenceSubmitButton');button.disabled=true;button.textContent='3. 确认提交资料';const modal=$('evidenceModal');modal.classList.add('on');modal.setAttribute('aria-hidden','false');$('evidenceFile').focus();}
+function openEvidenceModalForCase(caseId,code,label){if(!caseId||!code)return;S.dialogTrigger=document.activeElement;S.evidenceDraft={caseId,code,label:label||EVIDENCE_LABEL[code]||code,fileName:"",synthetic:false};$('evidenceModalCase').textContent=caseId;$('evidenceModalLabel').textContent=S.evidenceDraft.label;$('evidenceFile').value='';$('selectedEvidenceFile').textContent='尚未选择文件';$('evidenceModalError').textContent='';$('evidenceReceipt').innerHTML='';resetEvidenceProgress();const cancel=$('evidenceCancelButton');cancel.textContent='取消';cancel.className='tbtn';const button=$('evidenceSubmitButton');button.className='tbtn primary';button.disabled=true;button.textContent='3. 确认提交资料';const modal=$('evidenceModal');modal.classList.add('on');modal.setAttribute('aria-hidden','false');$('evidenceFile').focus();}
 function selectEvidenceFile(input){const file=input.files&&input.files[0];if(!S.evidenceDraft)return;S.evidenceDraft.fileName=file?file.name:"";S.evidenceDraft.synthetic=false;$('selectedEvidenceFile').innerHTML=file?`已选择：<strong>${esc(file.name)}</strong> · 仅使用文件名模拟提交，不读取内容`:'尚未选择文件';$('evidenceSubmitButton').disabled=!file;$('evidenceModalError').textContent='';}
 function useSyntheticEvidenceFile(){if(!S.evidenceDraft)return;S.evidenceDraft.fileName=`synthetic-${S.evidenceDraft.code.replace(/[^a-z0-9]+/gi,'-')}.pdf`;S.evidenceDraft.synthetic=true;$('evidenceFile').value='';$('selectedEvidenceFile').innerHTML=`已选择：<strong>${esc(S.evidenceDraft.fileName)}</strong> · Synthetic 演示占位`;$('evidenceSubmitButton').disabled=false;$('evidenceModalError').textContent='';}
 function closeEvidenceModal(){if(S.evidenceDraft&&S.evidenceSubmittingCases.has(S.evidenceDraft.caseId))return;const modal=$('evidenceModal');modal.classList.remove('on');modal.setAttribute('aria-hidden','true');S.evidenceDraft=null;const target=S.dialogTrigger;S.dialogTrigger=null;if(target&&target.isConnected)target.focus();}
-async function submitEvidenceModal(){const draft=S.evidenceDraft;if(!draft||S.evidenceSubmittingCases.has(draft.caseId))return;if(!draft.fileName){$('evidenceModalError').textContent='请先选择文件，或使用 Synthetic 演示文件。';$('evidenceFile').focus();return;}S.evidenceSubmitting=true;S.evidenceSubmittingCases.add(draft.caseId);const button=$('evidenceSubmitButton');button.disabled=true;button.textContent='正在提交…';$('evidenceModalError').textContent='';setEvidenceProgress('validate','active');await new Promise(resolve=>setTimeout(resolve,180));setEvidenceProgress('validate','done');setEvidenceProgress('persist','active');let shouldAnalyze=false;
-  try{const result=await api('POST',`/cases/${draft.caseId}/evidence`,{evidence_code:draft.code});if(!result.ok){setEvidenceProgress('persist','');$('evidenceModalError').textContent='后端未接受该资料；案件状态没有被前端改写，请重试。';button.disabled=false;button.textContent='3. 确认提交资料';return;}invalidateDerivedViews();await loadCaseAudit(draft.caseId);setEvidenceProgress('persist','done');setEvidenceProgress('recheck','done');const remaining=(result.data.missing_labels||[]).length;$('evidenceReceipt').innerHTML=`<div class="submit-receipt"><strong>资料提交成功</strong><p>案件 ${esc(draft.caseId)} 已记录「${esc(draft.label)}」。重新校验后仍缺 ${remaining} 项资料，当前阶段为 ${esc((STATUS_VIEW[result.data.phase]||[result.data.phase])[0])}。</p></div>`;button.textContent='已提交';if(S.selectedCase&&S.selectedCase.case_id===draft.caseId){S.selectedCase=result.data;S.last=result.data;renderStoredDiagnosis(result.data);}shouldAnalyze=Boolean(S.agentCase&&S.agentCase.case_id===draft.caseId);}
+async function submitEvidenceModal(){const draft=S.evidenceDraft;if(!draft||S.evidenceSubmittingCases.has(draft.caseId))return;if(!draft.fileName){$('evidenceModalError').textContent='请先选择文件，或使用 Synthetic 演示文件。';$('evidenceFile').focus();return;}S.evidenceSubmitting=true;S.evidenceSubmittingCases.add(draft.caseId);const cancel=$('evidenceCancelButton');cancel.disabled=true;const button=$('evidenceSubmitButton');button.disabled=true;button.textContent='正在提交…';$('evidenceModalError').textContent='';setEvidenceProgress('validate','active');await new Promise(resolve=>setTimeout(resolve,180));setEvidenceProgress('validate','done');setEvidenceProgress('persist','active');let shouldAnalyze=false;
+  try{const result=await api('POST',`/cases/${draft.caseId}/evidence`,{evidence_code:draft.code});if(!result.ok){setEvidenceProgress('persist','');$('evidenceModalError').textContent='后端未接受该资料；案件状态没有被前端改写，请重试。';cancel.disabled=false;button.disabled=false;button.textContent='3. 确认提交资料';return;}invalidateDerivedViews();await loadCaseAudit(draft.caseId);setEvidenceProgress('persist','done');setEvidenceProgress('recheck','done');const remaining=(result.data.missing_labels||[]).length;$('evidenceReceipt').innerHTML=`<div class="submit-receipt"><strong>资料提交成功</strong><p>案件 ${esc(draft.caseId)} 已记录「${esc(draft.label)}」。重新校验后仍缺 ${remaining} 项资料，当前阶段为 ${esc((STATUS_VIEW[result.data.phase]||[result.data.phase])[0])}。</p></div>`;button.textContent='提交成功';button.className='tbtn';cancel.disabled=false;cancel.textContent='完成并返回案件';cancel.className='tbtn primary';cancel.focus();if(S.selectedCase&&S.selectedCase.case_id===draft.caseId){S.selectedCase=result.data;S.last=result.data;renderStoredDiagnosis(result.data);}shouldAnalyze=Boolean(S.agentCase&&S.agentCase.case_id===draft.caseId);}
   finally{S.evidenceSubmittingCases.delete(draft.caseId);S.evidenceSubmitting=S.evidenceSubmittingCases.size>0;}
   if(shouldAnalyze){await bindAgentCase(draft.caseId,false);await analyzeCurrentCase('EVIDENCE_SUBMITTED');}await loadCases();}
 $('evidenceModal').addEventListener('click',event=>{if(event.target===$('evidenceModal'))closeEvidenceModal();});document.addEventListener('keydown',event=>{if(event.key==='Escape'&&$('evidenceModal').classList.contains('on'))closeEvidenceModal();});
