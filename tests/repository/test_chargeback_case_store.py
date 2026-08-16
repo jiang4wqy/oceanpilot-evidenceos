@@ -1,8 +1,10 @@
+import sqlite3
 from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
 
+from oceanpilot.adapters.persistence.chargeback_schema import CHARGEBACK_SCHEMA_SQL
 from oceanpilot.adapters.persistence.chargeback_sqlite import (
     ChargebackAuditEventType,
     SqliteChargebackCaseStore,
@@ -12,9 +14,10 @@ from oceanpilot.application.chargeback_supervisor import ChargebackCaseState
 from oceanpilot.application.errors import (
     CaseNotFound,
     ConcurrentCaseWrite,
+    NoEvidenceToWithdraw,
     PersistenceInvariantViolation,
 )
-from oceanpilot.domain.chargeback import ChargebackEvidenceCode, DisputeReasonCode
+from oceanpilot.domain.chargeback import CardNetwork, ChargebackEvidenceCode, DisputeReasonCode
 
 REASON = DisputeReasonCode.PRODUCT_NOT_RECEIVED
 CODE_A = ChargebackEvidenceCode.TRANSACTION_RECEIPT
@@ -112,6 +115,25 @@ def test_state_survives_a_fresh_store_instance(cb_path: Path) -> None:
     assert reloaded is not None
     assert reloaded.reason_code is REASON
     assert reloaded.collected == {CODE_A, CODE_B}
+
+
+def test_card_network_selection_is_atomic_idempotent_and_durable(cb_path: Path) -> None:
+    writer = SqliteChargebackCaseStore(cb_path, clock=lambda: FIXED_MOMENT)
+    case_id = writer.create()
+    revision = writer.current_revision(case_id)
+
+    selected = writer.set_card_network(case_id, CardNetwork.VISA, revision)
+    replayed = writer.set_card_network(case_id, CardNetwork.VISA, revision)
+
+    assert selected.card_network is CardNetwork.VISA
+    assert replayed.revision == selected.revision
+    with pytest.raises(ConcurrentCaseWrite):
+        writer.set_card_network(case_id, CardNetwork.MASTERCARD, revision)
+    reopened = SqliteChargebackCaseStore(cb_path, clock=lambda: FIXED_MOMENT).load(case_id)
+    assert reopened is not None
+    assert reopened.card_network is CardNetwork.VISA
+    events = writer.audit_trail(case_id)
+    assert [event.event_type for event in events].count("CARD_NETWORK_SELECTED") == 1
 
 
 def test_replay_of_unchanged_state_is_a_noop(store: SqliteChargebackCaseStore) -> None:
@@ -322,3 +344,138 @@ def test_created_at_is_loaded_for_deadline_tracking(store: SqliteChargebackCaseS
     state = store.load(case_id)
     assert state is not None
     assert state.created_at == FIXED_MOMENT
+
+
+def test_withdraw_latest_evidence_is_atomic_and_audited(
+    store: SqliteChargebackCaseStore,
+) -> None:
+    case_id = store.create()
+    state = _reason_state(store, case_id)
+    state.collected.add(CODE_A)
+    store.save(case_id, state)
+    state = store.load(case_id)
+    assert state is not None
+    state.collected.add(CODE_B)
+    state.collection_finalized = True
+    store.save(case_id, state)
+    revision_before = store.current_revision(case_id)
+
+    withdrawn = store.withdraw_latest_evidence(case_id, CODE_B)
+
+    assert withdrawn.collected == {CODE_A}
+    assert withdrawn.collection_finalized is False
+    assert store.current_revision(case_id) == revision_before + 1
+    event = store.audit_trail(case_id)[-1]
+    assert event.event_type == ChargebackAuditEventType.EVIDENCE_WITHDRAWN
+    assert event.detail == CODE_B.value
+    assert event.case_revision == revision_before + 1
+
+
+def test_withdrawal_survives_reopen(cb_path: Path) -> None:
+    writer = SqliteChargebackCaseStore(cb_path, clock=lambda: FIXED_MOMENT)
+    case_id = writer.create()
+    state = _reason_state(writer, case_id)
+    state.collected.update({CODE_A, CODE_B})
+    writer.save(case_id, state)
+    # New evidence rows in one save are inserted in sorted code order; CODE_A is
+    # the deterministic latest item for these two enum values.
+    latest = ChargebackEvidenceCode(writer.audit_trail(case_id)[-1].detail or "")
+    writer.withdraw_latest_evidence(case_id, latest)
+
+    reader = SqliteChargebackCaseStore(cb_path, clock=lambda: FIXED_MOMENT)
+    reopened = reader.load(case_id)
+    assert reopened is not None
+    assert latest not in reopened.collected
+    assert reader.audit_trail(case_id)[-1].event_type == "EVIDENCE_WITHDRAWN"
+
+
+def test_duplicate_withdrawal_cannot_remove_the_next_item(
+    store: SqliteChargebackCaseStore,
+) -> None:
+    case_id = store.create()
+    state = _reason_state(store, case_id)
+    state.collected.add(CODE_A)
+    store.save(case_id, state)
+    state = store.load(case_id)
+    assert state is not None
+    state.collected.add(CODE_B)
+    store.save(case_id, state)
+
+    store.withdraw_latest_evidence(case_id, CODE_B)
+    with pytest.raises(ConcurrentCaseWrite):
+        store.withdraw_latest_evidence(case_id, CODE_B)
+
+    reloaded = store.load(case_id)
+    assert reloaded is not None
+    assert reloaded.collected == {CODE_A}
+
+
+def test_withdraw_without_evidence_is_a_conflict(store: SqliteChargebackCaseStore) -> None:
+    case_id = store.create()
+    with pytest.raises(NoEvidenceToWithdraw):
+        store.withdraw_latest_evidence(case_id, CODE_A)
+
+
+def test_failed_withdrawal_rolls_back_delete_revision_and_audit(cb_path: Path) -> None:
+    clock = ScriptedClock(FIXED_MOMENT)
+    store = SqliteChargebackCaseStore(cb_path, clock=clock)
+    case_id = store.create()
+    state = _reason_state(store, case_id)
+    state.collected.add(CODE_A)
+    store.save(case_id, state)
+    revision_before = store.current_revision(case_id)
+    audit_before = store.audit_trail(case_id)
+    clock.raise_at = clock.calls + 2
+
+    with pytest.raises(RuntimeError, match="clock failure"):
+        store.withdraw_latest_evidence(case_id, CODE_A)
+
+    reloaded = store.load(case_id)
+    assert reloaded is not None
+    assert reloaded.collected == {CODE_A}
+    assert store.current_revision(case_id) == revision_before
+    assert store.audit_trail(case_id) == audit_before
+
+
+def test_initialize_migrates_legacy_audit_constraint_without_data_loss(tmp_path: Path) -> None:
+    path = tmp_path / "legacy-chargeback.db"
+    legacy_sql = (
+        CHARGEBACK_SCHEMA_SQL.replace(
+            "    card_network TEXT CHECK (card_network IN ('VISA', 'MASTERCARD', 'AMEX')),\n",
+            "",
+        )
+        .replace(
+            "'CASE_OPENED','REASON_CLASSIFIED','REASON_CONFIRMED','CARD_NETWORK_SELECTED',",
+            "'CASE_OPENED','REASON_CLASSIFIED','REASON_CONFIRMED',",
+        )
+        .replace(
+            "'EVIDENCE_ADDED','EVIDENCE_WITHDRAWN','COLLECTION_FINALIZED'",
+            "'EVIDENCE_ADDED','COLLECTION_FINALIZED'",
+        )
+    )
+    connection = sqlite3.connect(path)
+    connection.executescript(legacy_sql)
+    connection.close()
+    legacy = SqliteChargebackCaseStore(path, clock=lambda: FIXED_MOMENT)
+    case_id = legacy.create()
+    audit_before = legacy.audit_trail(case_id)
+
+    initialize_chargeback_schema(path)
+
+    migrated = SqliteChargebackCaseStore(path, clock=lambda: FIXED_MOMENT)
+    assert migrated.audit_trail(case_id) == audit_before
+    state = _reason_state(migrated, case_id)
+    state.collected.add(CODE_A)
+    migrated.save(case_id, state)
+    migrated.withdraw_latest_evidence(case_id, CODE_A)
+    connection = sqlite3.connect(path)
+    schema_sql = connection.execute(
+        "SELECT sql FROM sqlite_schema WHERE name = 'chargeback_audit'"
+    ).fetchone()[0]
+    connection.close()
+    assert "EVIDENCE_WITHDRAWN" in schema_sql
+    assert "CARD_NETWORK_SELECTED" in schema_sql
+    columns = {
+        row[1] for row in sqlite3.connect(path).execute("PRAGMA table_info(chargeback_cases)")
+    }
+    assert "card_network" in columns

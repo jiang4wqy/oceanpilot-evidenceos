@@ -28,6 +28,24 @@ def test_full_default_evidence_is_ready_and_ordered():
     assert pkg.cover_note_source is ExplanationSource.MODEL
 
 
+def test_packager_parses_the_json_cover_note_contract():
+    model = ScriptedModelProvider(
+        [
+            '{"cover_note":"随附退款凭证等证据。","included_evidence":["退款凭证"],'
+            '"missing_evidence":[],"submission_boundary":"需人工确认"}'
+        ]
+    )
+
+    pkg = _agent(model).build(
+        DisputeReasonCode.CREDIT_NOT_PROCESSED,
+        required_evidence_for(DisputeReasonCode.CREDIT_NOT_PROCESSED),
+    )
+
+    assert pkg.cover_note == "随附退款凭证等证据。"
+    assert "submission_boundary" in (model.requests[0].system or "")
+    assert "ONLY valid JSON" in (model.requests[0].system or "")
+
+
 def test_bank_template_drives_order_and_window():
     agent = _agent(ScriptedModelProvider(default_text="note"))
     reason = DisputeReasonCode.PRODUCT_NOT_RECEIVED

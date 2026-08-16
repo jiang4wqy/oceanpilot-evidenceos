@@ -7,7 +7,8 @@
 |---|---|
 | `claude.py` | `ClaudeProvider`,Anthropic SDK,默认 `claude-opus-4-8`;不发 temperature/budget_tokens。 |
 | `local.py` | `LocalModelProvider`,OpenAI 兼容 `/v1/chat/completions`,HIGH 档隔离模型;失败统一包成 `ModelProviderError`(不泄露)。 |
-| `composition.py` | `build_chargeback_model_provider`:按安全档位组装 `RoutingModelProvider`(LOW=Claude,MEDIUM=脱敏后 Claude,HIGH=本地)。 |
+| `deepseek.py` | DeepSeek OpenAI-compatible Provider 构造器；仅从环境变量读取凭据，复用分级路由与脱敏。 |
+| `composition.py` | `build_chargeback_model_provider`:按安全档位组装 `RoutingModelProvider`（LOW=所选外部模型，MEDIUM=脱敏后外部模型，HIGH=本地隔离模型或脱敏外部模型）。 |
 | `fake.py` | `ScriptedModelProvider`,离线确定性,供演示/测试。 |
 
 ## 持久化 `persistence/`

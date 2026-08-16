@@ -57,7 +57,7 @@ domain  ←  application  ←  adapters / api
 | 渠道无关核心(Inbound→Delivery) | `application/channels.py`,`application/chargeback_channel_service.py` |
 | 打包 / 申诉 | `application/chargeback_packager.py`,`application/chargeback_appeal.py` |
 | SLA / 时限 | `application/chargeback_deadline.py`,`application/scheduling.py` |
-| 模型 provider(Claude/本地/脚本/路由/脱敏) | `adapters/model/*.py` |
+| 模型 provider(DeepSeek/Claude/本地/脚本/路由/脱敏) | `adapters/model/*.py` |
 | 持久化(拒付) | `adapters/persistence/chargeback_sqlite.py` |
 | 渠道适配器(HTTP/飞书) | `adapters/channels/**` |
 | HTTP 路由 | `api/chargeback.py`,`api/chargeback_schemas.py` |

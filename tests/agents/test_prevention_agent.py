@@ -27,6 +27,21 @@ def test_kernel_decides_and_model_only_phrases_the_tip():
     assert outcome.advice_source is ExplanationSource.MODEL
 
 
+def test_prevention_parses_the_json_advice_contract():
+    model = ScriptedModelProvider(
+        [
+            '{"advice":"请保存 3DS 验证记录。","risk_factors":["3DS 未认证"],'
+            '"evidence_to_retain":["3DS 记录"],"manual_review_note":"建议人工复核"}'
+        ]
+    )
+
+    outcome = PreventionAgent(model).assess(_HIGH_RISK)
+
+    assert outcome.advice == "请保存 3DS 验证记录。"
+    assert "evidence_to_retain" in (model.requests[0].system or "")
+    assert "ONLY valid JSON" in (model.requests[0].system or "")
+
+
 def test_falls_back_to_deterministic_advice_when_model_unavailable():
     model = ScriptedModelProvider(error=ModelProviderError())
     outcome = PreventionAgent(model).assess(_HIGH_RISK)

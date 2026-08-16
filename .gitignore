@@ -17,3 +17,4 @@ work/
 dist/
 build/
 *.egg-info/
+.superpowers/

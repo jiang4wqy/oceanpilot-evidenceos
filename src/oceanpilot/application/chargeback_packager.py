@@ -13,6 +13,7 @@ from decimal import ROUND_HALF_UP, Decimal
 
 from oceanpilot.application.chargeback_agents import ExplanationSource
 from oceanpilot.application.knowledge_base import BankRuleEntry, KnowledgeBase
+from oceanpilot.application.model_output import json_text
 from oceanpilot.application.model_provider import (
     Effort,
     ModelMessage,
@@ -28,11 +29,14 @@ from oceanpilot.domain.reason_catalog import reason_label
 
 _QUANT = Decimal("0.0001")
 _PACKAGER_SYSTEM = (
-    "You write a one-paragraph cover note for a chargeback representment "
-    "package. Do NOT change which evidence is included or its order; only "
-    "summarize what is enclosed and what is missing, using the human labels "
-    "provided (never a raw code token). Be concise. Synthetic data; never claim "
-    "any business action was taken."
+    "Write a concise cover note for a chargeback representment package. Do NOT "
+    "change evidence inclusion or order and never expose raw code tokens. Return "
+    "ONLY valid JSON with exactly these fields: "
+    '{"cover_note":"one Chinese paragraph",'
+    '"included_evidence":["human-readable label"],'
+    '"missing_evidence":["human-readable label"],'
+    '"submission_boundary":"Chinese human-approval boundary"}. '
+    "Synthetic data; never claim any business action was taken."
 )
 
 
@@ -59,6 +63,9 @@ class RepresentmentPackage:
     source_section: str | None = None
     required_assertions: tuple[str, ...] = ()
     rule_limitation: str | None = None
+    rule_version_id: str | None = None
+    verification_status: str | None = None
+    submission_window_basis: str | None = None
 
 
 class PackagerAgent:
@@ -113,6 +120,9 @@ class PackagerAgent:
             source_section=entry.source_section,
             required_assertions=entry.required_assertions,
             rule_limitation=entry.limitation,
+            rule_version_id=entry.rule_version_id,
+            verification_status=entry.verification_status,
+            submission_window_basis=entry.submission_window_basis,
             cover_note=note,
             cover_note_source=source,
         )
@@ -144,6 +154,11 @@ class PackagerAgent:
             return _fallback_note(entry, ordered, missing), ExplanationSource.FALLBACK
         text = result.text.strip()
         if not text:
+            return _fallback_note(entry, ordered, missing), ExplanationSource.FALLBACK
+        structured = json_text(text, "cover_note")
+        if structured is not None:
+            return structured, ExplanationSource.MODEL
+        if text.startswith("{"):
             return _fallback_note(entry, ordered, missing), ExplanationSource.FALLBACK
         return text, ExplanationSource.MODEL
 

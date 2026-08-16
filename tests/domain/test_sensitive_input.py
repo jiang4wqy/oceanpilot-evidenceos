@@ -18,6 +18,10 @@ TRUSTED_UUID_IDENTIFIER_FIELDS = (
     "request_id",
     "trace_id",
     "correlation_id",
+    "turn_id",
+    "source_turn_id",
+    "decision_id",
+    "audit_event_id",
 )
 
 

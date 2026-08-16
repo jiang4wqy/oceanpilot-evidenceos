@@ -7,12 +7,31 @@ appeal only reaches the in-process mock connector.
 
 ## Recommended judge path: Web console
 
-The shortest complete walkthrough uses two local consoles: the merchant-facing
-transaction diagnostic workspace at `http://127.0.0.1:8002/demo`, and the
-read-only operations console at `http://127.0.0.1:8003/admin`.
-It covers prevention → intake → evidence collection with SLA → deterministic
-assessment and provenance → bank-rule package → blocked/approved mock appeal →
-audit and agent trace, plus the PII/card-number safety guard.
+The 3–5 minute main walkthrough stays in the merchant-facing AI operations
+workspace at `http://127.0.0.1:8002/demo`.
+
+The main path is deliberately one synthetic case:
+
+```text
+AI operations hub
+  → payment exception
+  → original persisted case workspace
+  → explicitly choose the Visa 10.4 synthetic template
+  → Visa 10.4 synthetic case
+  → internal evidence checklist
+  → deterministic evidence readiness
+  → card-scheme rule validation and package
+  → human gate
+  → in-process mock connector
+  → case-handling audit + this-session mock receipt
+```
+
+The payment-exception card only navigates to the existing persisted case
+workspace; it does not create a case or claim that transaction settlement and
+issuer-notice provenance were validated. A failed 3DS challenge remains a
+Foundation `PAYMENT_INCIDENT` support scenario outside this Web mainline. The
+Web flow, direct create-case API and Chargeback Feishu seam are synthetic
+collaboration interfaces rather than production intake gates.
 
 Start with Docker:
 
@@ -21,12 +40,43 @@ docker build -t oceanpilot-evidenceos .
 docker run --rm -p 127.0.0.1:8000:8000 oceanpilot-evidenceos
 ```
 
-Open the client, search `OP-20260814-8421`, and inspect the structured root
-cause, processing path, observed evidence and recommended action. Then open
-“异常与争议” and choose a synthetic partial-evidence scenario. Load its existing materials first: the console stops
-in evidence collection and prominently lists every missing item, with the next
-requested item highlighted. Submit items one by one, use “补齐全部（演示）” to
-continue quickly, or finalize the incomplete case to demonstrate human review.
+Open the client and follow this script:
+
+1. On **AI 运营中枢**, identify the product capability map and click the only
+   `LIVE DEMO · synthetic` payment-exception node. The other capability cards
+   show their real implementation status and do not pretend to contain live
+   product data.
+2. The payment-exception node opens the original **案件中心** directly; it does
+   not create or preselect a case. Open **新建案件**, choose the Visa 10.4
+   synthetic template and explicitly click “确认创建案件”.
+3. The clear “非本人交易” description enters the persisted Visa 10.4 synthetic
+   case at `NEED_EVIDENCE`. The internal checklist starts with the transaction
+   receipt and five missing items. Submit one item manually, then use the demo
+   shortcut if needed; the shortcut still calls the existing `/evidence` API for
+   every remaining item and uses each backend response rather than changing
+   readiness in the browser.
+4. At 100% evidence readiness, note that Fraud remains routed to human review.
+   This score is checklist readiness, never a predicted win probability.
+5. Explicitly choose the card network. The diagnosis or assessment reference
+   uses the read-only `rule-reference` endpoint to resolve a concrete version;
+   if no exact mapping exists, the UI shows no link. Open the matched rule detail and distinguish
+   the two visible scopes: the
+   six-item **internal case-preparation checklist** drives collection and
+   readiness, while the four-item **card-scheme package summary** validates and
+   orders the package. AVS/CVV are internal preparation items, not claimed as
+   official Visa-mandated evidence.
+6. Return to the same case, generate the package and use its rule citation to
+   reopen the same `rule_version_id`. First preview the appeal without approval to show
+   the deterministic block. Then enter the reviewer actor ID, approve, and send
+   only to the in-process mock connector.
+7. Finish on **案件处理审计 + 本次 mock 回执**. Package generation, approval and
+   the mock receipt are not represented as Chargeback SQLite audit events.
+
+The rule catalog contains nine `UNVERIFIED_SUMMARY` records. Diagnosis and
+assessment can resolve an exact version for a read-only citation; only three
+`DEMO_MAPPED` records can participate in package matching after generic
+evidence collection. They are demo summaries that require production
+verification by scheme, region, version and effective date.
 `/docs` exposes the strict API contract and `/health` checks the local stores.
 
 Docker is optional. To run from a Python 3.12 virtual environment instead:
@@ -36,13 +86,6 @@ python3.12 -m venv .venv
 .venv/bin/python -m pip install -e ".[dev]"
 export OCEANPILOT_DB_PATH=work/oceanpilot.db
 .venv/bin/python -m uvicorn oceanpilot.main:create_app --factory --host 127.0.0.1 --port 8002
-```
-
-In a second terminal, start the maintenance console:
-
-```bash
-OCEANPILOT_CLIENT_BASE_URL=http://127.0.0.1:8002 \
-  .venv/bin/python -m uvicorn oceanpilot.admin:create_admin_app --factory --host 127.0.0.1 --port 8003
 ```
 
 On Windows, use `.\.venv\Scripts\python.exe` and set `OCEANPILOT_DB_PATH` in
@@ -72,14 +115,18 @@ engineering evidence, not a real-world accuracy or win-rate claim:
 .venv/bin/python scripts/eval_chargeback.py
 ```
 
-## Foundation HTTP case → evidence → diagnosis
+## Foundation support branch: 3DS/callback incident → diagnosis
 
-`examples/demo.ps1` verifies the older Foundation `PAYMENT_INCIDENT` chain
-against a running service. It is retained for engineering regression and is not
-the main chargeback competition walkthrough:
+`examples/demo.ps1` verifies the Foundation `PAYMENT_INCIDENT` chain against a
+running service. In the product story this is the correct destination for a
+3DS challenge failure or callback anomaly: diagnose the technical incident and
+route support/human review, but do not create a chargeback case. It remains an
+engineering regression path and is not the main Visa 10.4 walkthrough:
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\examples\demo.ps1
+# Local venv service on 8002:
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\examples\demo.ps1 -BaseUrl http://127.0.0.1:8002
+# Docker's default 8000 mapping may omit -BaseUrl.
 ```
 
 The script checks `GET /health`; creates a synthetic Foundation case; appends

@@ -1,10 +1,10 @@
-# OceanPilot — 跨境拒付申诉协作 Agent
+# OceanPilot — 跨境商户成功 AI 运营中枢
 
 ![OceanPilot：证据驱动的跨境拒付申诉协作 Agent；缺证先补问、过门再评估、高风险步骤由人工确认](docs/assets/submission/oceanpilot-hero.png)
 
-**帮助跨境 PSP 在举证窗口内收齐有效证据、判断是否值得申诉，并生成可审核的拒付申诉材料。** OceanPilot 用一个版本化案件串联拒付理由、证据缺口、证据就绪评估、材料打包、人工审批与审计；AI 负责理解、补问和起草，确定性规则与人工负责裁定。
+**面向跨境商户成功与支付运营建立统一 AI 工作入口，并用“支付异常 → 争议协作”证明一条可运行的深度主线。** OceanPilot 用一个版本化案件串联拒付理由、证据缺口、证据就绪评估、规则校验与打包、人工审批和案件处理审计；AI 负责理解、补问和起草，确定性规则与人工负责裁定。
 
-> **当前边界：** 产品主线是 synthetic 拒付申诉：HTTP/Web 已跑通“受理 → 补证 → 评估 → 打包 → 人审 → mock 申诉”，签名飞书回调已用显式 `/chargeback` 指令和 namespaced 卡片动作跑通受理与补证。EvidenceOS Foundation 以 `PAYMENT_INCIDENT` 切片验证完整证据、确定性诊断和人工确认，是底层能力证明，不是第二个并列产品。真实飞书 tenant、Oceanpayment 数据、银行规则和上游申诉均未接入，系统不执行任何真实资金或业务动作。
+> **当前边界：** 全部业务数据和动作均为 Synthetic Demo。Web 主演示从 AI 总窗口进入原版案件中心，由演示者选择 Visa 10.4 合成模板，完成“受理 → 通用补证 → 评估 → 条款引用与打包 → 人审 → mock 申诉”。3DS 失败或回调异常仍只属于 Foundation `PAYMENT_INCIDENT` 支持分支；Web 入口和直连建案 API 尚未接入真实交易状态或 Issuer 通知来源校验。真实飞书 tenant、Oceanpayment 数据、经生产核验的卡组织规则和上游申诉均未接入，系统不执行任何真实资金或业务动作。
 
 ### 三个核心设计
 
@@ -14,7 +14,7 @@
 
 ## What OceanPilot Is
 
-OceanPilot 是一个面向跨境 PSP 拒付运营的独立参赛原型。它把一次拒付处理固定为一条可检查的业务链：识别理由、补齐证据、评估申诉价值、按银行规则打包、人工批准并记录审计。EvidenceOS Foundation 提供证据先行、确定性决策、人工闸门和可追溯审计等底层原则；仓库中的支付异常切片用于验证这些原则可以扩展到其它跨境支付协作场景。
+OceanPilot 是一个面向跨境 PSP 与商户运营的独立参赛原型。AI 运营中枢展示商户成功、支付运营、风险合规、争议协作、规则知识和审计运维等能力域，但只把“支付异常”标记为本次可完整演示的 Live Demo。它把正式拒付处理固定为一条可检查的业务链：识别理由、补齐证据、计算证据就绪度、按卡组织演示规则校验和打包、人工批准，并分别展示案件处理审计与本次 mock 回执。
 
 这个版本适合用于代码审查、架构讨论和比赛演示。所有商户、交易、银行规则和证据内容均为合成示例；仓库不包含真实商户数据或外部系统凭据，离线评测结果也只说明 synthetic fixture 上的可重复行为。
 
@@ -22,28 +22,31 @@ OceanPilot 是一个面向跨境 PSP 拒付运营的独立参赛原型。它把�
 
 | Capability | Status | Current behavior |
 |---|---|---|
-| Chargeback mainline | Available (synthetic) | 受理、reason 确认、逐项补证、确定性评估、银行规则打包、人工闸门后的 mock 申诉与审计 |
-| Web console and demos | Available (synthetic) | `/demo`、跨平台 Python transcript、Docker 一键启动与 synthetic 离线评测 |
+| Chargeback mainline | Available (synthetic) | 正式争议受理、reason 确认、逐项补证、确定性评估、规则校验与打包、人工闸门后的 mock 申诉、案件处理审计与本次 mock 回执 |
+| Web console and demos | Available (synthetic) | `/demo` AI 运营中枢与支付异常单案主线、跨平台 Python transcript、Docker 一键启动与 synthetic 离线评测 |
 | EvidenceOS Foundation | Supporting slice | `PAYMENT_INCIDENT` 建案/补证、确定性诊断持久化与 identity replay，用于验证底层证据与审计能力 |
 | Foundation Feishu callbacks | Supporting slice | 经签名校验的建案、补问、诊断卡和人工确认审计；与拒付主线共享签名与回执基础设施 |
 | Basic observability | Available (synthetic) | PII-free request/trace 日志与进程内决策指标；不是生产日志平台或持久化 metrics backend |
 | Chargeback Feishu callbacks | Available (synthetic) | `/chargeback` 显式建案、理由/补证卡片、签名与 replay 防护、哈希 chat↔case 绑定；未做真实 tenant smoke |
-| Rules and company data | Placeholder only | 当前为确定性 reason-code 表与内存精确规则匹配；真实规则、脱敏案例与 RAG 尚未接入 |
+| Rules knowledge prototype | Available (unverified summaries) | 独立 SQLite 规则库原型提供 9 条可浏览摘要，其中 3 条可参与 Demo 打包；通用补证仍由领域策略驱动，真实规则、脱敏案例与 RAG 尚未接入 |
 | Real integrations | Planned | 真实 Oceanpayment、外部 A2A/MCP/工单、上游申诉与公网 Feishu tenant smoke |
 | Production readiness | Not claimed | 尚未完成鉴权、限流、生产可观测性后端、云数据库、备份、部署和运行保障 |
 
-## 产品主线：拒付申诉协作 / Chargeback Appeal
+## 产品主线：支付异常到争议协作
 
-OceanPilot 将一次跨境拒付固定为下面这条业务链。内部可以由多个专属处理器完成窄任务，但对用户呈现的是一个连续案件，而不是七个彼此独立的 Agent：
+OceanPilot 主演示 Web 界面以“AI 总窗口 → 支付异常 → 原版案件中心”为入口，由演示者明确选择 Visa 10.4 合成模板后建案。Foundation 仍保留 3DS 失败、回调异常等 `PAYMENT_INCIDENT` 能力验证，但它不是当前 Web 主线。Web、直连建案 API 与 Chargeback 飞书入口均为 synthetic 协作 seam，尚未接入真实交易状态或 Issuer 通知来源校验，不能视为生产受理门禁：
 
 ```text
-收到拒付
+已结算交易收到正式拒付通知
   → 识别理由      抽取安全事实并提出 reason-code；不确定时由人工确认
-  → 补齐证据      按理由逐项提示缺口；关键材料不足时停止评估
+  → 通用补证      由领域策略逐项提示缺口；关键材料不足时停止评估
   → 申诉评估      确定性规则计算证据就绪度、薄弱点与人工路由
-  → 材料打包      按银行/卡组织模板组织 representment 材料
+  → 条款引用      明确选择卡组织后，只读解析并展示具体规则版本
+  → 规则校验      在打包阶段用同一规则版本校验与排序材料
+  → 材料打包      按命中的 Demo 模板组织 representment 材料
   → 人工批准      人类核对依据和申诉草稿
-  → 提交与跟进    当前只调用 synthetic mock connector，并记录时限和审计
+  → 模拟提交      当前只调用 synthetic mock connector
+  → 结果核对      分开展示案件处理审计与本次 mock 回执
 ```
 
 三条设计取向：**(1) 渠道无关内核**，完整链路由 HTTP/Web 驱动，飞书复用同一 `ChargebackChannelService` 承载受理与补证协作；**(2) 模型可插拔**，离线运行默认 Scripted/确定性 fallback，只有显式开启 live 开关才按安全档位路由到 Claude 或本地隔离模型；**(3) 混合决策**——确定性内核决策、LLM 只解释/建议、人类拍板。系统绝不执行真实支付、退款、风控或上游提交；人工批准只可能调用 synthetic mock connector。
@@ -53,20 +56,20 @@ OceanPilot 将一次跨境拒付固定为下面这条业务链。内部可以由
 - 给公司的数据需求：[docs/data/2026-08-07-chargeback-data-request.md](docs/data/2026-08-07-chargeback-data-request.md)
 - 离线可跑的演示：`examples/chargeback_demo.py`（agent 集群）、`examples/chargeback_transcript.py`（HTTP 全链路 transcript）
 - 一键起服务：`docker build -t oceanpilot-evidenceos . && docker run --rm -p 127.0.0.1:8000:8000 oceanpilot-evidenceos`
-- 双端控制台：客户端 `http://127.0.0.1:8002/demo`，运行维护端 `http://127.0.0.1:8003/admin`
+- Web 控制台：`http://127.0.0.1:8002/demo`
 - 离线评测报告（分类准确率 + synthetic 规则分离度）：`python scripts/eval_chargeback.py`
 
 ## Web 控制台 / Console
 
 ![OceanPilot 拒付申诉控制台：侧栏 + 案件工作台 + 活动流；确定性内核判定的证据就绪度、逐项证据与决策来源](docs/assets/console.png)
 
-客户端以“概览 → 交易 → 诊断”为主路径，同时保留完整拒付链：识别理由 → 补证（带 SLA 时限）→ 证据就绪评估 → 打包 → 人工批准 → mock 申诉 → 审计。运行维护端单独展示 API 状态、滚动请求指标、可解释故障信号和业务积压；两端共享同一 Oceanpayment 海洋绿色卡。
+客户端以“AI 运营中枢 → 支付异常 → 原版案件中心”为主演示路径。首屏展示完整能力版图和实现状态，但只有支付异常标记为 `LIVE DEMO · synthetic`；点击只做导航，不自动建案。案件诊断或评估在明确选择卡组织后通过只读端点解析实际 `rule_version_id`，Package 复用同一版本引用；两处均可进入规则知识页并返回案件上下文，返回后已生成的 Package 不会丢失。规则知识页提供 9 条 `UNVERIFIED_SUMMARY` 摘要及来源追溯。
 
-- 客户端启动后打开根路径 `/`（自动跳转到 `/demo`）；维护端根路径跳转到 `/admin`。
+- 启动后打开根路径 `/`（自动跳转到 `/demo`）。
 - Docker：`docker run --rm -p 127.0.0.1:8000:8000 oceanpilot-evidenceos`，浏览器开 `http://127.0.0.1:8000/demo`。
 - 远程服务器：SSH 端口转发 `ssh -L 8000:127.0.0.1:8000 <user>@<host>`，本地开 `http://localhost:8000/demo`。
-- 客户端顶栏提供全局交易搜索（`⌘K`）；技术端点不出现在客户导航中。
-- 双端设计与交互说明：[docs/design/2026-08-14-transaction-diagnostic-dashboards.md](docs/design/2026-08-14-transaction-diagnostic-dashboards.md)。
+- 客户端顶栏提供全局搜索（`⌘K`）；技术端点不出现在客户导航中。
+- 当前 AI 总窗口、原版案件主线与规则知识交互说明：[docs/superpowers/specs/2026-08-15-oceanpilot-ai-operations-design.md](docs/superpowers/specs/2026-08-15-oceanpilot-ai-operations-design.md)。
 
 ## 技术原则：证据先行闭环
 
@@ -84,7 +87,8 @@ OceanPilot 的核心不是增加一个信息入口，而是让 AI、确定性规
 Chargeback HTTP / Web console
     -> ChargebackChannelService -> Supervisor / deterministic kernel
     -> ChargebackCaseStore -> chargeback SQLite
-    -> Packager -> in-memory synthetic bank rules
+    -> internal evidence policy -> readiness / missing evidence
+    -> Packager -> independent rules SQLite -> in-memory fallback
     -> Appeal -> human gate -> mock upstream connector
 
 Foundation HTTP / signed Feishu callbacks
@@ -92,7 +96,7 @@ Foundation HTTP / signed Feishu callbacks
     -> CaseStore port -> foundation SQLite
 ```
 
-API 只负责严格输入映射、状态码和安全错误；领域/应用层负责 readiness、评估和编排；SQL、事务、revision 条件更新和审计落库由 Store 负责。Foundation 诊断快照会持久化并 replay；拒付 assessment/package/appeal 当前按最新案件状态计算，不声明 snapshot replay 或生产提交语义。完整组件和数据流见 [docs/architecture.md](docs/architecture.md)。
+API 只负责严格输入映射、状态码和安全错误；领域/应用层负责 readiness、评估和编排；SQL、事务、revision 条件更新和案件处理审计落库由 Store 负责。通用逐项补证继续由领域策略驱动；独立规则库在诊断/评估页只读解析和展示具体引用，只有打包阶段才使用对应 Demo 摘要、要求顺序和版本来源进行校验与排序，不能表述为“规则库驱动全流程”。Foundation 诊断快照会持久化并 replay；拒付 assessment/package/appeal 当前按最新案件状态计算，Package、人工批准和 mock 回执不属于 Chargeback SQLite 审计事件。完整组件和数据流见 [docs/architecture.md](docs/architecture.md)。
 
 ## Foundation：底层能力验证切片
 
@@ -116,7 +120,7 @@ Foundation 以合成支付异常验证版本化证据、确定性诊断、审计
 | HTTP 接口 | [`src/oceanpilot/api/README.md`](src/oceanpilot/api/README.md) |
 | 测试与门禁 | [`tests/README.md`](tests/README.md) |
 
-**配置**：所有环境变量见根目录 [`.env.example`](.env.example)(存储路径、Claude、本地模型、飞书凭据);凭据只经环境变量注入,绝不入库。运行/安装见下方 Quick Start。
+**配置**：所有环境变量见根目录 [`.env.example`](.env.example)(存储路径、DeepSeek/Claude、本地模型、飞书凭据);凭据只经环境变量注入,绝不入库。运行/安装见下方 Quick Start。
 
 **提交前门禁**(与 CI 一致)：
 
@@ -148,10 +152,17 @@ py -3.12 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -e ".[dev]"
 $env:OCEANPILOT_DB_PATH = "work/oceanpilot.db"
 .\.venv\Scripts\python.exe -m uvicorn oceanpilot.main:create_app --factory --host 127.0.0.1 --port 8002
-# 新终端：
-$env:OCEANPILOT_CLIENT_BASE_URL = "http://127.0.0.1:8002"
-.\.venv\Scripts\python.exe -m uvicorn oceanpilot.admin:create_admin_app --factory --host 127.0.0.1 --port 8003
 ```
+
+需要启用 DeepSeek 时，将 `.env.example` 复制为不会被 Git 跟踪的 `.env`，填写
+`DEEPSEEK_API_KEY`，并设置 `OCEANPILOT_MODEL_PROVIDER=deepseek`、
+`OCEANPILOT_CHARGEBACK_LIVE_MODEL=1`。启动时显式加载该文件：
+
+```powershell
+.\.venv\Scripts\python.exe -m uvicorn oceanpilot.main:create_app --factory --env-file .env --host 127.0.0.1 --port 8002
+```
+
+密钥存放、轮换、live 测试和安全路由见 [DeepSeek 本地接入指南](docs/deepseek-setup.md)。
 
 Linux / macOS：
 
@@ -160,9 +171,6 @@ python3.12 -m venv .venv
 .venv/bin/python -m pip install -e ".[dev]"
 export OCEANPILOT_DB_PATH=work/oceanpilot.db
 .venv/bin/python -m uvicorn oceanpilot.main:create_app --factory --host 127.0.0.1 --port 8002
-# 新终端：
-OCEANPILOT_CLIENT_BASE_URL=http://127.0.0.1:8002 \
-  .venv/bin/python -m uvicorn oceanpilot.admin:create_admin_app --factory --host 127.0.0.1 --port 8003
 ```
 
 启动过程由 FastAPI lifespan 创建 SQLite schema 并执行一次 Store 健康检查。构造或导入应用本身不会打开数据库连接。飞书回调为可选：设置 `FEISHU_APP_ID/APP_SECRET/VERIFICATION_TOKEN/ENCRYPT_KEY` 后启用（凭据只走环境变量），配置步骤见 [docs/feishu-setup.md](docs/feishu-setup.md)，演示脚本见 [docs/demo.md](docs/demo.md)。未配置飞书时核心 API 与 `/health` 正常，飞书路由返回固定安全 `503`。
@@ -172,7 +180,7 @@ OCEANPILOT_CLIENT_BASE_URL=http://127.0.0.1:8002 \
 服务运行后，在另一个 PowerShell 窗口执行：
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\examples\demo.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\examples\demo.ps1 -BaseUrl http://127.0.0.1:8002
 ```
 
 脚本按顺序验证：

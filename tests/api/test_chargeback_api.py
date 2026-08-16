@@ -1,3 +1,5 @@
+import sqlite3
+
 from fastapi.testclient import TestClient
 
 from oceanpilot.config import Settings
@@ -151,6 +153,87 @@ def test_finalize_routes_to_human_review(tmp_path):
     assert body["assessment"]["requires_human"] is True
 
 
+def test_withdraw_latest_evidence_reopens_collection_and_audits(tmp_path):
+    with _client(tmp_path) as client:
+        body = client.post(
+            "/api/v1/chargeback/cases", json={"description": "没收到货，要拒付"}
+        ).json()
+        case_id = body["case_id"]
+        first = body["next_evidence"]
+        body = client.post(
+            f"/api/v1/chargeback/cases/{case_id}/evidence",
+            json={"evidence_code": first},
+        ).json()
+        second = body["next_evidence"]
+        client.post(
+            f"/api/v1/chargeback/cases/{case_id}/evidence",
+            json={"evidence_code": second},
+        )
+        client.post(f"/api/v1/chargeback/cases/{case_id}/finalize")
+
+        response = client.post(
+            f"/api/v1/chargeback/cases/{case_id}/evidence/withdraw-latest",
+            json={"evidence_code": second},
+        )
+        audit = client.get(f"/api/v1/chargeback/cases/{case_id}/audit").json()
+
+    assert response.status_code == 200
+    withdrawn = response.json()
+    assert withdrawn["phase"] == "NEED_EVIDENCE"
+    assert withdrawn["collection_finalized"] is False
+    assert second not in withdrawn["collected"]
+    assert withdrawn["next_evidence"] == second
+    assert audit["events"][-1]["event_type"] == "EVIDENCE_WITHDRAWN"
+    assert audit["events"][-1]["detail"] == second
+
+
+def test_duplicate_withdrawal_returns_concurrent_conflict(tmp_path):
+    with _client(tmp_path) as client:
+        body = client.post(
+            "/api/v1/chargeback/cases", json={"description": "没收到货，要拒付"}
+        ).json()
+        case_id = body["case_id"]
+        first = body["next_evidence"]
+        body = client.post(
+            f"/api/v1/chargeback/cases/{case_id}/evidence",
+            json={"evidence_code": first},
+        ).json()
+        second = body["next_evidence"]
+        client.post(
+            f"/api/v1/chargeback/cases/{case_id}/evidence",
+            json={"evidence_code": second},
+        )
+        endpoint = f"/api/v1/chargeback/cases/{case_id}/evidence/withdraw-latest"
+        assert client.post(endpoint, json={"evidence_code": second}).status_code == 200
+        duplicate = client.post(endpoint, json={"evidence_code": second})
+
+    assert duplicate.status_code == 409
+    assert duplicate.json()["code"] == "CONCURRENT_CASE_WRITE"
+
+
+def test_withdraw_without_evidence_returns_named_conflict(tmp_path):
+    with _client(tmp_path) as client:
+        case_id = client.post(
+            "/api/v1/chargeback/cases", json={"description": "没收到货，要拒付"}
+        ).json()["case_id"]
+        response = client.post(
+            f"/api/v1/chargeback/cases/{case_id}/evidence/withdraw-latest",
+            json={"evidence_code": "transaction.receipt"},
+        )
+    assert response.status_code == 409
+    assert response.json()["code"] == "NO_EVIDENCE_TO_WITHDRAW"
+
+
+def test_withdraw_unknown_case_returns_safe_404(tmp_path):
+    with _client(tmp_path) as client:
+        response = client.post(
+            "/api/v1/chargeback/cases/does-not-exist/evidence/withdraw-latest",
+            json={"evidence_code": "transaction.receipt"},
+        )
+    assert response.status_code == 404
+    assert response.json()["code"] == "CASE_NOT_FOUND"
+
+
 def test_response_includes_evidence_window_deadline(tmp_path):
     with _client(tmp_path) as client:
         body = client.post(
@@ -224,7 +307,10 @@ def _ready_case(client):
     """Open a PRODUCT_NOT_RECEIVED case and submit its full checklist."""
     from oceanpilot.domain.chargeback import DisputeReasonCode, required_evidence_for
 
-    body = client.post("/api/v1/chargeback/cases", json={"description": "没收到货，要拒付"}).json()
+    body = client.post(
+        "/api/v1/chargeback/cases",
+        json={"description": "没收到货，要拒付", "card_network": "VISA"},
+    ).json()
     case_id = body["case_id"]
     for code in required_evidence_for(DisputeReasonCode.PRODUCT_NOT_RECEIVED):
         client.post(
@@ -257,6 +343,175 @@ def test_package_endpoint_exposes_visa_rule_provenance(tmp_path):
     assert pkg["source_document"] == "Dispute Management Guidelines for Visa Merchants"
     assert pkg["required_assertions"]
     assert "不是 Visa 官方申诉期限" in pkg["rule_limitation"]
+    assert pkg["rule_version_id"] == "visa-13-1-demo-v1"
+    assert pkg["verification_status"] == "UNVERIFIED_SUMMARY"
+    assert pkg["submission_window_basis"] == "INTERNAL_DEMO"
+
+
+def test_rules_catalog_exposes_ten_curated_summaries(tmp_path):
+    with _client(tmp_path) as client:
+        response = client.get("/api/v1/chargeback/rules")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total"] == 10
+    assert body["demo_mapped"] == 3
+    assert body["scheme_count"] == 4
+    assert body["source_document_count"] == 4
+    assert "生产使用前" in body["disclaimer"]
+    assert len(body["items"]) == 10
+    assert all(item["verification_status"] == "UNVERIFIED_SUMMARY" for item in body["items"])
+
+
+def test_rules_catalog_filters_and_searches(tmp_path):
+    with _client(tmp_path) as client:
+        visa = client.get("/api/v1/chargeback/rules", params={"scheme": "VISA"}).json()
+        searched = client.get("/api/v1/chargeback/rules", params={"q": "10.4"}).json()
+    assert visa["total"] == 6
+    assert all(item["scheme"] == "VISA" for item in visa["items"])
+    assert searched["total"] == 1
+    assert searched["items"][0]["rule_version_id"] == "visa-10-4-demo-v1"
+
+
+def test_rule_detail_and_package_reference_the_same_version(tmp_path):
+    with _client(tmp_path) as client:
+        case_id = _ready_case(client)
+        package = client.get(
+            f"/api/v1/chargeback/cases/{case_id}/package",
+            params={"card_network": "VISA"},
+        ).json()
+        detail = client.get(f"/api/v1/chargeback/rules/{package['rule_version_id']}")
+    assert detail.status_code == 200
+    body = detail.json()
+    assert body["rule_version_id"] == package["rule_version_id"]
+    assert body["scheme_reason_code"] == package["scheme_reason_code"]
+    assert body["document"]["source_url"].startswith("https://")
+    assert body["assertions"]
+    assert body["evidence"]
+    assert "生产使用前" in body["disclaimer"]
+
+
+def test_rule_reference_resolves_exact_package_and_detail_version(tmp_path):
+    with _client(tmp_path) as client:
+        case_id = _ready_case(client)
+        reference = client.get(
+            f"/api/v1/chargeback/cases/{case_id}/rule-reference",
+            params={"card_network": "VISA"},
+        )
+        package = client.get(
+            f"/api/v1/chargeback/cases/{case_id}/package",
+            params={"card_network": "VISA"},
+        ).json()
+
+        assert reference.status_code == 200
+        body = reference.json()
+        assert body["match_status"] == "EXACT_MATCH"
+        assert body["rule_reference"]["rule_version_id"] == package["rule_version_id"]
+        assert body["rule_reference"]["rule_version_id"] == "visa-13-1-demo-v1"
+        detail = client.get(f"/api/v1/chargeback/rules/{body['rule_reference']['rule_version_id']}")
+
+    assert detail.status_code == 200
+    assert detail.json()["rule_version_id"] == body["rule_reference"]["rule_version_id"]
+    assert detail.json()["source_section"] == body["rule_reference"]["source_section"]
+
+
+def test_rule_reference_uses_persisted_card_network(tmp_path):
+    with _client(tmp_path) as client:
+        case_id = _ready_case(client)
+        response = client.get(f"/api/v1/chargeback/cases/{case_id}/rule-reference")
+    assert response.status_code == 200
+    assert response.json()["card_network"] == "VISA"
+
+
+def test_rule_reference_rejects_unconfirmed_reason(tmp_path):
+    with _client(tmp_path) as client:
+        case_id = client.post(
+            "/api/v1/chargeback/cases", json={"description": "这是一段用于测试的中性内容"}
+        ).json()["case_id"]
+        response = client.get(
+            f"/api/v1/chargeback/cases/{case_id}/rule-reference",
+            params={"card_network": "VISA"},
+        )
+    assert response.status_code == 409
+    assert response.json()["code"] == "HTTP_ERROR"
+
+
+def test_rule_reference_does_not_guess_across_card_networks(tmp_path):
+    with _client(tmp_path) as client:
+        case_id = _ready_case(client)
+        response = client.get(
+            f"/api/v1/chargeback/cases/{case_id}/rule-reference",
+            params={"card_network": "MASTERCARD"},
+        )
+    assert response.status_code == 409
+    assert "visa-13-1-demo-v1" not in response.text
+
+
+def test_card_network_selection_is_cas_and_idempotent(tmp_path):
+    with _client(tmp_path) as client:
+        created = client.post(
+            "/api/v1/chargeback/cases",
+            json={"description": "没收到货，要拒付"},
+        ).json()
+        selected = client.put(
+            f"/api/v1/chargeback/cases/{created['case_id']}/card-network",
+            json={"card_network": "VISA", "expected_revision": created["revision"]},
+        )
+        replayed = client.put(
+            f"/api/v1/chargeback/cases/{created['case_id']}/card-network",
+            json={"card_network": "VISA", "expected_revision": created["revision"]},
+        )
+        stale = client.put(
+            f"/api/v1/chargeback/cases/{created['case_id']}/card-network",
+            json={"card_network": "MASTERCARD", "expected_revision": created["revision"]},
+        )
+        audit = client.get(f"/api/v1/chargeback/cases/{created['case_id']}/audit").json()
+    assert selected.status_code == 200
+    assert replayed.status_code == 200
+    assert replayed.json()["revision"] == selected.json()["revision"]
+    assert stale.status_code == 409
+    assert [event["event_type"] for event in audit["events"]].count("CARD_NETWORK_SELECTED") == 1
+
+
+def test_rule_reference_returns_503_when_rule_database_fails(tmp_path):
+    with _client(tmp_path) as client:
+        case_id = _ready_case(client)
+        connection = sqlite3.connect(tmp_path / "oceanpilot-rules.db")
+        connection.execute("PRAGMA foreign_keys=OFF")
+        connection.execute("DROP TABLE rule_requirements")
+        connection.close()
+
+        response = client.get(
+            f"/api/v1/chargeback/cases/{case_id}/rule-reference",
+            params={"card_network": "VISA"},
+        )
+    assert response.status_code == 503
+    assert response.headers["content-type"].startswith("application/problem+json")
+    assert response.json()["code"] == "DATABASE_UNAVAILABLE"
+
+
+def test_unknown_rule_detail_returns_safe_404(tmp_path):
+    with _client(tmp_path) as client:
+        response = client.get("/api/v1/chargeback/rules/not-a-rule")
+    assert response.status_code == 404
+    assert response.headers["content-type"].startswith("application/problem+json")
+    assert response.json()["code"] == "HTTP_ERROR"
+
+
+def test_package_returns_503_when_rule_database_fails(tmp_path):
+    with _client(tmp_path) as client:
+        case_id = _ready_case(client)
+        connection = sqlite3.connect(tmp_path / "oceanpilot-rules.db")
+        connection.execute("PRAGMA foreign_keys=OFF")
+        connection.execute("DROP TABLE rule_requirements")
+        connection.close()
+
+        response = client.get(
+            f"/api/v1/chargeback/cases/{case_id}/package",
+            params={"card_network": "VISA"},
+        )
+    assert response.status_code == 503
+    assert response.headers["content-type"].startswith("application/problem+json")
+    assert response.json()["code"] == "DATABASE_UNAVAILABLE"
 
 
 def test_appeal_without_approval_is_blocked_and_never_submits(tmp_path):
@@ -268,6 +523,8 @@ def test_appeal_without_approval_is_blocked_and_never_submits(tmp_path):
     assert body["submitted"] is False
     assert body["blocked_reason"] == "NOT_APPROVED"
     assert body["draft"]
+    assert body["synthetic"] is True
+    assert body["connector_kind"] == "IN_PROCESS_MOCK"
 
 
 def test_appeal_with_human_approval_submits_once(tmp_path):
@@ -280,6 +537,8 @@ def test_appeal_with_human_approval_submits_once(tmp_path):
     assert body["submitted"] is True
     assert body["blocked_reason"] is None
     assert body["submission_id"]
+    assert body["synthetic"] is True
+    assert body["connector_kind"] == "IN_PROCESS_MOCK"
 
 
 def test_appeal_approval_requires_actor(tmp_path):
@@ -409,6 +668,8 @@ def test_agent_trace_is_present_across_the_flow(tmp_path):
     trace = body["agent_trace"]
     assert any(a["agent"] == "AssessAgent" for a in trace)
     assess = next(a for a in trace if a["agent"] == "AssessAgent")
+    assert assess["action"].startswith("材料就绪度 ")
+    assert "胜诉" not in assess["action"]
     assert assess["source"] in ("MODEL", "FALLBACK")
 
 

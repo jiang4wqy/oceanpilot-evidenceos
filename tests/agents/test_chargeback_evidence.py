@@ -20,6 +20,21 @@ def test_partial_evidence_asks_for_a_missing_critical_item():
     assert request.question_source is ExplanationSource.MODEL
 
 
+def test_agent_parses_the_json_evidence_question_contract():
+    model = ScriptedModelProvider(
+        [
+            '{"question":"请提供物流签收证明。","why":"用于证明履约",'
+            '"accepted_examples":["签收记录"],"safety_note":"请勿提供卡号"}'
+        ]
+    )
+
+    request = EvidenceAgent(model).next_request(_REASON, [])
+
+    assert request.question == "请提供物流签收证明。"
+    assert "accepted_examples" in (model.requests[0].system or "")
+    assert "ONLY valid JSON" in (model.requests[0].system or "")
+
+
 def test_complete_evidence_needs_no_question():
     agent = EvidenceAgent(ScriptedModelProvider())
     request = agent.next_request(_REASON, required_evidence_for(_REASON))

@@ -1,5 +1,5 @@
 from decimal import Decimal
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import (
     BaseModel,
@@ -11,7 +11,7 @@ from pydantic import (
     model_validator,
 )
 
-from oceanpilot.domain.chargeback import ChargebackEvidenceCode, DisputeReasonCode
+from oceanpilot.domain.chargeback import CardNetwork, ChargebackEvidenceCode, DisputeReasonCode
 
 
 class _StrictRequest(BaseModel):
@@ -22,9 +22,19 @@ class _StrictRequest(BaseModel):
 
 class CreateChargebackRequest(_StrictRequest):
     description: Annotated[StrictStr, Field(min_length=1, max_length=2000)]
+    card_network: CardNetwork | None = None
+
+
+class SetCardNetworkRequest(_StrictRequest):
+    card_network: CardNetwork
+    expected_revision: Annotated[StrictInt, Field(ge=0)]
 
 
 class SubmitEvidenceRequest(_StrictRequest):
+    evidence_code: ChargebackEvidenceCode
+
+
+class WithdrawLatestEvidenceRequest(_StrictRequest):
     evidence_code: ChargebackEvidenceCode
 
 
@@ -46,7 +56,16 @@ class ChargebackEvidenceItemDTO(BaseModel):
 class ChargebackAssessmentDTO(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    win_likelihood: StrictStr
+    win_likelihood: Annotated[
+        StrictStr,
+        Field(
+            deprecated=True,
+            description=(
+                "Deprecated compatibility alias for evidence_readiness. This deterministic "
+                "value measures evidence readiness, not predicted chargeback win probability."
+            ),
+        ),
+    ]
     evidence_readiness: StrictStr
     completeness: StrictStr
     responsible_team: StrictStr
@@ -114,6 +133,9 @@ class ChargebackPackageResponse(BaseModel):
     source_section: StrictStr | None = None
     required_assertions: tuple[StrictStr, ...] = ()
     rule_limitation: StrictStr | None = None
+    rule_version_id: StrictStr | None = None
+    verification_status: StrictStr | None = None
+    submission_window_basis: StrictStr | None = None
     submission_window_days: StrictInt
     completeness: StrictStr
     ready_to_submit: StrictBool
@@ -123,9 +145,104 @@ class ChargebackPackageResponse(BaseModel):
     cover_note_source: StrictStr
 
 
+class RuleSummaryDTO(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    rule_version_id: StrictStr
+    document_id: StrictStr
+    scheme: StrictStr
+    scheme_reason_code: StrictStr
+    display_name: StrictStr
+    category: StrictStr
+    region: StrictStr
+    version_label: StrictStr | None = None
+    demo_role: StrictStr
+    verification_status: StrictStr
+    source_document: StrictStr
+    source_url: StrictStr
+
+
+class RuleCatalogResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    items: tuple[RuleSummaryDTO, ...] = ()
+    total: StrictInt
+    demo_mapped: StrictInt
+    scheme_count: StrictInt
+    source_document_count: StrictInt
+    disclaimer: StrictStr
+
+
+class RuleRequirementDTO(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    requirement_id: StrictStr
+    requirement_type: StrictStr
+    necessity: StrictStr
+    sequence: StrictInt
+    description_zh: StrictStr
+    internal_evidence_code: StrictStr | None = None
+
+
+class RuleDocumentDTO(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    document_id: StrictStr
+    scheme: StrictStr
+    title: StrictStr
+    publisher: StrictStr
+    source_url: StrictStr
+    source_version: StrictStr | None = None
+
+
+class RuleDetailResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    rule_version_id: StrictStr
+    scheme: StrictStr
+    scheme_reason_code: StrictStr
+    display_name: StrictStr
+    category: StrictStr
+    region: StrictStr
+    version_label: StrictStr | None = None
+    source_section: StrictStr | None = None
+    effective_date: StrictStr | None = None
+    internal_reason_code: StrictStr | None = None
+    demo_role: StrictStr
+    internal_window_days: StrictInt | None = None
+    verification_status: StrictStr
+    limitation: StrictStr
+    document: RuleDocumentDTO
+    assertions: tuple[RuleRequirementDTO, ...] = ()
+    evidence: tuple[RuleRequirementDTO, ...] = ()
+    disclaimer: StrictStr
+
+
+class RuleReferenceDTO(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    rule_version_id: StrictStr
+    scheme_reason_code: StrictStr
+    rule_version: StrictStr | None = None
+    source_document: StrictStr | None = None
+    source_section: StrictStr | None = None
+    verification_status: StrictStr
+    submission_window_basis: StrictStr
+    limitation: StrictStr
+
+
+class CaseRuleReferenceResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    case_id: StrictStr
+    card_network: StrictStr
+    match_status: Literal["EXACT_MATCH", "NO_EXACT_MAPPING"]
+    rule_reference: RuleReferenceDTO | None = None
+
+
 class AppealRequest(_StrictRequest):
     bank_id: StrictStr | None = None
-    card_network: StrictStr | None = None
+    card_network: CardNetwork | None = None
     human_approved: StrictBool = False
     actor_id: StrictStr | None = None
 
@@ -139,6 +256,8 @@ class AppealRequest(_StrictRequest):
 class ChargebackAppealResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    synthetic: Literal[True]
+    connector_kind: Literal["IN_PROCESS_MOCK"]
     draft: StrictStr
     draft_source: StrictStr
     submitted: StrictBool
@@ -211,6 +330,8 @@ class ChargebackCaseResponse(BaseModel):
 
     case_id: StrictStr
     phase: StrictStr
+    revision: StrictInt
+    card_network: CardNetwork | None = None
     reason_code: StrictStr | None = None
     reason_confirmed: StrictBool = False
     collection_finalized: StrictBool = False

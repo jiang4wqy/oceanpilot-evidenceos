@@ -13,6 +13,7 @@ from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 
+from oceanpilot.application.model_output import json_object, json_text
 from oceanpilot.application.model_provider import (
     Effort,
     ModelMessage,
@@ -39,12 +40,14 @@ from oceanpilot.domain.evidence_catalog import describe, request_sentence
 from oceanpilot.domain.security import assert_no_sensitive_data
 
 _ASSESS_SYSTEM = (
-    "You explain a cross-border chargeback representment assessment to an "
-    "operator, in plain language. You are given a decision that was already made "
-    "by a deterministic rule engine. Do NOT change the win likelihood, the "
-    "responsible team, or whether human review is required — only explain them, "
-    "state which evidence is still missing, and give the single next step. Be "
-    "concise. This is synthetic data; never claim any business action was taken."
+    "Explain a cross-border chargeback assessment that was already decided by a "
+    "deterministic rule engine. Do NOT change evidence readiness, responsible_team, "
+    "or requires_human. Return ONLY valid JSON with exactly these fields: "
+    '{"operator_summary":"concise Chinese explanation",'
+    '"missing_evidence":["human-readable item"],'
+    '"next_action":"one concrete Chinese action",'
+    '"human_review_note":"Chinese review boundary"}. '
+    "This is synthetic data; never claim any business action was taken."
 )
 
 
@@ -103,6 +106,11 @@ class ChargebackAssessAgent:
         text = result.text.strip()
         if not text:
             return _fallback(assessment), ExplanationSource.FALLBACK
+        structured = json_text(text, "operator_summary")
+        if structured is not None:
+            return structured, ExplanationSource.MODEL
+        if text.startswith("{"):
+            return _fallback(assessment), ExplanationSource.FALLBACK
         return text, ExplanationSource.MODEL
 
 
@@ -158,10 +166,15 @@ class IntakeOutcome:
 
 
 _INTAKE_SYSTEM = (
-    "You classify a merchant's free-text description of a card dispute into "
-    "exactly one reason code. Reply with ONLY the code token, nothing else. "
-    "Valid codes: " + ", ".join(c.value for c in DisputeReasonCode) + ". "
-    "This is synthetic data."
+    "Classify a merchant's free-text card dispute. Return ONLY valid JSON with "
+    "exactly these fields: "
+    '{"reason_code":"one valid code",'
+    '"confidence":0.0,'
+    '"case_summary":"one neutral Chinese sentence",'
+    '"needs_human_confirmation":true}. '
+    "Valid reason_code values: "
+    + ", ".join(c.value for c in DisputeReasonCode)
+    + ". confidence must be between 0 and 1. Synthetic data only."
 )
 
 # ordered keyword heuristics (Chinese + English); first match wins.
@@ -205,6 +218,26 @@ def _parse_reason(text: str) -> DisputeReasonCode | None:
         if code.value in upper:
             return code
     return None
+
+
+def _parse_intake_output(text: str) -> tuple[DisputeReasonCode, bool] | None:
+    data = json_object(text)
+    if data is None:
+        return None
+    raw_code = data.get("reason_code")
+    confidence = data.get("confidence")
+    needs_human = data.get("needs_human_confirmation")
+    if not isinstance(raw_code, str) or isinstance(confidence, bool):
+        return None
+    if not isinstance(confidence, (int, float)) or not 0 <= confidence <= 1:
+        return None
+    if not isinstance(needs_human, bool):
+        return None
+    try:
+        code = DisputeReasonCode(raw_code)
+    except ValueError:
+        return None
+    return code, confidence >= 0.7 and not needs_human
 
 
 def _heuristic_reason(text: str) -> DisputeReasonCode | None:
@@ -321,6 +354,14 @@ class IntakeAgent:
         except ModelProviderError:
             result = None
         if result is not None:
+            structured = _parse_intake_output(result.text)
+            if structured is not None:
+                code, confident = structured
+                return IntakeOutcome(
+                    reason_code=code,
+                    confident=confident,
+                    source=ClassificationSource.MODEL,
+                )
             code = _parse_reason(result.text)
             if code is not None:
                 return IntakeOutcome(
@@ -354,12 +395,14 @@ class EvidenceRequest:
 
 
 _EVIDENCE_SYSTEM = (
-    "You ask a merchant, in one or two concise Chinese sentences, to provide "
-    "exactly one specified piece of chargeback evidence. You are given the "
-    "evidence's human label, what it is, why it matters, and acceptable "
-    "examples — use them so the merchant understands what to send and why. Ask "
-    "only for the given evidence; never show the raw evidence_code token and "
-    "never invent new requirements. Synthetic data."
+    "Ask a merchant for exactly one specified piece of chargeback evidence. "
+    "Never expose the raw evidence_code or invent requirements. Return ONLY valid "
+    "JSON with exactly these fields: "
+    '{"question":"one or two concise Chinese sentences",'
+    '"why":"concise Chinese reason",'
+    '"accepted_examples":["human-readable example"],'
+    '"safety_note":"Chinese reminder not to submit sensitive credentials"}. '
+    "Synthetic data only."
 )
 
 
@@ -440,6 +483,11 @@ class EvidenceAgent:
         text = result.text.strip()
         if not text:
             return _fallback_question(code, remaining), ExplanationSource.FALLBACK
+        structured = json_text(text, "question")
+        if structured is not None:
+            return structured, ExplanationSource.MODEL
+        if text.startswith("{"):
+            return _fallback_question(code, remaining), ExplanationSource.FALLBACK
         return text, ExplanationSource.MODEL
 
 
@@ -454,13 +502,14 @@ class PreventionOutcome:
 
 
 _PREVENTION_SYSTEM = (
-    "You warn a merchant, in plain Chinese, that a transaction has an elevated "
-    "chargeback risk and tell them which evidence to keep now so they can win a "
-    "future dispute. You are given a risk decision already made by a "
-    "deterministic engine — do NOT change the risk level or invent new factors, "
-    "only explain them and list the evidence to retain. You never block, hold, "
-    "capture, or refund anything; the strongest action is advising a manual "
-    "review. Be concise. Synthetic data; never claim any action was executed."
+    "Explain a chargeback prevention decision already made by a deterministic "
+    "engine. Do NOT change the risk level or invent factors. Return ONLY valid "
+    "JSON with exactly these fields: "
+    '{"advice":"concise Chinese merchant guidance",'
+    '"risk_factors":["human-readable factor"],'
+    '"evidence_to_retain":["human-readable evidence"],'
+    '"manual_review_note":"Chinese manual-review boundary"}. '
+    "Never block, hold, capture, or refund anything. Synthetic data only."
 )
 
 _RISK_LABELS = {
@@ -535,5 +584,10 @@ class PreventionAgent:
             return _prevention_fallback(assessment), ExplanationSource.FALLBACK
         text = result.text.strip()
         if not text:
+            return _prevention_fallback(assessment), ExplanationSource.FALLBACK
+        structured = json_text(text, "advice")
+        if structured is not None:
+            return structured, ExplanationSource.MODEL
+        if text.startswith("{"):
             return _prevention_fallback(assessment), ExplanationSource.FALLBACK
         return text, ExplanationSource.MODEL

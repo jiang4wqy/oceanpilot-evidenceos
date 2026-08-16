@@ -68,6 +68,7 @@ class LocalModelProvider:
         model_overrides: Mapping[str, str] | None = None,
         api_key: str | None = None,
         timeout: int | float = 60,
+        include_metadata: bool = True,
         transport: Callable[[LocalHttpRequest], LocalHttpResponse] | None = None,
     ) -> None:
         if type(endpoint) is not str or not endpoint:
@@ -87,6 +88,8 @@ class LocalModelProvider:
             raise ValueError("api_key must be a non-empty string when provided")
         if type(timeout) not in (int, float) or timeout <= 0:
             raise ValueError("timeout must be a positive number")
+        if type(include_metadata) is not bool:
+            raise TypeError("include_metadata must be a bool")
         if transport is not None and not callable(transport):
             raise TypeError("transport must be callable")
         self._endpoint = endpoint
@@ -94,6 +97,7 @@ class LocalModelProvider:
         self._overrides = dict(model_overrides or {})
         self._api_key = api_key
         self._timeout = float(timeout)
+        self._include_metadata = include_metadata
         self._transport = transport or _urllib_transport
 
     def _model_for(self, task: TaskSpec) -> str:
@@ -111,14 +115,15 @@ class LocalModelProvider:
             "model": self._model_for(task),
             "messages": self._encode_messages(messages, system),
             "max_tokens": task.max_output_tokens,
+        }
+        if self._include_metadata:
             # Non-standard controls carried where OpenAI-compatible servers ignore
             # unknown keys; a server that honours effort/kind can read them here.
-            "metadata": {
+            payload["metadata"] = {
                 "kind": task.kind,
                 "effort": task.effort.value,
                 "security_tier": task.security_tier.value,
-            },
-        }
+            }
         if tools:
             payload["tools"] = [
                 {

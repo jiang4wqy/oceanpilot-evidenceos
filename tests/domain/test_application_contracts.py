@@ -27,6 +27,7 @@ from oceanpilot.application.errors import (
     DiagnosisInputStale,
     EvidenceConflict,
     InvalidInbound,
+    NoEvidenceToWithdraw,
     PersistenceInvariantViolation,
 )
 from oceanpilot.application.ports import CaseStoreFactory, CaseStoreSession
@@ -289,6 +290,7 @@ ERROR_MESSAGES = {
     CaseNotReady: "case is not ready for diagnosis",
     EvidenceConflict: "evidence id conflicts with existing content",
     ConcurrentCaseWrite: "case changed during write",
+    NoEvidenceToWithdraw: "case has no evidence to withdraw",
     DiagnosisInputStale: "diagnosis input is stale",
     DatabaseUnavailable: "database is unavailable",
     PersistenceInvariantViolation: "persistence invariant was violated",
@@ -307,6 +309,7 @@ def test_application_error_subclass_set_and_messages_are_exact() -> None:
         "CaseNotReady",
         "EvidenceConflict",
         "ConcurrentCaseWrite",
+        "NoEvidenceToWithdraw",
         "DiagnosisInputStale",
         "DatabaseUnavailable",
         "PersistenceInvariantViolation",

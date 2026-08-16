@@ -5,7 +5,7 @@ HTML + vanilla JS driving the existing JSON API — no build step, no external
 assets, works offline. The shell follows Oceanpayment's merchant-console visual
 language: white surfaces, operational green, compact navigation, and prominent
 case readiness. Deterministic decisions, human confirmation, and synthetic-only
-boundaries remain visible without exposing implementation jargon to merchants.
+boundaries remain visible without exposing implementation jargon.
 """
 
 from fastapi import APIRouter
@@ -483,6 +483,8 @@ _DEMO_HTML = """<!doctype html>
   *{box-sizing:border-box}
   body{margin:0;background:var(--canvas);color:var(--body);font-family:var(--sans);font-size:14px;line-height:1.55;
     -webkit-font-smoothing:antialiased}
+  .skip-link{position:fixed;left:16px;top:-64px;z-index:1000;padding:10px 14px;border-radius:8px;background:var(--accent);color:#fff;font-weight:700;text-decoration:none}
+  .skip-link:focus{top:12px}
   .app{display:grid;grid-template-columns:236px 1fr;min-height:100vh}
   @media(max-width:840px){.app{grid-template-columns:1fr}.side{display:none}}
   a{color:var(--accent)}
@@ -495,12 +497,12 @@ _DEMO_HTML = """<!doctype html>
   .sbrand .rl{font-size:11px;color:var(--side-muted)}
   .navlbl{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:#5c6577;padding:12px 15px 6px}
   .nav{padding:6px 8px}
-  .nav a{display:flex;align-items:center;gap:10px;padding:9px 11px;border-radius:8px;color:var(--side-muted);
-    text-decoration:none;font-size:13px;cursor:pointer;user-select:none}
-  .nav a .ic{width:15px;height:15px;border:1.6px solid currentColor;border-radius:4px;opacity:.7}
-  .nav a:hover{color:var(--side-ink);background:var(--side-active)}
-  .nav a.on{color:#fff;background:var(--side-active)}
-  .nav a.on .ic{background:var(--accent);border-color:var(--accent);opacity:1}
+  .nav button{display:flex;align-items:center;gap:10px;width:100%;border:0;padding:9px 11px;border-radius:8px;
+    background:transparent;color:var(--side-muted);text-align:left;font:13px var(--sans);cursor:pointer;user-select:none}
+  .nav button .ic{width:15px;height:15px;border:1.6px solid currentColor;border-radius:4px;opacity:.7}
+  .nav button:hover{color:var(--side-ink);background:var(--side-active)}
+  .nav button.on{color:#fff;background:var(--side-active)}
+  .nav button.on .ic{background:var(--accent);border-color:var(--accent);opacity:1}
   .main{display:flex;flex-direction:column;min-width:0}
   .top{display:flex;align-items:center;gap:10px;padding:12px 24px;border-bottom:1px solid var(--border);
     background:var(--surface);position:sticky;top:0;z-index:5;flex-wrap:wrap}
@@ -624,7 +626,7 @@ _DEMO_HTML = """<!doctype html>
     --ink:#17221b; --body:#3d4a41; --muted:#6d786f; --faint:#929b94;
     --side:#fff; --side-2:#f6f8f6; --side-ink:#17221b; --side-muted:#68726b;
     --side-active:#e9f6ee; --side-border:#e3e9e4;
-    --accent:#087a70; --accent-soft:#dff3ef;
+    --accent:#087a70; --accent-soft:#dff3ef; --accent-border:#b8ddd6;
     --good:#178a52; --good-bg:#e5f4ec; --warn:#c88722; --warn-bg:#fff4df;
     --crit:#c84646; --crit-bg:#fbeaea; --info:#3676a8; --deep:#123b3a;
     --sh:0 1px 2px rgba(18,59,58,.035),0 8px 20px -16px rgba(18,59,58,.22);
@@ -638,10 +640,10 @@ _DEMO_HTML = """<!doctype html>
   .brand-product{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--side-muted);margin-top:7px}
   .navlbl{color:var(--faint);padding:22px 20px 6px;letter-spacing:.12em}
   .nav{padding:4px 10px}
-  .nav a{position:relative;color:var(--side-muted);padding:11px 12px;border-radius:8px;font-size:14px}
-  .nav a:hover{color:var(--ink);background:var(--side-2)}
-  .nav a.on{color:var(--accent);background:var(--side-active);font-weight:700}
-  .nav a.on:before{content:"";position:absolute;left:0;top:10px;bottom:10px;width:3px;border-radius:2px;background:var(--accent)}
+  .nav button{position:relative;color:var(--side-muted);padding:11px 12px;border-radius:8px;font-size:14px}
+  .nav button:hover{color:var(--ink);background:var(--side-2)}
+  .nav button.on{color:var(--accent);background:var(--side-active);font-weight:700}
+  .nav button.on:before{content:"";position:absolute;left:0;top:10px;bottom:10px;width:3px;border-radius:2px;background:var(--accent)}
   .top{min-height:64px;padding:0 32px;flex-wrap:nowrap;box-shadow:none}
   .crumb-sep{padding:0 7px;color:var(--faint)}
   .tbtn{min-height:34px}
@@ -684,11 +686,14 @@ _DEMO_HTML = """<!doctype html>
 
   /* Transaction Diagnostic System */
   .global-search{position:relative;width:min(420px,34vw)}
-  .global-search input{height:38px;padding:8px 58px 8px 35px;border-radius:8px;background:var(--canvas)}
+  .global-search input{height:38px;padding:8px 12px 8px 35px;border-radius:8px;background:var(--canvas)}
   .global-search:before{content:"";position:absolute;left:13px;top:12px;width:11px;height:11px;border:1.5px solid var(--muted);border-radius:50%;z-index:1}
   .global-search:after{content:"";position:absolute;left:23px;top:23px;width:6px;height:1.5px;background:var(--muted);transform:rotate(45deg);z-index:1}
-  .shortcut{position:absolute;right:8px;top:8px;color:var(--muted);font:11px var(--mono);border:1px solid var(--border);border-radius:5px;padding:2px 5px;background:var(--surface)}
-  .env-chip{font-size:11px;font-weight:700;color:var(--accent);background:var(--accent-soft);border:1px solid #b8ddd6;border-radius:5px;padding:4px 8px}
+  .global-search-status{display:none;position:absolute;left:0;right:0;top:calc(100% + 6px);z-index:20;
+    padding:8px 10px;border:1px solid var(--border);border-radius:7px;background:var(--surface);box-shadow:var(--sh);
+    color:var(--muted);font-size:11.5px;line-height:1.45}
+  .global-search-status.on{display:block}
+  .env-chip{font-size:11px;font-weight:700;color:var(--accent);background:var(--accent-soft);border:1px solid var(--accent-border);border-radius:5px;padding:4px 8px}
   .avatar{width:30px;height:30px;border-radius:50%;background:var(--deep);color:#fff;display:grid;place-items:center;font-size:11px;font-weight:750}
   .content.full{max-width:1440px}.content.full.view{display:none}.content.full.view.on{display:block}.content.full .page-head{display:flex}
   .metric-strip{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));border:1px solid var(--border);border-radius:10px;background:var(--surface);overflow:hidden;margin-bottom:16px}
@@ -701,70 +706,139 @@ _DEMO_HTML = """<!doctype html>
   .status-dot{width:8px;height:8px;border-radius:50%;background:var(--good)}.status-dot.warn{background:var(--warn)}.status-dot.crit{background:var(--crit)}
   .table-tools{display:flex;gap:8px;align-items:center;margin-bottom:12px}.table-tools input,.table-tools select{width:auto;height:36px;padding:7px 10px}.table-tools input{min-width:240px}.op-table{width:100%;border-collapse:collapse;background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden}.op-table th{background:#f0f5f3;color:var(--muted);font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;text-align:left;padding:10px 12px;border-bottom:1px solid var(--border);white-space:nowrap}.op-table td{padding:11px 12px;border-bottom:1px solid var(--border);font-size:12px;color:var(--body);white-space:nowrap}.op-table tbody tr{cursor:pointer}.op-table tbody tr:hover{background:#f7faf9}.op-table tbody tr:last-child td{border-bottom:0}.op-table .primary-id{font:600 12px var(--mono);color:var(--accent)}
   .op-table .sub-id{font:10.5px var(--mono);color:var(--muted);margin-top:3px}.op-table .stage-code{font-size:11.5px;color:var(--body)}.op-table .stage-code code{display:block;margin-top:3px;color:var(--muted);background:transparent;padding:0}.op-table .action-cell{width:138px;white-space:nowrap;text-align:center}.op-table th:last-child{text-align:center}.op-table .action-cell .tbtn{display:inline-flex;align-items:center;justify-content:center;width:118px;min-height:38px;padding:7px 10px;text-align:center}
+  .op-table .action-cell{width:194px}.action-stack{display:flex;justify-content:center;gap:6px}.op-table .action-stack .tbtn{width:auto;min-width:84px}
   .op-table .pill{max-width:150px;white-space:normal;overflow-wrap:normal;word-break:keep-all;justify-content:center;text-align:center;font-size:11.5px;line-height:1.3;padding:5px 9px}
   .op-table td:nth-child(3) .pill{min-width:138px}.op-table td:nth-child(4) .pill{min-width:98px}
   .diag-layout{display:grid;grid-template-columns:minmax(0,1.45fr) 350px;gap:16px}.diag-result{border-top:3px solid var(--crit)}.diag-hero{display:grid;grid-template-columns:1fr auto;gap:20px}.diag-title{font-size:20px;line-height:1.35;color:var(--ink);font-weight:750}.confidence{min-width:112px;text-align:right}.confidence strong{display:block;font:750 30px var(--mono);color:var(--ink)}.confidence span{font-size:11px;color:var(--muted)}
   .fact-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:0;border:1px solid var(--border);border-radius:8px;margin:15px 0;overflow:hidden}.fact{padding:11px 12px;border-right:1px solid var(--border)}.fact:last-child{border-right:0}.fact span{display:block;color:var(--muted);font-size:10.5px}.fact strong{display:block;color:var(--ink);font-size:12px;margin-top:2px}
-  .path{display:flex;align-items:center;gap:0;overflow-x:auto;padding:6px 0}.path-node{min-width:108px;border:1px solid var(--border);border-radius:7px;padding:9px 10px;background:var(--surface)}.path-node strong{display:block;color:var(--ink);font-size:11.5px}.path-node span{font-size:10.5px;color:var(--muted)}.path-node.bad{border-color:#e1a0a0;background:var(--crit-bg)}.path-link{height:1px;min-width:25px;background:var(--border2)}
-  .triad{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:14px}.triad-item{border:1px solid var(--border);border-radius:8px;padding:12px}.triad-item h4{font-size:11px;color:var(--muted);margin:0 0 7px;text-transform:uppercase;letter-spacing:.05em}.triad-item p{font-size:12px;color:var(--body);margin:0;line-height:1.6}.triad-item.actionable{background:var(--accent-soft);border-color:#b8ddd6}.evidence-line{display:flex;gap:9px;padding:10px 0;border-bottom:1px solid var(--border);font-size:12px}.evidence-line:last-child{border:0}.evidence-line b{color:var(--ink)}.evidence-line span{color:var(--muted)}
+  .path{display:flex;align-items:center;gap:0;overflow-x:auto;padding:6px 0}.path-node{min-width:108px;border:1px solid var(--border);border-radius:7px;padding:9px 10px;background:var(--surface)}.path-node strong{display:block;color:var(--ink);font-size:11.5px}.path-node span{font-size:10.5px;color:var(--muted)}.path-node.bad{border-color:#e1a0a0;background:var(--crit-bg)}.path-link{height:1px;min-width:25px;background:var(--border-2)}
+  .triad{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:14px}.triad-item{border:1px solid var(--border);border-radius:8px;padding:12px}.triad-item h4{font-size:11px;color:var(--muted);margin:0 0 7px;text-transform:uppercase;letter-spacing:.05em}.triad-item p{font-size:12px;color:var(--body);margin:0;line-height:1.6}.triad-item.actionable{background:var(--accent-soft);border-color:var(--accent-border)}.evidence-line{display:flex;gap:9px;padding:10px 0;border-bottom:1px solid var(--border);font-size:12px}.evidence-line:last-child{border:0}.evidence-line b{color:var(--ink)}.evidence-line span{color:var(--muted)}
   .customer-alert{border:1px solid #e3bd76;border-left:4px solid var(--warn);background:var(--warn-bg);border-radius:8px;padding:13px 14px;margin-bottom:14px}.customer-alert strong{display:block;color:#765115}.customer-alert p{margin:4px 0 0;color:#85632d;font-size:12px}
-  .secondary-nav{margin-top:auto;border-top:1px solid var(--side-border);padding:10px}.secondary-nav a{font-size:12px}
+  .secondary-nav{margin-top:auto;border-top:1px solid var(--side-border);padding:10px}.secondary-nav button{font-size:12px}
   .task-guide{display:grid;grid-template-columns:repeat(3,1fr);gap:0;background:var(--surface);border:1px solid var(--border);border-radius:10px;margin-bottom:16px;overflow:hidden}
   .guide-step{display:grid;grid-template-columns:30px 1fr;gap:10px;padding:15px 16px;border-right:1px solid var(--border)}.guide-step:last-child{border-right:0}
   .guide-no{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;background:var(--accent-soft);color:var(--accent);font-weight:750}
   .guide-step strong{display:block;color:var(--ink);font-size:13px}.guide-step span{display:block;color:var(--muted);font-size:11.5px;margin-top:2px}
-  .work-grid{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:16px}.work-aside{display:flex;flex-direction:column;gap:16px}
+  .work-grid{display:grid;grid-template-columns:minmax(0,1fr) 430px;gap:16px}.work-aside{display:flex;flex-direction:column;gap:16px}
   .quick-row{padding:14px 16px;border-bottom:1px solid var(--border)}.quick-row:last-child{border-bottom:0}.quick-row strong{display:block;color:var(--ink);font-size:13px}.quick-row p{margin:3px 0 9px;color:var(--muted);font-size:11.5px}
   @media(max-width:1320px){.work-grid{grid-template-columns:1fr}.work-aside{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}}
   @media(max-width:700px){.work-aside{grid-template-columns:1fr}.op-table td:nth-child(3) .pill{min-width:112px}.op-table td:nth-child(4) .pill{min-width:92px}}
-  .diag-layout.clear{grid-template-columns:minmax(0,1fr) 300px}.diag-result{border-top:0}.diagnosis-summary{border-left:4px solid var(--crit)}
+  .diag-layout.clear{grid-template-columns:minmax(0,1fr) 430px}.diag-result{border-top:0}.diagnosis-summary{border-left:4px solid var(--crit)}
   .diagnosis-summary.good{border-left-color:var(--good)}.diagnosis-summary.warn{border-left-color:var(--warn)}
   .diagnosis-kicker{color:var(--muted);font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}.diagnosis-title{font-size:22px;line-height:1.35;color:var(--ink);font-weight:760;margin:5px 0 8px}.diagnosis-copy{font-size:13px;line-height:1.7;color:var(--body);margin:0}
-  .next-action{margin-top:16px;padding:14px 15px;border-radius:8px;background:var(--accent-soft);border:1px solid #b8ddd6}.next-action strong{display:block;color:var(--accent);font-size:13px}.next-action p{margin:4px 0 0;color:var(--body);font-size:12.5px}
+  .next-action{margin-top:16px;padding:14px 15px;border-radius:8px;background:var(--accent-soft);border:1px solid var(--accent-border)}.next-action strong{display:block;color:var(--accent);font-size:13px}.next-action p{margin:4px 0 0;color:var(--body);font-size:12.5px}
   .missing-checklist{display:flex;flex-direction:column;gap:8px;margin-top:10px}.missing-row{display:flex;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--border);border-radius:7px;padding:9px 10px;color:var(--body);font-size:12.5px}.missing-row.next{border-color:#ddb66d;background:#fffaf0;font-weight:700;color:#765115}.missing-row .box{width:18px;height:18px;border:1.5px solid currentColor;border-radius:4px;display:grid;place-items:center;font-size:10px;flex:0 0 auto}
-  .source-case{margin:0 0 14px;padding:12px 13px;background:var(--accent-soft);border:1px solid #b8ddd6;border-radius:8px}.source-case strong{display:block;color:var(--accent);font-size:12.5px}.source-case span{display:block;color:var(--body);font:11.5px var(--mono);margin-top:3px}
   .field-label{display:block;color:var(--ink);font-size:12px;font-weight:700;margin:12px 0 6px}.helper{font-size:11.5px;color:var(--muted);margin-top:7px}.technical{border-top:1px solid var(--border);margin-top:16px;padding-top:12px}.technical summary{cursor:pointer;color:var(--accent);font-size:12.5px;font-weight:700}.technical[open] summary{margin-bottom:12px}
   .case-records{margin-top:0}.case-records summary{cursor:pointer;color:var(--body);font-weight:700}.case-records .record-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:14px}
   .diagnostic-materials{border-left:4px solid var(--warn)}.diagnostic-materials.complete{border-left-color:var(--good)}
   .material-notice{padding:12px 13px;border-radius:8px;background:var(--warn-bg);color:#765115;margin-bottom:12px}.material-notice strong{display:block;font-size:13px}.material-notice p{margin:3px 0 0;font-size:12px}.material-notice.complete{background:var(--good-bg);color:var(--good)}
   .material-list{display:flex;flex-direction:column;gap:8px}.material-row{display:grid;grid-template-columns:26px minmax(0,1fr) auto;gap:10px;align-items:center;border:1px solid var(--border);border-radius:8px;padding:10px 11px}.material-row.done{background:var(--good-bg);border-color:#b9ddca}.material-row .material-state{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;background:var(--warn-bg);color:var(--warn);font-size:11px;font-weight:800;line-height:1;margin:0}.material-row.done .material-state{background:var(--good);color:#fff}.material-row strong{display:block;color:var(--ink);font-size:12.5px}.material-row div>span{display:block;color:var(--muted);font-size:11px;margin-top:2px}
   .material-form{display:none;margin-top:12px;padding:14px;border:1px solid var(--border);border-radius:8px;background:var(--sunken)}.material-form.on{display:block}.material-form h3{margin:0 0 4px;color:var(--ink);font-size:13px}.material-form p{margin:0 0 9px;color:var(--muted);font-size:11.5px}.form-error{color:var(--crit);font-size:11.5px;margin-top:6px}
+  .modal-backdrop{display:none;position:fixed;inset:0;z-index:50;background:rgba(12,24,20,.48);padding:24px;align-items:center;justify-content:center}.modal-backdrop.on{display:flex}.evidence-modal{width:min(620px,100%);max-height:calc(100vh - 48px);overflow:auto;background:var(--surface);border:1px solid var(--border);border-radius:12px;box-shadow:0 24px 70px rgba(18,59,58,.28)}
+  .modal-hd{display:flex;align-items:flex-start;gap:12px;padding:17px 20px;border-bottom:1px solid var(--border)}.modal-hd h2{margin:0;color:var(--ink);font-size:17px}.modal-hd p{margin:3px 0 0;color:var(--muted);font-size:11.5px}.modal-close{margin-left:auto;border:0;background:transparent;color:var(--muted);font-size:20px;line-height:1;cursor:pointer}.modal-bd{padding:18px 20px}.modal-ft{display:flex;justify-content:flex-end;gap:9px;padding:14px 20px;border-top:1px solid var(--border)}
+  .withdraw-copy{padding:14px;border:1px solid #e4c18a;border-radius:9px;background:var(--warn-bg);color:#765115;line-height:1.6}.withdraw-copy strong{display:block;color:#68430b}.withdraw-copy code{overflow-wrap:anywhere}.withdraw-action{border-color:#d6a7a7!important;color:var(--crit)!important}.withdraw-action:hover{background:var(--crit-bg)!important}.withdraw-progress{display:none;margin-top:14px;color:var(--muted);font-size:11.5px}.withdraw-progress.on{display:block}
+  .upload-target{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:13px}.upload-fact{padding:10px 11px;border:1px solid var(--border);border-radius:8px;background:var(--sunken)}.upload-fact span{display:block;color:var(--muted);font-size:10.5px}.upload-fact strong{display:block;color:var(--ink);font-size:12px;margin-top:3px;overflow-wrap:anywhere}.file-choice{border:1px dashed var(--border-2);border-radius:9px;padding:14px;background:var(--canvas)}.file-choice input{background:var(--surface)}.selected-file{margin-top:9px;color:var(--body);font-size:11.5px}.selected-file strong{color:var(--ink)}
+  .submit-progress{display:flex;flex-direction:column;gap:7px;margin-top:14px}.progress-step{display:flex;align-items:center;gap:9px;padding:8px 10px;border:1px solid var(--border);border-radius:7px;color:var(--muted);font-size:11.5px}.progress-step:before{content:"";width:9px;height:9px;border-radius:50%;background:var(--border-2)}.progress-step.active{color:var(--accent);border-color:var(--accent-border);background:var(--accent-soft)}.progress-step.active:before{background:var(--accent)}.progress-step.done{color:var(--good)}.progress-step.done:before{background:var(--good)}.submit-receipt{padding:14px;border:1px solid #b9ddca;border-radius:9px;background:var(--good-bg);color:var(--body)}.submit-receipt strong{display:block;color:var(--good);font-size:14px}.submit-receipt p{margin:5px 0 0;font-size:11.5px;line-height:1.65}
   .empty-state{text-align:center;padding:28px 20px}.empty-state strong{display:block;color:var(--ink);font-size:15px}.empty-state p{margin:6px auto 14px;max-width:430px;color:var(--muted);font-size:12.5px}
-  @media(max-width:1180px){.metric-strip{grid-template-columns:repeat(3,1fr)}.metric-cell:nth-child(3){border-right:0}.metric-cell:nth-child(-n+3){border-bottom:1px solid var(--border)}.ops-grid,.diag-layout{grid-template-columns:1fr}.diag-layout>.rail{display:none}}
-  @media(max-width:1180px){.work-grid,.diag-layout.clear{grid-template-columns:1fr}.work-aside{display:grid;grid-template-columns:1fr 1fr}}
-  @media(max-width:840px){.global-search{width:100%}.top{height:auto;padding:10px 14px;flex-wrap:wrap}.metric-strip{grid-template-columns:repeat(2,1fr)}.metric-cell{border-bottom:1px solid var(--border)}.fact-grid,.triad,.task-guide{grid-template-columns:1fr}.guide-step{border-right:0;border-bottom:1px solid var(--border)}.guide-step:last-child{border-bottom:0}.work-aside,.case-records .record-grid{grid-template-columns:1fr}.fact{border-right:0;border-bottom:1px solid var(--border)}}
+  .mobile-nav{display:none}
+  .nav-live{margin-left:auto;width:7px;height:7px;border-radius:50%;background:var(--crit);box-shadow:0 0 0 3px rgba(201,78,74,.16)}
+  .boundary-banner{display:flex;align-items:flex-start;gap:10px;padding:11px 13px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--body);font-size:12px;margin-bottom:16px}
+  .boundary-banner strong{color:var(--ink);white-space:nowrap}.boundary-banner .dot{width:8px;height:8px;border-radius:50%;background:var(--crit);margin-top:5px;flex:0 0 auto}
+  .hub-hero{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:28px;align-items:end;padding:28px;border:1px solid var(--border);border-radius:12px;background:var(--surface);box-shadow:var(--sh);margin-bottom:18px}
+  .hub-hero h1{font-size:32px;line-height:1.15;color:var(--ink);letter-spacing:-.035em;margin:8px 0}.hub-hero p{max-width:720px;margin:0;color:var(--muted);font-size:14px;line-height:1.75}
+  .hero-kicker{display:flex;align-items:center;gap:8px;color:var(--accent);font-size:11px;font-weight:800;letter-spacing:.12em;text-transform:uppercase}.hero-kicker:before{content:"";width:22px;height:2px;background:var(--accent)}
+  .ai-map{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));grid-template-rows:repeat(3,auto);gap:12px;align-items:stretch}
+  .ai-core,.capability-card{border:1px solid var(--border);border-radius:10px;background:var(--surface);min-height:126px;padding:16px;box-shadow:var(--sh)}
+  .ai-core{grid-column:2;grid-row:2;border:2px solid var(--accent);background:var(--accent-soft);display:flex;flex-direction:column;justify-content:center;text-align:center}
+  .ai-core strong{font-size:20px;color:var(--ink)}.ai-core span{font-size:11px;color:var(--accent);font-weight:800;letter-spacing:.1em;margin-bottom:5px}.ai-core p{font-size:12px;color:var(--body);margin:7px 0 0}
+  .capability-card{display:flex;flex-direction:column;text-align:left;color:inherit;font-family:var(--sans)}.cap-a{grid-column:1;grid-row:1}.cap-b{grid-column:2;grid-row:1}.cap-c{grid-column:3;grid-row:1}.cap-d{grid-column:1;grid-row:2}.cap-e{grid-column:3;grid-row:2}.cap-f{grid-column:2;grid-row:3}
+  .capability-card.live{border-color:var(--accent-border);background:var(--accent-soft)}.capability-card.live,.capability-card.link{cursor:pointer}.capability-card.live:hover,.capability-card.link:hover{border-color:var(--accent);transform:translateY(-1px)}
+  .capability-top{display:flex;align-items:center;justify-content:space-between;gap:8px}.capability-code{font:700 11px var(--mono);color:var(--faint)}.capability-card h2{font-size:15px;color:var(--ink);margin:14px 0 4px}.capability-card p{font-size:11.5px;color:var(--muted);margin:0;line-height:1.55}.capability-status{font-size:10px;border-radius:4px;padding:2px 6px;background:var(--sunken);color:var(--muted);font-weight:700}.capability-status.live{background:var(--crit-bg);color:var(--crit)}.capability-status.ready{background:var(--good-bg);color:var(--good)}
+  .planned-strip{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:18px}.planned-item{padding:11px 12px;border:1px dashed var(--border-2);border-radius:8px;background:var(--surface)}.planned-item strong{display:block;color:var(--body);font-size:12px}.planned-item span{color:var(--faint);font-size:10.5px}
+  .copilot{border:1px solid var(--accent-border);border-radius:12px;background:var(--surface);box-shadow:var(--sh);margin-bottom:18px;overflow:hidden}
+  .copilot-hd{display:flex;align-items:center;gap:12px;padding:14px 18px;border-bottom:1px solid var(--border);background:linear-gradient(90deg,var(--accent-soft),var(--surface))}.copilot-hd h2{font-size:15px;color:var(--ink);margin:0}.copilot-hd p{font-size:11.5px;color:var(--muted);margin:2px 0 0}.runtime-badge{margin-left:auto;white-space:nowrap}
+  .copilot-grid{display:grid;grid-template-columns:minmax(320px,.8fr) minmax(0,1.2fr)}.copilot-compose{padding:18px;border-right:1px solid var(--border);background:var(--canvas)}.copilot-output{padding:18px;min-width:0}
+  .case-copilot{margin:0}.case-copilot .copilot-hd{padding:13px 14px}.case-copilot .copilot-grid,.case-copilot .agent-result-grid{grid-template-columns:1fr}.case-copilot .copilot-compose{padding:14px;border-right:0;border-bottom:1px solid var(--border)}.case-copilot .copilot-output{padding:14px}.case-copilot .copilot-compose textarea{min-height:82px}.case-copilot .assistant-message{margin-bottom:10px}.case-copilot .agent-panel+.agent-panel{margin-top:10px}.agent-context{display:flex;align-items:center;gap:7px;margin-bottom:10px;padding:8px 9px;border:1px solid var(--border);border-radius:7px;background:var(--surface);font-size:10.5px;color:var(--muted)}.agent-context strong{font-family:var(--mono);color:var(--ink);overflow:hidden;text-overflow:ellipsis}.agent-history{display:flex;flex-direction:column;gap:7px;max-height:176px;overflow:auto;margin-bottom:10px;padding-right:3px}.chat-bubble{max-width:90%;padding:8px 10px;border-radius:8px;font-size:11.5px;line-height:1.55}.chat-bubble.user{align-self:flex-end;background:var(--deep);color:#fff}.chat-bubble.assistant{align-self:flex-start;background:var(--accent-soft);color:var(--body)}.agent-action{margin-top:10px;padding:10px;border:1px solid var(--accent-border);border-radius:8px;background:var(--accent-soft)}.agent-action p{margin:0 0 7px;color:var(--body);font-size:11.5px}
+  .agent-materials,.agent-citations{display:flex;flex-direction:column;gap:7px}.agent-material,.agent-citation{padding:8px 9px;border:1px solid var(--border);border-radius:7px;background:var(--surface)}.agent-material strong,.agent-citation strong{display:block;color:var(--ink);font-size:11.5px}.agent-material span,.agent-citation p{display:block;color:var(--muted);font-size:10.5px;line-height:1.5;margin:3px 0 0}.agent-citation button{margin-top:7px}.review-proposal{margin-top:10px;padding:12px;border:1px solid #ddb66d;border-radius:8px;background:var(--warn-bg)}.review-proposal h4{margin:0;color:#765115;font-size:12.5px}.review-proposal p{margin:5px 0;color:var(--body);font-size:11.5px;line-height:1.55}.review-proposal input{margin-top:7px}.review-proposal .actions{margin-top:8px}.review-receipt{margin-top:8px;padding:8px 9px;border-radius:7px;background:var(--good-bg);color:var(--good);font-size:11px;line-height:1.5}
+  .prompt-examples{display:flex;flex-wrap:wrap;gap:7px;margin:8px 0 12px}.prompt-example{border:1px solid var(--border);border-radius:999px;background:var(--surface);color:var(--body);padding:6px 10px;font:11.5px var(--sans);cursor:pointer}.prompt-example:hover{border-color:var(--accent);color:var(--accent)}
+  .copilot-compose textarea{min-height:118px;resize:vertical;line-height:1.6}.copilot-compose .actions{align-items:center}.copilot-status{min-height:20px;margin-top:9px;color:var(--muted);font-size:11.5px}.copilot-status.error{color:var(--crit)}
+  .assistant-message{border-left:3px solid var(--accent);background:var(--accent-soft);border-radius:0 8px 8px 0;padding:12px 14px;margin-bottom:14px}.assistant-message span{display:block;color:var(--accent);font-size:10.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase}.assistant-message p{color:var(--ink);font-size:13px;line-height:1.7;margin:5px 0 0}
+  .agent-result-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(280px,.9fr);gap:14px}.agent-panel{border:1px solid var(--border);border-radius:9px;overflow:hidden}.agent-panel-hd{display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid var(--border);background:var(--sunken)}.agent-panel-hd h3{font-size:12.5px;color:var(--ink);margin:0}.agent-panel-bd{padding:12px}
+  .judgment-summary{font-size:12px;line-height:1.65;color:var(--body);margin:0 0 10px}.judgment-row{display:grid;grid-template-columns:86px minmax(0,1fr);gap:10px;padding:7px 0;border-top:1px solid var(--border);font-size:11.5px}.judgment-row span{color:var(--muted)}.judgment-row strong{color:var(--ink);font-weight:650}.fact-chips{display:flex;flex-wrap:wrap;gap:5px}.fact-chip{padding:3px 7px;border-radius:5px;background:var(--good-bg);color:var(--good);font-size:10.5px}.fact-chip.pending{background:var(--warn-bg);color:var(--warn)}
+  .agent-trace{display:flex;flex-direction:column}.trace-step{position:relative;padding:0 0 13px 22px}.trace-step:last-child{padding-bottom:0}.trace-step:before{content:"";position:absolute;left:4px;top:5px;width:9px;height:9px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}.trace-step:after{content:"";position:absolute;left:8px;top:17px;bottom:2px;width:1px;background:var(--border-2)}.trace-step:last-child:after{display:none}.trace-step.rule:before{background:var(--info)}.trace-step.human:before{background:var(--warn);box-shadow:0 0 0 3px var(--warn-bg)}.trace-step.blocked:before{background:var(--crit);box-shadow:0 0 0 3px var(--crit-bg)}
+  .trace-top{display:flex;align-items:center;gap:6px}.trace-top strong{color:var(--ink);font-size:11.5px}.trace-top span{font-size:9.5px;padding:2px 5px;border-radius:4px;background:var(--sunken);color:var(--muted);font-weight:700}.trace-step p{font-size:11px;color:var(--body);margin:3px 0 0;line-height:1.45}.trace-meta{font:9.5px var(--mono);color:var(--faint);margin-top:2px}.case-link{font-family:var(--mono)}
+  .rules-layout{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(340px,.7fr);gap:16px}.rule-panel{border-top:3px solid var(--accent)}.rule-id{font:650 11.5px var(--mono);color:var(--accent)}.rule-name{color:var(--ink);font-weight:650}
+  .rule-detail{position:sticky;top:80px}.rule-detail h2{font-size:19px;color:var(--ink);line-height:1.35;margin:7px 0}.rule-section{border-top:1px solid var(--border);padding-top:12px;margin-top:12px}.rule-section h3{font-size:12px;color:var(--accent);letter-spacing:.04em;margin:0 0 8px}.requirement{display:grid;grid-template-columns:24px minmax(0,1fr);gap:9px;padding:8px 0;border-bottom:1px solid var(--border)}.requirement:last-child{border-bottom:0}.requirement .seq{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;background:var(--accent-soft);color:var(--accent);font:700 10px var(--mono)}.requirement strong{font-size:12px;color:var(--ink)}.requirement span{display:block;font-size:10.5px;color:var(--muted);margin-top:2px}
+  .rule-detail.reference-highlight{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft),var(--sh)}
+  .op-table tr.rule-selected td{background:var(--accent-soft)}
+  .error-state{padding:18px;border:1px solid #D9A09D;background:var(--crit-bg);border-radius:8px;color:var(--crit);font-size:12px}.loading-state{padding:18px;color:var(--muted);font-size:12px}
+  .tbtn,.scenario-card,.capability-card{transition:border-color .18s ease,background-color .18s ease,color .18s ease,transform .18s ease}
+  @media(max-width:1180px){.metric-strip{grid-template-columns:repeat(3,1fr)}.metric-cell:nth-child(3){border-right:0}.metric-cell:nth-child(-n+3){border-bottom:1px solid var(--border)}.ops-grid,.diag-layout{grid-template-columns:1fr}.diag-layout>.rail{display:none}.copilot-grid,.agent-result-grid{grid-template-columns:1fr}.copilot-compose{border-right:0;border-bottom:1px solid var(--border)}}
+  @media(max-width:1180px){.work-grid,.diag-layout.clear,.rules-layout{grid-template-columns:1fr}.work-aside{display:grid;grid-template-columns:1fr 1fr}.case-copilot{grid-column:1/-1}.rule-detail{position:static}}
+  @media(max-width:840px){.global-search{width:100%}.global-search input{height:44px}.top{height:auto;padding:10px 14px;flex-wrap:wrap}.mobile-nav{display:flex;gap:6px;padding:9px 12px;border-bottom:1px solid var(--border);background:var(--surface);overflow-x:auto}.mobile-nav button{min-height:44px;border:1px solid var(--border);border-radius:7px;background:var(--surface);color:var(--muted);padding:7px 10px;white-space:nowrap}.mobile-nav button.on{color:var(--accent);border-color:var(--accent);background:var(--accent-soft);font-weight:700}.metric-strip{grid-template-columns:repeat(2,1fr)}.metric-cell{border-bottom:1px solid var(--border)}.fact-grid,.triad,.task-guide{grid-template-columns:1fr}.guide-step{border-right:0;border-bottom:1px solid var(--border)}.guide-step:last-child{border-bottom:0}.work-aside,.case-records .record-grid{grid-template-columns:1fr}.fact{border-right:0;border-bottom:1px solid var(--border)}.hub-hero{grid-template-columns:1fr;align-items:start}.ai-map{grid-template-columns:1fr 1fr;grid-template-rows:auto}.ai-core,.capability-card{grid-column:auto;grid-row:auto}.ai-core{grid-column:1/-1;grid-row:1}.planned-strip{grid-template-columns:1fr 1fr}.tbtn,.schip,.segmented button,label.chk,.table-tools input,.table-tools select{min-height:44px}}
+  @media(max-width:560px){.ai-map,.planned-strip{grid-template-columns:1fr}.hub-hero{padding:20px}.hub-hero h1{font-size:27px}.copilot-hd{align-items:flex-start;flex-wrap:wrap}.runtime-badge{margin-left:0}.copilot-compose,.copilot-output{padding:14px}.upload-target{grid-template-columns:1fr}.modal-backdrop{padding:10px}.table-tools{align-items:stretch;flex-direction:column}.table-tools input,.table-tools select{width:100%;min-width:0}textarea,select,input{font-size:16px}}
 </style>
 </head>
 <body>
+<a class="skip-link" href="#mainContent">跳到主要内容</a>
 <div class="app">
   <aside class="side">
     <div class="sbrand">
       <img class="ocean-logo" src="__OCEANPAYMENT_LOGO__" alt="Oceanpayment" />
       <div class="brand-product">案件诊断系统</div>
     </div>
+    <div class="navlbl">全能 AI 助手</div>
+    <nav class="nav">
+      <button class="on" type="button" data-v="hub">AI 运营中枢</button>
+    </nav>
     <div class="navlbl">工作台</div>
     <nav class="nav">
-      <a class="on" data-v="overview">案件中心</a>
-      <a data-v="create">新建案件</a>
-      <a data-v="prev">交易风险</a>
+      <button type="button" data-v="overview">案件中心</button>
+      <button type="button" data-v="create">新建案件</button>
+      <button type="button" data-v="prev">交易风险</button>
+      <button type="button" data-v="rules">规则知识</button>
     </nav>
+    <nav class="secondary-nav nav"><button type="button" data-v="safe">规则与运营</button></nav>
   </aside>
 
-  <div class="main">
+  <main class="main" id="mainContent" tabindex="-1">
     <div class="top">
-      <div class="crumb"><b id="crumbRoot">商户工作台</b><span class="crumb-sep">/</span><span id="crumbId" class="id">案件中心</span></div>
+      <div class="crumb"><b id="crumbRoot">OceanPilot</b><span class="crumb-sep">/</span><span id="crumbId" class="id">AI 运营中枢</span></div>
       <div class="grow"></div>
-      <div class="global-search"><input id="globalSearch" placeholder="搜索案件号或争议原因" autocomplete="off"><span class="shortcut">⌘K</span></div>
+      <div class="global-search"><input id="globalSearch" aria-label="全局搜索" placeholder="搜索案件号或争议原因" autocomplete="off" aria-describedby="globalSearchStatus"><div class="global-search-status" id="globalSearchStatus" role="status" aria-live="polite"></div></div>
+      <span class="env-chip">Synthetic Demo</span>
       <label class="language-control"><span>语言</span><select id="languageSelect" aria-label="语言"><option value="zh">中文</option><option value="en">English</option></select></label>
       <div class="merchant-account"><span>商户</span><strong>OceanStore</strong></div>
     </div>
+    <nav class="mobile-nav" aria-label="移动端导航">
+      <button class="on" data-v="hub">AI 中枢</button><button data-v="overview">案件中心</button><button data-v="create">新建案件</button><button data-v="prev">交易风险</button><button data-v="rules">规则知识</button><button data-v="safe">规则与运营</button>
+    </nav>
+
+    <!-- AI 运营中枢 -->
+    <div class="content full view on" id="v-hub">
+      <div class="boundary-banner"><span class="dot"></span><strong>Synthetic Demo</strong><span>当前不连接真实 Oceanpayment 交易、退款、风控或卡组织提交；AI 只提出建议，确定性规则约束，人类确认后最多进入 mock connector。</span></div>
+      <section class="hub-hero">
+        <div><div class="hero-kicker">Merchant success operating system</div><h1>一个中枢，协同跨境商户运营</h1><p>OceanPilot 将支付运营、争议协作、风险提示、规则知识与审计运维放入同一套可解释工作流。本次比赛只把“支付异常”做成端到端 Live Demo，其余能力如实标注实现状态。</p></div>
+        <button class="tbtn primary" onclick="showView('overview')">进入支付异常主线</button>
+      </section>
+      <section class="ai-map" aria-label="OceanPilot AI 能力地图">
+        <button class="capability-card live cap-a" onclick="showView('overview')"><span class="capability-top"><span class="capability-code">01 · PAYMENT OPS</span><span class="capability-status live">LIVE · 当前演示</span></span><h2>支付异常</h2><p>进入持久化案件工作台，完成建案、补证、评估、规则追溯与人工确认。</p></button>
+        <article class="capability-card cap-b"><span class="capability-top"><span class="capability-code">02 · DISPUTE</span><span class="capability-status ready">已实现</span></span><h2>争议协作</h2><p>持久化案件、逐项补证、材料就绪评估、人审与 mock 提交。</p></article>
+        <article class="capability-card cap-c"><span class="capability-top"><span class="capability-code">03 · RISK</span><span class="capability-status ready">已实现</span></span><h2>交易风险</h2><p>提供交易前风险提示和建议留存材料，不执行真实风控动作。</p></article>
+        <button class="capability-card link cap-d" onclick="showView('rules')" aria-label="进入规则知识库"><span class="capability-top"><span class="capability-code">04 · KNOWLEDGE</span><span class="capability-status ready">Backend Ready · 10 / 3</span></span><h2>规则知识</h2><p>浏览 10 条演示摘要与 3 条 Demo Mapped 规则，并从诊断或材料包追溯具体版本与来源。</p></button>
+        <div class="ai-core"><span>OCEANPILOT</span><strong>AI Operations Core</strong><p>事实 → 规则 → 建议 → 人工确认 → 留痕</p></div>
+        <article class="capability-card cap-e"><span class="capability-top"><span class="capability-code">05 · AUDIT</span><span class="capability-status ready">已实现</span></span><h2>审计与运营</h2><p>展示案件处理留痕、敏感信息拦截与本次进程概览。</p></article>
+        <article class="capability-card cap-f"><span class="capability-top"><span class="capability-code">06 · SUCCESS</span><span class="capability-status">已设计</span></span><h2>商户成功</h2><p>将异常处置结果沉淀为商户建议；比赛版本不伪装外部数据接入。</p></article>
+      </section>
+      <div class="planned-strip" aria-label="规划能力"><div class="planned-item"><strong>增长洞察</strong><span>规划接入</span></div><div class="planned-item"><strong>客户支持</strong><span>已设计</span></div><div class="planned-item"><strong>自动化编排</strong><span>规划接入</span></div><div class="planned-item"><strong>企业集成</strong><span>规划接入</span></div></div>
+    </div>
 
     <!-- 案件中心 -->
-    <div class="content full view on" id="v-overview">
-      <div class="page-head"><div><div class="eyebrow">Case center</div><h1>案件中心</h1><p>只展示已在当前系统中创建并可重新读取的案件；待补资料案件可进入诊断。</p></div><button class="tbtn primary" onclick="openCreate(null)">新建案件</button></div>
+    <div class="content full view" id="v-overview">
+      <div class="page-head"><div><div class="eyebrow">Case center</div><h1>案件中心</h1><p>只展示已在当前系统中创建并可重新读取的案件；选择“进入 AI 分析”后在单案诊断页处理。</p></div><button class="tbtn primary" onclick="openCreate(null)">新建案件</button></div>
       <div class="work-grid">
         <section class="panel"><div class="panel-hd"><h2>历史案件</h2><div class="grow"></div><span class="muted" id="transactionCount">正在读取</span></div><div class="panel-bd">
-          <div class="table-tools"><input id="tableSearch" placeholder="案件号或争议原因"><select id="statusFilter"><option value="ALL">全部状态</option><option value="REASON_PROPOSED">待确认原因</option><option value="NEED_EVIDENCE">待补资料</option><option value="ASSESSED">评估完成</option></select></div>
+          <div class="table-tools"><input id="tableSearch" aria-label="搜索案件" placeholder="案件号或争议原因"><select id="statusFilter" aria-label="筛选案件状态"><option value="ALL">全部状态</option><option value="REASON_PROPOSED">待确认原因</option><option value="NEED_EVIDENCE">待补资料</option><option value="ASSESSED">评估完成</option></select></div>
           <div style="overflow:auto"><table class="op-table"><thead><tr><th>案件</th><th>争议原因</th><th>状态</th><th>待补资料</th><th>操作</th></tr></thead><tbody id="transactionRows"><tr><td colspan="5" class="empty">正在从案件库读取…</td></tr></tbody></table></div>
         </div></section>
         <aside class="work-aside">
@@ -776,20 +850,38 @@ _DEMO_HTML = """<!doctype html>
 
     <!-- 案件诊断 -->
     <div class="content full view" id="v-diagnosis">
-      <div class="page-head"><div><div class="eyebrow">Case diagnosis</div><h1>案件诊断</h1><p>查看当前案件为什么无法继续，并在本页直接补交系统确认缺失的资料。</p></div><button class="tbtn" onclick="showView('overview')">返回案件中心</button></div>
+      <div class="page-head"><div><div class="eyebrow">Case diagnosis</div><h1>案件诊断</h1><p>查看当前案件为什么无法继续，并在本页直接补交系统确认缺失的资料。</p></div><button class="tbtn" onclick="returnToCaseCenter()">返回案件中心</button></div>
       <div class="diag-layout clear"><div class="stack">
         <section class="panel diagnosis-summary" id="diagnosisSummary"><div class="panel-hd"><h2>发生了什么</h2><div class="grow"></div><span class="pill p-warn" id="diagStatus">读取中</span></div><div class="panel-bd">
           <div class="diagnosis-kicker">诊断结论</div><div class="diagnosis-title" id="diagCause">正在读取案件状态</div><p class="diagnosis-copy" id="diagMeaning">诊断结果将以案件库中的当前状态为准。</p>
           <div class="fact-grid"><div class="fact"><span>案件号</span><strong id="diagId">—</strong></div><div class="fact"><span>争议原因</span><strong id="diagCode">—</strong></div><div class="fact"><span>当前阶段</span><strong id="diagStage">—</strong></div><div class="fact"><span>待补资料</span><strong id="diagImpact">—</strong></div></div>
           <div class="next-action"><strong>建议下一步</strong><p id="diagAdvice">请按下方清单补交资料。</p></div>
         </div></section>
-        <section class="panel diagnostic-materials" id="diagnosticMaterials"><div class="panel-hd"><h2>需要补交的资料</h2><span class="pill p-warn" id="diagMissingBadge">读取中</span></div><div class="panel-bd"><div class="material-notice" id="diagnosisAlert"><strong>正在核对案件资料</strong><p>清单只显示后端当前确认缺失的材料。</p></div><div class="material-list" id="diagMaterialRows"></div></div></section>
-      </div><aside class="work-aside"><section class="panel"><div class="panel-hd"><h2>本次案件</h2></div><div class="panel-bd"><div class="field"><div class="k">案件号</div><div class="v mono" id="diagCaseId">—</div></div><div class="field mt"><div class="k">记录校验</div><div class="v" id="diagSideId"><span class="pill p-good">后端可读</span></div></div><div class="field mt"><div class="k">资料状态</div><div class="v" id="diagMaterialState"><span class="pill p-warn">读取中</span></div></div></div></section><section class="panel"><div class="panel-hd"><h2>处理方式</h2></div><div class="panel-bd"><p class="muted" style="margin-top:0">1. 查看当前状态<br>2. 按后端清单逐项补交<br>3. 提交后立即重新读取案件</p></div></section></aside></div>
+        <section class="panel diagnostic-materials" id="diagnosticMaterials"><div class="panel-hd"><h2>需要补交的资料</h2><span class="pill p-warn" id="diagMissingBadge">读取中</span></div><div class="panel-bd"><div class="material-notice" id="diagnosisAlert" role="status" aria-live="polite"><strong>正在核对案件资料</strong><p>清单只显示后端当前确认缺失的材料。</p></div><div class="material-list" id="diagMaterialRows"></div></div></section>
+        <section class="panel"><div class="panel-hd"><h2>适用条款解析</h2><span class="pill p-acc">只读</span></div><div class="panel-bd"><div class="helper" style="margin-top:0">明确选择卡组织后，系统才会按当前案件原因解析具体规则版本；不会按原因码猜测。</div><div class="actions"><select id="diagnosisNetwork" aria-label="案件诊断卡组织" onchange="setRuleReferenceNetwork('diagnosis',this.value)" style="max-width:220px"><option value="">请选择卡组织</option><option value="VISA">Visa</option><option value="MASTERCARD">Mastercard</option><option value="AMEX">American Express</option></select><button class="tbtn" onclick="resolveCaseRuleReference('diagnosis')">解析并查看引用条款</button></div><div id="diagnosisRuleReferenceOut" class="mt" aria-live="polite"></div></div></section>
+      </div><aside class="work-aside">
+        <section class="copilot case-copilot" aria-labelledby="copilotTitle">
+          <div class="copilot-hd"><div><h2 id="copilotTitle">OceanPilot Agent</h2><p>围绕当前案件持续分析与建议</p></div><span class="pill p-mut runtime-badge" id="agentRuntimeBadge">等待调用</span></div>
+          <div class="copilot-grid">
+            <div class="copilot-compose">
+              <div class="agent-context"><span>当前上下文</span><strong id="agentCaseContext">正在绑定案件</strong></div>
+              <div class="agent-history" id="agentHistory" aria-live="polite"><div class="chat-bubble assistant">进入案件后，AI 会自动读取最新快照，并在原因确认或资料变化后重新分析。</div></div>
+              <div class="prompt-examples" aria-label="案件问题示例"><button class="prompt-example" onclick="fillAgentPrompt('为什么这个案件还不能提交？')">为什么被阻断</button><button class="prompt-example" onclick="fillAgentPrompt('目前还缺什么资料？')">还缺什么</button><button class="prompt-example" onclick="fillAgentPrompt('审核通过，已核对全部 Synthetic 材料内容一致。')">登记审核结论</button></div>
+              <label class="field-label" for="agentMessage">向 Agent 提问或输入审核结论</label><textarea id="agentMessage" maxlength="2000" aria-describedby="agentPromptHelp" placeholder="例如：请总结当前判断；或输入审核通过并说明已核对内容"></textarea>
+              <div class="helper" id="agentPromptHelp">AI 只生成说明或拟写入提案；请勿输入真实卡号或个人敏感信息。按 Ctrl/⌘ + Enter 发送。</div>
+              <div class="actions"><button class="tbtn primary" id="agentSendButton" onclick="sendAgentTurn()">发送给 Agent</button><button class="tbtn" onclick="analyzeCurrentCase('CASE_OPENED')">重新分析</button></div>
+              <div class="copilot-status" id="agentTurnStatus" role="status" aria-live="polite"></div>
+            </div>
+            <div class="copilot-output" id="agentOutput" aria-live="polite"><div class="empty-state"><strong>正在读取案件</strong><p>分析将展示案件总结、材料内容、判断原因、下一步、引用和执行轨迹。</p></div></div>
+          </div>
+        </section>
+        <section class="panel"><div class="panel-hd"><h2>本次案件</h2></div><div class="panel-bd"><div class="field"><div class="k">案件号</div><div class="v mono" id="diagCaseId">—</div></div><div class="field mt"><div class="k">记录校验</div><div class="v" id="diagSideId"><span class="pill p-good">后端可读</span></div></div><div class="field mt"><div class="k">资料状态</div><div class="v" id="diagMaterialState"><span class="pill p-warn">读取中</span></div></div><div class="actions"><button class="tbtn" onclick="showView('flow');apply(S.selectedCase)">进入评估与材料包</button></div></div></section>
+      </aside></div>
     </div>
 
     <!-- 新建案件 -->
     <div class="content view" id="v-create">
-      <div class="page-head"><div><div class="eyebrow">Create case</div><h1>新建案件</h1><p>选择常见案件模板，确认案件说明后创建；此流程与失败案件诊断互相独立。</p></div><button class="tbtn" onclick="showView('overview')">返回案件中心</button></div>
+      <div class="page-head"><div><div class="eyebrow">Create case</div><h1>新建案件</h1><p>选择常见案件模板，确认案件说明后创建；此流程与失败案件诊断互相独立。</p></div><button class="tbtn" onclick="returnToCaseCenter()">返回案件中心</button></div>
       <div class="stack"><div class="card"><div class="hd"><h3>案件信息</h3><span class="eyebrow">创建案件</span></div><div class="bd" id="createAction"></div></div></div>
       <aside class="rail"><section class="panel"><div class="panel-hd"><h2>创建后</h2></div><div class="panel-bd"><p class="muted" style="margin-top:0">新案件会进入案件详情。系统将识别已有材料，并显示后续案件处理缺口。</p></div></section></aside>
     </div>
@@ -808,10 +900,10 @@ _DEMO_HTML = """<!doctype html>
           <div class="bd" id="action"></div>
         </div>
         <div class="card" id="verdictCard" style="display:none">
-          <div class="hd"><h3>材料就绪评估</h3><span class="eyebrow">规则评估</span></div>
+          <div class="hd"><h3>材料就绪评估</h3><span class="eyebrow">内部案件准备清单</span></div>
           <div class="bd" id="verdictBody"></div>
         </div>
-        <details class="card case-records"><summary class="hd">查看案件处理记录</summary><div class="bd record-grid"><div><h3>处理记录</h3><ul class="tl" id="auditOut"><li class="empty">建案后自动记录。</li></ul></div><div><h3>判断依据</h3><div id="agentOut"><div class="empty">—</div></div></div></div></details>
+        <details class="card case-records"><summary class="hd">查看案件处理审计</summary><div class="bd record-grid"><div><h3>案件处理审计</h3><ul class="tl" id="auditOut"><li class="empty">建案后自动记录。</li></ul></div><div><h3>Agent 判断依据</h3><div id="agentOut"><div class="empty">—</div></div></div></div></details>
       </div>
       <div class="rail"></div>
     </div>
@@ -830,13 +922,23 @@ _DEMO_HTML = """<!doctype html>
             <label class="amount-field"><span>交易金额</span><input id="p_amount" placeholder="例如 4200"></label>
             <button class="tbtn primary" onclick="assessPrevention()">开始评估</button>
           </div>
-          <div id="preventionOut" class="mt"></div>
+          <div id="preventionOut" class="mt" aria-live="polite"></div>
         </div>
       </div></div>
       <div class="rail"></div>
     </div>
 
-    <!-- 安全与指标 -->
+    <!-- 规则知识 -->
+    <div class="content full view" id="v-rules">
+      <div class="page-head"><div><div class="eyebrow">Curated rules prototype</div><h1>规则知识</h1><p>浏览本地规则知识库原型中的公开资料整理摘要；案件诊断与材料打包均通过同一 rule_version_id 追溯来源。</p></div><span class="pill p-acc" id="ruleStats">正在读取规则库</span></div>
+      <div class="boundary-banner"><span class="dot" style="background:var(--accent)"></span><strong>UNVERIFIED_SUMMARY</strong><span id="ruleDisclaimer">演示规则摘要；生产使用前须按卡组织、地区、版本和生效日期，以正式 Standards、后台公告及收单机构有效版本复核。</span></div>
+      <div class="rules-layout">
+        <section class="panel rule-panel"><div class="panel-hd"><h2>规则目录</h2><div class="grow"></div><span class="muted">只读</span></div><div class="panel-bd"><div class="table-tools"><input id="ruleSearch" aria-label="搜索规则" placeholder="搜索原因码、名称或来源"><select id="ruleScheme" aria-label="筛选卡组织或技术来源"><option value="">全部来源</option><option value="VISA">Visa</option><option value="MASTERCARD">Mastercard</option><option value="AMEX">American Express</option><option value="OCEANPAYMENT">Oceanpayment 技术文档</option></select><button class="tbtn" onclick="loadRules()">查询</button></div><div style="overflow:auto"><table class="op-table"><thead><tr><th>规则</th><th>卡组织 / 来源</th><th>版本</th><th>角色</th><th>校验状态</th><th>操作</th></tr></thead><tbody id="ruleRows"><tr><td colspan="6" class="loading-state">正在从规则数据库读取…</td></tr></tbody></table></div></div></section>
+        <aside class="panel rule-detail" id="ruleDetail" tabindex="-1" aria-live="polite"><div class="panel-hd"><h2>规则详情</h2><span class="pill p-acc">Provenance</span></div><div class="panel-bd"><div class="empty-state"><strong>选择一条规则</strong><p>查看来源文档、版本、断言、证据摘要、内部映射与限制。</p></div></div></aside>
+      </div>
+    </div>
+
+    <!-- 规则与运营 -->
     <div class="content view" id="v-safe">
       <div class="page-head"><div><h1>规则与运营</h1>
         <p>查看信息安全拦截和案件处理概览，确认系统始终在授权边界内运行。</p></div></div>
@@ -844,10 +946,10 @@ _DEMO_HTML = """<!doctype html>
         <div class="card">
           <div class="hd"><h3>敏感信息检查</h3><span class="eyebrow">卡号不入库</span></div>
           <div class="bd">
-            <input type="text" id="safeText" data-i18n-value value="请退款到卡号 4111 1111 1111 1111">
+            <label class="field-label" for="safeText">待检查文本</label><input type="text" id="safeText" data-i18n-value value="请退款到卡号 4111 1111 1111 1111">
             <div class="actions"><button class="tbtn primary" onclick="safetyScan()">检查内容</button>
               <span class="muted">检测到卡号后立即阻断，结果不会回显原文。</span></div>
-            <div id="safeOut" class="mt"></div>
+            <div id="safeOut" class="mt" aria-live="polite"></div>
           </div>
         </div>
         <div class="card">
@@ -857,21 +959,50 @@ _DEMO_HTML = """<!doctype html>
       </div>
       <div class="rail"></div>
     </div>
-  </div>
+  </main>
+</div>
+
+<div class="modal-backdrop" id="evidenceModal" role="dialog" aria-modal="true" aria-labelledby="evidenceModalTitle" aria-hidden="true">
+  <section class="evidence-modal">
+    <div class="modal-hd"><div><h2 id="evidenceModalTitle">提交案件资料</h2><p>核对资料后明确提交；Synthetic 演示不会上传文件内容。</p></div><button class="modal-close" id="evidenceModalClose" onclick="closeEvidenceModal()" aria-label="关闭资料提交弹窗">×</button></div>
+    <div class="modal-bd" id="evidenceModalBody">
+      <div class="upload-target"><div class="upload-fact"><span>案件号</span><strong id="evidenceModalCase">—</strong></div><div class="upload-fact"><span>目标资料</span><strong id="evidenceModalLabel">—</strong></div></div>
+      <div class="file-choice"><label class="field-label" for="evidenceFile" style="margin-top:0">1. 选择演示文件</label><input type="file" id="evidenceFile" accept=".pdf,.png,.jpg,.jpeg,.txt" onchange="selectEvidenceFile(this)"><div class="actions"><button class="tbtn" onclick="useSyntheticEvidenceFile()">使用 Synthetic 演示文件</button></div><div class="selected-file" id="selectedEvidenceFile">尚未选择文件</div></div>
+      <div class="note"><b>2. 核对提交边界</b><br>系统只记录既有资料代码，不读取文件内容、不上传对象存储，也不会向卡组织发送资料。</div>
+      <div class="submit-progress" id="evidenceSubmitProgress" aria-live="polite"><div class="progress-step" data-step="validate">形式校验</div><div class="progress-step" data-step="persist">写入案件资料状态</div><div class="progress-step" data-step="recheck">重新执行规则检查</div></div>
+      <div class="form-error" id="evidenceModalError" role="alert"></div>
+      <div id="evidenceReceipt" aria-live="polite"></div>
+    </div>
+    <div class="modal-ft"><button class="tbtn" id="evidenceCancelButton" onclick="closeEvidenceModal()">取消</button><button class="tbtn primary" id="evidenceSubmitButton" onclick="submitEvidenceModal()">3. 确认提交资料</button></div>
+  </section>
+</div>
+
+<div class="modal-backdrop" id="withdrawModal" role="dialog" aria-modal="true" aria-labelledby="withdrawModalTitle" aria-hidden="true">
+  <section class="evidence-modal">
+    <div class="modal-hd"><div><h2 id="withdrawModalTitle">确认撤回最近资料</h2><p>撤回会写入审计，并根据剩余资料重新计算案件阶段。</p></div><button class="modal-close" onclick="closeWithdrawModal()" aria-label="关闭撤回资料弹窗">×</button></div>
+    <div class="modal-bd">
+      <div class="withdraw-copy"><strong id="withdrawEvidenceLabel">—</strong><span>证据代码：<code id="withdrawEvidenceCode">—</code></span><br><span>仅撤回当前最近有效资料；若案件已被其他操作更新，请求会安全失败。</span></div>
+      <div class="withdraw-progress" id="withdrawProgress" role="status" aria-live="polite">正在原子撤回并刷新案件状态…</div>
+      <div class="form-error" id="withdrawModalError" role="alert"></div>
+    </div>
+    <div class="modal-ft"><button class="tbtn" id="withdrawCancelButton" onclick="closeWithdrawModal()">取消</button><button class="tbtn withdraw-action" id="withdrawConfirmButton" onclick="confirmEvidenceWithdrawal()">确认撤回</button></div>
+  </section>
 </div>
 
 <script>__CLIENT_I18N__</script>
 <script>
 const BASE="/api/v1/chargeback";
-const S={caseId:null,loc:window.oceanI18n.getLanguage(),packaged:false,appealed:false,last:null,cardNetwork:"VISA",
-  scenarioIndex:0,autoEvidence:["transaction.receipt","fulfillment.tracking"],selectedCase:null,cases:[]};
+const S={caseId:null,loc:window.oceanI18n.getLanguage(),currentView:"hub",packaged:false,appealed:false,caseCreating:false,evidenceSubmitting:false,evidenceSubmittingCases:new Set(),evidenceDraft:null,agentSubmitting:false,pendingAgentTurn:null,agentCase:null,agentMessages:[],pendingReview:null,lastAgentInput:"",last:null,cardNetwork:"",expectedReason:null,
+  scenarioIndex:0,autoEvidence:["transaction.receipt","fulfillment.tracking"],selectedCase:null,cases:[],
+  rules:[],currentRuleId:null,ruleReturnContext:null,rulesRequestId:0,ruleDetailRequestId:0,
+  auditByCase:new Map(),withdrawDraft:null,dialogTrigger:null};
 const SCENARIOS=[
-  {label:"Visa 13.1 · 未收到货",meta:"已有 2 项 · 仍缺 3 项",network:"VISA",
+  {label:"Visa 13.1 · 未收到货",meta:"已有 2 项 · 仍缺 3 项",network:"VISA",reason:"PRODUCT_NOT_RECEIVED",
     available:["transaction.receipt","fulfillment.tracking"],
     desc:"客户声称未收到商品；商户目前只有交易收据和物流轨迹，尚未取得签收证明、地址匹配及客服沟通。"},
-  {label:"Visa 10.4 · 非本人交易",meta:"已有 1 项 · 仍缺 5 项",network:"VISA",available:["transaction.receipt"],
+  {label:"Visa 10.4 · 非本人交易",meta:"已有 1 项 · 仍缺 5 项",network:"VISA",reason:"FRAUD_CARD_NOT_PRESENT",available:["transaction.receipt"],
     desc:"持卡人声称这笔交易不是本人、属于盗刷；商户目前只有交易收据，缺少 3DS、AVS/CVV、设备/IP 和历史交易关联。"},
-  {label:"Mastercard 4853 · 商品不符",meta:"已有 2 项 · 仍缺 3 项",network:"MASTERCARD",
+  {label:"Mastercard 4853 · 商品不符",meta:"已有 2 项 · 仍缺 3 项",network:"MASTERCARD",reason:"PRODUCT_NOT_AS_DESCRIBED",
     available:["transaction.receipt","product.description"],
     desc:"客户声称收到的商品与下单页面描述不符；商户目前只有交易收据和商品页面，缺少签收、沟通和政策材料。"},
 ];
@@ -885,7 +1016,7 @@ const TEAM_LABEL={RISK:"风控团队",CUSTOMER_SUPPORT:"客服团队",BUSINESS:"
 const AGENT_LABEL={IntakeAgent:"案件识别",EvidenceAgent:"材料校验",AssessAgent:"规则评估",HumanGate:"人工确认"};
 const SOURCE_LABEL={MODEL:"辅助说明",FALLBACK:"规则说明",HEURISTIC:"规则识别"};
 const EVENT_LABEL={CASE_OPENED:"案件创建",REASON_CLASSIFIED:"争议原因识别",REASON_CONFIRMED:"争议原因确认",
-  EVIDENCE_ADDED:"材料已补充",COLLECTION_FINALIZED:"材料收集结束"};
+  EVIDENCE_ADDED:"材料已补充",EVIDENCE_WITHDRAWN:"材料已撤回",COLLECTION_FINALIZED:"材料收集结束"};
 const RISK_LABEL={LOW:"低风险",MEDIUM:"中风险",HIGH:"高风险"};
 const FACTOR_LABEL={NO_3DS:"未完成 3DS",AVS_MISMATCH:"AVS 地址不匹配",CVV_MISMATCH:"CVV 不匹配",
   DEVICE_IP_MISMATCH:"设备与 IP 异常",HIGH_TICKET:"高额交易",HIGH_RISK_MCC:"高风险行业",
@@ -896,65 +1027,134 @@ const EVIDENCE_LABEL={"transaction.receipt":"交易收据","auth.avs_result":"AV
   "billing.refund_record":"退款记录","policy.terms_refund":"条款与退款政策","comms.customer":"客户沟通记录",
   "subscription.cancellation_record":"取消订阅记录","history.prior_transactions":"历史交易记录","billing.duplicate_check":"重复扣款核验"};
 const $=(id)=>document.getElementById(id);
-const esc=(s)=>String(s==null?"":s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+const esc=(s)=>String(s==null?"":s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const tr=(s)=>window.oceanI18n.translate(s);
 const cleanCopy=(s)=>String(s||"").replace(/（合成模型输出，仅用于离线演示）/g,"").trim();
 const actionLabel=(s)=>cleanCopy(s).replace(/胜诉评估 ([0-9.]+)（数字由内核判定）/,"材料就绪度 $1（规则评估）");
 const detailLabel=(s)=>REASON_LABEL[s]||EVIDENCE_LABEL[s]||s;
-async function api(m,p,b){const o={method:m,headers:{'Content-Type':'application/json'}};
+async function requestJson(base,m,p,b){const o={method:m,headers:{'Content-Type':'application/json'}};
   if(b!==undefined)o.body=JSON.stringify(b);
-  const r=await fetch(BASE+p,o);return{ok:r.ok,status:r.status,data:await r.json().catch(()=>({}))};}
+  try{const r=await fetch(base+p,o);return{ok:r.ok,status:r.status,data:await r.json().catch(()=>({}))};}
+  catch(error){return{ok:false,status:0,data:{detail:"network unavailable"}};}}
+const api=(m,p,b)=>requestJson(BASE,m,p,b);
+function returnToCaseCenter(){showView('overview');}
+function invalidateDerivedViews(){S.packaged=false;S.appealed=false;['pkgOut','appealOut','ruleReferenceOut','diagnosisRuleReferenceOut'].forEach(id=>{const node=$(id);if(node)node.innerHTML='';});}
+async function loadCaseAudit(caseId){if(!caseId)return[];const result=await api('GET',`/cases/${caseId}/audit`);if(!result.ok||!Array.isArray(result.data&&result.data.events))return S.auditByCase.get(caseId)||[];S.auditByCase.set(caseId,result.data.events);return result.data.events;}
+function latestActiveEvidence(caseId,collected=[]){const active=[];const present=new Set(collected||[]);for(const item of S.auditByCase.get(caseId)||[]){const code=item&&item.detail;if(!code)continue;if(item.event_type==='EVIDENCE_ADDED'){const previous=active.lastIndexOf(code);if(previous>=0)active.splice(previous,1);active.push(code);}else if(item.event_type==='EVIDENCE_WITHDRAWN'){const previous=active.lastIndexOf(code);if(previous>=0)active.splice(previous,1);}}for(let i=active.length-1;i>=0;i--){if(present.has(active[i]))return active[i];}return null;}
+function evidenceContext(source){const diagnosis=source==='diagnosis';const data=diagnosis?S.selectedCase:S.last;return{source:diagnosis?'diagnosis':'flow',data,caseId:data&&data.case_id};}
+
+const RUNTIME_LABEL={DEEPSEEK_LIVE:"DeepSeek Live",CLAUDE_LIVE:"Claude Live",INJECTED_MODEL:"Injected Model",OFFLINE_FALLBACK:"Offline Fallback"};
+const TRACE_STATUS={COMPLETED:"已完成",WAITING:"等待人工",BLOCKED:"已阻断"};
+function fillAgentPrompt(text){$('agentMessage').value=text;$('agentMessage').focus();}
+function traceClass(step){if(step.status==='BLOCKED')return'blocked';if(step.actor==='HumanGate')return'human';if(step.actor==='CaseTool'||step.source==='DETERMINISTIC_FALLBACK'||step.source==='CASE_STATE')return'rule';return'ai';}
+function factChips(items,pending=false){return items&&items.length?`<div class="fact-chips">${items.map(item=>`<span class="fact-chip${pending?' pending':''}">${esc(item)}</span>`).join('')}</div>`:'<span class="faint">无</span>';}
+function renderAgentHistory(){const out=$('agentHistory');out.innerHTML=S.agentMessages.length?S.agentMessages.slice(-8).map(item=>`<div class="chat-bubble ${item.role}">${esc(item.text)}</div>`).join(''):'<div class="chat-bubble assistant">进入案件后，AI 会基于当前快照自动分析。</div>';out.scrollTop=out.scrollHeight;}
+function appendAgentMessage(role,text){S.agentMessages.push({role,text});renderAgentHistory();}
+function acceptAgentUserMessage(message){S.lastAgentInput=message;appendAgentMessage('user',message);const input=$('agentMessage');if(input.value.trim()===message)input.value='';}
+async function bindAgentCase(caseId,reset=false){const result=await api('GET',`/cases/${caseId}`);if(!result.ok)return false;S.agentCase=result.data;$('agentCaseContext').textContent=`${caseId.slice(0,8)}… · ${(STATUS_VIEW[result.data.phase]||['待处理'])[0]}`;if(reset){S.agentMessages=[];S.pendingReview=null;S.pendingAgentTurn=null;appendAgentMessage('assistant',`已绑定案件 ${caseId.slice(0,8)}…。后续提问不会重复建案。`);$('agentOutput').innerHTML='<div class="empty-state"><strong>案件上下文已就绪</strong><p>AI 正在读取当前案件快照。</p></div>';}return true;}
+async function selectAgentCase(caseId){await openStoredCase(caseId);}
+function agentAction(data){const a=data.recommended_action||{};if(a.kind==='OPEN_EVIDENCE_MODAL'&&a.evidence_code)return `<div class="agent-action"><p>${esc(a.label||'补交下一项资料')} · 需要操作人员明确确认</p><button class="tbtn primary" onclick="openEvidenceModalForCase('${esc(data.case_id)}','${esc(a.evidence_code)}','${esc(a.evidence_label||EVIDENCE_LABEL[a.evidence_code]||a.evidence_code)}')">${esc(a.label||'打开资料提交')}</button></div>`;if(a.kind==='OPEN_CASE_DETAIL')return `<div class="agent-action"><p>${esc(a.label||'查看案件详情')} · Agent 不会自动修改案件</p><button class="tbtn" onclick="openStoredCase('${esc(data.case_id)}')">打开案件详情</button></div>`;return'';}
+function reviewStatusLabel(status){return({UNREVIEWED:'待人工审核',NEEDS_MORE_INFO:'待补资料',APPROVED:'审核已通过',REJECTED:'审核已驳回'})[status]||status||'待人工审核';}
+function agentMaterials(items){return items&&items.length?`<div class="agent-materials">${items.map(item=>`<div class="agent-material"><strong>${esc(item.label)}</strong><span>${esc(item.summary)}</span></div>`).join('')}</div>`:'<span class="faint">尚无已登记材料</span>';}
+function agentCitations(items,data){return items&&items.length?`<div class="agent-citations">${items.map(item=>`<div class="agent-citation"><strong>${esc(item.title)}</strong><p>${esc(item.claim)}</p><p>${esc(item.verification_status)} · ${esc(item.limitation)}</p><button class="tbtn" onclick="showRuleReference('${esc(item.reference_id)}',{sourceView:'diagnosis',caseId:'${esc(data.case_id)}',cardNetwork:'${esc(data.card_network||S.cardNetwork)}'})">查看引用 ${esc(item.reference_id)}</button></div>`).join('')}</div>`:'<span class="faint">当前尚无已核验引用；系统不会匹配相似条款。</span>';}
+function agentReviewProposal(data){const proposal=data.review_proposal;if(!proposal){S.pendingReview=null;return'';}S.pendingReview={caseId:data.case_id,sourceTurnId:data.source_turn_id,caseRevision:data.case_revision,status:proposal.status};const conflicts=proposal.conflicts||[];return `<div class="review-proposal" id="agentReviewProposal"><h4>拟写入案件 · ${esc(reviewStatusLabel(proposal.status))}</h4><p>${esc(proposal.summary)}</p>${conflicts.length?`<p><b>一致性阻断：</b>${conflicts.map(esc).join('；')}</p>`:''}<p><b>下一步：</b>${esc(proposal.next_action)}<br><b>原因：</b>${esc(proposal.why)}</p><input id="agentReviewerId" aria-label="审核确认人" value="judge_reviewer_01" placeholder="审核人 Actor ID"><div class="actions"><button class="tbtn primary" id="confirmAgentReviewButton" onclick="confirmAgentReview()">确认写入案件</button><button class="tbtn" onclick="editAgentReview()">修改输入</button><button class="tbtn" onclick="cancelAgentReview()">取消</button></div><div id="agentReviewReceipt" aria-live="polite"></div></div>`;}
+function agentReviewDecision(data){const decision=data.review_decision;if(!decision)return'';return `<div class="review-receipt"><b>${esc(reviewStatusLabel(decision.status))}</b> · revision ${esc(decision.revision)}<br>审核人 ${esc(decision.confirmed_by)} · 审计 ${esc(decision.audit_event_id)}</div>`;}
+function renderAgentTurn(data){const j=data.judgment||{},runtime=data.runtime||{},trace=data.agent_trace||[];const mode=RUNTIME_LABEL[runtime.mode]||runtime.mode||'Unknown Runtime';const badge=$('agentRuntimeBadge');badge.textContent=`${mode} · ${runtime.model||'unknown'}`;badge.className=`pill runtime-badge ${runtime.mode==='OFFLINE_FALLBACK'?'p-warn':'p-good'}`;appendAgentMessage('assistant',data.assistant_message);
+  const human=j.human_gate?'<span class="pill p-warn">需要人工确认</span>':'<span class="pill p-good">当前无需人审</span>';
+  $('agentOutput').innerHTML=`<div class="assistant-message"><span>AI Assistant · ${esc(mode)}</span><p>${esc(data.assistant_message)}</p></div>`
+    +`<div class="agent-result-grid"><section class="agent-panel"><div class="agent-panel-hd"><h3>AI 判断总结</h3><span class="pill p-acc">${esc(reviewStatusLabel(data.review_status))}</span></div><div class="agent-panel-bd"><p class="judgment-summary">${esc(data.analysis_summary||j.decision_summary)}</p>`
+    +`<div class="judgment-row"><span>分析触发</span><strong>${esc(data.trigger)} · revision ${esc(data.case_revision)}</strong></div>`
+    +`<div class="judgment-row"><span>问题类型</span><strong>${esc(j.problem_type)}</strong></div><div class="judgment-row"><span>已确认事实</span>${factChips(j.confirmed_facts)}</div><div class="judgment-row"><span>待确认事实</span>${factChips(j.uncertain_facts,true)}</div>`
+    +`<div class="judgment-row"><span>材料就绪度</span><strong>${esc(j.evidence_readiness)}</strong></div><div class="judgment-row"><span>材料内容</span>${agentMaterials(data.material_contents)}</div><div class="judgment-row"><span>责任域</span><strong>${esc(TEAM_LABEL[j.responsible_team]||j.responsible_team)}</strong></div><div class="judgment-row"><span>判断原因</span><strong>${esc(data.decision_reason)}</strong></div><div class="judgment-row"><span>人工边界</span><strong>${human}</strong></div><div class="judgment-row"><span>下一步</span><strong>${esc(j.next_action)}</strong></div><div class="judgment-row"><span>引用</span>${agentCitations(data.citations,data)}</div>`
+    +`${agentAction(data)}${agentReviewDecision(data)}${agentReviewProposal(data)}</div></section>`
+    +`<section class="agent-panel"><div class="agent-panel-hd"><h3>Agent 可视化执行轨迹</h3><span class="pill p-mut">不展示思维链</span></div><div class="agent-panel-bd agent-trace">${trace.map(step=>`<div class="trace-step ${traceClass(step)}"><div class="trace-top"><strong>${esc(step.step)} · ${esc(step.actor)}</strong><span>${esc(TRACE_STATUS[step.status]||step.status)}</span></div><p>${esc(step.action)}</p><div class="trace-meta">${esc(step.source)} · ${esc(step.output_summary)}</div></div>`).join('')}</div></section></div>`;}
+async function runAgentTurn(message,trigger='USER_MESSAGE',showUser=false){const statusEl=$('agentTurnStatus');if(!S.agentCase){statusEl.className='copilot-status error';statusEl.setAttribute('role','alert');statusEl.textContent='案件上下文尚未就绪，请稍后重试。';return false;}const caseId=S.agentCase.case_id;if(S.agentSubmitting){if(S.pendingAgentTurn&&S.pendingAgentTurn.trigger==='USER_MESSAGE'){if(trigger!=='USER_MESSAGE')return true;statusEl.className='copilot-status error';statusEl.setAttribute('role','alert');statusEl.textContent='已有一条人工输入等待分析；当前输入已保留，请稍后再次发送。';return false;}if(showUser)acceptAgentUserMessage(message);S.pendingAgentTurn={message,trigger,caseId};statusEl.className='copilot-status';statusEl.setAttribute('role','status');statusEl.textContent=trigger==='USER_MESSAGE'?'你的输入已排队，将在当前分析完成后自动发送。':'案件状态已更新，将在当前分析完成后自动重新分析。';return true;}if(showUser)acceptAgentUserMessage(message);S.agentSubmitting=true;const button=$('agentSendButton');const userTurn=trigger==='USER_MESSAGE';button.disabled=userTurn;button.textContent=userTurn?'Agent 正在分析…':'分析中 · 可排队发送';statusEl.className='copilot-status';statusEl.setAttribute('role','status');statusEl.textContent='正在读取案件快照、规则引用与审核状态…';const payload={message,locale:S.loc==='en'?'en-US':'zh-CN',case_id:caseId,trigger};if(S.cardNetwork)payload.card_network=S.cardNetwork;
+  try{const result=await requestJson('',"POST","/api/v1/agent/turns",payload);if(!result.ok){statusEl.className='copilot-status error';statusEl.setAttribute('role','alert');statusEl.textContent=result.status===422?'输入包含无效或敏感内容，请移除后重试。':'请求未完成，请重试。';appendAgentMessage('assistant','本轮请求没有完成，案件状态未被修改。');return true;}if(S.agentCase&&S.agentCase.case_id===caseId){renderAgentTurn(result.data);statusEl.textContent=`已分析案件 ${result.data.case_id} · revision ${result.data.case_revision}${result.data.result==='REPLAYED'?' · 重放快照':''}`;}await loadCases();return true;}
+  finally{S.agentSubmitting=false;button.disabled=false;button.textContent='发送给 Agent';const pending=S.pendingAgentTurn;S.pendingAgentTurn=null;if(pending&&S.agentCase&&S.agentCase.case_id===pending.caseId)await runAgentTurn(pending.message,pending.trigger,false);}}
+async function sendAgentTurn(){const message=$('agentMessage').value.trim();const statusEl=$('agentTurnStatus');if(message.length<3){statusEl.className='copilot-status error';statusEl.setAttribute('role','alert');statusEl.textContent='请至少输入 3 个字符，再交给 AI 分析。';$('agentMessage').focus();return;}await runAgentTurn(message,'USER_MESSAGE',true);}
+async function analyzeCurrentCase(trigger){const messages={CASE_OPENED:'请基于当前案件快照总结状态、材料、判断原因、下一步及其依据。',REASON_CONFIRMED:'争议原因已由操作人员确认，请基于新版本重新分析。',EVIDENCE_SUBMITTED:'新资料已明确提交，请重新核对材料缺口、判断和下一步。',EVIDENCE_WITHDRAWN:'最近一项资料已明确撤回，请基于当前版本重新判断缺口并清除过期结论。',REVIEW_CONFIRMED:'审核决定已由操作人员确认写入，请说明当前状态和后续人工闸门。'};await runAgentTurn(messages[trigger]||messages.CASE_OPENED,trigger,false);}
+function cancelAgentReview(){S.pendingReview=null;const card=$('agentReviewProposal');if(card)card.remove();$('agentTurnStatus').textContent='已取消本次拟写入提案；案件状态未改变。';}
+function editAgentReview(){const text=S.lastAgentInput||'审核通过，已核对全部 Synthetic 材料内容一致。';cancelAgentReview();$('agentMessage').value=text;$('agentMessage').focus();}
+async function confirmAgentReview(){const pending=S.pendingReview;if(!pending)return;const actor=$('agentReviewerId').value.trim();const receipt=$('agentReviewReceipt');if(!actor){receipt.className='form-error';receipt.textContent='请填写审核确认人 Actor ID。';return;}const button=$('confirmAgentReviewButton');button.disabled=true;button.textContent='正在写入…';const result=await requestJson('',"POST",`/api/v1/agent/cases/${encodeURIComponent(pending.caseId)}/review-decisions`,{source_turn_id:pending.sourceTurnId,case_revision:pending.caseRevision,confirmed_by:actor});if(!result.ok){receipt.className='form-error';receipt.textContent=result.status===409?'案件版本已经变化，请重新分析后再确认。':'审核决定未写入，请检查后重试。';button.disabled=false;button.textContent='确认写入案件';return;}receipt.className='review-receipt';receipt.textContent=`${result.data.result==='REPLAYED'?'已重放':'已写入'}审核决定 · 审计 ${result.data.audit_event_id}`;appendAgentMessage('assistant',`审核决定已写入案件，审计编号 ${result.data.audit_event_id}。`);S.pendingReview=null;const fresh=await api('GET',`/cases/${pending.caseId}`);if(fresh.ok){S.selectedCase=fresh.data;S.last=fresh.data;renderStoredDiagnosis(fresh.data);}await bindAgentCase(pending.caseId,false);await analyzeCurrentCase('REVIEW_CONFIRMED');}
+$('agentMessage').addEventListener('keydown',event=>{if((event.ctrlKey||event.metaKey)&&event.key==='Enter'){event.preventDefault();sendAgentTurn();}});
 
 const STATUS_VIEW={REASON_PROPOSED:['待确认原因','p-warn'],NEED_EVIDENCE:['待补资料','p-acc'],ASSESSED:['评估完成','p-good'],NEEDS_INTAKE:['待识别','p-mut']};
 function showView(v){
   if(v==='transactions')v='overview';
+  S.currentView=v;clearGlobalSearchStatus();
   const navView=(v==='diagnosis'||v==='flow')?'overview':v;
-  document.querySelectorAll('.nav a').forEach(x=>x.classList.toggle('on',x.dataset.v===navView));
+  document.querySelectorAll('.nav button,.mobile-nav button').forEach(x=>{const active=x.dataset.v===navView;x.classList.toggle('on',active);if(active)x.setAttribute('aria-current','page');else x.removeAttribute('aria-current');});
   document.querySelectorAll('.view').forEach(x=>x.classList.remove('on'));
   const view=$('v-'+v);if(view)view.classList.add('on');
-  const navCrumb={overview:["商户工作台","案件中心"],diagnosis:["案件中心",S.selectedCase?S.selectedCase.case_id.slice(0,18):"案件诊断"],create:["案件中心","新建案件"],flow:["案件中心",S.caseId?S.caseId.slice(0,18):"案件详情"],prev:["交易风险","实时评估"],safe:["系统管理","安全检查"]}[v]||["商户工作台",v];
+  if(view){view.setAttribute('tabindex','-1');view.focus({preventScroll:true});}
+  const navCrumb={hub:["OceanPilot","AI 运营中枢"],overview:["商户工作台","案件中心"],diagnosis:["案件中心",S.selectedCase?S.selectedCase.case_id.slice(0,18):"案件诊断"],create:["案件中心","新建案件"],flow:["案件中心",S.caseId?S.caseId.slice(0,18):"案件详情"],prev:["交易风险","实时评估"],rules:["规则知识",S.currentRuleId||"规则目录"],safe:["规则与运营","安全边界"]}[v]||["OceanPilot",v];
   $('crumbRoot').textContent=navCrumb[0];$('crumbId').textContent=navCrumb[1];
+  const placeholders={rules:"搜索规则原因码、名称或来源"};
+  $('globalSearch').placeholder=placeholders[navView]||"搜索案件号或争议原因";
   if(v==='overview')loadCases();
+  if(v==='rules')loadRules();
 }
-document.querySelectorAll('.nav a').forEach(a=>a.addEventListener('click',()=>a.dataset.v==='create'?openCreate(null):showView(a.dataset.v)));
+function navigateTo(view){if(view==='create'){openCreate();return;}showView(view);}
+document.querySelectorAll('.nav button,.mobile-nav button').forEach(button=>button.addEventListener('click',()=>navigateTo(button.dataset.v)));
 async function loadCases(){const result=await api("GET","/cases");
   if(!result.ok||!Array.isArray(result.data)){S.cases=[];$('transactionCount').textContent='读取失败';$('transactionRows').innerHTML='<tr><td colspan="5" class="empty">案件库暂时无法读取，请稍后刷新。</td></tr>';return;}
   S.cases=result.data;renderTransactions();}
 function renderTransactions(){const query=($('tableSearch').value||'').toLowerCase();const status=$('statusFilter').value;
   const rows=S.cases.filter(c=>(status==='ALL'||c.phase===status)&&[c.case_id,c.reason_code,REASON_LABEL[c.reason_code],tr(REASON_LABEL[c.reason_code])].join(' ').toLowerCase().includes(query));
   const synced=new Date().toLocaleTimeString(S.loc==='en'?'en-US':'zh-CN',{hour12:false,hour:'2-digit',minute:'2-digit',second:'2-digit'});$('transactionCount').textContent=`${rows.length} 件有效实体 · 更新于 ${synced}`;
-  $('transactionRows').innerHTML=rows.map(c=>{const s=STATUS_VIEW[c.phase]||['未知','p-mut'];const missing=(c.missing_labels||[]).length;const action=c.phase==='ASSESSED'?'查看案件':'查看诊断';return `<tr onclick="openStoredCase('${esc(c.case_id)}')"><td class="primary-id">${esc(c.case_id)}<div class="sub-id">案件库有效实体</div></td><td>${esc(REASON_LABEL[c.reason_code]||c.reason_code||'待确认')}</td><td><span class="pill ${s[1]}">${s[0]}</span></td><td>${missing?`<span class="pill p-warn">仍缺 ${missing} 项</span>`:'<span class="pill p-good">无待补项</span>'}</td><td class="action-cell"><button class="tbtn" onclick="event.stopPropagation();openStoredCase('${esc(c.case_id)}')">${action}</button></td></tr>`;}).join('')||'<tr><td colspan="5" class="empty-state"><strong>暂无有效案件记录</strong><p>列表不使用预置案件；只有成功写入案件库且可重新读取的案件才会显示。</p><button class="tbtn primary" onclick="openCreate(null)">新建案件</button></td></tr>';
+  $('transactionRows').innerHTML=rows.map(c=>{const s=STATUS_VIEW[c.phase]||['未知','p-mut'];const missing=(c.missing_labels||[]).length;return `<tr onclick="openStoredCase('${esc(c.case_id)}')"><td class="primary-id">${esc(c.case_id)}<div class="sub-id">案件库有效实体</div></td><td>${esc(REASON_LABEL[c.reason_code]||c.reason_code||'待确认')}</td><td><span class="pill ${s[1]}">${s[0]}</span></td><td>${missing?`<span class="pill p-warn">仍缺 ${missing} 项</span>`:'<span class="pill p-good">无待补项</span>'}</td><td class="action-cell"><button class="tbtn primary" onclick="event.stopPropagation();openStoredCase('${esc(c.case_id)}')">进入 AI 分析</button></td></tr>`;}).join('')||'<tr><td colspan="5" class="empty-state"><strong>暂无有效案件记录</strong><p>列表不使用预置案件；只有成功写入案件库且可重新读取的案件才会显示。</p><button class="tbtn primary" onclick="openCreate(null)">新建案件</button></td></tr>';
   const pending=S.cases.filter(c=>c.phase!=='ASSESSED');$('pendingCaseCount').textContent=`${pending.length} 件`;
-  $('pendingCaseRows').innerHTML=pending.slice(0,3).map(c=>`<div class="quick-row"><strong>${esc(c.case_id)}</strong><p>${esc((STATUS_VIEW[c.phase]||['待处理'])[0])} · 仍缺 ${(c.missing_labels||[]).length} 项资料</p><button class="tbtn" onclick="openStoredCase('${esc(c.case_id)}')">进入诊断</button></div>`).join('')||'<div class="panel-bd empty">暂无待处理案件</div>';}
-async function openStoredCase(caseId){const result=await api("GET",`/cases/${caseId}`);
+  $('pendingCaseRows').innerHTML=pending.slice(0,3).map(c=>`<div class="quick-row"><strong>${esc(c.case_id)}</strong><p>${esc((STATUS_VIEW[c.phase]||['待处理'])[0])} · 仍缺 ${(c.missing_labels||[]).length} 项资料</p><div class="actions"><button class="tbtn primary" onclick="openStoredCase('${esc(c.case_id)}')">进入 AI 分析</button></div></div>`).join('')||'<div class="panel-bd empty">暂无待处理案件</div>';}
+async function openStoredCase(caseId){const [result,auditResult]=await Promise.all([api("GET",`/cases/${caseId}`),api("GET",`/cases/${caseId}/audit`)]);if(auditResult.ok&&Array.isArray(auditResult.data&&auditResult.data.events))S.auditByCase.set(caseId,auditResult.data.events);
   if(!result.ok){await loadCases();showView('overview');return;}
-  const c=result.data;S.selectedCase=c;S.caseId=c.case_id;S.last=c;
-  if(c.phase==='ASSESSED'){showView('flow');apply(c);return;}
-  renderStoredDiagnosis(c);showView('diagnosis');}
+  const switched=S.caseId!==caseId;if(switched){S.expectedReason=null;S.autoEvidence=[];S.packaged=false;S.appealed=false;}
+  const c=result.data;S.selectedCase=c;S.caseId=c.case_id;S.last=c;S.cardNetwork=c.card_network||"";
+  renderStoredDiagnosis(c);showView('diagnosis');if(await bindAgentCase(caseId,switched))await analyzeCurrentCase('CASE_OPENED');}
 function renderStoredDiagnosis(c){const s=STATUS_VIEW[c.phase]||['未知','p-mut'];const missing=c.missing_labels||[];
   $('diagnosisSummary').className=`panel diagnosis-summary ${c.phase==='ASSESSED'?'good':'warn'}`;
   $('diagId').textContent=c.case_id;$('diagStage').textContent=s[0];$('diagCode').textContent=REASON_LABEL[c.reason_code]||c.reason_code||'待确认';$('diagCaseId').textContent=c.case_id;
   $('diagSideId').innerHTML='<span class="pill p-good">案件库可读</span>';const status=$('diagStatus');status.className=`pill ${s[1]}`;status.textContent=s[0];
   if(c.phase==='REASON_PROPOSED'){$('diagCause').textContent='争议原因尚未确认';$('diagMeaning').textContent='系统已给出初步判断，需要人工确认后才能继续收集材料。';$('diagAdvice').textContent='请先确认争议原因，系统将在确认后生成缺失材料清单。';}
-  else{$('diagCause').textContent=missing.length?`案件仍缺 ${missing.length} 项材料，暂不能完成评估`:'案件材料已齐全';$('diagMeaning').textContent=missing.length?'当前案件存在明确的证据缺口，下方清单来自后端当前状态。':'当前没有待补资料。';$('diagAdvice').textContent=missing.length?'请按清单逐项补交；每次提交后系统会重新读取案件状态。':'可返回案件中心查看其他案件。';}
-  $('diagImpact').textContent=missing.length?`仍缺 ${missing.length} 项`:'无待补项';renderDiagnosticMaterials(c);}
+  else{$('diagCause').textContent=missing.length?`案件仍缺 ${missing.length} 项材料，暂不能完成评估`:'案件材料已齐全';$('diagMeaning').textContent=missing.length?'当前案件存在明确的证据缺口，下方清单来自后端当前状态。':'当前没有待补资料；欺诈类案件仍必须人工审核。';$('diagAdvice').textContent=missing.length?'请按清单逐项补交；每次提交后系统会重新读取案件状态。':'请在右侧输入审核结论；AI 只生成拟写入提案，确认后才会落库。';}
+  $('diagImpact').textContent=c.phase==='REASON_PROPOSED'?'待确认原因':(missing.length?`仍缺 ${missing.length} 项`:'无待补项');const network=$('diagnosisNetwork');if(network)network.value=S.cardNetwork;const ruleOut=$('diagnosisRuleReferenceOut');if(ruleOut)ruleOut.innerHTML='';renderDiagnosticMaterials(c);}
 $('tableSearch').addEventListener('input',renderTransactions);$('statusFilter').addEventListener('change',renderTransactions);
-$('globalSearch').addEventListener('keydown',event=>{if(event.key==='Enter'){const q=event.target.value.toLowerCase();const hit=S.cases.find(c=>[c.case_id,c.reason_code,REASON_LABEL[c.reason_code],tr(REASON_LABEL[c.reason_code])].join(' ').toLowerCase().includes(q));if(hit)openStoredCase(hit.case_id);else{showView('overview');$('tableSearch').value=event.target.value;renderTransactions();}}});
+$('ruleSearch').addEventListener('keydown',event=>{if(event.key==='Enter')loadRules();});$('ruleScheme').addEventListener('change',loadRules);
+function clearGlobalSearchStatus(){const status=$('globalSearchStatus');status.textContent='';status.classList.remove('on');}
+function setGlobalSearchStatus(message){const status=$('globalSearchStatus');status.textContent=message;status.classList.add('on');}
+const globalSearch=$('globalSearch');globalSearch.addEventListener('input',clearGlobalSearchStatus);globalSearch.addEventListener('keydown',event=>{if(event.key==='Escape'){event.preventDefault();event.target.value='';clearGlobalSearchStatus();return;}if(event.key!=='Enter')return;const raw=event.target.value.trim();if(!raw)return;if(S.currentView==='rules'){$('ruleSearch').value=raw;clearGlobalSearchStatus();loadRules();return;}const q=raw.toLowerCase();const hit=S.cases.find(c=>[c.case_id,c.reason_code,REASON_LABEL[c.reason_code],tr(REASON_LABEL[c.reason_code])].join(' ').toLowerCase().includes(q));if(hit){clearGlobalSearchStatus();openStoredCase(hit.case_id);return;}setGlobalSearchStatus('未找到匹配案件，请检查案件号或争议原因。');});
 document.addEventListener('keydown',event=>{if((event.metaKey||event.ctrlKey)&&event.key.toLowerCase()==='k'){event.preventDefault();$('globalSearch').focus();}});
 function focusTransactionSearch(){showView('overview');$('tableSearch').focus();}
-function openCreate(){S.scenarioIndex=0;S.autoEvidence=SCENARIOS[0].available.slice();renderCreateForm();showView('create');}
+function openCreate(){S.scenarioIndex=0;S.cardNetwork=SCENARIOS[0].network;S.expectedReason=SCENARIOS[0].reason;S.autoEvidence=SCENARIOS[0].available.slice();renderCreateForm();showView('create');}
 
-function renderDiagnosticMaterials(c){const codes=c.missing||[],labels=c.missing_labels||[];const missing=labels;const card=$('diagnosticMaterials');const badge=$('diagMissingBadge');
-  card.className=`panel diagnostic-materials${missing.length===0?' complete':''}`;
-  badge.className=`pill ${missing.length?'p-warn':'p-good'}`;badge.textContent=missing.length?`仍缺 ${missing.length} 项`:'资料已齐全';
+function renderDiagnosticMaterials(c){const codes=c.missing||[],labels=c.missing_labels||[];const missing=labels;const awaitingReason=c.phase==='REASON_PROPOSED';const card=$('diagnosticMaterials');const badge=$('diagMissingBadge');
+  card.className=`panel diagnostic-materials${!awaitingReason&&missing.length===0?' complete':''}`;
+  badge.className=`pill ${awaitingReason||missing.length?'p-warn':'p-good'}`;badge.textContent=awaitingReason?'待确认原因':(missing.length?`仍缺 ${missing.length} 项`:'资料已齐全');
   if(c.phase==='REASON_PROPOSED'){$('diagnosisAlert').className='material-notice';$('diagnosisAlert').innerHTML='<strong>请先确认争议原因</strong><p>原因确认后，系统才会生成本案件的待补资料清单。</p>';}
   else if(missing.length){$('diagnosisAlert').className='material-notice';$('diagnosisAlert').innerHTML=`<strong>需要商户补充 ${missing.length} 项信息</strong><p>清单来自案件后端；提交后会立即重新校验。</p>`;}
   else{$('diagnosisAlert').className='material-notice complete';$('diagnosisAlert').innerHTML='<strong>本案件暂无待补资料</strong><p>当前状态以后端返回结果为准。</p>';}
-  $('diagMaterialRows').innerHTML=c.phase==='REASON_PROPOSED'?'<div class="material-row"><span class="material-state">!</span><div><strong>确认争议原因</strong><span>确认后再继续补交材料</span></div><button class="tbtn primary" onclick="confirmDiagnosisReason()">确认原因</button></div>':(missing.length?missing.map((label,i)=>`<div class="material-row"><span class="material-state">${i+1}</span><div><strong>${esc(label)}</strong><span>提交后系统将重新校验案件状态</span></div><button class="tbtn primary" onclick="submitDiagnosticEvidence('${esc(codes[i])}')">补交资料</button></div>`).join(''):'<div class="empty">没有待补资料。</div>');
-  $('diagMaterialState').innerHTML=missing.length?`<span class="pill p-warn">待补交 ${missing.length} 项</span>`:'<span class="pill p-good">资料已齐全</span>';
+  const latest=latestActiveEvidence(c.case_id,c.collected);const withdraw=latest?`<div class="material-row done"><span class="material-state">✓</span><div><strong>最近已补交：${esc(EVIDENCE_LABEL[latest]||latest)}</strong><span>可撤回这一项；操作会留痕并重新计算案件状态</span></div><button class="tbtn withdraw-action" onclick="openWithdrawModal('diagnosis')">撤回最近资料</button></div>`:'';
+  $('diagMaterialRows').innerHTML=(c.phase==='REASON_PROPOSED'?'<div class="material-row"><span class="material-state">!</span><div><strong>确认或更正争议原因</strong><span>模板案件会预选对应原因，确认后再继续补交材料</span><select id="diagReasonFix" aria-label="确认或更正争议原因" style="margin-top:7px"></select></div><button class="tbtn primary" onclick="confirmDiagnosisReason()">确认原因</button></div>':(missing.length?missing.map((label,i)=>`<div class="material-row"><span class="material-state">${i+1}</span><div><strong>${esc(label)}</strong><span>进入独立提交界面核对并明确提交</span></div><button class="tbtn primary" onclick="openEvidenceModal('${esc(codes[i])}','${esc(label)}')">补交：${esc(label)}</button></div>`).join(''):'<div class="empty">没有待补资料。</div>'))+withdraw;
+  if(c.phase==='REASON_PROPOSED')populateDiagnosisReasons(c.reason_code);
+  $('diagMaterialState').innerHTML=awaitingReason?'<span class="pill p-warn">确认原因后生成材料清单</span>':(missing.length?`<span class="pill p-warn">待补交 ${missing.length} 项</span>`:'<span class="pill p-good">资料已齐全</span>');
 }
-async function submitDiagnosticEvidence(code){if(!S.selectedCase||!code)return;const result=await api("POST",`/cases/${S.selectedCase.case_id}/evidence`,{evidence_code:code});if(result.ok){S.selectedCase=result.data;renderStoredDiagnosis(result.data);await loadCases();}}
-async function confirmDiagnosisReason(){if(!S.selectedCase)return;const result=await api("POST",`/cases/${S.selectedCase.case_id}/confirm`,{});if(result.ok){S.selectedCase=result.data;renderStoredDiagnosis(result.data);await loadCases();}}
+async function populateDiagnosisReasons(currentReason){const result=await api("GET",`/catalog?locale=${S.loc}`);const sel=$('diagReasonFix');if(!sel||!result.ok)return;const selected=S.expectedReason||currentReason||'';sel.innerHTML=result.data.reasons.map(reason=>`<option value="${esc(reason.code)}" ${reason.code===selected?'selected':''}>${esc(reason.label)}</option>`).join('');}
+function resetEvidenceProgress(){document.querySelectorAll('#evidenceSubmitProgress .progress-step').forEach(step=>step.className='progress-step');}
+function setEvidenceProgress(name,state){const step=document.querySelector(`#evidenceSubmitProgress [data-step="${name}"]`);if(step)step.className=`progress-step ${state}`;}
+function openEvidenceModal(code,label){const caseId=S.selectedCase&&S.selectedCase.case_id;if(caseId)openEvidenceModalForCase(caseId,code,label);}
+function openEvidenceModalForCase(caseId,code,label){if(!caseId||!code)return;S.dialogTrigger=document.activeElement;S.evidenceDraft={caseId,code,label:label||EVIDENCE_LABEL[code]||code,fileName:"",synthetic:false};$('evidenceModalCase').textContent=caseId;$('evidenceModalLabel').textContent=S.evidenceDraft.label;$('evidenceFile').value='';$('selectedEvidenceFile').textContent='尚未选择文件';$('evidenceModalError').textContent='';$('evidenceReceipt').innerHTML='';resetEvidenceProgress();const cancel=$('evidenceCancelButton');cancel.textContent='取消';cancel.className='tbtn';const button=$('evidenceSubmitButton');button.className='tbtn primary';button.disabled=true;button.textContent='3. 确认提交资料';const modal=$('evidenceModal');modal.classList.add('on');modal.setAttribute('aria-hidden','false');$('evidenceFile').focus();}
+function selectEvidenceFile(input){const file=input.files&&input.files[0];if(!S.evidenceDraft)return;S.evidenceDraft.fileName=file?file.name:"";S.evidenceDraft.synthetic=false;$('selectedEvidenceFile').innerHTML=file?`已选择：<strong>${esc(file.name)}</strong> · 仅使用文件名模拟提交，不读取内容`:'尚未选择文件';$('evidenceSubmitButton').disabled=!file;$('evidenceModalError').textContent='';}
+function useSyntheticEvidenceFile(){if(!S.evidenceDraft)return;S.evidenceDraft.fileName=`synthetic-${S.evidenceDraft.code.replace(/[^a-z0-9]+/gi,'-')}.pdf`;S.evidenceDraft.synthetic=true;$('evidenceFile').value='';$('selectedEvidenceFile').innerHTML=`已选择：<strong>${esc(S.evidenceDraft.fileName)}</strong> · Synthetic 演示占位`;$('evidenceSubmitButton').disabled=false;$('evidenceModalError').textContent='';}
+function closeEvidenceModal(){if(S.evidenceDraft&&S.evidenceSubmittingCases.has(S.evidenceDraft.caseId))return;const modal=$('evidenceModal');modal.classList.remove('on');modal.setAttribute('aria-hidden','true');S.evidenceDraft=null;const target=S.dialogTrigger;S.dialogTrigger=null;if(target&&target.isConnected)target.focus();}
+async function submitEvidenceModal(){const draft=S.evidenceDraft;if(!draft||S.evidenceSubmittingCases.has(draft.caseId))return;if(!draft.fileName){$('evidenceModalError').textContent='请先选择文件，或使用 Synthetic 演示文件。';$('evidenceFile').focus();return;}S.evidenceSubmitting=true;S.evidenceSubmittingCases.add(draft.caseId);const cancel=$('evidenceCancelButton');cancel.disabled=true;const button=$('evidenceSubmitButton');button.disabled=true;button.textContent='正在提交…';$('evidenceModalError').textContent='';setEvidenceProgress('validate','active');await new Promise(resolve=>setTimeout(resolve,180));setEvidenceProgress('validate','done');setEvidenceProgress('persist','active');let shouldAnalyze=false;
+  try{const result=await api('POST',`/cases/${draft.caseId}/evidence`,{evidence_code:draft.code});if(!result.ok){setEvidenceProgress('persist','');$('evidenceModalError').textContent='后端未接受该资料；案件状态没有被前端改写，请重试。';cancel.disabled=false;button.disabled=false;button.textContent='3. 确认提交资料';return;}invalidateDerivedViews();await loadCaseAudit(draft.caseId);setEvidenceProgress('persist','done');setEvidenceProgress('recheck','done');const remaining=(result.data.missing_labels||[]).length;$('evidenceReceipt').innerHTML=`<div class="submit-receipt"><strong>资料提交成功</strong><p>案件 ${esc(draft.caseId)} 已记录「${esc(draft.label)}」。重新校验后仍缺 ${remaining} 项资料，当前阶段为 ${esc((STATUS_VIEW[result.data.phase]||[result.data.phase])[0])}。</p></div>`;button.textContent='提交成功';button.className='tbtn';cancel.disabled=false;cancel.textContent='完成并返回案件';cancel.className='tbtn primary';cancel.focus();if(S.selectedCase&&S.selectedCase.case_id===draft.caseId){S.selectedCase=result.data;S.last=result.data;renderStoredDiagnosis(result.data);}shouldAnalyze=Boolean(S.agentCase&&S.agentCase.case_id===draft.caseId);}
+  finally{S.evidenceSubmittingCases.delete(draft.caseId);S.evidenceSubmitting=S.evidenceSubmittingCases.size>0;}
+  if(shouldAnalyze){await bindAgentCase(draft.caseId,false);await analyzeCurrentCase('EVIDENCE_SUBMITTED');}await loadCases();}
+$('evidenceModal').addEventListener('click',event=>{if(event.target===$('evidenceModal'))closeEvidenceModal();});document.addEventListener('keydown',event=>{if(event.key==='Escape'&&$('evidenceModal').classList.contains('on'))closeEvidenceModal();});
+function openWithdrawModal(source='flow'){const context=evidenceContext(source);if(!context.caseId||!context.data)return;const code=latestActiveEvidence(context.caseId,context.data.collected);if(!code)return;S.dialogTrigger=document.activeElement;S.withdrawDraft={caseId:context.caseId,code,source:context.source,submitting:false};$('withdrawEvidenceLabel').textContent=EVIDENCE_LABEL[code]||code;$('withdrawEvidenceCode').textContent=code;$('withdrawModalError').textContent='';$('withdrawProgress').classList.remove('on');$('withdrawCancelButton').disabled=false;$('withdrawConfirmButton').disabled=false;const modal=$('withdrawModal');modal.classList.add('on');modal.setAttribute('aria-hidden','false');$('withdrawConfirmButton').focus();}
+function closeWithdrawModal(){const state=S.withdrawDraft;if(state&&state.submitting)return;const modal=$('withdrawModal');modal.classList.remove('on');modal.setAttribute('aria-hidden','true');S.withdrawDraft=null;const target=S.dialogTrigger;S.dialogTrigger=null;if(target&&target.isConnected)target.focus();}
+async function confirmEvidenceWithdrawal(){const state=S.withdrawDraft;if(!state||state.submitting)return;state.submitting=true;$('withdrawCancelButton').disabled=true;$('withdrawConfirmButton').disabled=true;$('withdrawModalError').textContent='';$('withdrawProgress').classList.add('on');const result=await api('POST',`/cases/${state.caseId}/evidence/withdraw-latest`,{evidence_code:state.code});if(!result.ok){$('withdrawProgress').classList.remove('on');const code=result.data&&result.data.code;$('withdrawModalError').textContent=code==='CONCURRENT_CASE_WRITE'?'案件已被其他操作更新，没有撤回任何资料；请关闭后刷新重试。':code==='NO_EVIDENCE_TO_WITHDRAW'?'当前已经没有可撤回资料。':'撤回失败，案件状态没有改变。';state.submitting=false;$('withdrawCancelButton').disabled=false;$('withdrawConfirmButton').disabled=false;return;}invalidateDerivedViews();await loadCaseAudit(state.caseId);const source=state.source;const caseId=state.caseId;state.submitting=false;closeWithdrawModal();if(source==='diagnosis'&&S.selectedCase&&S.selectedCase.case_id===caseId){S.selectedCase=result.data;S.last=result.data;renderStoredDiagnosis(result.data);}else if(S.caseId===caseId){S.last=result.data;apply(result.data);}await bindAgentCase(caseId,false);await analyzeCurrentCase('EVIDENCE_WITHDRAWN');await loadCases();}
+$('withdrawModal').addEventListener('click',event=>{if(event.target===$('withdrawModal'))closeWithdrawModal();});document.addEventListener('keydown',event=>{if(event.key==='Escape'&&$('withdrawModal').classList.contains('on'))closeWithdrawModal();});
+async function confirmDiagnosisReason(){if(!S.selectedCase)return;const selected=$('diagReasonFix')?$('diagReasonFix').value:'';const result=await api("POST",`/cases/${S.selectedCase.case_id}/confirm`,selected?{reason_code:selected}:{});if(!result.ok)return;let updated=result.data;while(updated.phase==='NEED_EVIDENCE'&&S.autoEvidence.length){const seeded=await api('POST',`/cases/${updated.case_id}/evidence`,{evidence_code:S.autoEvidence.shift()});if(!seeded.ok)break;updated=seeded.data;}await loadCaseAudit(updated.case_id);S.selectedCase=updated;S.last=updated;renderStoredDiagnosis(updated);await bindAgentCase(updated.case_id,false);await analyzeCurrentCase('REASON_CONFIRMED');await loadCases();}
 
 const STAGES=["创建案件","补全材料","检查结果","生成材料"];
 function stageStatus(){const st=STAGES.map(()=> "");const d=S.last;
@@ -968,27 +1168,29 @@ function renderStages(){const stt=stageStatus();let h="";
     h+=`<span class="step ${stt[i]}"><span class="b">${stt[i]==='done'?'✓':(i+1)}</span>${n}</span>`;});
   $('steps').innerHTML=h;}
 
-function renderCreateForm(){const cards=SCENARIOS.map((s,i)=>`<button class="scenario-card${i===0?' on':''}" data-i="${i}" onclick="fillScenario(${i})">`
+function renderCreateForm(){const selected=SCENARIOS[S.scenarioIndex]||SCENARIOS[0];const cards=SCENARIOS.map((s,i)=>`<button class="scenario-card${i===S.scenarioIndex?' on':''}" data-i="${i}" onclick="fillScenario(${i})">`
     +`<strong>${esc(s.label)}</strong><span>${esc(s.meta)}</span></button>`).join("");
-  const initial=tr(SCENARIOS[0].desc);
   $('createAction').innerHTML=`<div style="color:var(--ink);font-weight:700">1. 选择常见案件模板</div>`
     +`<div class="scenario-grid">${cards}</div>`
-    +`<label class="field-label" for="desc">2. 确认案件说明</label><textarea id="desc" rows="3">${esc(initial)}</textarea>`
+    +`<label class="field-label" for="desc">2. 确认案件说明</label><textarea id="desc" rows="3">${esc(tr(selected.desc))}</textarea>`
     +`<div class="helper">创建完成后会进入案件详情，并列出案件处理所需材料。</div>`
-    +`<div class="actions"><button class="tbtn primary" onclick="openCase()">确认创建案件</button></div>`;}
+    +`<div class="actions"><button class="tbtn primary" id="createCaseButton" onclick="openCase()">确认创建案件</button></div>`;}
 
-async function openCase(loadAvailable=true){const {ok,data}=await api("POST","/cases",{description:$('desc').value.trim()});
-  if(!ok){$('createAction').insertAdjacentHTML('beforeend','<div class="form-error">创建失败：案件说明不能为空。</div>');return;}
-  S.caseId=data.case_id;S.packaged=false;S.appealed=false;
-  S.autoEvidence=SCENARIOS[S.scenarioIndex].available.slice();showView('flow');apply(data);
-  if(loadAvailable){while(S.last&&S.last.phase==="NEED_EVIDENCE"&&S.autoEvidence.length){await submitEvidence(S.autoEvidence.shift());}}
-  await loadCases();}
+async function openCase(loadAvailable=true){if(S.caseCreating)return;S.caseCreating=true;const button=$('createCaseButton');if(button){button.disabled=true;button.textContent='正在创建案件…';}
+  try{const {ok,data}=await api("POST","/cases",{description:$('desc').value.trim(),card_network:S.cardNetwork||null});
+    if(!ok){$('createAction').insertAdjacentHTML('beforeend','<div class="form-error" role="alert">创建失败：请检查案件说明后重试。</div>');if(button){button.disabled=false;button.textContent='确认创建案件';}return;}
+    const createdCaseId=data.case_id;let current=data;S.caseId=createdCaseId;S.packaged=false;S.appealed=false;S.autoEvidence=loadAvailable?SCENARIOS[S.scenarioIndex].available.slice():[];
+    while(current.phase==='NEED_EVIDENCE'&&S.autoEvidence.length){const seeded=await api('POST',`/cases/${createdCaseId}/evidence`,{evidence_code:S.autoEvidence.shift()});if(!seeded.ok)break;current=seeded.data;}
+    await loadCaseAudit(createdCaseId);S.selectedCase=current;S.last=current;renderStoredDiagnosis(current);showView('diagnosis');await bindAgentCase(createdCaseId,true);await analyzeCurrentCase('CASE_OPENED');await loadCases();
+  }finally{S.caseCreating=false;}}
 async function refreshCase(){if(!S.caseId)return;apply((await api("GET",`/cases/${S.caseId}`)).data);}
-async function confirmReason(){const v=$('fix')?$('fix').value:"";apply((await api("POST",`/cases/${S.caseId}/confirm`,v?{reason_code:v}:{})).data);}
-async function submitEvidence(code){apply((await api("POST",`/cases/${S.caseId}/evidence`,{evidence_code:code})).data);}
+async function confirmReason(){const v=$('fix')?$('fix').value:(S.expectedReason||"");const result=await api("POST",`/cases/${S.caseId}/confirm`,v?{reason_code:v}:{});if(!result.ok)return;apply(result.data);if(S.agentCase&&S.agentCase.case_id===S.caseId){await bindAgentCase(S.caseId,false);await analyzeCurrentCase('REASON_CONFIRMED');}}
+async function submitEvidence(code,caseId=S.caseId){if(!caseId||!code||S.evidenceSubmittingCases.has(caseId))return;S.evidenceSubmitting=true;S.evidenceSubmittingCases.add(caseId);const buttons=S.caseId===caseId?document.querySelectorAll('#action button'):[];buttons.forEach(button=>button.disabled=true);
+  try{const result=await api("POST",`/cases/${caseId}/evidence`,{evidence_code:code});if(result.ok){if(S.caseId===caseId)apply(result.data);}else if(S.caseId===caseId){$('action').insertAdjacentHTML('beforeend','<div class="form-error" role="alert">补交失败：后端未接受该材料，案件状态未改变。</div>');buttons.forEach(button=>button.disabled=false);}}
+  finally{S.evidenceSubmittingCases.delete(caseId);S.evidenceSubmitting=S.evidenceSubmittingCases.size>0;}}
 async function finalize(){apply((await api("POST",`/cases/${S.caseId}/finalize`)).data);}
 function fillScenario(i){const d=$('desc');if(d)d.value=tr(SCENARIOS[i].desc);S.scenarioIndex=i;
-  S.cardNetwork=SCENARIOS[i].network;S.autoEvidence=SCENARIOS[i].available.slice();
+  S.cardNetwork=SCENARIOS[i].network;S.expectedReason=SCENARIOS[i].reason;S.autoEvidence=SCENARIOS[i].available.slice();
   document.querySelectorAll('.scenario-card').forEach(c=>c.classList.toggle('on',+c.dataset.i===i));}
 async function autoRun(){if(!S.caseId)await openCase(false);let g=0;
   while(S.last&&S.last.phase!=="ASSESSED"&&g++<40){
@@ -1025,7 +1227,7 @@ function renderAction(){const d=S.last;const tag=$('phaseTag');
   const ph=d.phase;if(tag)tag.textContent=(PHASE[ph]||["","",""])[2];
   if(ph==="REASON_PROPOSED"){
     $('action').innerHTML=`<div class="muted">${esc(d.question||"")}</div>`
-      +`<div class="actions"><select id="fix" style="max-width:280px"></select>`
+      +`<div class="actions"><select id="fix" aria-label="确认或修正争议原因" style="max-width:280px"></select>`
       +`<button class="tbtn primary" onclick="confirmReason()">确认争议原因</button></div>`;populateReasons();
   }else if(ph==="NEED_EVIDENCE"){
     const labels=d.missing_labels||[];const next=d.next_evidence_label||"下一项证据";
@@ -1035,12 +1237,14 @@ function renderAction(){const d=S.last;const tag=$('phaseTag');
       +`<span class="missing-count">仍缺 ${labels.length} 项</span></div><div class="missing-checklist">${missing}</div></div>`
       +(question?`<div style="font-size:15px;color:var(--ink);font-weight:600;margin-top:14px">${esc(question)}</div>`:"")
       +`<div class="helper">每补交一项，系统都会自动重新检查并提示下一项。</div>`
-      +`<div class="actions"><button class="tbtn primary" onclick="submitEvidence('${esc(d.next_evidence)}')">补交：${esc(next)}</button>`
-      +`<button class="tbtn" onclick="finalize()">本次无法提供，提交人工复核</button></div>`;
-  }else if(ph==="ASSESSED"){$('action').innerHTML='<span class="muted">材料收集已完成。请查看下方评估结果并选择下一步。</span>';}
+      +`<div class="actions"><button class="tbtn primary" onclick="openEvidenceModalForCase('${esc(S.caseId)}','${esc(d.next_evidence)}','${esc(next)}')">补交：${esc(next)}</button>`
+      +`<button class="tbtn" onclick="finalize()">本次无法提供，提交人工复核</button>${latestEvidenceAction(d)}</div>`;
+  }else if(ph==="ASSESSED"){$('action').innerHTML=`<span class="muted">材料收集已完成。请查看下方评估结果并选择下一步。</span>${latestEvidenceAction(d,true)}`;}
   else $('action').innerHTML=`<span class="muted">阶段：${esc(ph)}</span>`;}
 async function populateReasons(){const {data}=await api("GET",`/catalog?locale=${S.loc}`);const sel=$('fix');if(!sel)return;
   sel.innerHTML='<option value="">（接受系统判定）</option>'+data.reasons.map(r=>`<option value="${esc(r.code)}">${esc(r.label)}</option>`).join("");}
+
+function latestEvidenceAction(d,wrap=false){const code=latestActiveEvidence(d.case_id,d.collected);if(!code)return'';const button=`<button class="tbtn withdraw-action" onclick="openWithdrawModal('flow')">撤回最近资料：${esc(EVIDENCE_LABEL[code]||code)}</button>`;return wrap?`<div class="actions">${button}</div>`:button;}
 
 function renderAssess(d){const a=d.assessment;if(!a)return;
   const pct=Math.round(parseFloat(a.evidence_readiness||a.win_likelihood||"0")*100);
@@ -1056,16 +1260,35 @@ function renderAssess(d){const a=d.assessment;if(!a)return;
     +`<span class="pill p-mut">负责团队 · ${esc(TEAM_LABEL[a.responsible_team]||a.responsible_team)}</span>`
     +`<span class="pill p-mut">说明来源 · ${src}</span></div>`
     +`<div class="cov"><div class="track"><i style="width:${cov}%"></i></div><span class="n">证据 ${have}/${bd.length}</span></div></div></div>`
+    +`<div class="field-label">内部案件准备清单 · ${bd.length} 项</div><div class="helper">驱动逐项补证与 Evidence Readiness；AVS/CVV 仅为内部准备项。</div>`
     +`<div class="ev">${chk}</div>`
-    +`<div class="note">${cleanCopy(a.explanation)?esc(cleanCopy(a.explanation))+" ":""}<b>该分数仅表示规则要求的材料就绪程度，不代表真实胜诉概率；说明文字仅作辅助。</b></div>`
-    +`<div class="actions"><select id="network" onchange="S.cardNetwork=this.value" style="max-width:180px">`
+    +`<div class="note"><b>该分数仅表示规则要求的材料就绪程度，不代表真实胜诉概率；AI 说明不会改变材料就绪度、责任团队或人工闸门。</b></div>`
+    +`<div class="field-label">卡组织规则</div><div class="helper">只有明确选择卡组织后，系统才会解析并引用具体条款；不会按原因码猜测。</div>`
+    +`<div class="actions"><select id="network" aria-label="卡组织" onchange="setRuleReferenceNetwork('flow',this.value)" style="max-width:180px">`
+    +`<option value="" ${S.cardNetwork===''?'selected':''}>请选择卡组织</option>`
     +`<option value="VISA" ${S.cardNetwork==='VISA'?'selected':''}>Visa</option>`
-    +`<option value="MASTERCARD" ${S.cardNetwork==='MASTERCARD'?'selected':''}>Mastercard</option></select>`
+    +`<option value="MASTERCARD" ${S.cardNetwork==='MASTERCARD'?'selected':''}>Mastercard</option>`
+    +`<option value="AMEX" ${S.cardNetwork==='AMEX'?'selected':''}>American Express</option></select>`
+    +`<button class="tbtn" onclick="resolveCaseRuleReference('flow')">查看评估引用条款</button>`
     +`<button class="tbtn primary" onclick="doPackage()">生成申诉材料包</button>`
-    +`<button class="tbtn" onclick="doAppeal(false)">预览申诉草稿</button>`
-    +`<button class="tbtn danger" onclick="doAppeal(true)">人工确认并模拟提交</button></div>`
-    +`<div id="pkgOut" class="mt"></div><div id="appealOut" class="mt"></div>`;}
-async function doPackage(){const network=$('network')?$('network').value:S.cardNetwork;S.cardNetwork=network;
+    +`<button class="tbtn" onclick="doAppeal(false)">验证未批准阻断</button></div>`
+    +`<div id="ruleReferenceOut" class="mt" aria-live="polite"></div>`
+    +`<label class="field-label" for="actorId">复核人 Actor ID</label><input id="actorId" autocomplete="off" placeholder="例如 judge_reviewer_01" aria-describedby="actorHelp">`
+    +`<div class="helper" id="actorHelp">只有填写复核人并显式确认，才会进入本地 mock connector。</div>`
+    +`<div class="actions"><button class="tbtn danger" id="submitAppealButton" onclick="doAppeal(true)">人工确认并模拟提交</button></div>`
+    +`<div id="pkgOut" class="mt" aria-live="polite"></div><div id="appealOut" class="mt" aria-live="polite"></div>`;}
+function currentCardNetwork(){return $('network')?$('network').value:S.cardNetwork;}
+function ruleReferenceTarget(sourceView='flow'){const view=sourceView==='diagnosis'?'diagnosis':'flow';const input=$(view==='diagnosis'?'diagnosisNetwork':'network');const caseId=view==='diagnosis'?(S.selectedCase&&S.selectedCase.case_id):S.caseId;return{sourceView:view,caseId:String(caseId||''),cardNetwork:String(input?input.value:S.cardNetwork||'').toUpperCase(),outputId:view==='diagnosis'?'diagnosisRuleReferenceOut':'ruleReferenceOut'};}
+async function setRuleReferenceNetwork(sourceView,value){const selected=String(value||'').toUpperCase();const target=ruleReferenceTarget(sourceView);const out=$(target.outputId);if(out)out.innerHTML='';if(!selected||!target.caseId)return;const current=sourceView==='diagnosis'?S.selectedCase:S.last;if(!current)return;const result=await api('PUT',`/cases/${encodeURIComponent(target.caseId)}/card-network`,{card_network:selected,expected_revision:current.revision});if(!result.ok){if(out)out.innerHTML='<div class="error-state" role="alert">卡组织保存失败：案件版本已经变化，请刷新后重试。</div>';const input=$(sourceView==='diagnosis'?'diagnosisNetwork':'network');if(input)input.value=S.cardNetwork;return;}S.cardNetwork=result.data.card_network||'';S.last=result.data;if(S.selectedCase&&S.selectedCase.case_id===target.caseId)S.selectedCase=result.data;await bindAgentCase(target.caseId,false);await analyzeCurrentCase('CASE_OPENED');}
+function ruleReferencePath(caseId,cardNetwork){const id=String(caseId||'').trim();const network=String(cardNetwork||'').trim().toUpperCase();return id&&network?`/cases/${encodeURIComponent(id)}/rule-reference?card_network=${encodeURIComponent(network)}`:'';}
+function ruleDetailPath(ruleVersionId){const id=String(ruleVersionId||'').trim();return id?`/rules/${encodeURIComponent(id)}`:'';}
+function ruleReturnContext(sourceView='flow'){const target=ruleReferenceTarget(sourceView);return{sourceView:target.sourceView,caseId:target.caseId,cardNetwork:target.cardNetwork};}
+async function resolveCaseRuleReference(sourceView='flow'){const target=ruleReferenceTarget(sourceView);const out=$(target.outputId);if(!out)return;if(!target.cardNetwork){out.innerHTML='<span class="pill p-warn">请先明确选择卡组织</span>';return;}const path=ruleReferencePath(target.caseId,target.cardNetwork);if(!path){out.innerHTML='<span class="pill p-warn">尚未选择案件</span>';return;}const result=await api('GET',path);const data=result.data||{};
+  if(!result.ok){const message=result.status===409?'案件原因尚未确认，暂不能解析条款。':result.status===503?'规则数据库暂不可用，请稍后重试。':'条款引用暂时无法读取。';out.innerHTML=`<div class="error-state" role="alert"><strong>未解析到具体条款</strong><br>${message}</div>`;return;}
+  const ref=data.rule_reference;if(data.match_status!=='EXACT_MATCH'||!ref||!ref.rule_version_id){out.innerHTML='<div class="note"><b>未解析到具体条款。</b> 当前卡组织与案件原因没有精确映射，系统没有使用相似规则代替。</div>';return;}
+  out.innerHTML=`<div class="kv"><span class="k">${target.sourceView==='diagnosis'?'诊断引用':'评估引用'}</span><span><button class="tbtn" onclick="showRuleReference('${esc(ref.rule_version_id)}',ruleReturnContext('${target.sourceView}'))">${esc(ref.rule_version_id)}</button> · ${esc(ref.verification_status)} · ${esc(ref.source_section||'来源章节待核验')}</span></div><div class="helper">引用来自只读规则解析端点，与规则数据库中的版本 ID 完全一致。</div>`;}
+async function doPackage(){const network=currentCardNetwork();S.cardNetwork=network;
+  if(!network){$('pkgOut').innerHTML='<span class="pill p-warn">请先明确选择卡组织</span>';return;}
   const {ok,data}=await api("GET",`/cases/${S.caseId}/package?locale=${S.loc}&card_network=${encodeURIComponent(network)}`);
   if(!ok){$('pkgOut').innerHTML='<span class="pill p-warn">案件未就绪</span>';return;}
   S.packaged=true;renderStages();
@@ -1073,17 +1296,42 @@ async function doPackage(){const network=$('network')?$('network').value:S.cardN
     +` · ${esc(data.card_network||"")} ${esc(data.scheme_reason_code||"")} · 完整度 ${esc(data.completeness)} `
     +`${data.ready_to_submit?'<span class="pill p-good">可提交</span>':'<span class="pill p-warn">未就绪</span>'}</span></div>`
     +`<div class="kv"><span class="k">需证明</span><span>${data.required_assertions.map(esc).join("；")||"—"}</span></div>`
-    +`<div class="kv"><span class="k">随附</span><span>${data.ordered_evidence.map(e=>esc(e.label)).join("、")||"—"}</span></div>`
+    +`<div class="kv"><span class="k">卡组织打包摘要</span><span>${data.ordered_evidence.length} 项 · ${data.ordered_evidence.map(e=>esc(e.label)).join("、")||"—"}</span></div>`
     +`<div class="kv"><span class="k">依据</span><span>${esc(data.source_document||"合成默认规则")} ${esc(data.rule_version||"")} · ${esc(data.source_section||"")}</span></div>`
+    +(data.rule_version_id?`<div class="kv"><span class="k">规则追溯</span><span><button class="tbtn" onclick="showRuleReference('${esc(data.rule_version_id)}',ruleReturnContext('flow'))">${esc(data.rule_version_id)}</button> · ${esc(data.verification_status||'待核验')} · ${esc(data.submission_window_basis||'INTERNAL_DEMO')} ${esc(data.submission_window_days)} 天</span></div>`:'')
     +`<div class="note">${esc(data.cover_note)}${data.rule_limitation?`<br><b>边界：</b>${esc(data.rule_limitation)}`:""}</div>`;}
-async function doAppeal(approve){const network=$('network')?$('network').value:S.cardNetwork;
-  const base={card_network:network};const payload=approve?{...base,human_approved:true,actor_id:"ou_reviewer"}:base;
-  const {data}=await api("POST",`/cases/${S.caseId}/appeal`,payload);
-  if(data.submitted){S.appealed=true;renderStages();}
+async function doAppeal(approve){const network=currentCardNetwork();
+  const submitButton=approve?$('submitAppealButton'):null;if(approve&&S.appealed){$('appealOut').innerHTML='<div class="note"><b>本次会话已完成 mock 提交。</b> 为避免重复回执，提交按钮保持禁用。</div>';if(submitButton)submitButton.disabled=true;return;}
+  const base={card_network:network};const actor=approve&&$('actorId')?$('actorId').value.trim():'';
+  if(approve&&!actor){$('appealOut').innerHTML='<div class="error-state" role="alert"><strong>需要复核人 Actor ID</strong><br>未发送 mock 提交请求。</div>';return;}
+  if(submitButton){submitButton.disabled=true;submitButton.textContent='正在发送至 mock connector…';}
+  const payload=approve?{...base,human_approved:true,actor_id:actor}:base;
+  const result=await api("POST",`/cases/${S.caseId}/appeal`,payload);const data=result.data||{};
+  if(!result.ok){$('appealOut').innerHTML=`<div class="error-state" role="alert"><strong>人工闸门请求失败</strong><br>${esc(data.detail||'请检查案件与复核人信息。')}</div>`;if(submitButton){submitButton.disabled=false;submitButton.textContent='人工确认并模拟提交';}return;}
+  if(data.submitted){S.appealed=true;renderStages();if(submitButton)submitButton.textContent='本次已模拟提交';}else if(submitButton){submitButton.disabled=false;submitButton.textContent='人工确认并模拟提交';}
   const b=data.submitted?'<span class="pill p-good">模拟提交成功</span>':`<span class="pill p-warn">仅生成草稿 · ${esc(data.blocked_reason||"")}</span>`;
-  $('appealOut').innerHTML=`<div class="kv"><span class="k">申诉</span><span>${b}`
+  $('appealOut').innerHTML=`<div class="field-label">${data.submitted?'本次 mock 回执':'人工闸门结果'}</div><div class="kv"><span class="k">申诉</span><span>${b}`
     +(data.submission_id?` <code>${esc(data.submission_id)}</code>`:"")+`</span></div>`
+    +(actor?`<div class="kv"><span class="k">复核人</span><span>${esc(actor)}</span></div>`:'')
     +`<div class="note" style="white-space:pre-wrap">${esc(data.draft)}</div>`;refreshAudit();refreshMetrics();}
+
+function safeHttpUrl(value){try{const url=new URL(value);return(url.protocol==='https:'||url.protocol==='http:')?url.href:'#';}catch(error){return'#';}}
+function normalizeRuleReturnContext(context){const source=context||{};return{sourceView:source.sourceView==='diagnosis'?'diagnosis':'flow',caseId:String(source.caseId||''),cardNetwork:String(source.cardNetwork||'').toUpperCase()};}
+function ruleReturnButton(){const context=S.ruleReturnContext;if(!context||!context.caseId)return'';const label=context.sourceView==='diagnosis'?'返回案件诊断':'返回案件详情';return `<button class="tbtn" onclick="returnFromRuleReference()">${label}</button>`;}
+function markRuleSelection(ruleVersionId){document.querySelectorAll('#ruleRows tr[data-rule-version-id]').forEach(row=>row.classList.toggle('rule-selected',row.dataset.ruleVersionId===ruleVersionId));}
+async function loadRules(){const requestId=++S.rulesRequestId;S.ruleDetailRequestId++;const params=new URLSearchParams();const scheme=$('ruleScheme').value;const query=$('ruleSearch').value.trim();if(scheme)params.set('scheme',scheme);if(query)params.set('q',query);
+  const suffix=params.toString()?`?${params.toString()}`:'';const result=await api('GET',`/rules${suffix}`);if(requestId!==S.rulesRequestId)return;const data=result.data||{};const detail=$('ruleDetail');
+  if(!result.ok||!Array.isArray(data.items)){S.rules=[];S.currentRuleId=null;$('ruleStats').textContent='规则库暂不可用';$('ruleRows').innerHTML='<tr><td colspan="6"><div class="error-state"><strong>无法读取规则目录</strong><br>请稍后重试；页面不会回退到伪造数据。</div></td></tr>';detail.classList.remove('reference-highlight');detail.innerHTML='<div class="panel-hd"><h2>规则详情</h2></div><div class="panel-bd"><div class="error-state"><strong>规则库暂不可用</strong><br>没有使用缓存或伪造详情。</div></div>';$('crumbId').textContent='规则目录';return;}
+  S.rules=data.items;$('ruleDisclaimer').textContent=data.disclaimer||$('ruleDisclaimer').textContent;$('ruleStats').textContent=`${data.total} 条 · ${data.demo_mapped} 条 Demo Mapped · ${data.scheme_count} 个卡组织 · ${data.source_document_count} 份来源`;
+  $('ruleRows').innerHTML=S.rules.map(rule=>`<tr data-rule-version-id="${esc(rule.rule_version_id)}"><td><div class="rule-id">${esc(rule.rule_version_id)}</div><div class="rule-name">${esc(rule.scheme_reason_code)} · ${esc(rule.display_name)}</div></td><td>${esc(rule.scheme)}</td><td>${esc(rule.version_label||'未标定')}</td><td><span class="pill ${rule.demo_role==='DEMO_MAPPED'?'p-good':'p-mut'}">${esc(rule.demo_role)}</span></td><td><span class="pill p-acc">${esc(rule.verification_status)}</span></td><td><button class="tbtn" onclick="openRule('${esc(rule.rule_version_id)}')">查看详情</button></td></tr>`).join('')||'<tr><td colspan="6"><div class="empty-state"><strong>没有匹配规则</strong><p>请调整卡组织或搜索条件。</p></div></td></tr>';
+  if(S.currentRuleId&&S.rules.some(rule=>rule.rule_version_id===S.currentRuleId)){await openRule(S.currentRuleId);return;}S.currentRuleId=null;markRuleSelection(null);detail.classList.remove('reference-highlight');$('crumbId').textContent='规则目录';detail.innerHTML='<div class="panel-hd"><h2>规则详情</h2><span class="pill p-acc">Provenance</span></div><div class="panel-bd"><div class="empty-state"><strong>选择当前列表中的规则</strong><p>筛选已更新；旧详情已清除，避免列表与来源错配。</p></div></div>';}
+async function openRule(ruleVersionId){const requestId=++S.ruleDetailRequestId;const detail=$('ruleDetail');const result=await api('GET',ruleDetailPath(ruleVersionId));if(requestId!==S.ruleDetailRequestId)return;const data=result.data||{};
+  if(!result.ok){S.currentRuleId=null;markRuleSelection(null);detail.classList.remove('reference-highlight');$('crumbId').textContent='规则目录';const message=result.status===503?'规则数据库暂不可用。':'该规则版本不存在。';detail.innerHTML=`<div class="panel-hd"><h2>规则详情</h2></div><div class="panel-bd"><div class="error-state"><strong>无法读取规则详情</strong><br>${message} 旧详情已清除。</div></div>`;return;}
+  S.currentRuleId=data.rule_version_id;markRuleSelection(data.rule_version_id);$('crumbId').textContent=data.rule_version_id;const requirementList=items=>(items||[]).map(item=>`<div class="requirement"><span class="seq">${esc(item.sequence)}</span><div><strong>${esc(item.description_zh)}</strong><span>${esc(item.necessity)}${item.internal_evidence_code?` · 内部映射 ${esc(item.internal_evidence_code)}`:''}</span></div></div>`).join('')||'<div class="empty">无</div>';const sourceUrl=safeHttpUrl(data.document&&data.document.source_url);
+  detail.innerHTML=`<div class="panel-hd"><h2>规则详情</h2><div class="grow"></div>${ruleReturnButton()}<span class="pill p-acc">${esc(data.verification_status)}</span></div><div class="panel-bd"><div class="rule-id">${esc(data.rule_version_id)}</div><h2>${esc(data.scheme)} ${esc(data.scheme_reason_code)} · ${esc(data.display_name)}</h2><div class="row"><span class="pill ${data.demo_role==='DEMO_MAPPED'?'p-good':'p-mut'}">${esc(data.demo_role)}</span><span class="pill p-mut">${esc(data.region)}</span><span class="pill p-mut">${esc(data.version_label||'版本未标定')}</span></div><div class="rule-section"><h3>来源与适用范围</h3><div class="kv"><span class="k">文档</span><span>${esc(data.document&&data.document.title)}</span></div><div class="kv"><span class="k">章节</span><span>${esc(data.source_section||'未核验')}</span></div><div class="kv"><span class="k">生效日期</span><span>${esc(data.effective_date||'未核验')}</span></div><div class="kv"><span class="k">来源链接</span><span>${sourceUrl==='#'?esc(data.document&&data.document.source_url):`<a href="${esc(sourceUrl)}" target="_blank" rel="noopener noreferrer">打开来源文档</a>`}</span></div>${data.internal_window_days==null?'':`<div class="kv"><span class="k">内部 Demo 窗口</span><span>${esc(data.internal_window_days)} 天（非官方响应期限）</span></div>`}</div><div class="rule-section"><h3>Required Assertions</h3>${requirementList(data.assertions)}</div><div class="rule-section"><h3>卡组织打包证据摘要 · ${(data.evidence||[]).length} 项</h3>${requirementList(data.evidence)}</div><div class="rule-section"><h3>限制与免责声明</h3><div class="note">${esc(data.limitation)}<br><br>${esc(data.disclaimer)}</div></div></div>`;
+  detail.classList.remove('reference-highlight');requestAnimationFrame(()=>{if(S.currentRuleId!==data.rule_version_id)return;detail.classList.add('reference-highlight');detail.focus({preventScroll:true});detail.scrollIntoView({block:'start',behavior:'auto'});setTimeout(()=>{if(S.currentRuleId===data.rule_version_id)detail.classList.remove('reference-highlight');},1600);});}
+function showRuleReference(ruleVersionId,returnContext){const id=String(ruleVersionId||'').trim();if(!id)return;S.ruleReturnContext=normalizeRuleReturnContext(returnContext);S.currentRuleId=id;$('ruleSearch').value='';$('ruleScheme').value='';showView('rules');}
+async function returnFromRuleReference(){const context=S.ruleReturnContext;if(!context||!context.caseId){showView('overview');return;}S.ruleReturnContext=null;const needsLoad=S.caseId!==context.caseId||!S.last;if(needsLoad)await openStoredCase(context.caseId);S.cardNetwork=context.cardNetwork;const network=$(context.sourceView==='diagnosis'?'diagnosisNetwork':'network');if(network)network.value=context.cardNetwork;if(needsLoad)return;showView(context.sourceView);}
 
 function renderTrace(d){const t=d.agent_trace||[];
   $('agentOut').innerHTML=t.length?t.map(x=>`<div class="agent"><span class="atag">${esc(AGENT_LABEL[x.agent]||x.agent)}</span>`

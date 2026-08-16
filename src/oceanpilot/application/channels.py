@@ -27,6 +27,8 @@ class InboundKind(StrEnum):
     OPEN_CASE = "OPEN_CASE"
     CONFIRM_REASON = "CONFIRM_REASON"
     SUBMIT_EVIDENCE = "SUBMIT_EVIDENCE"
+    WITHDRAW_LATEST_EVIDENCE = "WITHDRAW_LATEST_EVIDENCE"
+    SET_CARD_NETWORK = "SET_CARD_NETWORK"
     FINALIZE_EVIDENCE = "FINALIZE_EVIDENCE"
     GET_CASE = "GET_CASE"
 
@@ -42,6 +44,8 @@ class NormalizedInbound:
     # absent, the human is confirming the reason the kernel proposed.
     reason_code: str | None = None
     actor: str | None = None
+    card_network: str | None = None
+    expected_revision: int | None = None
 
 
 @dataclass(frozen=True)
@@ -94,6 +98,8 @@ class AgentActivity:
 class Delivery:
     case_id: str
     phase: str
+    revision: int = 0
+    card_network: str | None = None
     reason_code: str | None = None
     reason_confirmed: bool = False
     collection_finalized: bool = False

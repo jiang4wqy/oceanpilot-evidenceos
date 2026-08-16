@@ -32,6 +32,23 @@ def test_agent_uses_model_explanation_but_keeps_deterministic_decision():
     assert _REASON.value in request.messages[0].content
 
 
+def test_agent_parses_the_json_assessment_contract():
+    model = ScriptedModelProvider(
+        [
+            '{"operator_summary":"材料齐备，等待人工复核。",'
+            '"missing_evidence":[],"next_action":"人工确认",'
+            '"human_review_note":"不得自动提交"}'
+        ]
+    )
+
+    outcome = ChargebackAssessAgent(model).assess(_REASON, required_evidence_for(_REASON))
+
+    assert outcome.explanation == "材料齐备，等待人工复核。"
+    request = model.requests[0]
+    assert "operator_summary" in (request.system or "")
+    assert "ONLY valid JSON" in (request.system or "")
+
+
 def test_model_failure_falls_back_to_deterministic_explanation():
     model = ScriptedModelProvider(error=ModelProviderError())
     agent = ChargebackAssessAgent(model)

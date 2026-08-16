@@ -15,6 +15,7 @@ from oceanpilot.application.errors import (
     DatabaseUnavailable,
     DiagnosisInputStale,
     EvidenceConflict,
+    NoEvidenceToWithdraw,
     PersistenceInvariantViolation,
 )
 from oceanpilot.domain.errors import InvalidTransition, SensitiveDataRejected
@@ -225,6 +226,15 @@ def register_exception_handlers(app: FastAPI) -> None:
             "CONCURRENT_CASE_WRITE",
             "Concurrent case write",
             "case changed during write",
+        ),
+    )
+    app.add_exception_handler(
+        NoEvidenceToWithdraw,
+        _fixed_handler(
+            409,
+            "NO_EVIDENCE_TO_WITHDRAW",
+            "No evidence to withdraw",
+            "case has no evidence to withdraw",
         ),
     )
     app.add_exception_handler(
