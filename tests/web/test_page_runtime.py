@@ -557,3 +557,85 @@ assert.match(node('summaryRows').innerHTML,/规则以摘要为准/);
 """,
         role="BUSINESS",
     )
+
+
+def test_current_service_configuration_is_separate_from_saved_reply_source():
+    _execute(
+        (*STATE, "merchant/agent-review.js"),
+        """
+selectCase('a');acceptCaseSnapshot({case_id:'a',revision:7,
+ runtime:{mode:'DEEPSEEK_LIVE',provider:'DEEPSEEK',model:'deepseek-chat'}});
+renderAgentServiceStatus();
+assert.match(node('agentServiceStatus').innerHTML,/当前服务配置：实时 DeepSeek/);
+const offline={case_id:'a',case_revision:7,assistant_message:'旧离线说明',
+ output_source:'DETERMINISTIC',runtime:{mode:'OFFLINE_FALLBACK',provider:'DETERMINISTIC',model:'offline-rules'}};
+renderAgentTurn(offline);
+assert.equal(node('agentRuntimeBadge').textContent,'离线确定性输出');
+assert.match(node('agentHistory').innerHTML,/离线确定性输出/);
+assert.match(node('agentHistory').innerHTML,/offline-rules/);
+assert.equal(node('agentHistory').innerHTML.includes('实时模型输出'),false);
+assert.match(node('agentServiceStatus').innerHTML,/实时 DeepSeek/);
+renderAgentTurn({case_id:'a',case_revision:7,assistant_message:'新的实时说明',output_source:'MODEL',
+ runtime:{mode:'DEEPSEEK_LIVE',provider:'DEEPSEEK',model:'deepseek-chat'}});
+assert.equal(S.agentMessages.length,2);
+assert.equal(S.agentMessages[0].output_source,'DETERMINISTIC');
+assert.equal(S.agentMessages[1].output_source,'MODEL');
+offline.runtime.mode='DEEPSEEK_LIVE';offline.runtime.provider='DEEPSEEK';
+renderAgentHistory();assert.equal(S.agentMessages[0].runtime.mode,'OFFLINE_FALLBACK');
+assert.match(node('agentHistory').innerHTML,/离线确定性输出/);
+assert.match(node('agentHistory').innerHTML,/实时模型输出/);
+""",
+    )
+
+
+def test_explicit_analysis_and_error_retry_always_request_a_new_user_turn():
+    _execute(
+        (*STATE, "merchant/agent-review.js"),
+        """
+selectCase('a');acceptCaseSnapshot({case_id:'a',revision:7});
+const payloads=[];
+global.requestJson=async(base,method,path,payload)=>{
+ payloads.push(payload);
+ if(payloads.length===1)return {ok:false,status:503};
+ return {ok:true,data:{case_id:'a',case_revision:7,output_source:'MODEL',
+   assistant_message:'新的说明',runtime:{mode:'DEEPSEEK_LIVE',provider:'DEEPSEEK'}}};
+};
+await analyzeCurrentCase('CASE_OPENED');
+assert.equal(payloads[0].trigger,'USER_MESSAGE');
+assert.equal(payloads[0].case_id,'a');
+const retry=node('agentTurnStatus').innerHTML.match(/onclick="([^"]+)"/)[1];
+assert.equal(retry,'analyzeCurrentCase()');
+await eval(retry);
+assert.equal(payloads.length,2);assert.equal(payloads[1].trigger,'USER_MESSAGE');
+assert.equal(S.agentSubmitting,false);assert.equal(node('agentAnalyzeButton').disabled,false);
+assert.equal(S.agentMessages[0].output_source,'MODEL');
+""",
+    )
+
+
+def test_chat_source_labels_keep_legacy_messages_unknown_and_escape_runtime_fields():
+    _execute(
+        (*STATE, "merchant/agent-review.js"),
+        """
+selectCase('a');acceptCaseSnapshot({case_id:'a',revision:1});
+S.agentMessages=[{role:'assistant',text:'历史离线文字'}, {role:'user',text:'<script>bad</script>'}];
+renderAgentHistory();
+assert.match(node('agentHistory').innerHTML,/历史来源未记录/);
+assert.equal(node('agentHistory').innerHTML.includes('实时模型输出'),false);
+assert.match(node('agentHistory').innerHTML,/&lt;script&gt;/);
+appendAgentMessage('assistant','<img src=x onerror=bad>',{output_source:'FALLBACK',
+ failure_code:'TIMEOUT <unsafe>',
+ runtime:{mode:'DEEPSEEK_LIVE',provider:'<provider>',model:'<model>'}});
+assert.match(node('agentHistory').innerHTML,/模型异常后的降级输出/);
+assert.match(node('agentHistory').innerHTML,/TIMEOUT &lt;unsafe&gt;/);
+assert.match(node('agentHistory').innerHTML,/&lt;provider&gt; &lt;model&gt;/);
+assert.equal(node('agentHistory').innerHTML.includes('<img'),false);
+renderAgentServiceStatus();
+assert.match(node('agentServiceStatus').innerHTML,/当前服务配置尚未读取/);
+acceptCaseSnapshot({...S.caseSnapshot,runtime:{mode:'OFFLINE_FALLBACK',model:'offline-rules'}});
+renderAgentServiceStatus();assert.match(node('agentServiceStatus').innerHTML,/当前服务配置：离线规则/);
+acceptCaseSnapshot({...S.caseSnapshot,runtime:{mode:'INJECTED_MODEL',model:'<test-model>'}});
+renderAgentServiceStatus();assert.match(node('agentServiceStatus').innerHTML,/合成测试模型/);
+assert.match(node('agentServiceStatus').innerHTML,/&lt;test-model&gt;/);
+""",
+    )

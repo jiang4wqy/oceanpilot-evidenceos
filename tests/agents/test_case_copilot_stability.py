@@ -129,3 +129,81 @@ def test_valid_json_cannot_turn_registered_metadata_into_verified_content(field,
     assert claim not in outcome.assistant_message
     assert claim not in outcome.analysis_summary
     assert claim not in outcome.action_label
+
+
+def ask_complete_case(
+    model, message, *, offline=True, phase="ASSESSED", review_status="UNREVIEWED"
+):
+    return CaseCopilotAgent(model, offline=offline).respond(
+        message,
+        problem_type="合成正式争议",
+        phase=phase,
+        readiness="6/6 项",
+        responsible_team="RISK",
+        human_gate=True,
+        missing_codes=(),
+        missing_labels=(),
+        review_status=review_status,
+    )
+
+
+@pytest.mark.parametrize("offline", [True, False])
+def test_identity_and_complete_material_questions_get_distinct_bounded_answers(offline):
+    model = ScriptedModelProvider(error=ModelProviderError(ModelFailureCode.TIMEOUT))
+    identity = ask_complete_case(model, "你是谁？", offline=offline)
+    materials = ask_complete_case(model, "现在还缺什么材料？", offline=offline)
+    assert "我是 OceanPilot 案件助手" in identity.assistant_message
+    assert (
+        "本次回答未调用实时模型" in identity.assistant_message
+        if offline
+        else "降级说明" in identity.assistant_message
+    )
+    assert identity.action_kind is CopilotActionKind.NONE
+    assert identity.target_evidence_code is None
+    assert "清单没有缺失项" in materials.assistant_message
+    assert "仍待业务人员" in materials.assistant_message
+    assert identity.assistant_message != materials.assistant_message
+    for result in (identity, materials):
+        assert "真实文件正文" in result.assistant_message
+        assert "ASSESSED" not in result.assistant_message + result.analysis_summary
+        assert "RISK" not in result.assistant_message + result.analysis_summary
+        assert result.requires_confirmation is True
+        assert result.source == ("DETERMINISTIC" if offline else "FALLBACK")
+        assert result.failure_code == (None if offline else "TIMEOUT")
+    assert len(model.requests) == (0 if offline else 2)
+
+
+@pytest.mark.parametrize(
+    ("review_status", "expected"),
+    [
+        ("APPROVED", "已有人工登记复核通过记录"),
+        ("NEEDS_MORE_INFO", "人工退回补充"),
+        ("REJECTED", "已驳回"),
+    ],
+)
+def test_complete_material_reply_respects_existing_human_review(review_status, expected):
+    result = ask_complete_case(ScriptedModelProvider(), "还缺什么？", review_status=review_status)
+    assert expected in result.assistant_message
+    assert "仍待业务人员对当前版本进行人工登记复核" not in result.assistant_message
+    assert "真实文件正文仍未读取或核验" in result.assistant_message
+    assert result.requires_confirmation is True
+
+
+@pytest.mark.parametrize(
+    ("phase", "expected"),
+    [("NEEDS_REVIEW", "登记疑点或来源问题"), ("NO_EXACT_RULE", "没有精确匹配")],
+)
+def test_full_registration_does_not_hide_another_review_blocker(phase, expected):
+    result = ask_complete_case(ScriptedModelProvider(), "审核通过", phase=phase)
+    assert expected in result.assistant_message
+    assert "不会写入审核决定" in result.assistant_message
+    assert result.requires_confirmation is True
+    assert result.action_kind is CopilotActionKind.OPEN_CASE_DETAIL
+    assert phase not in result.assistant_message + result.analysis_summary
+
+
+def test_routing_reply_names_the_human_team_without_internal_enum():
+    result = ask_complete_case(ScriptedModelProvider(), "谁负责处理？")
+    assert "风控团队" in result.assistant_message
+    assert "RISK" not in result.assistant_message + result.analysis_summary
+    assert "人工登记复核" in result.assistant_message

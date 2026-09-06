@@ -191,6 +191,9 @@ def test_workspaces_keep_independent_language_preferences(tmp_path, path, cookie
     assert '"商户材料提交区":"Merchant materials workspace"' in body
     assert '"企业争议运营区":"Business dispute workspace"' in body
     assert "oceanpilot:languagechange" in body
+    assert 'id="agentServiceStatus" class="helper" role="status" aria-live="polite"' in body
+    assert 'onclick="analyzeCurrentCase()"' in body
+    assert "onclick=\"analyzeCurrentCase('CASE_OPENED')\"" not in body
     assert '"案件复核摘要（合成示例）":"Case review summary (synthetic example)"' in body
 
 

@@ -6,6 +6,17 @@
 
 ## 1. 本地离线启动与恢复
 
+已有项目依赖时，可使用统一启动入口，不会在启动时安装依赖。默认端口为 `8026`，默认模式为 `offline`：
+
+```bash
+.venv/bin/python scripts/run_local_demo.py --mode offline
+.venv/bin/python scripts/run_local_demo.py --mode live --port 8026
+```
+
+当前本地共享环境也可直接使用 `../oceanpilot-latest/.venv/bin/python scripts/run_local_demo.py --mode live`。脚本使用调用它的 Python 环境，固定项目工作目录与 `src` 导入路径；从其他目录启动时，传入脚本的绝对路径即可。它在启动时读取项目根目录 `.env`，已有 shell 环境变量优先；`--mode` 始终决定本次模型模式。live 仅使用 DeepSeek，缺少非空 `DEEPSEEK_API_KEY` 时明确报“配置未就绪”并退出，不会把离线结果称为实时。密钥不会写到启动回执或命令参数中。
+
+该入口默认保留 `work/local-demo/core.db`、`work/local-demo/oceanpilot-chargeback.db`、`work/local-demo/oceanpilot-rules.db`；`.env` 或 shell 已指定的三库路径优先。live 与 offline 使用同一配置路径，切换模式不会重置案件。默认页面为 `http://127.0.0.1:8026/demo` 和 `http://127.0.0.1:8026/business`。按 `Ctrl-C` 停止后重新运行即可；脚本不创建守护服务、不自动重启，也不抢占已使用的端口。最终发送保持关闭。设置 live 只表示实时配置已启用，仍需按页面每次回答的 `MODEL` / `FALLBACK` 来源判断调用结果。
+
 首次安装需要本地已有依赖或联网安装；安装完成后的离线演示不调用外网模型。使用 Python 3.12：
 
 ```bash

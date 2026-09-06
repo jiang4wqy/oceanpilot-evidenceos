@@ -123,6 +123,7 @@ function renderStoredDiagnosis(c){
   if(!c.reason_confirmed&&allowed('CONFIRM_REASON'))populateDiagnosisReasons(c.reason_code);
   $('diagnosisNetwork').value=c.card_network||'';$('diagnosisNetwork').disabled=!allowed('SET_NETWORK');$('saveNetworkButton').dataset.forbidden=String(!allowed('SET_NETWORK'));
   renderDiagnosticMaterials(c);renderCaseRule(c);renderConcerns(c);renderReview(c);renderCaseHistory(c);
+  renderAgentServiceStatus();
   $('agentCaseContext').textContent=`${c.case_id.slice(0,12)}… · 版本 ${c.revision}`;
   if(c.latest_analysis&&c.latest_analysis.case_id===c.case_id&&c.latest_analysis.case_revision===c.revision)renderAgentTurn(c.latest_analysis,false);
   else if(!S.lastAgentTurn||S.lastAgentTurn.case_revision!==c.revision){$('agentOutput').innerHTML='<p class="muted">当前版本尚未生成 Agent 输出。缺口与下一步来自后端确定性规则。</p>';$('agentRuntimeBadge').textContent='尚未生成输出';}

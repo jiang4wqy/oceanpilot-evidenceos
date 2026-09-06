@@ -1,0 +1,67 @@
+{
+  "synthetic": true,
+  "surface": "same local merchant case page",
+  "runtime_port": 8026,
+  "records": [
+    {
+      "question": "你是谁",
+      "source_turn_id": "e6d0a1a7-e425-47b3-9b1c-419614c4a531",
+      "case_id": "19d4cb22-3786-42c1-a029-bbc6f550ac9f",
+      "case_revision": 11,
+      "output_source": "MODEL",
+      "runtime": {
+        "mode": "DEEPSEEK_LIVE",
+        "provider": "DEEPSEEK",
+        "model": "deepseek-chat"
+      },
+      "failure_code": null,
+      "assistant_message": "您好，我是OceanPilot案件助手，负责协助您了解本案的注册材料情况、规则引用及人工复核流程。本案为“无卡欺诈（未授权交易）”，当前评估阶段已登记完毕，内部注册检查清单6/6项无缺口，无需补充材料。请您注意：目前尚未有人工复核记录，案件仍需人工审核确认；我仅能基于注册元数据处理，未读取任何真实卷宗内容，也不对材料真实性、交易内容或业务准确性作任何保证。建议您进入案件详情进行人工复核，下一步由责任团队推进。",
+      "requires_confirmation": true
+    },
+    {
+      "question": "目前缺什么，补充后会改变什么？",
+      "source_turn_id": "92217cfb-32c2-4d5f-a244-596db9ee27bc",
+      "case_id": "19d4cb22-3786-42c1-a029-bbc6f550ac9f",
+      "case_revision": 11,
+      "output_source": "FALLBACK",
+      "runtime": {
+        "mode": "DEEPSEEK_LIVE",
+        "provider": "DEEPSEEK",
+        "model": "deepseek-chat"
+      },
+      "failure_code": "INVALID_ACTION",
+      "assistant_message": "当前内部材料登记清单没有缺失项（材料就绪度 6/6 项）。下一步仍待业务人员对当前版本进行人工登记复核。仅登记合成材料元数据，真实文件正文仍未读取或核验。",
+      "requires_confirmation": true
+    },
+    {
+      "question": "目前缺什么，补充后会改变什么？（明确重试）",
+      "source_turn_id": "7786a967-dcbb-4cd0-828b-758410cc1c59",
+      "case_id": "19d4cb22-3786-42c1-a029-bbc6f550ac9f",
+      "case_revision": 11,
+      "output_source": "MODEL",
+      "runtime": {
+        "mode": "DEEPSEEK_LIVE",
+        "provider": "DEEPSEEK",
+        "model": "deepseek-chat"
+      },
+      "failure_code": null,
+      "assistant_message": "目前内部登记清单无缺失项，6/6 项均已登记，但案件仍处于待人工复核状态，尚未完成人工审核。补充材料不会改变缺失清单（因为已无缺失），但如果您有新的证据或材料，可提交供复核人员参考，复核结论需以人工审核为准。请注意，当前仅为系统登记信息，尚未读取任何真实文件内容。",
+      "requires_confirmation": true
+    },
+    {
+      "question": "点击分析当前版本",
+      "source_turn_id": "54937b0d-780d-48a7-b246-c6908a5e4918",
+      "case_id": "19d4cb22-3786-42c1-a029-bbc6f550ac9f",
+      "case_revision": 11,
+      "output_source": "FALLBACK",
+      "runtime": {
+        "mode": "DEEPSEEK_LIVE",
+        "provider": "DEEPSEEK",
+        "model": "deepseek-chat"
+      },
+      "failure_code": "UNSUPPORTED_CLAIM",
+      "assistant_message": "当前内部材料登记清单没有缺失项（材料就绪度 6/6 项）。下一步仍待业务人员对当前版本进行人工登记复核。仅登记合成材料元数据，真实文件正文仍未读取或核验。",
+      "requires_confirmation": true
+    }
+  ]
+}

@@ -755,6 +755,17 @@ CLIENT_TRANSLATIONS.update(
     }
 )
 
+CLIENT_TRANSLATIONS.update(
+    {
+        "当前服务配置：实时 DeepSeek": "Current service configuration: live DeepSeek",
+        "当前服务配置：离线规则": "Current service configuration: offline rules",
+        "当前服务配置：合成测试模型": "Current service configuration: synthetic test model",
+        "当前服务配置尚未读取，请刷新案件。": "Current service configuration unavailable; refresh this case.",
+        "当前配置与历史回复来源分别记录；每条回复以自身来源标签为准。": "Current configuration and historical response sources are separate. Check each response's own source label.",
+        "历史来源未记录": "Historical source not recorded",
+    }
+)
+
 CLIENT_I18N_SCRIPT = build_i18n_script(
     CLIENT_TRANSLATIONS,
     title_zh="Oceanpayment · 商户工作台",
