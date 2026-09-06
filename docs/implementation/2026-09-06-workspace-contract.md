@@ -89,14 +89,14 @@ R0–R6 已由独立重构 PR 完成基础工作；本阶段补齐 R1 中材料/
 
 | 需求 | 当前状态 | 所需证据 |
 | --- | --- | --- |
-| U1–U8 双端职责、列表、单案、材料、反馈、导航、审核、联调 | 接口与页面已实现；主线程已完成桌面双端 A 主链及 B/C；新增规则指纹后审核、中文HTML和规则往返最终复验已通过 | `tests/api/test_workspace_api.py`、`tests/web/test_page_runtime.py`；仍须记录同案双端实际操作 |
+| U1–U8 双端职责、列表、单案、材料、反馈、导航、审核、联调 | 接口与页面已实现；主线程已完成桌面双端 A 主链及 B/C；新增规则指纹后审核、中文HTML和规则往返最终复验已通过 | `tests/api/test_workspace_api.py`、`tests/web/test_page_runtime.py`；同案双端实际操作已记录，见验收记录步骤 3–5 |
 | P01–P03 三场景规则、无匹配、事实口径 | 后端/脚本/文档及定向回归已覆盖；中文HTML新排版实际浏览器复验已通过 | `tests/agents/test_material_boundaries.py`、`test_case_copilot_stability.py`、`tests/api/test_chargeback_api.py` |
 | P04–P06 分层闸门、冲突、当前审核与历史 | 定向后端回归已覆盖 | `tests/application/test_workspace_service.py`：关键/普通缺失、UNKNOWN不能ACK绕过、来源撤回重登记、同字段旧疑点CAS、旧规则审核历史化 |
 | P07–P08 创建幂等、A/B/C样例 | 后端幂等/并发/恢复已有回归；主线程已演示真实后端 A/B/C 副本 | `tests/api/test_workspace_api.py`、`tests/application/test_workspace_service.py`、真实API transcript |
 | P09–P10 同版HTML/JSON摘要 | 案件/规则/AI/审核指纹回归已覆盖；中文HTML新排版与预览指纹最终复验已通过 | 无模型调用、规则读取间隙变化、旧分析与旧审核排除、预览指纹、并发冲突、HTML转义/重启读取 |
 | P11 后端默认禁发送 | 直接HTTP自动化已覆盖 | 503 MOCK_SEND_DISABLED；设开关仍501 MOCK_SEND_NOT_READY；模型/打包/连接器零调用 |
-| P12–P13 模型来源与期限 | 离线与故障自动化已覆盖；主线程已完成一次真实 DeepSeek MODEL 与人工边界检查 | `tests/model/test_deadline_provider.py`、供应商超时/429、Copilot JSON/非法动作/越界主张降级测试 |
-| P14–P15 离线恢复、文档、完整彩排 | runbook与无网HTTP A/B/C已更新并运行；桌面 A/B/C 已演示，新增一致性修复后的最终审核、摘要、规则往返与重启恢复已验证 | `examples/chargeback_transcript.py`、`docs/demo.md`；依赖在场前准备，刷新/重启恢复独立验收 |
+| P12–P13 模型来源与期限 | 离线与故障自动化已覆盖；主线程已完成一次真实 DeepSeek MODEL 与人工边界检查，以及注入延迟 provider 的页面超时降级验收（不代表 DeepSeek 真实故障） | `tests/model/test_deadline_provider.py`、供应商超时/429、Copilot JSON/非法动作/越界主张降级测试；实际计时与页面见验收记录步骤 9 |
+| P14–P15 离线恢复、文档、完整彩排 | runbook与无网HTTP A/B/C已更新并运行；桌面 A/B/C 已演示，新增一致性修复后的最终审核、摘要、规则往返与重启恢复已验证 | `examples/chargeback_transcript.py`、`docs/demo.md`；依赖在场前准备，刷新与重启恢复已验证，见验收记录步骤 4、8、10 |
 
 E1/E2 为 P0 完成后的增强择一；E3 为独立发送增强。L1–L8 需要相应业务、数据、
 企业校准或生产化启动条件，保留在后续路线，不提前宣称已实施。
@@ -105,7 +105,7 @@ E1/E2 为 P0 完成后的增强择一；E3 为独立发送增强。L1–L8 需�
 ## 已记录证据与剩余验收
 
 - 主线程桌面浏览器首次验收：A 样例缺口、材料登记、规则往返、业务复核、摘要下载；B 阻断与历史；C 跨场景；一次 DeepSeek 实时回答。截图在 [验收目录](../acceptance/2026-09-06/screenshots/)。
-- `07-summary-before-readability-fix.png` 明确是 HTML 可读性修复前的截图，不能用于证明新版排版已通过。
+- `04-rule-return.png` 和 `07-summary-before-readability-fix.png` 分别是规则布局、HTML 可读性修复前的截图，不能用于证明新版排版已通过。
 - 定向真实 SQLite/API 回归覆盖：规则在摘要视图读取间隙变化、审核预览后规则变化、审核期间变化回滚、同版但旧规则 AI/审核排除、UNKNOWN 不允许仅 ACK 绕过、来源重登记保留历史、同字段旧疑点不覆盖后来事实、合法 JSON 中越界正文/交易/胜率主张降级。
 - 最终复验已完成：新版服务 A 案件、审核及摘要均为版本 10，规则绑定一致；中文 HTML 和规则往返截图已检查。全量 1429 passed、6 skipped，最终措辞后 41 项页面测试通过，详见[验收记录](../acceptance/2026-09-06/README.md)和工程报告。
 - 未进行完整移动端或读屏验收，不将其标为已完成。

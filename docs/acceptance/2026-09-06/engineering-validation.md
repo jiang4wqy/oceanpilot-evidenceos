@@ -48,3 +48,9 @@ PYTHONPATH=src '/Users/luxinyu/Desktop/飞书 ai 大赛/work/oceanpilot-latest/.
 额外执行的全仓 `ruff check .` 和 `ruff format --check .` 发现一个既存问题：未参与本次业务改动的 `scripts/build_final_proposal_docx.py` 存在导入排序和格式问题。该文件保持原状，不计入已通过的 `src tests` 验收范围。
 
 本轮没有运行浏览器交互或外网模型调用，也没有提交或推送代码。
+
+## 发布阶段补充核对
+
+上述记录描述本地工程检查；随后主线程提交并推送了 [PR #57](https://github.com/jiang4wqy/oceanpilot-evidenceos/pull/57)。提交 `832515c` 的 [GitHub CI](https://github.com/jiang4wqy/oceanpilot-evidenceos/actions/runs/34038302037) 已通过：**1433 passed、5 skipped**，以及 lint、格式、编译、离线合成演示、Docker 镜像构建与容器双端页面检查。五项跳过均为 CI 未配置 DeepSeek/Claude 密钥的实时测试；与本地环境结果分别记录，不相加。
+
+CI 的 14 条页面/健康断言也已在本地运行服务上执行，全部通过；互换商户和业务端响应时，新增角色断言能正确拒绝错误页面。发布阶段未更改应用代码，最终 wheel 的源码核对仍对应本次应用版本。
