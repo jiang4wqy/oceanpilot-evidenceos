@@ -6,7 +6,7 @@ const S={
   loc:window.oceanI18n.getLanguage(), currentView:'overview', section:'summary',
   cases:[], currentRuleId:null, rules:[], rulesRequestId:0, ruleDetailRequestId:0,
   ruleReturnContext:null, agentBoundCaseId:null, agentMessages:[], lastAgentTurn:null,
-  agentSubmitting:false, pendingAgentTurn:null, reviewDraft:null, evidenceDraft:null,
+  agentSubmitting:false, pendingAgentTurn:null, failedAgentTurn:null, reviewDraft:null, evidenceDraft:null,
   withdrawDraft:null, dialogTrigger:null, pendingCommand:null, commandSending:false,
   commandRecovery:null, commandProblem:null, lastReceipt:null, summaryGenerating:false,
   snapshotStale:false, loadingCase:false, navigationGeneration:0,
@@ -35,7 +35,7 @@ function safeReadStorage(key){try{return sessionStorage.getItem(key);}catch(erro
 function safeWriteStorage(key,value){try{if(value===null)sessionStorage.removeItem(key);else sessionStorage.setItem(key,value);}catch(error){void error;}}
 function selectCase(caseId){
   if(caseContext.select(caseId)){
-    S.agentBoundCaseId=null;S.agentMessages=[];S.lastAgentTurn=null;S.pendingAgentTurn=null;
+    S.agentBoundCaseId=null;S.agentMessages=[];S.lastAgentTurn=null;S.pendingAgentTurn=null;S.failedAgentTurn=null;
     S.reviewDraft=null;S.snapshotStale=false;
     for(const id of ['reviewSummary','agentMessage','concernField','concernOriginal','concernProposed','concernOriginalSource','concernProposedSource','concernSummary']){const input=$(id);if(input)input.value='';}
     for(const id of ['reviewError','summaryStatus','agentTurnStatus','concernError']){const status=$(id);if(status)status.textContent='';}
@@ -62,3 +62,9 @@ function syncWriteButtons(){
 }
 function formError(id,text){const node=$(id);if(node)node.textContent=text;}
 function applyLanguage(){window.oceanI18n.apply();}
+
+const CODE_LABEL={COPY_SAMPLE:'新建样例副本',CREATE_CASE:'创建案件',CONFIRM_REASON:'确认争议原因',SET_NETWORK:'提交卡组织选择',REGISTER_MATERIAL:'登记材料',WITHDRAW_MATERIAL:'撤回登记',FINALIZE:'收集结束',REVIEW:'登记复核',ADD_CONCERN:'登记疑点',RESOLVE_CONCERN:'处理疑点',UNVERIFIED_SUMMARY:'未核验摘要',DEMO_MAPPED:'演示已映射',DISPLAY_ONLY:'仅供展示',GLOBAL:'全球（需核验适用地区）',REQUIRED:'必需',RECOMMENDED:'推荐',COMPLETED:'已完成',BLOCKED:'已阻断',INFO:'信息',CHANNEL:'输入渠道',KERNEL:'案件内核',COPILOT:'模型辅助',HUMAN_GATE:'人工确认门槛'};
+function codeLabel(value){return CODE_LABEL[value]||value||'未记录';}
+
+const TEMPLATE_RECORDS=new Set(['当前案件版本','材料登记','新选择与当前记录不同，须业务人员明确复核。','提交方未说明材料来源，暂停推进。','待人工说明来源','合成样例：已复核登记清单；正文未读取。']);
+function recordHtml(value){return TEMPLATE_RECORDS.has(value)?esc(value):`<span data-no-i18n>${esc(value)}</span>`;}

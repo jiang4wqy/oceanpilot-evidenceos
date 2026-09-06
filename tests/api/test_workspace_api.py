@@ -432,3 +432,52 @@ def test_direct_appeal_never_bypasses_backend_send_gate_or_calls_model_or_upstre
         blocked_packager.preview.assert_not_called()
         blocked_appeal.draft.assert_not_called()
         blocked_appeal.submit.assert_not_called()
+
+
+def test_summary_english_download_preserves_frozen_case_and_original_notes(api):
+    case = ready(api)
+    case = execute(api, "REVIEW", review_data(case), case, BUSINESS)
+    response = api.client.post(
+        f"/api/v1/workspace/cases/{case['case_id']}/summaries",
+        headers=BUSINESS,
+        json={"expected_revision": case["revision"]},
+    )
+    assert response.status_code == 200
+    summary = response.json()
+    before = len(api.model.requests)
+    english = api.client.get(summary["html_url"] + "&locale=en", headers=BUSINESS)
+    chinese = api.client.get(summary["html_url"] + "&locale=zh", headers=BUSINESS)
+    assert english.status_code == chinese.status_code == 200
+    assert '<html lang="en">' in english.text
+    assert '<html lang="zh-CN">' in chinese.text
+    assert "Case review summary (synthetic example)" in english.text
+    assert "data-no-i18n" in english.text
+    assert review_data(case)["summary"] in english.text
+    assert case["case_id"] in english.text
+    assert len(api.model.requests) == before
+    first = api.client.get(summary["json_url"] + "&locale=en", headers=BUSINESS).json()
+    second = api.client.get(summary["json_url"] + "&locale=zh", headers=BUSINESS).json()
+    assert first == second
+    assert first["revision"] == case["revision"]
+
+
+@pytest.mark.parametrize("scenario", ["A", "B", "C"])
+def test_every_synthetic_summary_has_complete_english_presentation(api, scenario):
+    import re
+
+    from oceanpilot.web.summary_i18n import _SummaryTranslator
+
+    case = sample(api, scenario)
+    result = api.client.post(
+        f"/api/v1/workspace/cases/{case['case_id']}/summaries",
+        headers=BUSINESS,
+        json={"expected_revision": case["revision"]},
+    ).json()
+    english = api.client.get(result["html_url"] + "&locale=en", headers=BUSINESS).text
+
+    class Audit(_SummaryTranslator):
+        def handle_data(self, text):
+            if not (self.stack and self.stack[-1][1]):
+                assert not re.search(r"[\u3400-\u9fff]", text), text
+
+    Audit().feed(english)

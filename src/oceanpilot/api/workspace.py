@@ -208,12 +208,18 @@ def download_summary(
     service: Annotated[WorkspaceService, Depends(get_workspace)],
     identity: Annotated[tuple[str, str], Depends(demo_identity)],
     format: Literal["html", "json"] = "html",
+    locale: Literal["zh", "en"] = "zh",
 ) -> Response:
     import json
 
+    from oceanpilot.application.workspace_summary import render_summary
+    from oceanpilot.web.summary_i18n import localize_summary_html
+
     result = service.store.summary(summary_id)
     content = (
-        result["html"]
+        localize_summary_html(render_summary(result["snapshot"]), locale)
+        if format == "html" and locale == "en"
+        else result["html"]
         if format == "html"
         else json.dumps(result["snapshot"], ensure_ascii=False, indent=2)
     )

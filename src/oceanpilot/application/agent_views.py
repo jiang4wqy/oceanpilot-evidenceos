@@ -317,6 +317,7 @@ def judgment(delivery: Delivery, *, locale: str) -> AgentJudgment:
     next_action = assistant_message(delivery, locale=locale)
     problem_type = reason_label(reason, locale=locale) if reason is not None else "待识别"
     if locale == "en":
+        readiness = readiness.replace(" 项", " items")
         summary = (
             f"The deterministic kernel classified this as {problem_type}; evidence readiness "
             f"is {readiness}, routed to {responsible_team}."

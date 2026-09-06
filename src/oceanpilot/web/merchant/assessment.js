@@ -1,11 +1,11 @@
 function renderReview(c){
   const review=c.review||{},current=review.current_record;
   $('reviewVersion').textContent=`当前版本 ${c.revision}`;
-  $('currentReview').innerHTML=current&&current.case_revision===c.revision?`<div class="review-current"><span class="pill ${current.status==='APPROVED'?'p-good':'p-warn'}">${esc(reviewStatusLabel(current.status))}</span><p>${esc(current.summary)}</p><div class="meta">${esc(current.confirmed_by)} · ${esc(dateLabel(current.confirmed_at))} · 版本 ${esc(current.case_revision)}<br>审计 ${esc(current.audit_event_id)}</div></div>`:`<div class="review-current"><strong>当前版本尚未完成登记复核</strong><p>${review.stale?'旧复核未覆盖当前规则与材料版本，只作历史记录。':'企业运营方可在核对材料登记清单与内部处理门槛后记录决定。'}</p></div>`;
+  $('currentReview').innerHTML=current&&current.case_revision===c.revision?`<div class="review-current"><span class="pill ${current.status==='APPROVED'?'p-good':'p-warn'}">${esc(reviewStatusLabel(current.status))}</span><p data-no-i18n>${esc(current.summary)}</p><div class="meta">${esc(current.confirmed_by)} · ${esc(dateLabel(current.confirmed_at))} · 版本 ${esc(current.case_revision)}<br>审计 ${esc(current.audit_event_id)}</div></div>`:`<div class="review-current"><strong>当前版本尚未完成登记复核</strong><p>${review.stale?'旧复核未覆盖当前规则与材料版本，只作历史记录。':'企业运营方可在核对材料登记清单与内部处理门槛后记录决定。'}</p></div>`;
   $('reviewForm').hidden=!allowed('REVIEW');
   const approve=$('reviewDecision').querySelector('option[value="APPROVED"]');if(approve)approve.disabled=!(c.gate&&c.gate.can_review);
   if(!(c.gate&&c.gate.can_review)&&$('reviewDecision').value==='APPROVED')$('reviewDecision').value='NEEDS_MORE_INFO';
-  $('reviewHistory').innerHTML=(review.history||[]).slice().reverse().map(item=>`<div class="review-history-item"><span class="pill ${current&&item.decision_id===current.decision_id?'p-acc':'p-mut'}">版本 ${esc(item.case_revision)}${current&&item.decision_id===current.decision_id?' · 当前复核决定':' · 历史记录'}</span> ${esc(reviewStatusLabel(item.status))}<p>${esc(item.summary)}</p><div class="meta">${esc(item.confirmed_by)} · ${esc(dateLabel(item.confirmed_at))} · 审计 ${esc(item.audit_event_id)}</div></div>`).join('')||'<p class="empty">暂无历史复核</p>';
+  $('reviewHistory').innerHTML=(review.history||[]).slice().reverse().map(item=>`<div class="review-history-item"><span class="pill ${current&&item.decision_id===current.decision_id?'p-acc':'p-mut'}">版本 ${esc(item.case_revision)}${current&&item.decision_id===current.decision_id?' · 当前复核决定':' · 历史记录'}</span> ${esc(reviewStatusLabel(item.status))}<p>${recordHtml(item.summary)}</p><div class="meta">${esc(item.confirmed_by)} · ${esc(dateLabel(item.confirmed_at))} · 审计 ${esc(item.audit_event_id)}</div></div>`).join('')||'<p class="empty">暂无历史复核</p>';
   renderSummaryRows(c);
 }
 function previewReview(){
@@ -13,11 +13,12 @@ function previewReview(){
   if(ROLE!=='BUSINESS'||!allowed('REVIEW'))return;
   if(!S.caseSnapshot.rule_fingerprint){formError('reviewError','尚未读取当前规则依据，请刷新本案后再预览复核。');return;}
   const summary=$('reviewSummary').value.trim(),decision=$('reviewDecision').value;
+  if(summary.length>1200){formError('reviewError','输入超过允许长度，请缩短后重试。');return;}
   if(summary.length<3){formError('reviewError','请填写至少 3 个字符的复核意见。');return;}
   if(decision==='APPROVED'&&!S.caseSnapshot.gate.can_review){formError('reviewError','当前版本仍有阻断项，不能批准登记复核。可退回补充或驳回。');return;}
   S.reviewDraft={caseId:S.caseId,revision:S.caseRevision,ruleFingerprint:S.caseSnapshot.rule_fingerprint,decision,summary,scope:['材料登记清单','内部处理门槛']};
   const rule=S.caseSnapshot.rule_reference||{},readiness=S.caseSnapshot.readiness||{};
-  $('reviewProposal').innerHTML=`<div class="review-proposal"><h4>待确认：${esc(reviewStatusLabel(decision))}</h4><p>案件 ${esc(S.caseId)} · 版本 ${esc(S.caseRevision)}</p><p>登记清单 ${esc(readiness.present)}/${esc(readiness.total)} · 规则 ${esc(rule.rule_version_id||'没有精确匹配')}（${esc(rule.verification_status||'未核验')}）</p><p><b>复核范围：</b>材料登记清单、内部处理门槛。<br><b>不包含：</b>材料正文、真实性、一致性或真实交易核验。</p><p>${esc(summary)}</p><div class="actions"><button class="tbtn primary" data-write onclick="confirmWorkspaceReview()">确认写入复核决定</button><button class="tbtn" onclick="cancelWorkspaceReview()">返回修改</button></div></div>`;
+  $('reviewProposal').innerHTML=`<div class="review-proposal"><h4>待确认：${esc(reviewStatusLabel(decision))}</h4><p>案件 ${esc(S.caseId)} · 版本 ${esc(S.caseRevision)}</p><p>登记清单 ${esc(readiness.present)}/${esc(readiness.total)} · 规则 ${esc(rule.rule_version_id||'没有精确匹配')}（${esc(codeLabel(rule.verification_status||'未核验'))}）</p><p><b>复核范围：</b>材料登记清单、内部处理门槛。<br><b>不包含：</b>材料正文、真实性、一致性或真实交易核验。</p><p data-no-i18n>${esc(summary)}</p><div class="actions"><button class="tbtn primary" data-write onclick="confirmWorkspaceReview()">确认写入复核决定</button><button class="tbtn" onclick="cancelWorkspaceReview()">返回修改</button></div></div>`;
   syncWriteButtons();applyLanguage();
 }
 function cancelWorkspaceReview(){S.reviewDraft=null;$('reviewProposal').innerHTML='';}
@@ -52,12 +53,13 @@ async function downloadSummary(summaryId,format){
   const path=format==='html'?item.html_url:item.json_url;
   const url=new URL(path,location.origin);
   if(url.origin!==location.origin||!url.pathname.startsWith(`${WORKSPACE_BASE}/summaries/`))return;
+  url.searchParams.set('locale',S.loc);
   $('summaryStatus').textContent='正在读取已冻结摘要…';
   const result=await OceanRequest.text(url.pathname+url.search,{method:'GET',headers:demoHeaders()},15000);
   if(!result.ok){$('summaryStatus').textContent='摘要读取失败，请重试下载。';return;}
   const blob=new Blob([result.data],{type:format==='html'?'text/html;charset=utf-8':'application/json;charset=utf-8'});
   const objectUrl=URL.createObjectURL(blob),link=document.createElement('a');
-  link.href=objectUrl;link.download=`案件复核摘要（合成示例）-${item.case_id}-v${item.revision}.${format}`;
+  link.href=objectUrl;link.download=`${S.loc==='en'?'case-review-summary-synthetic':'案件复核摘要（合成示例）'}-${item.case_id}-v${item.revision}.${format}`;
   document.body.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(objectUrl),1000);
   $('summaryStatus').textContent=`已下载冻结版本 ${item.revision} 的 ${format.toUpperCase()} 摘要。`;
 }

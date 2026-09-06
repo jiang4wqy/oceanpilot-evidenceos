@@ -39,6 +39,7 @@ function showView(value,options={}){
     if(active)button.setAttribute('aria-current','page');else button.removeAttribute('aria-current');
   });
   const labels={overview:'案件中心',workspace:S.caseSnapshot&&S.caseSnapshot.title||'案件工作台',create:'新建案件',samples:'演示样例',rules:'规则知识'};
+  if(v==='workspace'&&!S.caseSnapshot.scenario)$('crumbId').setAttribute('data-no-i18n','');else $('crumbId').removeAttribute('data-no-i18n');
   $('crumbId').textContent=labels[v];
   const view=$(`v-${v}`);view.setAttribute('tabindex','-1');view.focus({preventScroll:true});
   if(options.history!==false)writeNavigation(Boolean(options.replace));else updateRoleLinks();
@@ -81,9 +82,9 @@ async function loadCases(){
 }
 function renderTransactions(){
   const q=$('tableSearch').value.trim().toLowerCase(),status=$('statusFilter').value,owner=$('ownerFilter').value;
-  const rows=S.cases.filter(c=>(status==='ALL'||c.phase===status)&&(owner==='ALL'||c.next_actor===owner)&&[c.title,c.case_id,c.reason_code,c.reason_label,c.card_network,c.rule_reference&&c.rule_reference.scheme_reason_code].join(' ').toLowerCase().includes(q));
+  const rows=S.cases.filter(c=>(status==='ALL'||c.phase===status)&&(owner==='ALL'||c.next_actor===owner)&&[c.title,c.case_id,c.reason_code,c.reason_label,window.oceanI18n.translateTo(c.reason_label,'en'),c.card_network,c.rule_reference&&c.rule_reference.scheme_reason_code].join(' ').toLowerCase().includes(q));
   $('transactionCount').textContent=`${rows.length} 件案件 · 更新于 ${new Date().toLocaleTimeString(S.loc==='en'?'en-US':'zh-CN',{hour12:false})}`;
-  $('transactionRows').innerHTML=rows.map(c=>`<tr><td><strong>${esc(c.title||c.case_id)}</strong><div class="sub-id">${esc(c.case_id)} · 版本 ${esc(c.revision)}</div>${c.scenario?`<span class="pill p-mut">合成样例 ${esc(c.scenario)}</span>`:''}</td><td>${esc(c.reason_label||'待确认原因')}<div class="sub-id">${esc(NETWORK_LABEL[c.card_network]||'卡组织待确认')}${c.rule_reference&&c.rule_reference.scheme_reason_code?` · ${esc(c.rule_reference.scheme_reason_code)}`:''}</div></td><td><span class="pill ${c.missing_count?'p-warn':'p-acc'}">${esc(c.phase_label||PHASE_LABEL[c.phase]||c.phase)}</span></td><td>${Number.isInteger(c.missing_count)?c.missing_count:'—'} 项</td><td>${esc(ownerLabel(c.next_actor))}</td><td><span class="pill ${c.review_status==='APPROVED'?'p-good':'p-mut'}">${esc(reviewStatusLabel(c.review_status))}</span></td><td>${esc(dateLabel(c.updated_at))}</td><td class="action-cell"><button class="tbtn primary" onclick="openStoredCase('${esc(c.case_id)}')">打开案件</button></td></tr>`).join('')||'<tr><td colspan="8"><div class="empty-state"><strong>暂无匹配案件</strong><p>可调整筛选，或从演示样例创建一个新副本。</p><button class="tbtn" onclick="showView(\'samples\')">打开演示样例</button></div></td></tr>';
+  $('transactionRows').innerHTML=rows.map(c=>`<tr><td><strong ${c.scenario?'':'data-no-i18n'}>${esc(c.title||c.case_id)}</strong><div class="sub-id">${esc(c.case_id)} · 版本 ${esc(c.revision)}</div>${c.scenario?`<span class="pill p-mut">合成样例 ${esc(c.scenario)}</span>`:''}</td><td>${esc(c.reason_label||'待确认原因')}<div class="sub-id">${esc(NETWORK_LABEL[c.card_network]||'卡组织待确认')}${c.rule_reference&&c.rule_reference.scheme_reason_code?` · ${esc(c.rule_reference.scheme_reason_code)}`:''}</div></td><td><span class="pill ${c.missing_count?'p-warn':'p-acc'}">${esc(c.phase_label||PHASE_LABEL[c.phase]||c.phase)}</span></td><td>${Number.isInteger(c.missing_count)?c.missing_count:'—'} 项</td><td>${esc(ownerLabel(c.next_actor))}</td><td><span class="pill ${c.review_status==='APPROVED'?'p-good':'p-mut'}">${esc(reviewStatusLabel(c.review_status))}</span></td><td>${esc(dateLabel(c.updated_at))}</td><td class="action-cell"><button class="tbtn primary" onclick="openStoredCase('${esc(c.case_id)}')">打开案件</button></td></tr>`).join('')||'<tr><td colspan="8"><div class="empty-state"><strong>暂无匹配案件</strong><p>可调整筛选，或从演示样例创建一个新副本。</p><button class="tbtn" onclick="showView(\'samples\')">打开演示样例</button></div></td></tr>';
   applyLanguage();
 }
 async function openStoredCase(caseId,options={}){
@@ -105,6 +106,7 @@ async function refreshCase(){
 }
 function renderStoredDiagnosis(c){
   if(c.case_id!==S.caseId||c.revision!==S.caseRevision)return;
+  for(const id of ['caseTitle','caseDescription']){if(c.scenario)$(id).removeAttribute('data-no-i18n');else $(id).setAttribute('data-no-i18n','');}
   $('caseTitle').textContent=c.title||'合成争议案件';$('diagId').textContent=c.case_id;
   $('caseRevision').textContent=`版本 ${c.revision}`;$('caseUpdated').textContent=`更新于 ${dateLabel(c.updated_at)}`;
   $('diagStatus').textContent=c.phase_label||PHASE_LABEL[c.phase]||c.phase;$('diagStatus').className=`pill ${c.missing_count?'p-warn':'p-acc'}`;
@@ -130,17 +132,18 @@ function renderStoredDiagnosis(c){
   updateRoleLinks();syncWriteButtons();applyLanguage();
 }
 async function populateDiagnosisReasons(reason){
-  const context=caseContext.capture();const result=await api('GET',`/catalog?locale=${S.loc}`);
+  const context=caseContext.capture();const result=await api('GET','/catalog?locale=zh');
   if(!result.ok||!caseContext.isCurrent(context)||!$('diagReasonFix'))return;
   $('diagReasonFix').innerHTML=(result.data.reasons||[]).map(item=>`<option value="${esc(item.code)}" ${item.code===reason?'selected':''}>${esc(item.label)}</option>`).join('');
 }
 async function confirmDiagnosisReason(){if(!S.caseId||!allowed('CONFIRM_REASON'))return;await runCommand('CONFIRM_REASON',{reason_code:$('diagReasonFix').value});}
-async function saveCaseNetwork(){if(!allowed('SET_NETWORK'))return;await runCommand('SET_NETWORK',{card_network:$('diagnosisNetwork').value});}
+async function saveCaseNetwork(){if(!allowed('SET_NETWORK'))return;if(!$('diagnosisNetwork').value){S.commandProblem='请选择卡组织后再确认。';renderCommandNotice();return;}await runCommand('SET_NETWORK',{card_network:$('diagnosisNetwork').value});}
 async function openCase(){
   if(S.pendingCommand||S.commandSending)return;
   formError('createError','');
   if(!$('formalDisputeConfirm').checked){formError('createError','请明确确认：这是已进入正式争议流程的合成案件。');return;}
   const title=$('caseName').value.trim(),description=$('desc').value.trim();
+  if(title.length>100||description.length>2000){formError('createError','输入超过允许长度，请缩短后重试。');return;}
   if(!title||description.length<10){formError('createError','请填写案件名称及至少 10 个字符的合成案件说明。');return;}
   await runCommand('CREATE_CASE',{title,description,card_network:$('createNetwork').value,formal_dispute:true});
 }

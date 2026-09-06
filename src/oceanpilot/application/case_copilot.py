@@ -243,6 +243,7 @@ class CaseCopilotAgent:
         missing_codes: tuple[str, ...],
         missing_labels: tuple[str, ...],
         review_status: str = "UNREVIEWED",
+        locale: str = "zh-CN",
     ) -> CopilotOutcome:
         fallback = _fallback(
             message,
@@ -254,6 +255,75 @@ class CaseCopilotAgent:
             review_status=review_status,
             offline=self._offline,
         )
+        if locale == "en-US":
+            readiness = readiness.replace(" 项", " items")
+            next_step = (
+                "Confirm the dispute reason before registering materials."
+                if phase == "REASON_PROPOSED"
+                else "Confirm the case description and formal dispute premise."
+                if phase == "NEEDS_INTAKE"
+                else "Resolve registered concerns and unknown sources before review."
+                if phase == "NEEDS_REVIEW"
+                else (
+                    "An exact applicable rule must be checked by a business operator; do not "
+                    "substitute a default rule."
+                )
+                if phase == "NO_EXACT_RULE"
+                else (
+                    "Register the missing items, then ask a business operator to review this "
+                    "revision."
+                )
+                if missing_codes
+                else (
+                    "This revision has a human register approval. Review its scope and "
+                    "generate a summary."
+                )
+                if review_status == "APPROVED"
+                else "A human requested more information. Read and address the review notes."
+                if review_status == "NEEDS_MORE_INFO"
+                else "A human rejected this revision. Read the review notes."
+                if review_status == "REJECTED"
+                else "A business operator must review the current register."
+            )
+            boundary = (
+                " Only synthetic metadata is registered. Real document bodies remain "
+                "unread and unverified; operator confirmation is required for changes."
+            )
+            mode = (
+                "This is an offline deterministic response."
+                if self._offline
+                else (
+                    "The live model did not return a usable answer; this is a deterministic "
+                    "fallback."
+                )
+            )
+            answer = (
+                (
+                    "I am OceanPilot, a case assistant for registration gaps, rule "
+                    "references, and human review. "
+                )
+                + mode
+                if _asks_identity(message)
+                else next_step
+                if phase in ("REASON_PROPOSED", "NEEDS_INTAKE")
+                else (
+                    "Missing registrations: " + ", ".join(missing_labels) + ". "
+                    if missing_codes
+                    else "The internal registration checklist is complete. "
+                )
+                + f"Registration readiness: {readiness}. "
+                + next_step
+            )
+            fallback = replace(
+                fallback,
+                assistant_message=answer + boundary,
+                analysis_summary=f"Registration readiness: {readiness}. " + next_step + boundary,
+                action_label="Register missing material"
+                if fallback.action_kind is CopilotActionKind.OPEN_EVIDENCE_MODAL
+                else "View case and review records"
+                if fallback.action_kind is not CopilotActionKind.NONE
+                else "",
+            )
         if self._offline:
             return replace(fallback, source="DETERMINISTIC", offline=True)
         snapshot = (
@@ -276,7 +346,7 @@ class CaseCopilotAgent:
                     max_output_tokens=700,
                 ),
                 [ModelMessage(role=ModelRole.USER, content=snapshot)],
-                system=_SYSTEM,
+                system=_SYSTEM.replace("Chinese", "English") if locale == "en-US" else _SYSTEM,
             )
         except ModelProviderError as error:
             return replace(fallback, failure_code=error.code.value)

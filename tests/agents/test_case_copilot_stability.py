@@ -207,3 +207,45 @@ def test_routing_reply_names_the_human_team_without_internal_enum():
     assert "风控团队" in result.assistant_message
     assert "RISK" not in result.assistant_message + result.analysis_summary
     assert "人工登记复核" in result.assistant_message
+
+
+@pytest.mark.parametrize("offline", [False, True])
+def test_english_mode_localizes_fallback_and_keeps_human_gate(offline):
+    import re
+
+    model = ScriptedModelProvider(default_text="invalid")
+    result = CaseCopilotAgent(model, offline=offline).respond(
+        "What is missing?",
+        problem_type="Card-not-present fraud",
+        phase="NEED_EVIDENCE",
+        readiness="5/6 items",
+        responsible_team="RISK",
+        human_gate=True,
+        missing_codes=("auth.threeds",),
+        missing_labels=("3DS authentication result",),
+        locale="en-US",
+    )
+    assert not re.search(r"[\u3400-\u9fff]", result.assistant_message)
+    assert "3DS authentication result" in result.assistant_message
+    assert "unread" in result.assistant_message
+    assert result.requires_confirmation is True
+    assert result.source == ("DETERMINISTIC" if offline else "FALLBACK")
+    if not offline:
+        assert "English answer" in model.requests[0].system
+        assert "Chinese answer" not in model.requests[0].system
+
+
+def test_english_intake_fallback_does_not_claim_checklist_complete():
+    result = CaseCopilotAgent(ScriptedModelProvider(), offline=True).respond(
+        "What is next?",
+        problem_type="Unconfirmed",
+        phase="REASON_PROPOSED",
+        readiness="0/0 items",
+        responsible_team="RISK",
+        human_gate=True,
+        missing_codes=(),
+        missing_labels=(),
+        locale="en-US",
+    )
+    assert "Confirm the dispute reason" in result.assistant_message
+    assert "checklist is complete" not in result.assistant_message

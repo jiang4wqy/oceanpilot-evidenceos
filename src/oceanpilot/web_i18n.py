@@ -4,6 +4,8 @@
 
 import json
 
+from oceanpilot.workspace_i18n import TRANSLATIONS as WORKSPACE_TRANSLATIONS
+
 COMMON_TRANSLATIONS = {
     "语言": "Language",
     "中文": "中文",
@@ -364,6 +366,10 @@ _RUNTIME = r"""
   const TABLE=__TABLE__;
   const TITLES={zh:__TITLE_ZH__,en:__TITLE_EN__};
   const TEXT_SOURCE=new WeakMap();
+  const TEXT_RENDERED=new WeakMap();
+  const ATTR_RENDERED=new WeakMap();
+  let observer;
+  const PHRASES=Object.keys(TABLE).filter(key=>/[\u3400-\u9fff]/.test(key)&&key.length>1).sort((a,b)=>b.length-a.length);
   const ATTR_SOURCE=new WeakMap();
   const COOKIE=__COOKIE__;
   let language=readLanguage();
@@ -378,7 +384,19 @@ _RUNTIME = r"""
     document.cookie=COOKIE+"="+encodeURIComponent(value)+";path=/;max-age=31536000;SameSite=Lax";
   }
   function pattern(source){
+    const translate=value=>translateTo(value,'en');
     let m;
+    if((m=source.match(/^内部清单仍缺少 (\d+) 项材料，暂不能形成通过结论。$/)))return `${m[1]} registrations remain missing; approval is not available.`;
+    if((m=source.match(/^读取阶段 (.+)，未修改案件状态$/)))return `Read stage ${m[1]}; case state unchanged`;
+    if((m=source.match(/^本案对应 (.+)「(.+)」的 Synthetic 映射，用于整理待人工复核的材料。(.*)$/)))return `Synthetic mapping for ${m[1]} (${translate(m[2])}), used to organize materials for human review. ${translate(m[3])}`;
+    if((m=source.match(/^(\d+) 条 · (\d+) 条 Demo Mapped · (\d+) 个卡组织 · (\d+) 份来源$/)))return `${m[1]} rules · ${m[2]} demo mapped · ${m[3]} networks · ${m[4]} sources`;
+    if((m=source.match(/^已完成本案版本 (\d+) 的说明。$/)))return `Explanation completed for revision ${m[1]}.`;
+    if((m=source.match(/^已下载冻结版本 (\d+) 的 (HTML|JSON) 摘要。$/)))return `Downloaded ${m[2]} summary for frozen revision ${m[1]}.`;
+    if((m=source.match(/^已选择合成材料文件名：(.+)。不读取或上传正文。$/)))return `Selected synthetic file name: ${m[1]}. No body is read or uploaded.`;
+    if((m=source.match(/^已登记「(.+)」；仍缺 (\d+) 项。正文未读取、内容未核验。$/)))return `Registered “${translate(m[1])}”; ${m[2]} items remain. Body not read; content not verified.`;
+    if((m=source.match(/^(\d+) 天（非官方响应期限）$/)))return `${m[1]} days (not an official response deadline)`;
+    if((m=source.match(/^(\d+) 项$/)))return `${m[1]} items`;
+
     if((m=source.match(/^(\d+) 件案件 · 更新于 (.+)$/)))return `${m[1]} cases · Updated ${m[2]}`;
     if((m=source.match(/^材料登记就绪度 (.+) \/ (.+)$/)))return `Registration readiness ${m[1]} / ${m[2]}`;
     if((m=source.match(/^当前版本 (\d+)$/)))return `Current revision ${m[1]}`;
@@ -423,7 +441,15 @@ _RUNTIME = r"""
   function translateTo(source,targetLanguage=language){
     source=String(source==null?"":source);
     if(targetLanguage!=="en")return source;
-    return TABLE[source]||pattern(source);
+    if(TABLE[source])return TABLE[source];
+    const formatted=pattern(source);if(formatted!==source)return formatted;
+    // Translate only recognized UI phrases; original records are marked data-no-i18n.
+    let out='',offset=0;
+    while(offset<source.length){
+      const phrase=PHRASES.find(key=>source.startsWith(key,offset));
+      if(phrase){out+=TABLE[phrase];offset+=phrase.length;}else out+=source[offset++];
+    }
+    return out;
   }
   function translate(source){return translateTo(source,language);}
   function preserveWhitespace(source,translated){
@@ -433,18 +459,22 @@ _RUNTIME = r"""
   function translateTextNode(node){
     if(!node.parentElement||node.parentElement.closest("script,style,[data-no-i18n]"))return;
     let source=TEXT_SOURCE.get(node);
-    if(source===undefined){source=node.nodeValue;TEXT_SOURCE.set(node,source);}
+    if(source===undefined||node.nodeValue!==TEXT_RENDERED.get(node)){source=node.nodeValue;TEXT_SOURCE.set(node,source);}
     const trimmed=source.trim();if(!trimmed)return;
     const next=language==="en"?preserveWhitespace(source,translate(trimmed)):source;
     if(node.nodeValue!==next)node.nodeValue=next;
+    TEXT_RENDERED.set(node,next);
   }
   function translateElement(element){
     if(element.matches("[data-no-i18n]")||element.closest("[data-no-i18n]"))return;
     let sources=ATTR_SOURCE.get(element);if(!sources){sources={};ATTR_SOURCE.set(element,sources);}
+    let rendered=ATTR_RENDERED.get(element);if(!rendered){rendered={};ATTR_RENDERED.set(element,rendered);}
     ["placeholder","title","aria-label"].forEach(name=>{
       if(!element.hasAttribute(name))return;
-      if(!(name in sources))sources[name]=element.getAttribute(name);
-      element.setAttribute(name,language==="en"?translate(sources[name]):sources[name]);
+      if(!(name in sources)||element.getAttribute(name)!==rendered[name])sources[name]=element.getAttribute(name);
+      const next=language==="en"?translate(sources[name]):sources[name];
+      if(element.getAttribute(name)!==next)element.setAttribute(name,next);
+      rendered[name]=next;
     });
     if(element.matches("[data-i18n-value]")){
       if(!("value" in sources))sources.value=element.value;
@@ -452,21 +482,22 @@ _RUNTIME = r"""
     }
   }
   function apply(root=document.body){
-    if(!root||applying)return;applying=true;
+    if(!root||applying)return;applying=true;if(observer)observer.disconnect();
     document.documentElement.lang=language==="en"?"en":"zh-CN";document.title=TITLES[language];
     if(root.nodeType===Node.TEXT_NODE)translateTextNode(root);
     else if(root.nodeType===Node.ELEMENT_NODE){translateElement(root);const walker=document.createTreeWalker(root,NodeFilter.SHOW_ELEMENT|NodeFilter.SHOW_TEXT);let node;while((node=walker.nextNode()))node.nodeType===Node.TEXT_NODE?translateTextNode(node):translateElement(node);}
     const selector=document.getElementById("languageSelect");if(selector)selector.value=language;
-    applying=false;
+    applying=false;if(observer)observe();
   }
   function setLanguage(value,save=true){
     const next=value==="en"?"en":"zh";if(next===language){apply();return;}
     const previousLanguage=language;language=next;if(save)persist(language);apply();window.dispatchEvent(new CustomEvent("oceanpilot:languagechange",{detail:{language,previousLanguage}}));
   }
+  function observe(){observer.observe(document.body,{childList:true,characterData:true,attributes:true,attributeFilter:["placeholder","title","aria-label"],subtree:true});}
   function init(){
     const selector=document.getElementById("languageSelect");if(selector)selector.addEventListener("change",event=>setLanguage(event.target.value));
     apply();
-    const observer=new MutationObserver(records=>{for(const record of records){for(const node of record.addedNodes)apply(node);}});observer.observe(document.body,{childList:true,subtree:true});
+    observer=new MutationObserver(()=>apply());observe();
     setInterval(()=>{const cookieLanguage=readLanguage();if(cookieLanguage!==language)setLanguage(cookieLanguage,false);},1000);
   }
   window.oceanI18n={apply,getLanguage:()=>language,setLanguage,translate,translateTo};
@@ -766,18 +797,20 @@ CLIENT_TRANSLATIONS.update(
     }
 )
 
+CLIENT_TRANSLATIONS.update(WORKSPACE_TRANSLATIONS)
+
 CLIENT_I18N_SCRIPT = build_i18n_script(
     CLIENT_TRANSLATIONS,
     title_zh="Oceanpayment · 商户工作台",
     title_en="Oceanpayment · Merchant Workspace",
-    preference_key="oceanpilot_client_language",
+    preference_key="oceanpilot_workspace_language",
 )
 
 BUSINESS_I18N_SCRIPT = build_i18n_script(
     CLIENT_TRANSLATIONS,
     title_zh="Oceanpayment · 企业争议运营",
     title_en="Oceanpayment · Business Dispute Workspace",
-    preference_key="oceanpilot_business_language",
+    preference_key="oceanpilot_workspace_language",
 )
 
 ADMIN_I18N_SCRIPT = build_i18n_script(

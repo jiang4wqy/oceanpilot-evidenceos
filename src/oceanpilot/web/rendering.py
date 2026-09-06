@@ -1,7 +1,8 @@
 """Compose packaged page resources without a build step or additional HTTP routes.
 
 Scripts deliberately share one classic-script scope: the existing inline event
-handlers and independent page-language preferences remain supported. Only the
+handlers remain supported. Workspaces share a language preference; operations
+keeps its own preference. Only the
 source files are modular; deployed pages still contain all their own assets.
 """
 

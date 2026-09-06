@@ -13,7 +13,8 @@ function persistPendingCommand(){
 }
 function commandProblemText(result){
   const data=result&&result.data||{};
-  return data.detail||data.message||(result&&result.timedOut?'请求超时，处理结果尚未确认。':'请求未完成，处理结果尚未确认。');
+  if(result&&result.status===0)return result.timedOut?'请求超时，处理结果尚未确认。':'网络不可用，请重试查询。';
+  return (typeof data.detail==='string'?data.detail:Array.isArray(data.detail)?'输入格式不符合要求，请检查必填项及长度。':null)||data.message||(result&&result.timedOut?'请求超时，处理结果尚未确认。':'请求未完成，处理结果尚未确认。');
 }
 function renderCommandNotice(){
   const box=$('commandNotice');
@@ -30,7 +31,7 @@ function renderCommandNotice(){
     box.classList.add('error');box.innerHTML=`<strong>${esc(S.commandProblem)}</strong><div class="actions"><button class="tbtn" onclick="clearCommandNotice()">关闭提示</button>${S.caseId?'<button class="tbtn" onclick="refreshCase()">刷新案件</button>':''}</div>`;
   }else{
     const receipt=S.lastReceipt;
-    box.innerHTML=`<strong>操作已记录 · ${esc(receipt.result||'APPLIED')}</strong><div>案件 ${esc(receipt.case_id)} · 版本 ${esc(receipt.revision)} · ${esc(dateLabel(receipt.applied_at))}</div><div class="helper">审计 ${esc(receipt.audit_event_id)} · 命令 <code>${esc(receipt.command_id)}</code></div><button class="tbtn" onclick="openStoredCase('${esc(receipt.case_id)}')">打开回执案件</button>`;
+    box.innerHTML=`<strong>操作已记录 · ${esc(codeLabel(receipt.result||'已完成'))}</strong><div>案件 ${esc(receipt.case_id)} · 版本 ${esc(receipt.revision)} · ${esc(dateLabel(receipt.applied_at))}</div><div class="helper">审计 ${esc(receipt.audit_event_id)} · 命令 <code>${esc(receipt.command_id)}</code></div><button class="tbtn" onclick="openStoredCase('${esc(receipt.case_id)}')">打开回执案件</button>`;
   }
   syncWriteButtons();applyLanguage();
 }
@@ -42,7 +43,7 @@ async function finishCommand(result){
   persistPendingCommand();
   const snapshot=result.case;
   if(snapshot&&pending.openResult&&pending.navigationGeneration===S.navigationGeneration&&caseContext.isCurrent(pending.context,false)){
-    selectCase(snapshot.case_id);acceptCaseSnapshot(snapshot);renderStoredDiagnosis(snapshot);showView('workspace');
+    selectCase(snapshot.case_id);S.section='summary';acceptCaseSnapshot(snapshot);renderStoredDiagnosis(snapshot);showView('workspace');
   }else if(snapshot&&snapshot.case_id===S.caseId&&acceptCaseSnapshot(snapshot))renderStoredDiagnosis(snapshot);
   renderCommandNotice();syncWriteButtons();
   await loadCases();

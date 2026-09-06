@@ -228,6 +228,7 @@ class CaseAgentService:
             missing_codes=judgment.missing_evidence_codes,
             missing_labels=judgment.missing_evidence,
             review_status=review_status,
+            locale=command.locale,
         )
         turn = views.AgentTurn(
             synthetic=True,

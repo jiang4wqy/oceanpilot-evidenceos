@@ -34,15 +34,34 @@ def _text(value: Any) -> str:
     return escape(str(value if value is not None and value != "" else "未记录"), quote=True)
 
 
+def _original(value: Any) -> str:
+    return "<span data-no-i18n>" + _text(value) + "</span>"
+
+
 def _label(value: Any) -> str:
     return LABELS.get(str(value), str(value or "未记录"))
 
 
 def _pairs(items) -> str:
+    original_keys = {
+        "涉及字段",
+        "原登记值及来源",
+        "建议值及来源",
+        "记录人",
+        "处理人",
+        "演示复核人",
+        "演示生成人",
+        "来源文档",
+        "引用章节",
+        "来源地址",
+    }
     return (
         '<dl class="facts">'
         + "".join(
-            f"<div><dt>{_text(key)}</dt><dd>{_text(value)}</dd></div>" for key, value in items
+            f"<div><dt>{_text(key)}</dt><dd>"
+            + (_original(value) if key in original_keys else _text(value))
+            + "</dd></div>"
+            for key, value in items
         )
         + "</dl>"
     )
@@ -69,7 +88,7 @@ def _review(record: dict[str, Any]) -> str:
             ]
         )
         + '<p class="opinion">'
-        + _text(record.get("summary"))
+        + _original(record.get("summary"))
         + "</p></article>"
     )
 
@@ -85,11 +104,11 @@ def _materials(items) -> str:
             '<tr><th scope="row">'
             + _text(item["label"])
             + "</th><td>"
-            + _text(item["file_name"])
+            + _original(item["file_name"])
             + '<br><span class="muted">'
             + _text(_label(item["source"]))
             + "</span></td><td>"
-            + _text(item["registered_by"])
+            + _original(item["registered_by"])
             + "<br>版本 "
             + _text(item["registered_revision"])
             + "<br>"
@@ -157,10 +176,10 @@ def render_summary(snapshot: dict[str, Any]) -> str:
             ]
         ),
         "</header><section><h2>案件说明与已知信息</h2>",
-        "<h3>"
-        + _text(case["title"])
+        '<p class="muted">原文记录（保留录入语言）</p><h3>'
+        + _original(case["title"])
         + "</h3><p>建案时登记的说明："
-        + _text(case["description"])
+        + _original(case["description"])
         + "</p>",
         _pairs(
             [
@@ -240,9 +259,9 @@ def render_summary(snapshot: dict[str, Any]) -> str:
                 ]
             )
             + "<p>疑点说明："
-            + _text(item["summary"])
+            + _original(item["summary"])
             + "</p><p>处理说明："
-            + _text(item.get("resolution_summary"))
+            + _original(item.get("resolution_summary"))
             + "</p></article>"
         )
     if not case["concerns"]:
@@ -276,7 +295,7 @@ def render_summary(snapshot: dict[str, Any]) -> str:
                     ("案件版本", analysis.get("case_revision")),
                 ]
             ),
-            "<p>" + _text(analysis.get("assistant_message")) + "</p>",
+            "<p>" + _original(analysis.get("assistant_message")) + "</p>",
         ]
     else:
         parts.append("<p>当前版本没有可引用的已保存 AI 分析；本摘要使用确定性快照。</p>")

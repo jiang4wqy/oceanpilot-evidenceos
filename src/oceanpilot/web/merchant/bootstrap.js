@@ -8,13 +8,14 @@ for(const [id,close] of [['evidenceModal',closeEvidenceModal],['withdrawModal',c
   $(id).addEventListener('click',event=>{if(event.target===$(id))close();});
 }
 document.addEventListener('keydown',event=>{
+  trapDialogFocus(event);
   if(event.key==='Escape'){if($('evidenceModal').classList.contains('on'))closeEvidenceModal();if($('withdrawModal').classList.contains('on'))closeWithdrawModal();}
 });
 window.addEventListener('popstate',restoreNavigation);
 window.addEventListener('oceanpilot:languagechange',event=>{
   S.loc=event.detail&&event.detail.language||'zh';renderTransactions();
-  if(S.caseSnapshot)renderStoredDiagnosis(S.caseSnapshot);
-  if(S.lastAgentTurn)renderAgentTurn(S.lastAgentTurn,false);renderCommandNotice();
+  // Translate existing nodes without rebuilding forms or discarding unsent edits.
+  renderAgentHistory();renderCommandNotice();applyLanguage();
 });
 (async()=>{
   const stored=safeReadStorage(`oceanpilot.pending.${ROLE}`);

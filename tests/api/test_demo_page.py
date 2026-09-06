@@ -173,21 +173,14 @@ def test_sample_reset_is_new_backend_copy_and_rules_have_return_context(tmp_path
     assert "默认模板或相似条款当作正式依据" in body
 
 
-@pytest.mark.parametrize(
-    ("path", "cookie", "other_cookie"),
-    [
-        ("/demo", "oceanpilot_client_language", "oceanpilot_business_language"),
-        ("/business", "oceanpilot_business_language", "oceanpilot_client_language"),
-    ],
-)
-def test_workspaces_keep_independent_language_preferences(tmp_path, path, cookie, other_cookie):
+@pytest.mark.parametrize("path", ["/demo", "/business"])
+def test_workspaces_share_language_preference_across_roles(tmp_path, path):
     with _client(tmp_path) as client:
         body = client.get(path).text
     assert 'id="languageSelect"' in body
     assert '<option value="zh">中文</option>' in body
     assert '<option value="en">English</option>' in body
-    assert f'const COOKIE="{cookie}"' in body
-    assert other_cookie not in body
+    assert 'const COOKIE="oceanpilot_workspace_language"' in body
     assert '"商户材料提交区":"Merchant materials workspace"' in body
     assert '"企业争议运营区":"Business dispute workspace"' in body
     assert "oceanpilot:languagechange" in body
