@@ -21,14 +21,11 @@ from types import MappingProxyType
 from oceanpilot.domain.enums import ResponsibleTeam
 
 _QUANT = Decimal("0.0001")
-# Below this rule-based win likelihood, route to human review.
-WIN_REVIEW_THRESHOLD = Decimal("0.60")
-# Missing "critical" evidence gates the win likelihood by the fraction of
-# critical evidence present: without your decisive proof you realistically
-# cannot win, so a case that is weight-complete but missing a critical item
-# must not read as high-confidence. Floored to a small non-zero value once any
-# evidence exists (a bleak estimate, not an absolute 0%); with no evidence at
-# all the likelihood stays exactly 0.
+READINESS_REVIEW_THRESHOLD = Decimal("0.60")
+# Compatibility name: this threshold concerns synthetic checklist readiness.
+WIN_REVIEW_THRESHOLD = READINESS_REVIEW_THRESHOLD
+# Missing critical registration items reduce the internal weighted readiness.
+# The score is neither a calibrated probability nor content verification.
 CRITICAL_MISSING_FLOOR = Decimal("0.05")
 
 
@@ -70,6 +67,15 @@ class ChargebackReviewReason(StrEnum):
     HIGH_RISK_CATEGORY = "HIGH_RISK_CATEGORY"
     MISSING_CRITICAL_EVIDENCE = "MISSING_CRITICAL_EVIDENCE"
     LOW_WIN_LIKELIHOOD = "LOW_WIN_LIKELIHOOD"
+    MATERIAL_CONTENT_UNVERIFIED = "MATERIAL_CONTENT_UNVERIFIED"
+
+
+class MaterialGate(StrEnum):
+    """Internal registration gate; conflicts and source concerns are separate."""
+
+    CRITICAL_MISSING = "CRITICAL_MISSING"
+    LIMITED = "LIMITED"
+    READY_FOR_REVIEW = "READY_FOR_REVIEW"
 
 
 @dataclass(frozen=True)
@@ -182,7 +188,7 @@ _POLICIES: dict[DisputeReasonCode, _ReasonPolicy] = MappingProxyType(
 
 @dataclass(frozen=True)
 class EvidenceContribution:
-    """One required-evidence item and its role in the win-likelihood decision."""
+    """One internal material-registration item and its readiness weight."""
 
     code: ChargebackEvidenceCode
     weight: int
@@ -208,6 +214,19 @@ class ChargebackAssessment:
     review_reasons: tuple[ChargebackReviewReason, ...]
     # Per-item breakdown behind win_likelihood (why the number is what it is).
     evidence_breakdown: tuple[EvidenceContribution, ...] = ()
+
+    @property
+    def evidence_readiness(self) -> Decimal:
+        """Preferred name for the retained ``win_likelihood`` wire alias."""
+        return self.win_likelihood
+
+    @property
+    def material_gate(self) -> MaterialGate:
+        if self.missing_critical:
+            return MaterialGate.CRITICAL_MISSING
+        if self.missing_evidence:
+            return MaterialGate.LIMITED
+        return MaterialGate.READY_FOR_REVIEW
 
 
 def required_evidence_for(reason_code: DisputeReasonCode) -> tuple[ChargebackEvidenceCode, ...]:
@@ -256,8 +275,10 @@ def assess_chargeback(
         reasons.append(ChargebackReviewReason.HIGH_RISK_CATEGORY)
     if missing_critical:
         reasons.append(ChargebackReviewReason.MISSING_CRITICAL_EVIDENCE)
-    if win_likelihood < WIN_REVIEW_THRESHOLD:
+    if win_likelihood < READINESS_REVIEW_THRESHOLD:
         reasons.append(ChargebackReviewReason.LOW_WIN_LIKELIHOOD)
+    # Registering synthetic metadata cannot verify the underlying content.
+    reasons.append(ChargebackReviewReason.MATERIAL_CONTENT_UNVERIFIED)
 
     breakdown = tuple(
         EvidenceContribution(

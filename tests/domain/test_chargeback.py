@@ -7,6 +7,7 @@ from oceanpilot.domain.chargeback import (
     ChargebackEvidenceCode,
     ChargebackReviewReason,
     DisputeReasonCode,
+    MaterialGate,
     assess_chargeback,
     required_evidence_for,
 )
@@ -22,7 +23,7 @@ def test_every_reason_code_has_a_policy():
         assert len(set(checklist)) == len(checklist)  # no duplicates
 
 
-def test_full_evidence_is_ready_and_high_win():
+def test_full_registration_is_ready_but_content_still_requires_human_review():
     reason = DisputeReasonCode.PRODUCT_NOT_RECEIVED
     result = assess_chargeback(reason, required_evidence_for(reason))
     assert result.missing_evidence == ()
@@ -30,8 +31,10 @@ def test_full_evidence_is_ready_and_high_win():
     assert result.completeness == Decimal("1.0000")
     assert result.win_likelihood == Decimal("1.0000")
     assert result.ready_to_submit is True
-    assert result.requires_human is False
-    assert result.review_reasons == ()
+    assert result.requires_human is True
+    assert result.review_reasons == (ChargebackReviewReason.MATERIAL_CONTENT_UNVERIFIED,)
+    assert result.material_gate is MaterialGate.READY_FOR_REVIEW
+    assert result.evidence_readiness == result.win_likelihood
     assert result.responsible_team is ResponsibleTeam.CUSTOMER_SUPPORT
     assert result.default_deadline_days == 15
 
@@ -55,7 +58,10 @@ def test_fraud_category_always_requires_human_even_when_complete():
     assert result.win_likelihood == Decimal("1.0000")
     assert result.ready_to_submit is True
     assert result.requires_human is True  # high-risk category
-    assert result.review_reasons == (ChargebackReviewReason.HIGH_RISK_CATEGORY,)
+    assert result.review_reasons == (
+        ChargebackReviewReason.HIGH_RISK_CATEGORY,
+        ChargebackReviewReason.MATERIAL_CONTENT_UNVERIFIED,
+    )
     assert result.responsible_team is ResponsibleTeam.RISK
 
 
@@ -138,7 +144,8 @@ def test_all_criticals_present_incurs_no_gate_penalty():
     result = assess_chargeback(reason, present)
     assert result.win_likelihood == Decimal("0.7000")
     assert result.missing_critical == ()
-    assert result.requires_human is False
+    assert result.requires_human is True
+    assert result.material_gate is MaterialGate.LIMITED
 
 
 def test_dropping_any_required_item_never_raises_the_win():

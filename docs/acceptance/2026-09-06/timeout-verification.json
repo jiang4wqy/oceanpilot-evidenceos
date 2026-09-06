@@ -1,0 +1,10 @@
+{
+  "synthetic_fault_injection": true,
+  "provider_delay_seconds": 15,
+  "configured_timeout_seconds": 12,
+  "elapsed_seconds": 12.03,
+  "output_source": "FALLBACK",
+  "failure_code": "TIMEOUT",
+  "case_revision": 7,
+  "http_status": 201
+}

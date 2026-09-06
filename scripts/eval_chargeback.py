@@ -5,11 +5,11 @@ real data. Two synthetic, reproducible measurements:
 
 1. **Intake accuracy** — the reason classifier over a small labeled description
    set (offline heuristic path), reported as accuracy + any mismatches.
-2. **Win-likelihood calibration** — synthetic case samples (routed through the
+2. **Synthetic material-readiness separation** — synthetic case samples (routed through the
    real ``adapters/ingestion`` loader, so company samples drop in later) scored
-   by the deterministic kernel; reports mean win for won vs lost cases, their
-   separation, a threshold accuracy, and how often lost cases are flagged for
-   human review.
+   by the deterministic kernel; reports checklist-score separation for deliberately
+   labeled complete vs missing-critical samples. Legacy won/lost labels are artificial, not measured
+   outcomes. Every case still requires human review of unverified materials.
 
 Run:  python scripts/eval_chargeback.py
 """
@@ -22,7 +22,8 @@ from oceanpilot.adapters.ingestion.schema import CaseSampleRecord
 from oceanpilot.adapters.model.fake import ScriptedModelProvider
 from oceanpilot.application.chargeback_agents import IntakeAgent
 from oceanpilot.domain.chargeback import (
-    WIN_REVIEW_THRESHOLD,
+    READINESS_REVIEW_THRESHOLD,
+    ChargebackEvidenceCode,
     DisputeReasonCode,
     assess_chargeback,
     required_evidence_for,
@@ -43,7 +44,7 @@ LABELED_DESCRIPTIONS: tuple[tuple[str, DisputeReasonCode], ...] = (
 )
 
 
-def _first_critical(reason: DisputeReasonCode) -> DisputeReasonCode | None:
+def _first_critical(reason: DisputeReasonCode) -> ChargebackEvidenceCode | None:
     for item in assess_chargeback(reason, []).evidence_breakdown:
         if item.critical:
             return item.code
@@ -100,7 +101,9 @@ class IntakeReport:
 
 @dataclass
 class CalibrationReport:
-    rows: list[tuple[str, str, str, str, bool]]  # ref, reason, outcome, win, requires_human
+    rows: list[
+        tuple[str, str, str, str, bool]
+    ]  # ref, reason, artificial outcome, readiness, requires_human
     won_mean: Decimal
     lost_mean: Decimal
     threshold_accuracy: float
@@ -133,24 +136,24 @@ def evaluate_calibration() -> CalibrationReport:
     lost_total = 0
     for record in calibration_samples():
         result = assess_chargeback(record.reason_code, record.present_evidence)
-        win = result.win_likelihood
+        readiness = result.evidence_readiness
         rows.append(
             (
                 record.case_ref,
                 record.reason_code.value,
                 record.outcome or "",
-                str(win),
+                str(readiness),
                 result.requires_human,
             )
         )
-        predicted_won = win >= Decimal("0.5")
+        predicted_won = readiness >= Decimal("0.5")
         actual_won = record.outcome == "won"
         if predicted_won == actual_won:
             correct_threshold += 1
         if actual_won:
-            won.append(win)
+            won.append(readiness)
         else:
-            lost.append(win)
+            lost.append(readiness)
             lost_total += 1
             if result.requires_human:
                 lost_flagged += 1
@@ -193,14 +196,15 @@ def build_report() -> str:
     lines.append(f"- 分离度（won-lost）：**{cal.separation}**（>0 表示方向正确）")
     lines.append(f"- 合成标签阈值分离准确率（readiness≥0.5）：**{cal.threshold_accuracy:.0%}**")
     lines.append(f"- 合成 lost 标签进入人工复核比例：**{cal.lost_review_recall:.0%}**")
-    lines.append("\n| 案例 | 理由 | 合成标签 | 证据就绪度 | 需人工 |")
+    lines.append("\n| 案例 | 理由 | 合成标签 | 材料就绪度 | 需人工 |")
     lines.append("|---|---|---|---|---|")
-    for ref, reason, outcome, win, requires_human in cal.rows:
-        lines.append(f"| {ref} | {reason} | {outcome} | {win} | {requires_human} |")
+    for ref, reason, outcome, readiness, requires_human in cal.rows:
+        lines.append(f"| {ref} | {reason} | {outcome} | {readiness} | {requires_human} |")
     lines.append(
-        f"\n> 内部兼容阈值 WIN_REVIEW_THRESHOLD={WIN_REVIEW_THRESHOLD}；"
-        "它仅控制 synthetic 人工路由，不代表判胜。"
-        "全部合成、可复现；真实（脱敏）样本经 adapters/ingestion 直接替换即可。"
+        f"\n> 内部材料阈值 READINESS_REVIEW_THRESHOLD={READINESS_REVIEW_THRESHOLD}；"
+        "旧 WIN_REVIEW_THRESHOLD / win_likelihood 名称仅为兼容；不代表判胜。"
+        "所有案件都需人工复核，人工路由比例不是业务效果。"
+        "全部合成且预设标签与缺口关联；未读取材料正文，不能用于真实业务准确率或结果校准。真实样本需要另行验证来源与标签。"
     )
     return "\n".join(lines)
 

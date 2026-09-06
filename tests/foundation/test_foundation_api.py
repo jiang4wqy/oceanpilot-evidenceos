@@ -336,6 +336,12 @@ def test_openapi_has_exact_foundation_paths(app: FastAPI):
         "/api/v1/admin/overview",
         "/api/v1/agent/turns",
         "/api/v1/agent/cases/{case_id}/review-decisions",
+        "/api/v1/workspace/cases",
+        "/api/v1/workspace/cases/{case_id}",
+        "/api/v1/workspace/commands",
+        "/api/v1/workspace/commands/{command_id}",
+        "/api/v1/workspace/cases/{case_id}/summaries",
+        "/api/v1/workspace/summaries/{summary_id}",
     }
     assert {path: set(item) for path, item in paths.items()} == {
         "/health": {"get"},
@@ -365,4 +371,10 @@ def test_openapi_has_exact_foundation_paths(app: FastAPI):
         "/api/v1/admin/overview": {"get"},
         "/api/v1/agent/turns": {"post"},
         "/api/v1/agent/cases/{case_id}/review-decisions": {"post"},
+        "/api/v1/workspace/cases": {"get"},
+        "/api/v1/workspace/cases/{case_id}": {"get"},
+        "/api/v1/workspace/commands": {"post"},
+        "/api/v1/workspace/commands/{command_id}": {"get"},
+        "/api/v1/workspace/cases/{case_id}/summaries": {"post"},
+        "/api/v1/workspace/summaries/{summary_id}": {"get"},
     }

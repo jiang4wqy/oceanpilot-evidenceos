@@ -17,17 +17,21 @@ import json
 import os
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
+from math import isfinite
 from typing import Literal
+from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
 
 from oceanpilot.application.model_provider import (
+    ModelFailureCode,
     ModelMessage,
     ModelProviderError,
     ModelResult,
     TaskSpec,
     ToolCall,
     ToolSpec,
+    remaining_model_seconds,
 )
 
 DEFAULT_LOCAL_MODEL = "local-isolated-model"
@@ -86,7 +90,7 @@ class LocalModelProvider:
             raise ValueError("default_model must be a non-empty string")
         if api_key is not None and (type(api_key) is not str or not api_key):
             raise ValueError("api_key must be a non-empty string when provided")
-        if type(timeout) not in (int, float) or timeout <= 0:
+        if type(timeout) not in (int, float) or not isfinite(timeout) or timeout <= 0:
             raise ValueError("timeout must be a positive number")
         if type(include_metadata) is not bool:
             raise TypeError("include_metadata must be a bool")
@@ -156,23 +160,37 @@ class LocalModelProvider:
             url=self._endpoint,
             headers=tuple(headers.items()),
             body=body,
-            timeout=self._timeout,
+            timeout=remaining_model_seconds(self._timeout),
         )
         try:
             response = self._transport(request)
+        except HTTPError as error:
+            code = (
+                ModelFailureCode.RATE_LIMITED if error.code == 429 else ModelFailureCode.UNAVAILABLE
+            )
+            raise ModelProviderError(code) from None
+        except (TimeoutError, URLError) as error:
+            timed_out = isinstance(error, TimeoutError) or isinstance(
+                getattr(error, "reason", None), TimeoutError
+            )
+            code = ModelFailureCode.TIMEOUT if timed_out else ModelFailureCode.UNAVAILABLE
+            raise ModelProviderError(code) from None
         except Exception:
             raise ModelProviderError() from None
         if (
             type(response) is not LocalHttpResponse
             or type(response.status_code) is not int
             or type(response.body) is not bytes
-            or not (200 <= response.status_code < 300)
         ):
+            raise ModelProviderError(ModelFailureCode.INVALID_RESPONSE)
+        if response.status_code == 429:
+            raise ModelProviderError(ModelFailureCode.RATE_LIMITED)
+        if not 200 <= response.status_code < 300:
             raise ModelProviderError()
         try:
             decoded = json.loads(response.body)
         except (json.JSONDecodeError, UnicodeDecodeError):
-            raise ModelProviderError() from None
+            raise ModelProviderError(ModelFailureCode.INVALID_RESPONSE) from None
         return self._to_result(decoded)
 
     @staticmethod
@@ -191,16 +209,16 @@ class LocalModelProvider:
     @staticmethod
     def _to_result(decoded: object) -> ModelResult:
         if not isinstance(decoded, dict):
-            raise ModelProviderError()
+            raise ModelProviderError(ModelFailureCode.INVALID_RESPONSE)
         choices = decoded.get("choices")
         if not isinstance(choices, list) or not choices:
-            raise ModelProviderError()
+            raise ModelProviderError(ModelFailureCode.INVALID_RESPONSE)
         first = choices[0]
         if not isinstance(first, dict):
-            raise ModelProviderError()
+            raise ModelProviderError(ModelFailureCode.INVALID_RESPONSE)
         message = first.get("message")
         if not isinstance(message, dict):
-            raise ModelProviderError()
+            raise ModelProviderError(ModelFailureCode.INVALID_RESPONSE)
 
         content = message.get("content")
         if content is None:
@@ -208,13 +226,13 @@ class LocalModelProvider:
         elif isinstance(content, str):
             text = content
         else:
-            raise ModelProviderError()
+            raise ModelProviderError(ModelFailureCode.INVALID_RESPONSE)
 
         calls: list[ToolCall] = []
         raw_calls = message.get("tool_calls")
         if raw_calls is not None:
             if not isinstance(raw_calls, list):
-                raise ModelProviderError()
+                raise ModelProviderError(ModelFailureCode.INVALID_RESPONSE)
             for raw_call in raw_calls:
                 calls.append(LocalModelProvider._parse_tool_call(raw_call))
 
@@ -230,21 +248,21 @@ class LocalModelProvider:
     @staticmethod
     def _parse_tool_call(raw_call: object) -> ToolCall:
         if not isinstance(raw_call, dict):
-            raise ModelProviderError()
+            raise ModelProviderError(ModelFailureCode.INVALID_RESPONSE)
         function = raw_call.get("function")
         if not isinstance(function, dict):
-            raise ModelProviderError()
+            raise ModelProviderError(ModelFailureCode.INVALID_RESPONSE)
         name = function.get("name")
         arguments_raw = function.get("arguments")
         # OpenAI encodes tool arguments as a JSON *string*.
         if not isinstance(name, str) or not isinstance(arguments_raw, str):
-            raise ModelProviderError()
+            raise ModelProviderError(ModelFailureCode.INVALID_RESPONSE)
         try:
             arguments = json.loads(arguments_raw)
         except (json.JSONDecodeError, UnicodeDecodeError):
-            raise ModelProviderError() from None
+            raise ModelProviderError(ModelFailureCode.INVALID_RESPONSE) from None
         if not isinstance(arguments, dict):
-            raise ModelProviderError()
+            raise ModelProviderError(ModelFailureCode.INVALID_RESPONSE)
         call_id = raw_call.get("id")
         return ToolCall(
             call_id=call_id if isinstance(call_id, str) else "",

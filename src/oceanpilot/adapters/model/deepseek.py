@@ -36,5 +36,6 @@ def build_deepseek_model_provider_from_env(
         default_model=os.getenv("DEEPSEEK_MODEL", DEFAULT_DEEPSEEK_MODEL),
         api_key=api_key,
         include_metadata=False,
+        timeout=12,
         transport=transport,
     )

@@ -1,28 +1,27 @@
-"""End-to-end HTTP transcript of the chargeback cluster — one readable run.
+"""Offline HTTP walkthrough: A registration -> human review -> saved summary.
 
-Drives the FastAPI app in-process (offline, synthetic) over the *public* HTTP
-surface and prints a human-readable transcript of the whole loop: pre-dispute
-prevention → open case → (human-confirm reason) → evidence collection with SLA →
-kernel assessment (with provenance + per-evidence breakdown) → representment
-package → appeal (blocked, then human-approved) → audit trail.
+Uses the public workspace API and temporary SQLite files. All cases assume a
+synthetic formal dispute; only material metadata is registered, no file body is
+read. B demonstrates invalidated approval after withdrawal, C checks Visa 13.1.
+No model credentials or network are used, even if live mode is set in the shell.
 
-No API key, no network, no business action — the strongest action is advising a
-human review; appeal only submits to a *mock* upstream after explicit approval.
-
-Run (needs the dev extra for the test client):  python examples/chargeback_transcript.py
+Run: python examples/chargeback_transcript.py
 """
 
 import tempfile
 from collections.abc import Callable
 from pathlib import Path
+from uuid import uuid4
 
 from fastapi.testclient import TestClient
 
+from oceanpilot.adapters.model.fake import ScriptedModelProvider
 from oceanpilot.config import Settings
 from oceanpilot.main import create_app
 
-_BASE = "/api/v1/chargeback"
-_MAX_ROUNDS = 50
+_BASE = "/api/v1/workspace"
+_MERCHANT = {"X-Demo-Role": "MERCHANT", "X-Demo-Actor": "synthetic-merchant"}
+_BUSINESS = {"X-Demo-Role": "BUSINESS", "X-Demo-Actor": "synthetic-business"}
 
 
 def build(emit: Callable[[str], None] | None = None) -> list[str]:
@@ -34,96 +33,116 @@ def build(emit: Callable[[str], None] | None = None) -> list[str]:
             emit(message)
 
     with tempfile.TemporaryDirectory() as tmp:
-        app = create_app(Settings(db_path=Path(tmp) / "demo.db"))
+        app = create_app(
+            Settings(db_path=Path(tmp) / "demo.db", mock_send_enabled=False),
+            chargeback_model=ScriptedModelProvider(default_text="（离线合成输出）"),
+        )
         with TestClient(app) as client:
             _run(client, say)
     return lines
 
 
+def _command(client, action, data, *, case=None, business=False):
+    payload = {"command_id": str(uuid4()), "action": action, "data": data, "confirmed": True}
+    if case is not None:
+        payload |= {"case_id": case["case_id"], "expected_revision": case["revision"]}
+    response = client.post(
+        f"{_BASE}/commands", json=payload, headers=_BUSINESS if business else _MERCHANT
+    )
+    response.raise_for_status()
+    return response.json()
+
+
 def _run(client: TestClient, say: Callable[[str], None]) -> None:
-    say("═══ 跨境拒付申诉集群 — 端到端演示（合成数据，不执行任何业务动作）═══")
+    say("═══ 双端案件工作台 — 合成正式争议：人工审核＋复核摘要 ═══")
+    say("前提：假定已进入正式争议流程；普通支付失败或 3DS 挑战失败不能直接当作拒付。")
+    say("仅登记合成材料元数据，未读取或核验真实文件正文。")
 
-    say("\n【0】预防：交易前风险提示")
-    prevention = client.post(
-        f"{_BASE}/prevention/assess",
-        json={"three_ds_authenticated": False, "avs_match": False, "amount": "4200"},
-    ).json()
-    say(f"  拒付风险：{prevention['risk_level']}（评分 {prevention['risk_score']}）")
-    say("  命中因子：" + "、".join(prevention["factors"]))
-    say("  建议现在留存：" + "、".join(e["label"] for e in prevention["recommended_evidence"]))
-    say(f"  建议人工复核：{prevention['recommend_manual_review']}")
-
-    say("\n【1】建案：商户描述问题")
-    description = "客户下单后一直没收到货，现在要求拒付。"
-    say(f"  商户：{description}")
-    case = client.post(
-        f"{_BASE}/cases",
-        json={"description": description, "card_network": "VISA"},
-    ).json()
+    say("\n【1】用户端：新建 A 样例副本")
+    result = _command(client, "COPY_SAMPLE", {"sample": "A"})
+    case = result["case"]
     case_id = case["case_id"]
-    say(f"  案件：{case_id}")
-    say(f"  判定原因：{case['reason_code']}（已确认={case['reason_confirmed']}）")
-    if case.get("deadline"):
-        say(f"  举证时限：还剩 {case['deadline']['days_remaining']} 天")
+    assert case["readiness"]["present"] == 5 and case["readiness"]["total"] == 6
+    assert case["rule_reference"]["scheme_reason_code"] == "10.4"
+    assert case["gate"]["status"] == "CRITICAL_MISSING"
+    say(f"  案件 {case_id} @rev{case['revision']}｜Visa 10.4｜材料就绪度 5/6")
+    gap = next(item for item in case["missing"] if item["critical"])
+    say(f"  补问：请登记 {gap['label']}。{gap['why']}")
+    say(f"  门槛：{case['gate']['reason']}")
 
-    if case["phase"] == "REASON_PROPOSED":
-        say("  → 原因不确定，等待人工确认…")
-        case = client.post(f"{_BASE}/cases/{case_id}/confirm", json={}).json()
-        say(f"  人工已确认原因：{case['reason_code']}")
+    say("\n【2】用户端：登记剩余关键材料并核对回执")
+    result = _command(
+        client,
+        "REGISTER_MATERIAL",
+        {
+            "evidence_code": gap["code"],
+            "file_name": "synthetic-3ds-registration.txt",
+            "source": "SYNTHETIC_TEMPLATE",
+        },
+        case=case,
+    )
+    case = result["case"]
+    assert case["gate"]["status"] == "READY_FOR_REVIEW"
+    assert case["gate"]["requires_human"] is True
+    say(f"  操作回执：{result['receipt']['command_id']}｜版本 {case['revision']}")
+    say("  材料就绪度 6/6；仅表示内部清单登记齐全，正文、真实性与内容一致性仍待核验。")
 
-    say("\n【2】补证：逐项收集（可随时“无法提供→转人工”）")
-    body = case
-    rounds = 0
-    while body["phase"] == "NEED_EVIDENCE":
-        say(f"  补问：{body['question']}")
-        body = client.post(
-            f"{_BASE}/cases/{case_id}/evidence",
-            json={"evidence_code": body["next_evidence"]},
-        ).json()
-        rounds += 1
-        if rounds > _MAX_ROUNDS:
-            raise RuntimeError("evidence loop did not converge")
+    say("\n【3】业务端：复核同一案件的当前版本")
+    shared = client.get(f"{_BASE}/cases/{case_id}", headers=_BUSINESS)
+    shared.raise_for_status()
+    assert shared.json()["revision"] == case["revision"]
+    result = _command(
+        client,
+        "REVIEW",
+        {
+            "decision": "APPROVED",
+            "summary": "当前版本内部材料登记清单已复核；未读取真实正文，规则正式适用性待核验。",
+            "scope": ["材料登记清单", "内部处理门槛", "规则引用来源"],
+            "expected_rule_fingerprint": case["rule_fingerprint"],
+        },
+        case=case,
+        business=True,
+    )
+    case = result["case"]
+    assert case["review"]["status"] == "APPROVED"
+    say(f"  人工登记复核：APPROVED @rev{case['revision']}；下一步为生成同版复核摘要。")
+    say(f"  规则：Visa 10.4｜{case['rule_reference']['verification_status']}")
 
-    say("\n【3】评估：确定性内核判定")
-    a = body["assessment"]
-    review = "需人工复核" if a["requires_human"] else "可自动推进"
+    say("\n【4】业务端：导出案件复核摘要（合成示例）")
+    response = client.post(
+        f"{_BASE}/cases/{case_id}/summaries",
+        json={"expected_revision": case["revision"]},
+        headers=_BUSINESS,
+    )
+    response.raise_for_status()
+    summary = response.json()
+    html = client.get(summary["html_url"], headers=_BUSINESS)
+    snapshot = client.get(summary["json_url"], headers=_BUSINESS)
+    html.raise_for_status()
+    snapshot.raise_for_status()
+    saved = snapshot.json()
+    assert saved["revision"] == saved["case"]["revision"] == case["revision"]
+    assert saved["case"]["review"]["status"] == "APPROVED"
+    say(f"  HTML / JSON 已生成｜摘要 {summary['summary_id']}｜同一版本 {saved['revision']}")
+    say("  摘要来自已保存的确定性快照，导出不调用模型；含未核验事项与合成说明。")
+
+    say("\n【5】B 阻断检查：旧审核后撤回关键材料")
+    blocked = _command(client, "COPY_SAMPLE", {"sample": "B"})["case"]
+    assert blocked["review"]["stale"] is True
+    assert blocked["gate"]["status"] == "CRITICAL_MISSING"
+    assert blocked["gate"]["can_review"] is False
+    say("  B：关键材料缺失；旧审核已失效并保留历史，当前版本不能通过登记复核。")
+
+    say("\n【6】C 跨场景自测：Visa 13.1")
+    cross = _command(client, "COPY_SAMPLE", {"sample": "C"})["case"]
+    assert cross["rule_reference"]["scheme_reason_code"] == "13.1"
     say(
-        f"  规则证据就绪度：{a.get('evidence_readiness', a['win_likelihood'])}"
-        f"（非胜诉概率）｜责任域：{a['responsible_team']}｜{review}"
+        f"  C：{cross['rule_reference']['display_name']}｜缺失项："
+        + "、".join(item["label"] for item in cross["missing"])
     )
-    checklist = " ".join(
-        ("✅" if item["present"] else "❌") + ("⭐" if item["critical"] else "") + item["label"]
-        for item in a["evidence_breakdown"]
-    )
-    say(f"  证据构成：{checklist}")
-    say(f"  说明（来源={a['explanation_source']}）：{a['explanation']}")
-
-    say("\n【4】打包：按银行模板生成 representment")
-    pkg = client.get(f"{_BASE}/cases/{case_id}/package?card_network=VISA").json()
-    say(
-        f"  规则来源：{pkg['rule_source']}｜Visa {pkg['scheme_reason_code']}"
-        f"｜完整度：{pkg['completeness']}"
-        f"｜可提交：{pkg['ready_to_submit']}"
-    )
-    say("  随附证据：" + "、".join(e["label"] for e in pkg["ordered_evidence"]))
-    say(f"  封面说明：{pkg['cover_note']}")
-
-    say("\n【5】申诉：人工确认硬闸门")
-    blocked = client.post(f"{_BASE}/cases/{case_id}/appeal", json={}).json()
-    say(f"  未经批准提交 → submitted={blocked['submitted']}，原因={blocked['blocked_reason']}")
-    approved = client.post(
-        f"{_BASE}/cases/{case_id}/appeal",
-        json={"human_approved": True, "actor_id": "ou_reviewer"},
-    ).json()
-    say(f"  人工批准后 → 已提交上游(mock)：submission_id={approved['submission_id']}")
-
-    say("\n【6】审计：完整可追溯")
-    audit = client.get(f"{_BASE}/cases/{case_id}/audit").json()
-    for event in audit["events"]:
-        detail = f"（{event['detail']}）" if event["detail"] else ""
-        say(f"  #{event['seq']} {event['event_type']}{detail} @rev{event['case_revision']}")
-
-    say("\n完成。全程合成数据；系统绝不执行支付/退款/风控/提交动作，最终以人工确认为准。")
+    say("  A / B / C 都通过后端新建副本，不清空数据库、不在浏览器修改进度。")
+    say("\n完成：主演示止于人工登记复核＋摘要导出。默认最终模拟发送由后端关闭。")
+    say("全程合成；不执行支付/退款/风控/提交动作。以上摘要在本次临时数据库中验证。")
 
 
 def main() -> int:

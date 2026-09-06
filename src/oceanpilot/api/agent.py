@@ -14,12 +14,15 @@ from oceanpilot.api.agent_schemas import (
     StrictAgentTurnCodec,
 )
 from oceanpilot.api.cases import COMMON_PROBLEMS, PROBLEM_RESPONSE
+from oceanpilot.api.dispute_context import require_formal_dispute
+from oceanpilot.api.workspace import business_identity, demo_identity, get_workspace
 from oceanpilot.application.agent_views import AgentRuntime
 from oceanpilot.application.case_agent import AgentTurnCommand, CaseAgentService
 from oceanpilot.application.case_copilot import CaseCopilotAgent
 from oceanpilot.application.case_review import CaseReviewStore
 from oceanpilot.application.chargeback_channel_service import ChargebackChannelService
 from oceanpilot.application.knowledge_base import KnowledgeBase, RuleCatalog
+from oceanpilot.application.workspace import WorkspaceService
 
 router = APIRouter(prefix="/api/v1/agent", tags=["agent"])
 
@@ -50,6 +53,8 @@ def get_case_agent_service(
     review_store: Annotated[CaseReviewStore, Depends(get_review_store)],
     knowledge_base: Annotated[KnowledgeBase, Depends(get_knowledge_base)],
     rule_catalog: Annotated[RuleCatalog, Depends(get_rule_catalog)],
+    workspace: Annotated[WorkspaceService, Depends(get_workspace)],
+    identity: Annotated[tuple[str, str], Depends(demo_identity)],
 ) -> CaseAgentService:
     return CaseAgentService(
         service,
@@ -58,6 +63,9 @@ def get_case_agent_service(
         knowledge_base,
         rule_catalog,
         turn_codec=StrictAgentTurnCodec(),
+        workspace=workspace,
+        role=identity[0],
+        actor=identity[1],
     )
 
 
@@ -72,9 +80,14 @@ def create_agent_turn(
     request: Request,
     agent: Annotated[CaseAgentService, Depends(get_case_agent_service)],
 ) -> AgentTurnResponse:
+    if payload.case_id is None:
+        require_formal_dispute(payload.message, payload.formal_dispute)
     runtime = AgentRuntimeDTO.model_validate(request.app.state.agent_runtime)
     turn = agent.create_turn(
-        AgentTurnCommand(**payload.model_dump()),
+        AgentTurnCommand(
+            **payload.model_dump(exclude={"formal_dispute"}),
+            command_id=request.headers.get("Idempotency-Key"),
+        ),
         AgentRuntime(**runtime.model_dump()),
     )
     return AgentTurnResponse.model_validate(asdict(turn))
@@ -96,6 +109,7 @@ def confirm_agent_review(
     payload: ConfirmAgentReviewRequest,
     response: Response,
     agent: Annotated[CaseAgentService, Depends(get_case_agent_service)],
+    identity: Annotated[tuple[str, str], Depends(business_identity)],
 ) -> ConfirmAgentReviewResponse:
     result = agent.confirm_review(case_id=case_id, **payload.model_dump())
     response.status_code = (

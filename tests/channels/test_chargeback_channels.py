@@ -101,6 +101,7 @@ def test_full_evidence_flow_through_the_service_reaches_assessment():
     assert delivery.phase == "ASSESSED"
     assert delivery.assessment is not None
     assert delivery.assessment.win_likelihood == "1.0000"
+    assert delivery.assessment.requires_human is True
     assert set(delivery.collected) == {c.value for c in required_evidence_for(reason)}
 
 
@@ -163,7 +164,7 @@ def test_http_channel_renders_delivery_as_json():
             win_likelihood="1.0000",
             completeness="1.0000",
             responsible_team="BUSINESS",
-            requires_human=False,
+            requires_human=True,
             review_reasons=(),
             explanation="ok",
         ),
@@ -173,7 +174,7 @@ def test_http_channel_renders_delivery_as_json():
     assert out["case_id"] == "c1"
     assert out["collected"] == ["transaction.receipt"]
     assert out["assessment"]["win_likelihood"] == "1.0000"
-    assert out["assessment"]["requires_human"] is False
+    assert out["assessment"]["requires_human"] is True
 
 
 # -- Feishu channel adapter -------------------------------------------------
@@ -326,7 +327,7 @@ def test_feishu_renders_a_confirm_button_for_reason_proposed():
     assert "确认该原因" in serialized
 
 
-def test_finalize_evidence_routes_to_assessment():
+def test_finalize_evidence_keeps_critical_missing_blocked():
     service = _service()
     opened = service.handle(
         NormalizedInbound(
@@ -340,9 +341,9 @@ def test_finalize_evidence_routes_to_assessment():
         )
     )
     assert final.collection_finalized is True
-    assert final.phase == "ASSESSED"
-    assert final.assessment is not None
-    assert final.assessment.requires_human is True
+    assert final.phase == "NEED_EVIDENCE"
+    assert final.assessment is None
+    assert final.next_evidence in final.missing
 
 
 def test_finalize_without_case_id_is_rejected():

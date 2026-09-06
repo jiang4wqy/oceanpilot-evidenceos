@@ -23,8 +23,16 @@ from oceanpilot.application.model_provider import (
     SecurityTier,
     TaskSpec,
 )
-from oceanpilot.domain.chargeback import ChargebackEvidenceCode, DisputeReasonCode
-from oceanpilot.domain.evidence_catalog import label_of
+from oceanpilot.domain.chargeback import (
+    ChargebackEvidenceCode,
+    DisputeReasonCode,
+    assess_chargeback,
+)
+from oceanpilot.domain.evidence_catalog import (
+    MATERIAL_REGISTRATION_BOUNDARY,
+    has_unsupported_material_claim,
+    label_of,
+)
 from oceanpilot.domain.reason_catalog import reason_label
 
 _QUANT = Decimal("0.0001")
@@ -36,12 +44,29 @@ _PACKAGER_SYSTEM = (
     '"included_evidence":["human-readable label"],'
     '"missing_evidence":["human-readable label"],'
     '"submission_boundary":"Chinese human-approval boundary"}. '
-    "Synthetic data; never claim any business action was taken."
+    "Only synthetic metadata is registered, not verified document contents. Never assert "
+    "transaction authenticity, content consistency, delivery, liability shift, win probability, "
+    "or automatic approval. The rule is an unverified synthetic summary, not an official "
+    "submission basis. The window is an internal demo value, not an official deadline. "
+    "Never claim any business action was taken."
 )
 
 
 def _labels(codes: tuple[ChargebackEvidenceCode, ...]) -> str:
     return "、".join(label_of(code) for code in codes) or "（无）"
+
+
+def has_exact_rule(entry: BankRuleEntry) -> bool:
+    """Only a complete versioned provenance link qualifies as a demo mapping."""
+    return bool(
+        entry.source != "default"
+        and entry.rule_version_id
+        and entry.scheme_reason_code
+        and entry.source_document
+        and entry.verification_status
+        and entry.limitation
+        and entry.submission_window_basis
+    )
 
 
 @dataclass(frozen=True)
@@ -94,6 +119,10 @@ class PackagerAgent:
         entry, package = self._prepare(
             reason_code, present, bank_id=bank_id, card_network=card_network
         )
+        if not has_exact_rule(entry) or not package.ready_to_submit:
+            # An unmatched or incomplete preparation list gets deterministic
+            # guidance, never a model-written formal representment rationale.
+            return package
         note, source = self._cover_note(entry, package.ordered_evidence, package.missing_evidence)
         return replace(package, cover_note=note, cover_note_source=source)
 
@@ -130,6 +159,7 @@ class PackagerAgent:
             else Decimal("1.0000")
         )
 
+        internal = assess_chargeback(reason_code, present_set)
         return entry, RepresentmentPackage(
             reason_code=reason_code,
             bank_id=bank_id,
@@ -138,18 +168,25 @@ class PackagerAgent:
             missing_evidence=missing,
             submission_window_days=entry.submission_window_days,
             completeness=completeness,
-            ready_to_submit=not missing,
+            ready_to_submit=not missing and internal.ready_to_submit and has_exact_rule(entry),
             rule_source=entry.source,
             scheme_reason_code=entry.scheme_reason_code,
             rule_version=entry.rule_version,
             source_document=entry.source_document,
             source_section=entry.source_section,
             required_assertions=entry.required_assertions,
-            rule_limitation=entry.limitation,
+            rule_limitation=(
+                entry.limitation
+                if has_exact_rule(entry)
+                else (
+                    f"{entry.limitation or ''} "
+                    "没有可追溯的精确规则映射；仅供内部材料准备，不可作为正式提交依据。"
+                ).strip()
+            ),
             rule_version_id=entry.rule_version_id,
             verification_status=entry.verification_status,
             submission_window_basis=entry.submission_window_basis,
-            cover_note=_fallback_note(entry, ordered, missing),
+            cover_note=_fallback_note(entry, ordered, missing, internal.missing_evidence),
             cover_note_source=ExplanationSource.FALLBACK,
         )
 
@@ -164,7 +201,8 @@ class PackagerAgent:
             f"rule_source={entry.source}\n"
             f"included={_labels(ordered)}\n"
             f"missing={_labels(missing)}\n"
-            f"window_days={entry.submission_window_days}"
+            f"internal_demo_window_days={entry.submission_window_days}\n"
+            "material_verification=METADATA_ONLY_CONTENT_UNVERIFIED"
         )
         try:
             result = self._model.complete(
@@ -183,8 +221,10 @@ class PackagerAgent:
             return _fallback_note(entry, ordered, missing), ExplanationSource.FALLBACK
         structured = json_text(text, "cover_note")
         if structured is not None:
+            if has_unsupported_material_claim(structured):
+                return _fallback_note(entry, ordered, missing), ExplanationSource.FALLBACK
             return structured, ExplanationSource.MODEL
-        if text.startswith("{"):
+        if text.startswith("{") or has_unsupported_material_claim(text):
             return _fallback_note(entry, ordered, missing), ExplanationSource.FALLBACK
         return text, ExplanationSource.MODEL
 
@@ -193,16 +233,23 @@ def _fallback_note(
     entry: BankRuleEntry,
     ordered: tuple[ChargebackEvidenceCode, ...],
     missing: tuple[ChargebackEvidenceCode, ...],
+    internal_missing: tuple[ChargebackEvidenceCode, ...] = (),
 ) -> str:
     reason = reason_label(entry.reason_code)
-    if missing:
-        return (
-            f"合成打包（{entry.source} 规则，{reason}）：已含 {len(ordered)} 项证据"
-            f"（{_labels(ordered)}），仍缺 {len(missing)} 项（{_labels(missing)}）；"
-            f"补齐后在 {entry.submission_window_days} 天窗口内提交。"
-        )
+    match = (
+        f"匹配 {entry.scheme_reason_code} 合成规则摘要（{entry.rule_version_id}），规则尚待核验"
+        if has_exact_rule(entry)
+        else "未匹配到可追溯的精确规则；当前仅为内部准备清单，默认模板不能作为正式依据"
+    )
+    gaps = tuple(dict.fromkeys((*internal_missing, *missing)))
+    readiness = (
+        f"仍缺 {len(gaps)} 项（{_labels(gaps)}），不能形成通过结论"
+        if gaps
+        else "登记清单齐备，等待人工复核"
+    )
     return (
-        f"合成打包（{entry.source} 规则，{reason}）：{len(ordered)} 项证据已按模板顺序就绪"
-        f"（{_labels(ordered)}），可在 {entry.submission_window_days} 天窗口内提交"
-        "（需人工确认，不执行业务动作）。"
+        f"合成材料预览（{reason}）：{match}。已登记 {len(ordered)} 项"
+        f"（{_labels(ordered)}）；{readiness}。"
+        f"{entry.submission_window_days} 天仅为内部演示窗口，并非官方响应期限。"
+        f"{MATERIAL_REGISTRATION_BOUNDARY}"
     )

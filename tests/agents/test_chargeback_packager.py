@@ -1,7 +1,13 @@
 from dataclasses import replace
 from decimal import Decimal
 
+import pytest
+
 from oceanpilot.adapters.knowledge.bank_rules import InMemoryBankRules
+from oceanpilot.adapters.knowledge.rule_repository import (
+    SqliteRuleRepository,
+    initialize_rule_database,
+)
 from oceanpilot.adapters.model.fake import ScriptedModelProvider
 from oceanpilot.application.chargeback_agents import ExplanationSource
 from oceanpilot.application.chargeback_packager import PackagerAgent
@@ -17,9 +23,16 @@ def _agent(model):
     return PackagerAgent(model, InMemoryBankRules())
 
 
-def test_preview_and_model_build_share_one_deterministic_package():
+@pytest.fixture
+def repository(tmp_path):
+    path = tmp_path / "rules.db"
+    initialize_rule_database(path)
+    return SqliteRuleRepository(path)
+
+
+def test_preview_and_model_build_share_one_deterministic_package(repository):
     model = ScriptedModelProvider(default_text="model cover note")
-    agent = _agent(model)
+    agent = PackagerAgent(model, repository)
     reason = DisputeReasonCode.FRAUD_CARD_NOT_PRESENT
     present = required_evidence_for(reason)
 
@@ -35,19 +48,19 @@ def test_preview_and_model_build_share_one_deterministic_package():
     )
 
 
-def test_full_default_evidence_is_ready_and_ordered():
+def test_full_default_list_stays_internal_and_cannot_claim_formal_readiness():
     reason = DisputeReasonCode.CREDIT_NOT_PROCESSED
     agent = _agent(ScriptedModelProvider(["随附退款凭证等证据。"]))
     pkg = agent.build(reason, required_evidence_for(reason))
-    assert pkg.ready_to_submit is True
+    assert pkg.ready_to_submit is False
     assert pkg.missing_evidence == ()
     assert pkg.completeness == Decimal("1.0000")
     assert pkg.rule_source == "default"
-    assert pkg.cover_note == "随附退款凭证等证据。"
-    assert pkg.cover_note_source is ExplanationSource.MODEL
+    assert "默认模板不能作为正式依据" in pkg.cover_note
+    assert pkg.cover_note_source is ExplanationSource.FALLBACK
 
 
-def test_packager_parses_the_json_cover_note_contract():
+def test_packager_parses_the_json_cover_note_contract(repository):
     model = ScriptedModelProvider(
         [
             '{"cover_note":"随附退款凭证等证据。","included_evidence":["退款凭证"],'
@@ -55,9 +68,10 @@ def test_packager_parses_the_json_cover_note_contract():
         ]
     )
 
-    pkg = _agent(model).build(
-        DisputeReasonCode.CREDIT_NOT_PROCESSED,
-        required_evidence_for(DisputeReasonCode.CREDIT_NOT_PROCESSED),
+    pkg = PackagerAgent(model, repository).build(
+        DisputeReasonCode.PRODUCT_NOT_RECEIVED,
+        required_evidence_for(DisputeReasonCode.PRODUCT_NOT_RECEIVED),
+        card_network="VISA",
     )
 
     assert pkg.cover_note == "随附退款凭证等证据。"
@@ -79,7 +93,7 @@ def test_bank_template_drives_order_and_window():
     assert pkg.rule_source == "bank"
     assert pkg.submission_window_days == 12
     assert pkg.ordered_evidence[0] is ChargebackEvidenceCode.PROOF_OF_DELIVERY
-    assert pkg.ready_to_submit is True
+    assert pkg.ready_to_submit is False  # no versioned provenance for this bank fixture
 
 
 def test_scheme_guidance_exposes_traceable_rule_metadata():
@@ -118,10 +132,10 @@ def test_partial_evidence_reports_missing_and_not_ready():
     assert all(c in {ChargebackEvidenceCode.TRANSACTION_RECEIPT} for c in pkg.ordered_evidence)
 
 
-def test_model_failure_falls_back_to_deterministic_note():
-    reason = DisputeReasonCode.CREDIT_NOT_PROCESSED
-    agent = _agent(ScriptedModelProvider(error=ModelProviderError()))
-    pkg = agent.build(reason, required_evidence_for(reason))
+def test_model_failure_falls_back_to_deterministic_note(repository):
+    reason = DisputeReasonCode.PRODUCT_NOT_RECEIVED
+    agent = PackagerAgent(ScriptedModelProvider(error=ModelProviderError()), repository)
+    pkg = agent.build(reason, required_evidence_for(reason), card_network="VISA")
     assert pkg.cover_note_source is ExplanationSource.FALLBACK
     assert pkg.cover_note
     assert pkg.ready_to_submit is True  # model failure never changes the package

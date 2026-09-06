@@ -48,3 +48,49 @@ def test_build_from_env_calls_the_deepseek_chat_api(monkeypatch):
         {"role": "user", "content": "synthetic merchant issue"},
     ]
     assert "metadata" not in payload
+
+
+def test_deepseek_has_a_single_twelve_second_transport_attempt(monkeypatch):
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "test-only-key")
+    transport = _RecordingTransport()
+    provider = build_deepseek_model_provider_from_env(transport=transport)
+    provider.complete(TaskSpec(kind="synthetic"), [])
+    assert len(transport.requests) == 1
+    assert transport.requests[0].timeout == 12
+
+
+def test_rate_limit_is_sanitized_and_not_retried(monkeypatch):
+    from oceanpilot.application.model_provider import ModelFailureCode, ModelProviderError
+
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "test-only-key")
+    calls = []
+
+    def limited(request):
+        calls.append(request)
+        return LocalHttpResponse(status_code=429, body=b"secret-upstream-body")
+
+    provider = build_deepseek_model_provider_from_env(transport=limited)
+    import pytest
+
+    with pytest.raises(ModelProviderError) as error:
+        provider.complete(TaskSpec(kind="synthetic"), [])
+    assert error.value.code is ModelFailureCode.RATE_LIMITED
+    assert str(error.value) == "model provider request failed"
+    assert len(calls) == 1
+
+
+def test_timeout_has_a_safe_failure_code(monkeypatch):
+    from oceanpilot.application.model_provider import ModelFailureCode, ModelProviderError
+
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "test-only-key")
+
+    def timeout(request):
+        raise TimeoutError("secret-url-and-upstream-detail")
+
+    provider = build_deepseek_model_provider_from_env(transport=timeout)
+    import pytest
+
+    with pytest.raises(ModelProviderError) as error:
+        provider.complete(TaskSpec(kind="synthetic"), [])
+    assert error.value.code is ModelFailureCode.TIMEOUT
+    assert str(error.value) == "model provider request failed"

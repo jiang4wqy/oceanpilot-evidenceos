@@ -1,4 +1,5 @@
 from typing import Annotated, Literal
+from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 
@@ -35,6 +36,8 @@ from oceanpilot.api.chargeback_schemas import (
     SubmitEvidenceRequest,
     WithdrawLatestEvidenceRequest,
 )
+from oceanpilot.api.dispute_context import require_formal_dispute
+from oceanpilot.api.workspace import demo_identity, get_workspace
 from oceanpilot.application.channels import Delivery, InboundKind, NormalizedInbound
 from oceanpilot.application.chargeback_agents import PreventionAgent
 from oceanpilot.application.chargeback_appeal import AppealAgent
@@ -52,6 +55,8 @@ from oceanpilot.application.knowledge_base import (
     RuleRequirement,
 )
 from oceanpilot.application.metrics import DecisionMetrics
+from oceanpilot.application.workspace import WorkspaceService
+from oceanpilot.application.workspace_ports import WorkspaceError
 from oceanpilot.domain.chargeback import CardNetwork, ChargebackEvidenceCode, DisputeReasonCode
 from oceanpilot.domain.chargeback_prevention import PreventionSignals
 from oceanpilot.domain.errors import SensitiveDataRejected
@@ -280,16 +285,30 @@ def _response(delivery: Delivery) -> ChargebackCaseResponse:
 )
 def create_case(
     payload: CreateChargebackRequest,
+    request: Request,
     service: Annotated[ChargebackChannelService, Depends(get_channel_service)],
+    workspace: Annotated[WorkspaceService, Depends(get_workspace)],
+    identity: Annotated[tuple[str, str], Depends(demo_identity)],
 ) -> ChargebackCaseResponse:
-    delivery = service.handle(
-        NormalizedInbound(
-            kind=InboundKind.OPEN_CASE,
-            channel=_CHANNEL,
-            description=payload.description,
-            card_network=payload.card_network.value if payload.card_network else None,
-        )
+    result = workspace.execute(
+        {
+            "command_id": request.headers.get("Idempotency-Key") or str(uuid4()),
+            "action": "CREATE_CASE",
+            "case_id": None,
+            "expected_revision": None,
+            "confirmed": True,
+            "data": {
+                "title": "",
+                "description": payload.description,
+                "card_network": payload.card_network.value if payload.card_network else None,
+                "formal_dispute": require_formal_dispute(
+                    payload.description, payload.formal_dispute
+                ),
+            },
+        },
+        *identity,
     )
+    delivery = service.get_case(result["receipt"]["case_id"])
     return _response(delivery)
 
 
@@ -314,17 +333,28 @@ def list_cases(
 def confirm_reason(
     case_id: str,
     payload: ConfirmReasonRequest,
+    request: Request,
     service: Annotated[ChargebackChannelService, Depends(get_channel_service)],
+    workspace: Annotated[WorkspaceService, Depends(get_workspace)],
+    identity: Annotated[tuple[str, str], Depends(demo_identity)],
 ) -> ChargebackCaseResponse:
-    delivery = service.handle(
-        NormalizedInbound(
-            kind=InboundKind.CONFIRM_REASON,
-            channel=_CHANNEL,
-            case_id=case_id,
-            reason_code=payload.reason_code.value if payload.reason_code else None,
-        )
+    state = workspace.store.read(case_id).state
+    workspace.execute(
+        {
+            "command_id": request.headers.get("Idempotency-Key") or str(uuid4()),
+            "action": "CONFIRM_REASON",
+            "case_id": case_id,
+            "expected_revision": (
+                payload.expected_revision
+                if payload.expected_revision is not None
+                else state.revision
+            ),
+            "confirmed": True,
+            "data": {"reason_code": payload.reason_code.value if payload.reason_code else None},
+        },
+        *identity,
     )
-    return _response(delivery)
+    return _response(service.get_case(case_id))
 
 
 @router.post(
@@ -377,18 +407,28 @@ def withdraw_latest_evidence(
 def set_card_network(
     case_id: str,
     payload: SetCardNetworkRequest,
+    request: Request,
     service: Annotated[ChargebackChannelService, Depends(get_channel_service)],
+    workspace: Annotated[WorkspaceService, Depends(get_workspace)],
+    identity: Annotated[tuple[str, str], Depends(demo_identity)],
 ) -> ChargebackCaseResponse:
-    delivery = service.handle(
-        NormalizedInbound(
-            kind=InboundKind.SET_CARD_NETWORK,
-            channel=_CHANNEL,
-            case_id=case_id,
-            card_network=payload.card_network.value,
-            expected_revision=payload.expected_revision,
-        )
+    state = workspace.store.read(case_id).state
+    if state.card_network == payload.card_network:
+        # Preserve the legacy idempotent no-op: reselecting the stored network
+        # never clears open concerns or rewrites facts, even after a retry.
+        return _response(service.get_case(case_id))
+    workspace.execute(
+        {
+            "command_id": request.headers.get("Idempotency-Key") or str(uuid4()),
+            "action": "SET_NETWORK",
+            "case_id": case_id,
+            "expected_revision": payload.expected_revision,
+            "confirmed": True,
+            "data": {"card_network": payload.card_network.value},
+        },
+        *identity,
     )
-    return _response(delivery)
+    return _response(service.get_case(case_id))
 
 
 @router.post(
@@ -479,14 +519,17 @@ def get_case_rule_reference(
 )
 def get_package(
     case_id: str,
-    store: Annotated[ChargebackCaseStore, Depends(get_store)],
+    workspace: Annotated[WorkspaceService, Depends(get_workspace)],
     packager: Annotated[PackagerAgent, Depends(get_packager)],
+    identity: Annotated[tuple[str, str], Depends(demo_identity)],
     bank_id: str | None = None,
     card_network: Literal["VISA", "MASTERCARD", "AMEX"] | None = None,
     locale: str = "zh",
 ) -> ChargebackPackageResponse:
-    state = store.load(case_id)
-    if state is None or state.reason_code is None:
+    # One loaded revision supplies both the preview and the workspace blockers.
+    bundle = workspace.store.read(case_id)
+    state = bundle.state
+    if state.reason_code is None:
         raise CaseNotFound()
     selected_network = _case_network(state, card_network)
     package = packager.preview(
@@ -495,7 +538,22 @@ def get_package(
         bank_id=bank_id,
         card_network=selected_network,
     )
-    return _package_response(case_id, package, locale=_norm_locale(locale))
+    gate = workspace.view(case_id, identity[0], bundle)["gate"]
+    response = _package_response(case_id, package, locale=_norm_locale(locale))
+    blocked = not gate["can_package"]
+    return response.model_copy(
+        update={
+            "case_revision": state.revision,
+            "workspace_gate": gate["status"],
+            "ready_to_submit": package.ready_to_submit and not blocked,
+            "blocked_reason": gate["reason"] if blocked else None,
+            "cover_note": (
+                (gate["reason"] + " " if blocked else "")
+                + package.cover_note
+                + " 本页仅为合成材料登记预览，不是正式可提交证据包。"
+            ),
+        }
+    )
 
 
 @router.post(
@@ -506,38 +564,22 @@ def get_package(
 def post_appeal(
     case_id: str,
     payload: AppealRequest,
+    request: Request,
     store: Annotated[ChargebackCaseStore, Depends(get_store)],
     packager: Annotated[PackagerAgent, Depends(get_packager)],
     appeal: Annotated[AppealAgent, Depends(get_appeal)],
     metrics: Annotated[DecisionMetrics, Depends(get_metrics)],
 ) -> ChargebackAppealResponse:
-    state = store.load(case_id)
-    if state is None or state.reason_code is None:
-        raise CaseNotFound()
-    selected_network = _case_network(
-        state,
-        payload.card_network.value if payload.card_network else None,
-    )
-    # AppealRequest already enforces actor_id when human_approved.
-    package = packager.build(
-        state.reason_code,
-        state.collected,
-        bank_id=payload.bank_id,
-        card_network=selected_network,
-    )
-    outcome = appeal.submit(
-        package, human_approved=payload.human_approved, actor_id=payload.actor_id or ""
-    )
-    metrics.incr("appeal_submitted" if outcome.submitted else "appeal_blocked")
-    return ChargebackAppealResponse(
-        synthetic=True,
-        connector_kind="IN_PROCESS_MOCK",
-        draft=outcome.draft,
-        draft_source=outcome.draft_source.value,
-        submitted=outcome.submitted,
-        submission_id=outcome.submission_id,
-        status=outcome.status,
-        blocked_reason=outcome.blocked_reason.value if outcome.blocked_reason else None,
+    if not request.app.state.settings.mock_send_enabled:
+        raise WorkspaceError(
+            "MOCK_SEND_DISABLED",
+            "最终模拟发送已由后端关闭；请完成人工登记复核并导出摘要。",
+            503,
+        )
+    raise WorkspaceError(
+        "MOCK_SEND_NOT_READY",
+        "冻结版本批准、持久化幂等和回执恢复尚未联合验收，暂不能启用发送。",
+        501,
     )
 
 

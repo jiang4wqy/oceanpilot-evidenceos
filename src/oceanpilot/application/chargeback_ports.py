@@ -40,6 +40,12 @@ class ChargebackCaseStore(Protocol):
         expected_evidence_code: ChargebackEvidenceCode,
     ) -> ChargebackCaseState: ...
 
+    def withdraw_evidence(
+        self,
+        case_id: str,
+        evidence_code: ChargebackEvidenceCode,
+    ) -> ChargebackCaseState: ...
+
     def set_card_network(
         self,
         case_id: str,

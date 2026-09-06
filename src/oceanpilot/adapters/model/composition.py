@@ -33,6 +33,7 @@ def build_chargeback_model_provider(
     *,
     claude: ModelProvider | None = None,
     deepseek: ModelProvider | None = None,
+    provider_name: str | None = None,
 ) -> ModelProvider | None:
     """Compose the tiered live provider, or ``None`` if no API key is configured.
 
@@ -40,7 +41,9 @@ def build_chargeback_model_provider(
     DeepSeek through ``OCEANPILOT_MODEL_PROVIDER`` and reads credentials only
     from the environment.
     """
-    provider_name = os.getenv("OCEANPILOT_MODEL_PROVIDER", "claude").strip().lower()
+    provider_name = (
+        (provider_name or os.getenv("OCEANPILOT_MODEL_PROVIDER", "claude")).strip().lower()
+    )
     if provider_name == "claude":
         if not os.getenv("ANTHROPIC_API_KEY"):
             return None

@@ -20,7 +20,12 @@ from oceanpilot.application.chargeback_agents import (
     IntakeAgent,
     IntakeOutcome,
 )
-from oceanpilot.domain.chargeback import CardNetwork, ChargebackEvidenceCode, DisputeReasonCode
+from oceanpilot.domain.chargeback import (
+    CardNetwork,
+    ChargebackEvidenceCode,
+    DisputeReasonCode,
+    MaterialGate,
+)
 
 
 @dataclass
@@ -37,7 +42,8 @@ class ChargebackCaseState:
     reason_confirmed: bool = False
     # A human may declare evidence collection finished even while required items
     # are still missing ("I can't provide more"): the loop stops asking and the
-    # case goes to assessment / human review instead of looping forever.
+    # a case with only ordinary gaps can receive a limited assessment. Critical
+    # gaps remain blocking even after this declaration.
     collection_finalized: bool = False
     card_network: CardNetwork | None = None
     revision: int = 0
@@ -125,8 +131,9 @@ class ChargebackSupervisor:
             # Kernel proposed a reason but a human has not confirmed it yet.
             return SupervisorStep(phase=SupervisorPhase.REASON_PROPOSED)
         request = EvidenceAgent.preview(state.reason_code, state.collected)
-        # Keep asking only while the human has not declared collection finished.
+        outcome = ChargebackAssessAgent.preview(state.reason_code, state.collected)
+        if outcome.assessment.material_gate is MaterialGate.CRITICAL_MISSING:
+            return SupervisorStep(phase=SupervisorPhase.NEED_EVIDENCE, evidence_request=request)
         if not request.complete and not state.collection_finalized:
             return SupervisorStep(phase=SupervisorPhase.NEED_EVIDENCE, evidence_request=request)
-        outcome = ChargebackAssessAgent.preview(state.reason_code, state.collected)
         return SupervisorStep(phase=SupervisorPhase.ASSESSED, assessment=outcome)

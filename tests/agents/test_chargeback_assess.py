@@ -28,7 +28,8 @@ def test_agent_uses_model_explanation_but_keeps_deterministic_decision():
     # the model was handed the deterministic facts + a guardrail system prompt
     request = model.requests[0]
     assert request.system is not None
-    assert "win_likelihood" in request.messages[0].content
+    assert "evidence_readiness" in request.messages[0].content
+    assert "win_likelihood" not in request.messages[0].content
     assert _REASON.value in request.messages[0].content
 
 
@@ -80,9 +81,8 @@ def test_agent_never_changes_win_likelihood_or_routing():
     assert outcome.assessment.responsible_team == kernel.responsible_team
 
 
-def test_fallback_runs_without_any_model_calls_on_error():
+def test_critical_gap_explanation_does_not_attempt_formal_model_assessment():
     model = ScriptedModelProvider(error=ModelProviderError())
     agent = ChargebackAssessAgent(model)
     agent.assess(_REASON, [ChargebackEvidenceCode.TRANSACTION_RECEIPT])
-    # one attempt was made, and it failed safely
-    assert len(model.requests) == 1
+    assert model.requests == []

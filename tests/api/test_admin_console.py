@@ -49,7 +49,8 @@ def test_admin_lists_only_persisted_cases_that_resolve_from_the_case_api(tmp_pat
     app = create_app(Settings(db_path=tmp_path / "api.db"))
     with TestClient(app, raise_server_exceptions=False) as client:
         created = client.post(
-            "/api/v1/chargeback/cases", json={"description": "没收到货，要拒付"}
+            "/api/v1/chargeback/cases",
+            json={"formal_dispute": True, "description": "没收到货，要拒付"},
         ).json()
         overview = client.get("/api/v1/admin/overview").json()
 

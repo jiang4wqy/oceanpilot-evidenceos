@@ -22,6 +22,9 @@ class Settings:
     feishu: FeishuSettings | None = None
     chargeback_db_path: Path | None = None
     rules_db_path: Path | None = None
+    mock_send_enabled: bool = False
+    model_timeout_seconds: float = 12.0
+    model_request_budget_seconds: float = 20.0
 
     def resolved_chargeback_db_path(self) -> Path:
         """Durable store file for the chargeback cluster (sibling of ``db_path``)."""
@@ -46,6 +49,7 @@ class Settings:
             feishu=_feishu_from_env(db_path),
             chargeback_db_path=Path(chargeback_env) if chargeback_env else None,
             rules_db_path=Path(rules_env) if rules_env else None,
+            mock_send_enabled=os.getenv("OCEANPILOT_MOCK_SEND_ENABLED", "0") == "1",
         )
 
 

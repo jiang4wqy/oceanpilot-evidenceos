@@ -25,6 +25,7 @@ from oceanpilot.adapters.knowledge.rule_repository import (
     initialize_rule_database,
 )
 from oceanpilot.adapters.model.composition import build_chargeback_model_provider
+from oceanpilot.adapters.model.deadline import DeadlineModelProvider
 from oceanpilot.adapters.model.fake import ScriptedModelProvider
 from oceanpilot.adapters.persistence.chargeback_review_sqlite import SqliteCaseReviewStore
 from oceanpilot.adapters.persistence.chargeback_sqlite import (
@@ -34,6 +35,10 @@ from oceanpilot.adapters.persistence.chargeback_sqlite import (
 from oceanpilot.adapters.persistence.sqlite import (
     SqliteCaseStoreFactory,
     initialize_schema,
+)
+from oceanpilot.adapters.persistence.workspace_sqlite import (
+    SqliteWorkspaceStore,
+    initialize_workspace_schema,
 )
 from oceanpilot.adapters.upstream.mock import MockUpstreamConnector
 from oceanpilot.api.admin import router as admin_router
@@ -45,6 +50,8 @@ from oceanpilot.api.dependencies import RequestContext
 from oceanpilot.api.errors import ProblemDetails, register_exception_handlers
 from oceanpilot.api.feishu import router as feishu_router
 from oceanpilot.api.health import router as health_router
+from oceanpilot.api.workspace import router as workspace_router
+from oceanpilot.api.workspace import workspace_error_handler
 from oceanpilot.application.case_copilot import CaseCopilotAgent
 from oceanpilot.application.case_service import CaseService
 from oceanpilot.application.chargeback_agents import (
@@ -60,8 +67,10 @@ from oceanpilot.application.chargeback_packager import PackagerAgent
 from oceanpilot.application.chargeback_supervisor import ChargebackSupervisor
 from oceanpilot.application.feishu_orchestrator import FeishuOrchestrator
 from oceanpilot.application.metrics import DecisionMetrics
-from oceanpilot.application.model_provider import ModelProvider
+from oceanpilot.application.model_provider import ModelProvider, model_request_budget
 from oceanpilot.application.monitoring import RequestMonitor
+from oceanpilot.application.workspace import WorkspaceService
+from oceanpilot.application.workspace_ports import WorkspaceError
 from oceanpilot.config import FeishuSettings, Settings
 
 _request_logger = logging.getLogger("oceanpilot.request")
@@ -122,6 +131,7 @@ def create_app(
         with store_factory() as store:
             store.healthcheck()
         initialize_chargeback_schema(chargeback_db_path)
+        initialize_workspace_schema(chargeback_db_path)
         initialize_rule_database(rules_db_path)
         if resolved.feishu is not None:
             app.state.feishu_store_factory = FeishuCallbackStoreFactory(resolved.feishu.db_path)
@@ -150,19 +160,17 @@ def create_app(
         "model": type(chargeback_model).__name__,
     }
     if chargeback_provider is None and _truthy(os.getenv("OCEANPILOT_CHARGEBACK_LIVE_MODEL")):
-        chargeback_provider = build_chargeback_model_provider()
-        provider_name = os.getenv("OCEANPILOT_MODEL_PROVIDER", "claude").strip().lower()
-        if chargeback_provider is not None and provider_name == "deepseek":
+        provider_name = os.getenv("OCEANPILOT_MODEL_PROVIDER", "deepseek").strip().lower()
+        if provider_name != "deepseek":
+            raise ValueError(
+                "正式演示仅使用 DeepSeek；离线排练请关闭 OCEANPILOT_CHARGEBACK_LIVE_MODEL。"
+            )
+        chargeback_provider = build_chargeback_model_provider(provider_name="deepseek")
+        if chargeback_provider is not None:
             agent_runtime = {
                 "mode": "DEEPSEEK_LIVE",
                 "provider": "DEEPSEEK",
                 "model": os.getenv("DEEPSEEK_MODEL", "deepseek-chat"),
-            }
-        elif chargeback_provider is not None:
-            agent_runtime = {
-                "mode": "CLAUDE_LIVE",
-                "provider": "CLAUDE",
-                "model": os.getenv("ANTHROPIC_MODEL", "claude"),
             }
     if chargeback_provider is None:
         chargeback_provider = ScriptedModelProvider(default_text="（合成模型输出，仅用于离线演示）")
@@ -172,12 +180,19 @@ def create_app(
             "model": "offline-rules",
         }
     application.state.agent_runtime = agent_runtime
+    chargeback_provider = DeadlineModelProvider(
+        chargeback_provider,
+        timeout_seconds=resolved.model_timeout_seconds,
+    )
     application.state.chargeback_supervisor = ChargebackSupervisor(
         intake=IntakeAgent(chargeback_provider),
         evidence=EvidenceAgent(chargeback_provider),
         assess=ChargebackAssessAgent(chargeback_provider),
     )
-    application.state.case_copilot = CaseCopilotAgent(chargeback_provider)
+    application.state.case_copilot = CaseCopilotAgent(
+        chargeback_provider,
+        offline=agent_runtime["mode"] == "OFFLINE_FALLBACK",
+    )
     # Durable store: chargeback cases survive across requests/restarts with an
     # atomic audit trail and optimistic CAS. Its own file, initialized in lifespan.
     application.state.chargeback_store = SqliteChargebackCaseStore(
@@ -190,8 +205,8 @@ def create_app(
     )
     # SLA / evidence-window deadline tracker, surfaced on every delivery.
     application.state.chargeback_deadline = DeadlineTracker(SystemClock())
-    # Representment packaging + appeal drafting (appeal submits only behind a
-    # human-approval gate; the upstream connector is a synthetic mock).
+    # Keep library-level preview/draft compatibility. The Web appeal endpoint
+    # stays disabled until a separately verified frozen submission flow exists.
     application.state.rule_catalog = rule_repository
     application.state.chargeback_packager = PackagerAgent(chargeback_provider, rule_repository)
     application.state.chargeback_appeal = AppealAgent(chargeback_provider, MockUpstreamConnector())
@@ -206,6 +221,12 @@ def create_app(
         metrics=application.state.chargeback_metrics,
     )
     application.state.chargeback_feishu_channel = FeishuChannel()
+    application.state.workspace = WorkspaceService(
+        SqliteWorkspaceStore(chargeback_db_path),
+        rule_repository,
+        application.state.chargeback_supervisor,
+        agent_runtime,
+    )
 
     if resolved.feishu is not None:
         _configure_feishu(application, resolved.feishu, case_service, feishu_transport)
@@ -217,7 +238,8 @@ def create_app(
         request.state.request_context = context
         status_code = 500
         try:
-            response = await call_next(request)
+            with model_request_budget(resolved.model_request_budget_seconds):
+                response = await call_next(request)
             status_code = response.status_code
             response.headers["X-Trace-ID"] = context.trace_id
             # Structured, PII-free request line (method/path/status + correlation ids).
@@ -241,6 +263,7 @@ def create_app(
                 )
 
     register_exception_handlers(application)
+    application.add_exception_handler(WorkspaceError, workspace_error_handler)
     application.include_router(health_router)
     application.include_router(cases_router)
     application.include_router(feishu_router)
@@ -248,6 +271,7 @@ def create_app(
     application.include_router(agent_router)
     application.include_router(admin_router)
     application.include_router(demo_router)
+    application.include_router(workspace_router)
 
     def openapi_schema() -> dict[str, object]:
         if application.openapi_schema is None:

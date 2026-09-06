@@ -4,7 +4,7 @@ const OceanRequest = (() => {
   const scopes = new Map();
   const defaultTimeoutMs = 90000;
 
-  async function json(url, options = {}, timeoutMs = defaultTimeoutMs) {
+  async function read(url, options = {}, timeoutMs = defaultTimeoutMs, format = 'json') {
     const controller = new AbortController();
     let timer;
     const timeout = new Promise(resolve => {
@@ -16,7 +16,7 @@ const OceanRequest = (() => {
     const operation = (async () => {
       try {
         const response = await fetch(url, {...options, signal: controller.signal});
-        const data = await response.json().catch(() => ({}));
+        const data = await response[format]().catch(() => format === 'json' ? {} : '');
         return {ok: response.ok, status: response.status, data};
       } catch (error) {
         return {ok: false, status: 0, data: {detail: 'network unavailable'}};
@@ -48,5 +48,7 @@ const OceanRequest = (() => {
     return scopes.get(ticket.scope) === ticket.sequence;
   }
 
-  return {json, singleFlight, begin, isLatest};
+  const json = (url, options, timeoutMs) => read(url, options, timeoutMs, 'json');
+  const text = (url, options, timeoutMs) => read(url, options, timeoutMs, 'text');
+  return {json, text, singleFlight, begin, isLatest};
 })();

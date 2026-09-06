@@ -1,5 +1,7 @@
 import sqlite3
+from unittest.mock import Mock
 
+import pytest
 from fastapi.testclient import TestClient
 
 from oceanpilot.config import Settings
@@ -7,15 +9,16 @@ from oceanpilot.domain.chargeback import DisputeReasonCode, required_evidence_fo
 from oceanpilot.main import create_app
 
 
-def _client(tmp_path):
-    app = create_app(Settings(db_path=tmp_path / "api.db"))
+def _client(tmp_path, *, mock_send_enabled=False):
+    app = create_app(Settings(db_path=tmp_path / "api.db", mock_send_enabled=mock_send_enabled))
     return TestClient(app, raise_server_exceptions=False)
 
 
 def test_create_case_classifies_and_asks_for_evidence(tmp_path):
     with _client(tmp_path) as client:
         resp = client.post(
-            "/api/v1/chargeback/cases", json={"description": "客户下单后一直没收到货"}
+            "/api/v1/chargeback/cases",
+            json={"formal_dispute": True, "description": "客户下单后一直没收到货"},
         )
     assert resp.status_code == 201
     body = resp.json()
@@ -32,7 +35,8 @@ def test_full_evidence_flow_reaches_assessment(tmp_path):
     reason = DisputeReasonCode.PRODUCT_NOT_RECEIVED
     with _client(tmp_path) as client:
         created = client.post(
-            "/api/v1/chargeback/cases", json={"description": "没收到货，要拒付"}
+            "/api/v1/chargeback/cases",
+            json={"formal_dispute": True, "description": "没收到货，要拒付"},
         ).json()
         case_id = created["case_id"]
         body = created
@@ -46,13 +50,14 @@ def test_full_evidence_flow_reaches_assessment(tmp_path):
             ).json()
         assert body["phase"] == "ASSESSED"
         assert body["assessment"]["win_likelihood"] == "1.0000"
+        assert body["assessment"]["requires_human"] is True
         assert set(body["collected"]) == {c.value for c in required_evidence_for(reason)}
 
 
 def test_get_case_returns_current_state(tmp_path):
     with _client(tmp_path) as client:
         case_id = client.post(
-            "/api/v1/chargeback/cases", json={"description": "被重复扣款了"}
+            "/api/v1/chargeback/cases", json={"formal_dispute": True, "description": "被重复扣款了"}
         ).json()["case_id"]
         resp = client.get(f"/api/v1/chargeback/cases/{case_id}")
     assert resp.status_code == 200
@@ -63,10 +68,11 @@ def test_get_case_returns_current_state(tmp_path):
 def test_list_cases_returns_only_persisted_cases_and_each_detail_resolves(tmp_path):
     with _client(tmp_path) as client:
         first = client.post(
-            "/api/v1/chargeback/cases", json={"description": "没收到货，要拒付"}
+            "/api/v1/chargeback/cases",
+            json={"formal_dispute": True, "description": "没收到货，要拒付"},
         ).json()
         second = client.post(
-            "/api/v1/chargeback/cases", json={"description": "被重复扣款了"}
+            "/api/v1/chargeback/cases", json={"formal_dispute": True, "description": "被重复扣款了"}
         ).json()
 
         listed = client.get("/api/v1/chargeback/cases")
@@ -90,9 +96,9 @@ def test_unknown_case_returns_safe_404(tmp_path):
 
 def test_invalid_evidence_code_is_rejected(tmp_path):
     with _client(tmp_path) as client:
-        case_id = client.post("/api/v1/chargeback/cases", json={"description": "没收到货"}).json()[
-            "case_id"
-        ]
+        case_id = client.post(
+            "/api/v1/chargeback/cases", json={"formal_dispute": True, "description": "没收到货"}
+        ).json()["case_id"]
         resp = client.post(
             f"/api/v1/chargeback/cases/{case_id}/evidence",
             json={"evidence_code": "not-a-real-code"},
@@ -103,7 +109,8 @@ def test_invalid_evidence_code_is_rejected(tmp_path):
 def test_unconfident_case_requires_confirmation_then_proceeds(tmp_path):
     with _client(tmp_path) as client:
         created = client.post(
-            "/api/v1/chargeback/cases", json={"description": "这是一段用于测试的中性内容"}
+            "/api/v1/chargeback/cases",
+            json={"formal_dispute": True, "description": "这是一段用于测试的中性内容"},
         ).json()
         assert created["phase"] == "REASON_PROPOSED"
         assert created["reason_confirmed"] is False
@@ -115,25 +122,52 @@ def test_unconfident_case_requires_confirmation_then_proceeds(tmp_path):
     assert confirmed["phase"] == "NEED_EVIDENCE"
 
 
-def test_confirm_can_correct_the_reason(tmp_path):
+def test_reason_correction_requires_explicit_business_conflict_resolution(tmp_path):
     with _client(tmp_path) as client:
-        case_id = client.post(
-            "/api/v1/chargeback/cases", json={"description": "这是一段用于测试的中性内容"}
-        ).json()["case_id"]
+        original = client.post(
+            "/api/v1/chargeback/cases",
+            json={"formal_dispute": True, "description": "这是一段用于测试的中性内容"},
+        ).json()
+        case_id = original["case_id"]
         resp = client.post(
             f"/api/v1/chargeback/cases/{case_id}/confirm",
             json={"reason_code": DisputeReasonCode.FRAUD_CARD_NOT_PRESENT.value},
         )
-    assert resp.status_code == 200
-    body = resp.json()
-    assert body["reason_code"] == DisputeReasonCode.FRAUD_CARD_NOT_PRESENT.value
-    assert body["reason_confirmed"] is True
+        assert resp.status_code == 200
+        assert resp.json()["reason_code"] == original["reason_code"]
+        paused = client.get(f"/api/v1/workspace/cases/{case_id}").json()
+        assert paused["gate"]["can_package"] is False
+        concern = paused["concerns"][-1]
+        assert concern["status"] == "OPEN"
+        assert concern["original_value"] == original["reason_code"]
+        assert concern["proposed_value"] == DisputeReasonCode.FRAUD_CARD_NOT_PRESENT.value
+        resolved = client.post(
+            "/api/v1/workspace/commands",
+            headers={"X-Demo-Role": "BUSINESS", "X-Demo-Actor": "synthetic-reviewer"},
+            json={
+                "command_id": "resolve-reason-correction",
+                "action": "RESOLVE_CONCERN",
+                "case_id": case_id,
+                "expected_revision": paused["revision"],
+                "confirmed": True,
+                "data": {
+                    "concern_id": concern["concern_id"],
+                    "resolution": "ACCEPT_PROPOSED",
+                    "summary": "复核合成案件说明后，采纳新的原因登记。",
+                },
+            },
+        )
+        assert resolved.status_code == 200
+        corrected = client.get(f"/api/v1/chargeback/cases/{case_id}").json()
+    assert corrected["reason_code"] == DisputeReasonCode.FRAUD_CARD_NOT_PRESENT.value
+    assert corrected["reason_confirmed"] is True
 
 
 def test_confirm_rejects_unknown_reason(tmp_path):
     with _client(tmp_path) as client:
         case_id = client.post(
-            "/api/v1/chargeback/cases", json={"description": "这是一段用于测试的中性内容"}
+            "/api/v1/chargeback/cases",
+            json={"formal_dispute": True, "description": "这是一段用于测试的中性内容"},
         ).json()["case_id"]
         resp = client.post(
             f"/api/v1/chargeback/cases/{case_id}/confirm",
@@ -142,21 +176,24 @@ def test_confirm_rejects_unknown_reason(tmp_path):
     assert resp.status_code == 422
 
 
-def test_finalize_routes_to_human_review(tmp_path):
+def test_finalize_cannot_bypass_critical_material_gaps(tmp_path):
     with _client(tmp_path) as client:
         case_id = client.post(
-            "/api/v1/chargeback/cases", json={"description": "没收到货，要拒付"}
+            "/api/v1/chargeback/cases",
+            json={"formal_dispute": True, "description": "没收到货，要拒付"},
         ).json()["case_id"]
         body = client.post(f"/api/v1/chargeback/cases/{case_id}/finalize").json()
     assert body["collection_finalized"] is True
-    assert body["phase"] == "ASSESSED"
-    assert body["assessment"]["requires_human"] is True
+    assert body["phase"] == "NEED_EVIDENCE"
+    assert body["assessment"] is None
+    assert body["next_evidence"] in body["missing"]
 
 
 def test_withdraw_latest_evidence_reopens_collection_and_audits(tmp_path):
     with _client(tmp_path) as client:
         body = client.post(
-            "/api/v1/chargeback/cases", json={"description": "没收到货，要拒付"}
+            "/api/v1/chargeback/cases",
+            json={"formal_dispute": True, "description": "没收到货，要拒付"},
         ).json()
         case_id = body["case_id"]
         first = body["next_evidence"]
@@ -190,7 +227,8 @@ def test_withdraw_latest_evidence_reopens_collection_and_audits(tmp_path):
 def test_duplicate_withdrawal_returns_concurrent_conflict(tmp_path):
     with _client(tmp_path) as client:
         body = client.post(
-            "/api/v1/chargeback/cases", json={"description": "没收到货，要拒付"}
+            "/api/v1/chargeback/cases",
+            json={"formal_dispute": True, "description": "没收到货，要拒付"},
         ).json()
         case_id = body["case_id"]
         first = body["next_evidence"]
@@ -214,7 +252,8 @@ def test_duplicate_withdrawal_returns_concurrent_conflict(tmp_path):
 def test_withdraw_without_evidence_returns_named_conflict(tmp_path):
     with _client(tmp_path) as client:
         case_id = client.post(
-            "/api/v1/chargeback/cases", json={"description": "没收到货，要拒付"}
+            "/api/v1/chargeback/cases",
+            json={"formal_dispute": True, "description": "没收到货，要拒付"},
         ).json()["case_id"]
         response = client.post(
             f"/api/v1/chargeback/cases/{case_id}/evidence/withdraw-latest",
@@ -237,7 +276,8 @@ def test_withdraw_unknown_case_returns_safe_404(tmp_path):
 def test_response_includes_evidence_window_deadline(tmp_path):
     with _client(tmp_path) as client:
         body = client.post(
-            "/api/v1/chargeback/cases", json={"description": "客户下单后一直没收到货"}
+            "/api/v1/chargeback/cases",
+            json={"formal_dispute": True, "description": "客户下单后一直没收到货"},
         ).json()
     assert body["deadline"] is not None
     assert body["deadline"]["phase"] == "COLLECTING_EVIDENCE"
@@ -249,7 +289,8 @@ def test_response_includes_evidence_window_deadline(tmp_path):
 def test_response_has_facts_field(tmp_path):
     with _client(tmp_path) as client:
         body = client.post(
-            "/api/v1/chargeback/cases", json={"description": "客户下单后一直没收到货"}
+            "/api/v1/chargeback/cases",
+            json={"formal_dispute": True, "description": "客户下单后一直没收到货"},
         ).json()
     # Offline model can't extract facts, but the field is wired into the contract.
     assert "facts" in body
@@ -258,7 +299,8 @@ def test_response_has_facts_field(tmp_path):
 def test_assessment_response_exposes_provenance_and_breakdown(tmp_path):
     with _client(tmp_path) as client:
         body = client.post(
-            "/api/v1/chargeback/cases", json={"description": "没收到货，要拒付"}
+            "/api/v1/chargeback/cases",
+            json={"formal_dispute": True, "description": "没收到货，要拒付"},
         ).json()
         case_id = body["case_id"]
         for _ in range(20):
@@ -279,7 +321,8 @@ def test_assessment_response_exposes_provenance_and_breakdown(tmp_path):
 def test_audit_endpoint_returns_ordered_trail(tmp_path):
     with _client(tmp_path) as client:
         case_id = client.post(
-            "/api/v1/chargeback/cases", json={"description": "客户下单后一直没收到货"}
+            "/api/v1/chargeback/cases",
+            json={"formal_dispute": True, "description": "客户下单后一直没收到货"},
         ).json()["case_id"]
         client.post(
             f"/api/v1/chargeback/cases/{case_id}/evidence",
@@ -309,7 +352,7 @@ def _ready_case(client):
 
     body = client.post(
         "/api/v1/chargeback/cases",
-        json={"description": "没收到货，要拒付", "card_network": "VISA"},
+        json={"formal_dispute": True, "description": "没收到货，要拒付", "card_network": "VISA"},
     ).json()
     case_id = body["case_id"]
     for code in required_evidence_for(DisputeReasonCode.PRODUCT_NOT_RECEIVED):
@@ -425,7 +468,8 @@ def test_rule_reference_uses_persisted_card_network(tmp_path):
 def test_rule_reference_rejects_unconfirmed_reason(tmp_path):
     with _client(tmp_path) as client:
         case_id = client.post(
-            "/api/v1/chargeback/cases", json={"description": "这是一段用于测试的中性内容"}
+            "/api/v1/chargeback/cases",
+            json={"formal_dispute": True, "description": "这是一段用于测试的中性内容"},
         ).json()["case_id"]
         response = client.get(
             f"/api/v1/chargeback/cases/{case_id}/rule-reference",
@@ -450,7 +494,7 @@ def test_card_network_selection_is_cas_and_idempotent(tmp_path):
     with _client(tmp_path) as client:
         created = client.post(
             "/api/v1/chargeback/cases",
-            json={"description": "没收到货，要拒付"},
+            json={"formal_dispute": True, "description": "没收到货，要拒付"},
         ).json()
         selected = client.put(
             f"/api/v1/chargeback/cases/{created['case_id']}/card-network",
@@ -514,31 +558,32 @@ def test_package_returns_503_when_rule_database_fails(tmp_path):
     assert response.json()["code"] == "DATABASE_UNAVAILABLE"
 
 
-def test_appeal_without_approval_is_blocked_and_never_submits(tmp_path):
-    with _client(tmp_path) as client:
+@pytest.mark.parametrize("human_approved", [False, True])
+@pytest.mark.parametrize("enabled, expected_status", [(False, 503), (True, 501)])
+def test_appeal_stays_disabled_before_packaging_model_or_upstream(
+    tmp_path, monkeypatch, human_approved, enabled, expected_status
+):
+    with _client(tmp_path, mock_send_enabled=enabled) as client:
         case_id = _ready_case(client)
-        resp = client.post(f"/api/v1/chargeback/cases/{case_id}/appeal", json={})
-    body = resp.json()
-    assert resp.status_code == 200
-    assert body["submitted"] is False
-    assert body["blocked_reason"] == "NOT_APPROVED"
-    assert body["draft"]
-    assert body["synthetic"] is True
-    assert body["connector_kind"] == "IN_PROCESS_MOCK"
-
-
-def test_appeal_with_human_approval_submits_once(tmp_path):
-    with _client(tmp_path) as client:
-        case_id = _ready_case(client)
-        body = client.post(
+        packager = Mock(side_effect=AssertionError("disabled send must not build a package"))
+        draft = Mock(side_effect=AssertionError("disabled send must not draft with a model"))
+        submit = Mock(side_effect=AssertionError("disabled send must not submit upstream"))
+        monkeypatch.setattr(client.app.state.chargeback_packager, "build", packager)
+        monkeypatch.setattr(client.app.state.chargeback_appeal, "draft", draft)
+        monkeypatch.setattr(client.app.state.chargeback_appeal._upstream, "submit", submit)
+        response = client.post(
             f"/api/v1/chargeback/cases/{case_id}/appeal",
-            json={"human_approved": True, "actor_id": "ou_reviewer"},
-        ).json()
-    assert body["submitted"] is True
-    assert body["blocked_reason"] is None
-    assert body["submission_id"]
-    assert body["synthetic"] is True
-    assert body["connector_kind"] == "IN_PROCESS_MOCK"
+            json={"human_approved": human_approved, "actor_id": "synthetic-reviewer"},
+        )
+    assert response.status_code == expected_status
+    expected_code = "MOCK_SEND_NOT_READY" if enabled else "MOCK_SEND_DISABLED"
+    assert response.json()["title"] == expected_code
+    assert response.json()["type"] == f"urn:oceanpilot:{expected_code}"
+    expected_detail = "尚未联合验收" if enabled else "最终模拟发送已由后端关闭"
+    assert expected_detail in response.json()["detail"]
+    packager.assert_not_called()
+    draft.assert_not_called()
+    submit.assert_not_called()
 
 
 def test_appeal_approval_requires_actor(tmp_path):
@@ -602,7 +647,7 @@ def test_metrics_endpoint_tracks_decisions(tmp_path):
     assert counts.get("assessments_total", 0) >= 1
     assert any(k.startswith("requires_human_") for k in counts)
     assert any(k.startswith("explanation_source_") for k in counts)
-    assert counts.get("appeal_blocked", 0) >= 1
+    assert counts.get("appeal_submitted", 0) == 0  # HTTP switch rejects before the agent runs.
     assert any(k.startswith("prevention_risk_") for k in counts)
 
 
@@ -651,7 +696,8 @@ def test_package_can_be_localized(tmp_path):
 def test_agent_trace_is_present_across_the_flow(tmp_path):
     with _client(tmp_path) as client:
         body = client.post(
-            "/api/v1/chargeback/cases", json={"description": "没收到货，要拒付"}
+            "/api/v1/chargeback/cases",
+            json={"formal_dispute": True, "description": "没收到货，要拒付"},
         ).json()
         # NEED_EVIDENCE step: intake + evidence agents visible.
         agents = {a["agent"] for a in body["agent_trace"]}
@@ -676,7 +722,8 @@ def test_agent_trace_is_present_across_the_flow(tmp_path):
 def test_agent_trace_shows_human_gate_when_reason_unconfident(tmp_path):
     with _client(tmp_path) as client:
         body = client.post(
-            "/api/v1/chargeback/cases", json={"description": "这是一段用于测试的中性内容"}
+            "/api/v1/chargeback/cases",
+            json={"formal_dispute": True, "description": "这是一段用于测试的中性内容"},
         ).json()
     assert body["phase"] == "REASON_PROPOSED"
     assert any(a["agent"] == "HumanGate" for a in body["agent_trace"])
@@ -701,3 +748,60 @@ def test_safety_scan_accepts_clean_text(tmp_path):
             "/api/v1/chargeback/safety/scan", json={"text": "客户下单后一直没收到货"}
         ).json()
     assert body["accepted"] is True
+
+
+def test_finalize_with_only_ordinary_gap_keeps_limited_analysis_and_missing_item(tmp_path):
+    from oceanpilot.domain.chargeback import assess_chargeback
+
+    reason = DisputeReasonCode.PRODUCT_NOT_RECEIVED
+    checklist = assess_chargeback(reason, []).evidence_breakdown
+    ordinary = next(item.code for item in checklist if not item.critical)
+    with _client(tmp_path) as client:
+        case_id = client.post(
+            "/api/v1/chargeback/cases",
+            json={
+                "formal_dispute": True,
+                "description": "合成正式争议：未收到商品的拒付通知",
+                "card_network": "VISA",
+            },
+        ).json()["case_id"]
+        for item in checklist:
+            if item.code != ordinary:
+                client.post(
+                    f"/api/v1/chargeback/cases/{case_id}/evidence",
+                    json={"evidence_code": item.code.value},
+                ).raise_for_status()
+        response = client.post(f"/api/v1/chargeback/cases/{case_id}/finalize")
+        response.raise_for_status()
+        body = response.json()
+        read_back = client.get(f"/api/v1/chargeback/cases/{case_id}").json()
+    assert body["phase"] == "ASSESSED"
+    assert body["assessment"]["requires_human"] is True
+    assert body["missing"] == [ordinary.value]
+    assert read_back["missing"] == [ordinary.value]
+    assert read_back["next_evidence"] == ordinary.value
+    assert "有限" in read_back["question"]
+
+
+def test_complete_internal_checklist_without_exact_network_rule_is_not_submittable(tmp_path):
+    with _client(tmp_path) as client:
+        case_id = client.post(
+            "/api/v1/chargeback/cases",
+            json={
+                "formal_dispute": True,
+                "description": "合成正式争议：未收到商品的拒付通知",
+                "card_network": "MASTERCARD",
+            },
+        ).json()["case_id"]
+        for code in required_evidence_for(DisputeReasonCode.PRODUCT_NOT_RECEIVED):
+            client.post(
+                f"/api/v1/chargeback/cases/{case_id}/evidence",
+                json={"evidence_code": code.value},
+            ).raise_for_status()
+        response = client.get(f"/api/v1/chargeback/cases/{case_id}/package")
+    assert response.status_code == 200
+    package = response.json()
+    assert package["ready_to_submit"] is False
+    assert package["rule_version_id"] is None
+    assert "精确" in package["cover_note"]
+    assert "正文" in package["cover_note"]

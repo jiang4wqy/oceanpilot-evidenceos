@@ -9,7 +9,7 @@ from oceanpilot.application.chargeback_supervisor import (
     ChargebackSupervisor,
     SupervisorPhase,
 )
-from oceanpilot.domain.chargeback import required_evidence_for
+from oceanpilot.domain.chargeback import ChargebackEvidenceCode, MaterialGate, required_evidence_for
 
 
 def _supervisor(model):
@@ -20,7 +20,7 @@ def _supervisor(model):
     )
 
 
-def test_finalize_stops_the_loop_and_routes_to_human_review():
+def test_finalize_cannot_bypass_critical_material_gap():
     model = ScriptedModelProvider(["PRODUCT_NOT_RECEIVED"], default_text="q")
     supervisor = _supervisor(model)
     state = ChargebackCaseState()
@@ -32,12 +32,30 @@ def test_finalize_stops_the_loop_and_routes_to_human_review():
     # The human declares they cannot provide more evidence.
     supervisor.finalize_evidence(state)
     step = supervisor.advance(state)
+    assert step.phase is SupervisorPhase.NEED_EVIDENCE
+    assert step.assessment is None
+    assert step.evidence_request.missing
+    assert all(request.task.kind != "chargeback_assess_explanation" for request in model.requests)
+
+
+def test_finalize_allows_only_limited_analysis_when_only_ordinary_items_are_missing():
+    model = ScriptedModelProvider(["PRODUCT_NOT_RECEIVED"], default_text="有限分析，待人工复核。")
+    supervisor = _supervisor(model)
+    state = ChargebackCaseState()
+    supervisor.intake(state, "没收到货")
+    for code in (
+        ChargebackEvidenceCode.DELIVERY_TRACKING,
+        ChargebackEvidenceCode.PROOF_OF_DELIVERY,
+    ):
+        supervisor.submit_evidence(state, code)
+    assert supervisor.snapshot(state).phase is SupervisorPhase.NEED_EVIDENCE
+    supervisor.finalize_evidence(state)
+    step = supervisor.advance(state)
     assert step.phase is SupervisorPhase.ASSESSED
-    assert step.assessment is not None
-    assert step.assessment.assessment.ready_to_submit is False
+    assert step.assessment.assessment.material_gate is MaterialGate.LIMITED
     assert step.assessment.assessment.requires_human is True
-    # The still-missing items are surfaced for the human reviewer.
-    assert step.assessment.assessment.missing_critical
+    assert step.assessment.assessment.ready_to_submit is False
+    assert any(request.task.kind == "chargeback_assess_explanation" for request in model.requests)
 
 
 def test_finalize_still_lets_a_completed_case_be_ready():

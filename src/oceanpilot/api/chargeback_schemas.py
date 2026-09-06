@@ -23,6 +23,9 @@ class _StrictRequest(BaseModel):
 class CreateChargebackRequest(_StrictRequest):
     description: Annotated[StrictStr, Field(min_length=1, max_length=2000)]
     card_network: CardNetwork | None = None
+    formal_dispute: StrictBool | None = Field(
+        default=None, description="Explicitly confirm an existing formal synthetic dispute."
+    )
 
 
 class SetCardNetworkRequest(_StrictRequest):
@@ -39,8 +42,9 @@ class WithdrawLatestEvidenceRequest(_StrictRequest):
 
 
 class ConfirmReasonRequest(_StrictRequest):
-    # Optional correction; when omitted the human confirms the proposed reason.
+    # A changed reason is recorded as a concern for business confirmation.
     reason_code: DisputeReasonCode | None = None
+    expected_revision: Annotated[StrictInt, Field(ge=0)] | None = None
 
 
 class ChargebackEvidenceItemDTO(BaseModel):
@@ -143,6 +147,10 @@ class ChargebackPackageResponse(BaseModel):
     missing_evidence: tuple[LabeledEvidenceDTO, ...] = ()
     cover_note: StrictStr
     cover_note_source: StrictStr
+    case_revision: StrictInt | None = None
+    preview_only: Literal[True] = True
+    workspace_gate: StrictStr | None = None
+    blocked_reason: StrictStr | None = None
 
 
 class RuleSummaryDTO(BaseModel):

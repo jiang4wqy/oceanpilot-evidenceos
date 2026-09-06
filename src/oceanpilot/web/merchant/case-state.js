@@ -20,12 +20,14 @@ function createCaseContext() {
   }
 
   function capture() {
-    return {caseId, revision: snapshot ? snapshot.revision : null, generation};
+    return {caseId, revision: snapshot ? snapshot.revision : null,
+      ruleFingerprint: snapshot ? snapshot.rule_fingerprint ?? null : null, generation};
   }
 
   function isCurrent(ticket, includeRevision = true) {
     return ticket.caseId === caseId && ticket.generation === generation &&
-      (!includeRevision || ticket.revision === (snapshot ? snapshot.revision : null));
+      (!includeRevision || (ticket.revision === (snapshot ? snapshot.revision : null) &&
+        ticket.ruleFingerprint === (snapshot ? snapshot.rule_fingerprint ?? null : null)));
   }
 
   return {

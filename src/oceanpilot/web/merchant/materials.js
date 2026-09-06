@@ -1,35 +1,68 @@
-async function loadCaseAudit(caseId){if(!caseId)return[];const ticket=OceanRequest.begin(`audit:${caseId}`);const result=await api('GET',`/cases/${caseId}/audit`);if(!result.ok||!OceanRequest.isLatest(ticket)||!Array.isArray(result.data&&result.data.events))return S.auditByCase.get(caseId)||[];S.auditByCase.set(caseId,result.data.events);return result.data.events;}
-function latestActiveEvidence(caseId,collected=[]){const active=[];const present=new Set(collected||[]);for(const item of S.auditByCase.get(caseId)||[]){const code=item&&item.detail;if(!code)continue;if(item.event_type==='EVIDENCE_ADDED'){const previous=active.lastIndexOf(code);if(previous>=0)active.splice(previous,1);active.push(code);}else if(item.event_type==='EVIDENCE_WITHDRAWN'){const previous=active.lastIndexOf(code);if(previous>=0)active.splice(previous,1);}}for(let i=active.length-1;i>=0;i--){if(present.has(active[i]))return active[i];}return null;}
-function evidenceContext(source){const diagnosis=source==='diagnosis';const data=diagnosis?S.selectedCase:S.last;return{source:diagnosis?'diagnosis':'flow',data,caseId:data&&data.case_id};}
-
-function renderDiagnosticMaterials(c){const codes=c.missing||[],labels=c.missing_labels||[];const missing=labels;const awaitingReason=c.phase==='REASON_PROPOSED';const card=$('diagnosticMaterials');const badge=$('diagMissingBadge');
-  card.className=`panel diagnostic-materials${!awaitingReason&&missing.length===0?' complete':''}`;
-  badge.className=`pill ${awaitingReason||missing.length?'p-warn':'p-good'}`;badge.textContent=awaitingReason?'待确认原因':(missing.length?`仍缺 ${missing.length} 项`:'资料已齐全');
-  if(c.phase==='REASON_PROPOSED'){$('diagnosisAlert').className='material-notice';$('diagnosisAlert').innerHTML='<strong>请先确认争议原因</strong><p>原因确认后，系统才会生成本案件的待补资料清单。</p>';}
-  else if(missing.length){$('diagnosisAlert').className='material-notice';$('diagnosisAlert').innerHTML=`<strong>需要商户补充 ${missing.length} 项信息</strong><p>清单来自案件后端；提交后会立即重新校验。</p>`;}
-  else{$('diagnosisAlert').className='material-notice complete';$('diagnosisAlert').innerHTML='<strong>本案件暂无待补资料</strong><p>当前状态以后端返回结果为准。</p>';}
-  const latest=latestActiveEvidence(c.case_id,c.collected);const withdraw=latest?`<div class="material-row done"><span class="material-state">✓</span><div><strong>最近已补交：${esc(EVIDENCE_LABEL[latest]||latest)}</strong><span>可撤回这一项；操作会留痕并重新计算案件状态</span></div><button class="tbtn withdraw-action" onclick="openWithdrawModal('diagnosis')">撤回最近资料</button></div>`:'';
-  $('diagMaterialRows').innerHTML=(c.phase==='REASON_PROPOSED'?'<div class="material-row"><span class="material-state">!</span><div><strong>确认或更正争议原因</strong><span>模板案件会预选对应原因，确认后再继续补交材料</span><select id="diagReasonFix" aria-label="确认或更正争议原因" style="margin-top:7px"></select></div><button class="tbtn primary" onclick="confirmDiagnosisReason()">确认原因</button></div>':(missing.length?missing.map((label,i)=>`<div class="material-row"><span class="material-state">${i+1}</span><div><strong>${esc(label)}</strong><span>进入独立提交界面核对并明确提交</span></div><button class="tbtn primary" onclick="openEvidenceModal('${esc(codes[i])}','${esc(label)}')">补交：${esc(label)}</button></div>`).join(''):'<div class="empty">没有待补资料。</div>'))+withdraw;
-  if(c.phase==='REASON_PROPOSED')populateDiagnosisReasons(c.reason_code);
-  $('diagMaterialState').innerHTML=awaitingReason?'<span class="pill p-warn">确认原因后生成材料清单</span>':(missing.length?`<span class="pill p-warn">待补交 ${missing.length} 项</span>`:'<span class="pill p-good">资料已齐全</span>');
+function renderDiagnosticMaterials(c){
+  const missing=c.missing||[];
+  $('diagMaterialRows').innerHTML=missing.length?missing.map((item,index)=>`<div class="material-row"><span class="material-state">${index+1}</span><div><strong>${esc(item.label)}${item.critical?' <span class="crit-tag">关键材料</span>':''}</strong><p class="material-description">为什么需要：${esc(item.why||'请按当前案件材料要求补充登记。')}</p><p class="material-impact">补充后：${esc(item.what_changes||'后端重新计算本案材料登记缺口。')}</p></div>${allowed('REGISTER_MATERIAL')?`<button class="tbtn primary" data-write onclick="openEvidenceModal('${esc(item.code)}','${esc(item.label)}')">登记材料</button>`:''}</div>`).join(''):`<div class="empty">${c.reason_confirmed?'当前没有待登记材料；正文与真实性仍未核验。':'确认争议原因后显示缺失材料清单。'}</div>`;
+  const registered=(c.materials||[]).filter(item=>item.active);
+  $('registeredMaterialRows').innerHTML=registered.map(item=>materialRow(item,c)).join('')||'<div class="empty">尚未登记材料</div>';
+  $('withdrawnMaterialRows').innerHTML=(c.materials||[]).filter(item=>!item.active).map(item=>materialRow(item,c)).join('')||'<p class="empty">暂无撤回记录</p>';
+  $('materialActions').innerHTML=allowed('FINALIZE')&&missing.length?'<button class="tbtn" data-write onclick="finalize()">本次无法补齐，转人工处理</button>':'';
 }
-async function populateDiagnosisReasons(currentReason){const result=await api("GET",`/catalog?locale=${S.loc}`);const sel=$('diagReasonFix');if(!sel||!result.ok)return;const selected=S.expectedReason||currentReason||'';sel.innerHTML=result.data.reasons.map(reason=>`<option value="${esc(reason.code)}" ${reason.code===selected?'selected':''}>${esc(reason.label)}</option>`).join('');}
-function resetEvidenceProgress(){document.querySelectorAll('#evidenceSubmitProgress .progress-step').forEach(step=>step.className='progress-step');}
-function setEvidenceProgress(name,state){const step=document.querySelector(`#evidenceSubmitProgress [data-step="${name}"]`);if(step)step.className=`progress-step ${state}`;}
-function openEvidenceModal(code,label){const caseId=S.selectedCase&&S.selectedCase.case_id;if(caseId)openEvidenceModalForCase(caseId,code,label);}
-function openEvidenceModalForCase(caseId,code,label){if(!caseId||!code)return;S.dialogTrigger=document.activeElement;S.evidenceDraft={caseId,code,label:label||EVIDENCE_LABEL[code]||code,fileName:"",synthetic:false};$('evidenceModalCase').textContent=caseId;$('evidenceModalLabel').textContent=S.evidenceDraft.label;$('evidenceFile').value='';$('selectedEvidenceFile').textContent='尚未选择文件';$('evidenceModalError').textContent='';$('evidenceReceipt').innerHTML='';resetEvidenceProgress();const cancel=$('evidenceCancelButton');cancel.textContent='取消';cancel.className='tbtn';const button=$('evidenceSubmitButton');button.className='tbtn primary';button.disabled=true;button.textContent='3. 确认提交资料';const modal=$('evidenceModal');modal.classList.add('on');modal.setAttribute('aria-hidden','false');$('evidenceFile').focus();}
-function selectEvidenceFile(input){const file=input.files&&input.files[0];if(!S.evidenceDraft)return;S.evidenceDraft.fileName=file?file.name:"";S.evidenceDraft.synthetic=false;$('selectedEvidenceFile').innerHTML=file?`已选择：<strong>${esc(file.name)}</strong> · 仅使用文件名模拟提交，不读取内容`:'尚未选择文件';$('evidenceSubmitButton').disabled=!file;$('evidenceModalError').textContent='';}
-function useSyntheticEvidenceFile(){if(!S.evidenceDraft)return;S.evidenceDraft.fileName=`synthetic-${S.evidenceDraft.code.replace(/[^a-z0-9]+/gi,'-')}.pdf`;S.evidenceDraft.synthetic=true;$('evidenceFile').value='';$('selectedEvidenceFile').innerHTML=`已选择：<strong>${esc(S.evidenceDraft.fileName)}</strong> · Synthetic 演示占位`;$('evidenceSubmitButton').disabled=false;$('evidenceModalError').textContent='';}
-function closeEvidenceModal(){if(S.evidenceDraft&&S.evidenceSubmittingCases.has(S.evidenceDraft.caseId))return;const modal=$('evidenceModal');modal.classList.remove('on');modal.setAttribute('aria-hidden','true');S.evidenceDraft=null;const target=S.dialogTrigger;S.dialogTrigger=null;if(target&&target.isConnected)target.focus();}
-async function submitEvidenceModal(){const draft=S.evidenceDraft;if(!draft||S.evidenceSubmittingCases.has(draft.caseId))return;if(!draft.fileName){$('evidenceModalError').textContent='请先选择文件，或使用 Synthetic 演示文件。';$('evidenceFile').focus();return;}S.evidenceSubmitting=true;S.evidenceSubmittingCases.add(draft.caseId);const cancel=$('evidenceCancelButton');cancel.disabled=true;const button=$('evidenceSubmitButton');button.disabled=true;button.textContent='正在提交…';$('evidenceModalError').textContent='';setEvidenceProgress('validate','active');await new Promise(resolve=>setTimeout(resolve,180));setEvidenceProgress('validate','done');setEvidenceProgress('persist','active');let shouldAnalyze=false;
-  try{const result=await api('POST',`/cases/${draft.caseId}/evidence`,{evidence_code:draft.code});if(!result.ok){setEvidenceProgress('persist','');$('evidenceModalError').textContent='后端未接受该资料；案件状态没有被前端改写，请重试。';cancel.disabled=false;button.disabled=false;button.textContent='3. 确认提交资料';return;}await loadCaseAudit(draft.caseId);setEvidenceProgress('persist','done');setEvidenceProgress('recheck','done');const remaining=(result.data.missing_labels||[]).length;$('evidenceReceipt').innerHTML=`<div class="submit-receipt"><strong>资料提交成功</strong><p>案件 ${esc(draft.caseId)} 已记录「${esc(draft.label)}」。重新校验后仍缺 ${remaining} 项资料，当前阶段为 ${esc((STATUS_VIEW[result.data.phase]||[result.data.phase])[0])}。</p></div>`;button.textContent='提交成功';button.className='tbtn';cancel.disabled=false;cancel.textContent='完成并返回案件';cancel.className='tbtn primary';cancel.focus();if(S.selectedCase&&S.selectedCase.case_id===draft.caseId){if(acceptCaseSnapshot(result.data))renderStoredDiagnosis(result.data);}shouldAnalyze=Boolean(S.agentCase&&S.agentCase.case_id===draft.caseId);}
-  finally{S.evidenceSubmittingCases.delete(draft.caseId);S.evidenceSubmitting=S.evidenceSubmittingCases.size>0;}
-  if(shouldAnalyze){await bindAgentCase(draft.caseId,false);await analyzeCurrentCase('EVIDENCE_SUBMITTED');}await loadCases();}
-$('evidenceModal').addEventListener('click',event=>{if(event.target===$('evidenceModal'))closeEvidenceModal();});document.addEventListener('keydown',event=>{if(event.key==='Escape'&&$('evidenceModal').classList.contains('on'))closeEvidenceModal();});
-function openWithdrawModal(source='flow'){const context=evidenceContext(source);if(!context.caseId||!context.data)return;const code=latestActiveEvidence(context.caseId,context.data.collected);if(!code)return;S.dialogTrigger=document.activeElement;S.withdrawDraft={caseId:context.caseId,code,source:context.source,submitting:false};$('withdrawEvidenceLabel').textContent=EVIDENCE_LABEL[code]||code;$('withdrawEvidenceCode').textContent=code;$('withdrawModalError').textContent='';$('withdrawProgress').classList.remove('on');$('withdrawCancelButton').disabled=false;$('withdrawConfirmButton').disabled=false;const modal=$('withdrawModal');modal.classList.add('on');modal.setAttribute('aria-hidden','false');$('withdrawConfirmButton').focus();}
-function closeWithdrawModal(){const state=S.withdrawDraft;if(state&&state.submitting)return;const modal=$('withdrawModal');modal.classList.remove('on');modal.setAttribute('aria-hidden','true');S.withdrawDraft=null;const target=S.dialogTrigger;S.dialogTrigger=null;if(target&&target.isConnected)target.focus();}
-async function confirmEvidenceWithdrawal(){const state=S.withdrawDraft;if(!state||state.submitting)return;state.submitting=true;$('withdrawCancelButton').disabled=true;$('withdrawConfirmButton').disabled=true;$('withdrawModalError').textContent='';$('withdrawProgress').classList.add('on');const result=await api('POST',`/cases/${state.caseId}/evidence/withdraw-latest`,{evidence_code:state.code});if(!result.ok){$('withdrawProgress').classList.remove('on');const code=result.data&&result.data.code;$('withdrawModalError').textContent=code==='CONCURRENT_CASE_WRITE'?'案件已被其他操作更新，没有撤回任何资料；请关闭后刷新重试。':code==='NO_EVIDENCE_TO_WITHDRAW'?'当前已经没有可撤回资料。':'撤回失败，案件状态没有改变。';state.submitting=false;$('withdrawCancelButton').disabled=false;$('withdrawConfirmButton').disabled=false;return;}await loadCaseAudit(state.caseId);const source=state.source;const caseId=state.caseId;state.submitting=false;closeWithdrawModal();if(source==='diagnosis'&&S.selectedCase&&S.selectedCase.case_id===caseId){if(acceptCaseSnapshot(result.data))renderStoredDiagnosis(result.data);}else if(S.caseId===caseId){apply(result.data);}if(await bindAgentCase(caseId,false))await analyzeCurrentCase('EVIDENCE_WITHDRAWN');await loadCases();}
-$('withdrawModal').addEventListener('click',event=>{if(event.target===$('withdrawModal'))closeWithdrawModal();});document.addEventListener('keydown',event=>{if(event.key==='Escape'&&$('withdrawModal').classList.contains('on'))closeWithdrawModal();});
-async function confirmDiagnosisReason(){if(!S.selectedCase)return;const context=caseContext.capture();const selected=$('diagReasonFix')?$('diagReasonFix').value:'';const result=await api("POST",`/cases/${S.selectedCase.case_id}/confirm`,selected?{reason_code:selected}:{});if(!result.ok||!caseContext.isCurrent(context,false))return;let updated=result.data;while(updated.phase==='NEED_EVIDENCE'&&S.autoEvidence.length){const seeded=await api('POST',`/cases/${updated.case_id}/evidence`,{evidence_code:S.autoEvidence.shift()});if(!seeded.ok)break;updated=seeded.data;}await loadCaseAudit(updated.case_id);if(!caseContext.isCurrent(context,false)||!acceptCaseSnapshot(updated))return;renderStoredDiagnosis(updated);if(await bindAgentCase(updated.case_id,false))await analyzeCurrentCase('REASON_CONFIRMED');await loadCases();}
-
-function latestEvidenceAction(d,wrap=false){const code=latestActiveEvidence(d.case_id,d.collected);if(!code)return'';const button=`<button class="tbtn withdraw-action" onclick="openWithdrawModal('flow')">撤回最近资料：${esc(EVIDENCE_LABEL[code]||code)}</button>`;return wrap?`<div class="actions">${button}</div>`:button;}
+function materialRow(item,c){
+  return `<div class="material-row ${item.active?'done':''}"><span class="material-state registered">${item.active?'✓':'↶'}</span><div><strong>${esc(item.label||item.code)}</strong><div class="material-meta">${esc(item.file_name||'未记录文件名')}<br>来源：${esc(MATERIAL_SOURCE[item.source]||'来源待确认')}<br>${esc(item.registered_by||'登记人未记录')} · ${esc(dateLabel(item.registered_at))} · 登记版本 ${esc(item.registered_revision)}<br><b>正文未读取 · 内容未核验</b>${!item.active?`<br>撤回于 ${esc(dateLabel(item.withdrawn_at))}`:''}</div></div>${item.active&&allowed('WITHDRAW_MATERIAL')?`<button class="tbtn withdraw-action" data-write onclick="openWithdrawModal('${esc(item.code)}')">撤回登记</button>`:''}</div>`;
+}
+function openEvidenceModal(code,label){
+  if(!S.caseId||!allowed('REGISTER_MATERIAL'))return;
+  S.dialogTrigger=document.activeElement;
+  S.evidenceDraft={caseId:S.caseId,revision:S.caseRevision,code,label,fileName:'',source:'UNKNOWN',finished:false};
+  $('evidenceModalCase').textContent=`${S.caseId} · 版本 ${S.caseRevision}`;$('evidenceModalLabel').textContent=label;
+  $('evidenceFile').value='';$('evidenceSource').value='UNKNOWN';$('selectedEvidenceFile').textContent='尚未选择文件';
+  $('evidenceModalError').textContent='';$('evidenceReceipt').innerHTML='';
+  const button=$('evidenceSubmitButton');button.disabled=true;button.dataset.forbidden='true';button.textContent='确认登记材料';
+  $('evidenceCancelButton').textContent='取消';
+  $('evidenceModal').classList.add('on');$('evidenceModal').setAttribute('aria-hidden','false');$('evidenceFile').focus();
+}
+function selectEvidenceFile(input){
+  if(!S.evidenceDraft)return;
+  const file=input.files&&input.files[0];S.evidenceDraft.fileName=file?file.name:'';S.evidenceDraft.source='SYNTHETIC_USER_METADATA';
+  $('evidenceSource').value=S.evidenceDraft.source;
+  $('selectedEvidenceFile').textContent=file?`已选择合成材料文件名：${file.name}。不读取或上传正文。`:'尚未选择文件';
+  $('evidenceSubmitButton').dataset.forbidden=file?'false':'true';syncWriteButtons();
+}
+function useSyntheticEvidenceFile(){
+  if(!S.evidenceDraft)return;
+  const draft=S.evidenceDraft;draft.fileName=`synthetic-${draft.code.replace(/[^a-z0-9]+/gi,'-')}.pdf`;draft.source='SYNTHETIC_TEMPLATE';
+  $('evidenceFile').value='';$('evidenceSource').value=draft.source;$('selectedEvidenceFile').textContent=`${draft.fileName} · Synthetic 演示占位，仅元数据`;
+  $('evidenceSubmitButton').dataset.forbidden='false';syncWriteButtons();
+}
+function closeEvidenceModal(){
+  if(S.commandSending)return;
+  $('evidenceModal').classList.remove('on');$('evidenceModal').setAttribute('aria-hidden','true');S.evidenceDraft=null;
+  const trigger=S.dialogTrigger;S.dialogTrigger=null;if(trigger&&trigger.isConnected)trigger.focus();
+}
+async function submitEvidenceModal(){
+  const draft=S.evidenceDraft;if(!draft||draft.finished||S.pendingCommand)return;
+  if(!draft.fileName){formError('evidenceModalError','请先选择合成文件名或使用 Synthetic 演示文件。');return;}
+  formError('evidenceModalError','');
+  const result=await runCommand('REGISTER_MATERIAL',{evidence_code:draft.code,file_name:draft.fileName,source:$('evidenceSource').value},{caseId:draft.caseId,revision:draft.revision});
+  if(S.evidenceDraft!==draft)return;
+  if(!result){formError('evidenceModalError','尚未取得已保存回执。可关闭弹窗，在页面顶部查询本次处理结果。');return;}
+  draft.finished=true;$('evidenceSubmitButton').dataset.forbidden='true';$('evidenceSubmitButton').disabled=true;$('evidenceSubmitButton').textContent='登记已记录';
+  $('evidenceCancelButton').textContent='完成并返回案件';
+  $('evidenceReceipt').innerHTML=`<div class="submit-receipt"><strong>材料登记已保存</strong><p>案件 ${esc(result.receipt.case_id)} · 版本 ${esc(result.receipt.revision)}<br>已登记「${esc(draft.label)}」；仍缺 ${esc(result.case.missing_count)} 项。正文未读取、内容未核验。</p></div>`;
+}
+function openWithdrawModal(code){
+  const material=(S.caseSnapshot&&S.caseSnapshot.materials||[]).find(item=>item.active&&item.code===code);
+  if(!material||!allowed('WITHDRAW_MATERIAL'))return;
+  S.dialogTrigger=document.activeElement;S.withdrawDraft={caseId:S.caseId,revision:S.caseRevision,code};
+  $('withdrawEvidenceLabel').textContent=material.label;$('withdrawCaseContext').textContent=`案件 ${S.caseId} · 版本 ${S.caseRevision}`;
+  $('withdrawModalError').textContent='';$('withdrawModal').classList.add('on');$('withdrawModal').setAttribute('aria-hidden','false');$('withdrawConfirmButton').focus();syncWriteButtons();
+}
+function closeWithdrawModal(){
+  if(S.commandSending)return;
+  $('withdrawModal').classList.remove('on');$('withdrawModal').setAttribute('aria-hidden','true');S.withdrawDraft=null;
+  const trigger=S.dialogTrigger;S.dialogTrigger=null;if(trigger&&trigger.isConnected)trigger.focus();
+}
+async function confirmEvidenceWithdrawal(){
+  const draft=S.withdrawDraft;if(!draft||S.pendingCommand)return;
+  const result=await runCommand('WITHDRAW_MATERIAL',{evidence_code:draft.code},{caseId:draft.caseId,revision:draft.revision});
+  if(result)closeWithdrawModal();else formError('withdrawModalError','尚未取得已保存回执，请关闭弹窗后查询本次处理结果。');
+}

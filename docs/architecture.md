@@ -1,12 +1,12 @@
-# OceanPilot Runtime Architecture (`v0.2.1`)
+# OceanPilot Runtime Architecture（2026-09-06 双端工作台）
 
 ## 1. Scope
 
 当前系统以 **跨境拒付申诉协作** 为唯一产品主线，同时保留一个 Foundation 能力验证切片。两者彼此分离且只使用合成数据：
 
 1. **产品主线 — synthetic chargeback cluster：** HTTP/Web Intake、理由确认、逐项补证、
-   确定性胜诉评估、银行规则打包、人工闸门后的 mock Appeal、时限计算、
-   审计与 agent trace 展示。Prevention advisor 是交易前扩展示例，不属于申诉主链。
+   材料登记与分层闸门、实际规则引用、当前版本人工登记复核、HTML/JSON 摘要、
+   持久化操作回执与审计。最终模拟发送由后端关闭。Prevention advisor 是交易前扩展示例，不属于申诉主链。
 2. **能力验证 — Foundation `PAYMENT_INCIDENT`：** 健康检查、案件创建/读取、证据追加、
    确定性诊断 snapshot/CAS/replay，以及经签名校验的飞书事件/卡片回调。
 
@@ -21,7 +21,12 @@ Foundation 用于证明版本化证据、确定性诊断、人工闸门、审计
 flowchart LR
     Client["Local client / OpenAPI"] --> FoundationAPI["Foundation API"]
     Client --> ChargebackAPI["Chargeback API"]
-    Demo["Web console /demo"] --> ChargebackAPI
+    Demo["Merchant /demo + Business /business"] --> WorkspaceAPI["Workspace API"]
+    WorkspaceAPI --> Workspace["WorkspaceService: commands / gates / reviews"]
+    Workspace --> Unit["SQLite atomic command + revision + receipt + audit"]
+    Unit --> ChargebackStore
+    Workspace --> Summary["Immutable HTML + JSON review snapshot"]
+    Workspace --> BankRules
 
     Feishu["Feishu signed events / card actions"] --> Verify["Signature + token verification"]
     Verify --> FeishuOrchestrator["Foundation FeishuOrchestrator"]
@@ -37,9 +42,8 @@ flowchart LR
     Supervisor --> ModelProvider["ModelProvider or deterministic fallback"]
 
     ChargebackAPI --> Packager["Packager"]
-    Packager --> BankRules["InMemoryBankRules (synthetic exact match)"]
-    ChargebackAPI --> Appeal["Appeal + human gate"]
-    Appeal --> MockUpstream["Mock upstream only"]
+    Packager --> BankRules["Versioned rules SQLite: unverified summaries"]
+    ChargebackAPI --> Appeal["Appeal HTTP blocked: 503 / 501"]
     ChargebackAPI --> Deadline["DeadlineTracker"]
     ChargebackAPI -. extension .-> Prevention["Prevention advisor"]
 
@@ -59,26 +63,27 @@ flowchart LR
 | Foundation domain | Evidence contract、readiness、状态机、置信度、四条确定性诊断规则 | 数据库、当前时间/UUID、Web 框架 |
 | Foundation Store | 六表 schema、事务、evidence/diagnosis CAS、snapshot/replay、原子审计 | 规则判断、网络调用、业务文案 |
 | `ChargebackChannelService` / Supervisor | 归一化 channel 输入、Intake/Evidence/Assess 相位与人工闸门 | 渠道 SDK、SQL、真实提交 |
-| Chargeback domain | reason/evidence 规则、胜诉评估、责任路由、预防风险判断 | 模型生成、数据库、外部调用 |
-| Chargeback Store | case/reason/evidence/finalize 持久化、revision CAS、append-only audit | assessment/package/appeal 决策和外部网络 |
-| Model/KB/deadline/upstream adapters | 可选解释、内存规则精确匹配、时限计算、mock submission | 改写确定性结论或执行真实业务动作 |
+| Chargeback domain | reason/evidence 内部清单、材料就绪度、关键/普通缺口分层、人工路由、预防建议 | 模型生成、数据库、外部调用 |
+| WorkspaceService | 同案视图、明确确认命令、疑点与人审门槛、规则引用、确定性摘要快照 | HTTP 细节、SQL、模型自动执行写操作 |
+| Chargeback / Workspace Store | 案件/材料/疑点/审核/Agent 回合/摘要持久化、CAS、命令原子回执与审计 | 业务结论、外部网络、正文识别 |
+| Model/KB/deadline/upstream adapters | 有期限的可选解释、实际版本规则匹配、内部演示时限、未启用的 Mock 连接器 | 改写确定性结论或执行真实业务动作 |
 
 ## 4. Lifecycle and Composition
 
 `create_app()` 解析 `Settings` 并构造 Foundation `CaseService`、chargeback
-Supervisor/Store、Packager、Appeal、Prevention、DeadlineTracker 和进程内 metrics。
+Supervisor/Store、WorkspaceService、Packager、Appeal、Prevention、DeadlineTracker 和进程内 metrics。
 这一阶段不创建数据库文件。进入 FastAPI lifespan 后才初始化 Foundation schema 和
-chargeback schema，并执行 Foundation Store 健康检查；配置飞书时，callback store
+chargeback/workspace 与独立规则 schema，并执行 Foundation Store 健康检查；配置飞书时，callback store
 factory 也在 lifespan 中挂载。
 
 - Foundation DB 默认 `work/oceanpilot.db`，由 `OCEANPILOT_DB_PATH` 覆盖。
 - Chargeback DB 默认使用同目录下 `oceanpilot-chargeback.db`，由
   `OCEANPILOT_CHARGEBACK_DB_PATH` 覆盖。
 - Feishu callback DB 仅在完整凭据配置后启用，由 `OCEANPILOT_FEISHU_DB_PATH` 覆盖。
-- Chargeback 模型默认是离线 `ScriptedModelProvider`。只有显式开启
-  `OCEANPILOT_CHARGEBACK_LIVE_MODEL` 才构造分级 live provider；凭据只走环境变量。
-  `OCEANPILOT_MODEL_PROVIDER` 可选择 `claude`（缺省）或 `deepseek`；两者均复用
-  LOW 直连、MEDIUM 脱敏、HIGH 本地隔离或脱敏兜底的安全路由。
+- 规则 DB 默认同目录 `oceanpilot-rules.db`，由 `OCEANPILOT_RULES_DB_PATH` 覆盖；规则是 `UNVERIFIED_SUMMARY`，不是生产核验依据。
+- 模型默认离线 `ScriptedModelProvider`；显式 `OCEANPILOT_CHARGEBACK_LIVE_MODEL=1` 才启用已选定的 DeepSeek。凭据只走环境变量，其他 provider 不进入当前正式演示配置。
+- 模型调用有单次期限和请求总预算；异常结果标为 `FALLBACK`，确定性规则输出为 `DETERMINISTIC`，实际模型输出为 `MODEL`。供应商配置不等于本次输出来源。
+- `OCEANPILOT_MOCK_SEND_ENABLED` 默认 0。最终发送 HTTP 默认 503；即使设为 1 也返回 501，等待冻结版本批准、幂等提交和回执恢复联合验收。
 
 ## 5. Foundation Data Flows
 
@@ -124,54 +129,57 @@ revision 或路由结论。
 飞书证据固定为 `USER_REPORTED`，因此签名飞书链的诊断要求人工复核；确认只写审计，
 不改变案件状态或执行业务动作。
 
-## 6. Synthetic Chargeback Flow
+## 6. 双端合成正式争议链路
 
 ```text
-POST /api/v1/chargeback/cases
-  -> Intake proposes a reason and extracts safe facts
-  -> low-confidence reason waits at REASON_PROPOSED for human confirmation
-  -> Evidence asks for one deterministic missing item at a time
-  -> Assess computes win likelihood, evidence breakdown and review routing
-  -> GET package applies synthetic in-memory bank/network rules
-  -> POST appeal drafts text; only explicit human approval reaches mock upstream
+/demo MERCHANT + /business BUSINESS
+  -> POST workspace/commands: COPY_SAMPLE or confirmed CREATE_CASE
+  -> same case_id + revision + formal-dispute premise
+  -> REGISTER_MATERIAL: metadata/source only, file content NOT_READ
+  -> material gate + unresolved concerns + actual rule match
+  -> BUSINESS REVIEW: explicit scope, current version, saved history
+  -> POST summaries(expected_revision): deterministic snapshot
+  -> save HTML/JSON after version + review + rule-change checks
+  -> GET saved summary: no model, no re-analysis, immutable old version
 ```
 
-当前 Supervisor 相位只有 `NEEDS_INTAKE / REASON_PROPOSED / NEED_EVIDENCE /
-ASSESSED`。Package 与 Appeal 不把案件持久化为 `PACKAGED`、`SUBMITTED` 或
-`RESOLVED`。Chargeback SQLite 只持久化案件、reason 确认、证据、collection-finalized
-和 append-only audit；assessment、package、appeal outcome 与 agent trace 均按当前状态
-计算，不声明 snapshot identity、持久化 replay 或 exactly-once。
+`WorkspaceService` 显示更细的工作阶段，包括关键缺失、有限分析、疑点待审、无精确规则、待登记复核与当前登记复核通过。内部 Supervisor 继续兼容四个相位 `NEEDS_INTAKE / REASON_PROPOSED / NEED_EVIDENCE / ASSESSED`：关键缺失即使 finalize 也停在 `NEED_EVIDENCE`；普通缺失 finalize 后可以 `ASSESSED` 有限分析，缺口仍随视图返回。完整内部清单仍强制人工复核。旧 `win_likelihood` 字段仅作兼容，含义是材料就绪度，不能当作真实胜诉概率。
 
-`InMemoryBankRules` 按 bank + network + reason、network + reason、默认模板的顺序做
-精确匹配。`KnowledgeBase` port 和 ingestion schema 已为真实规则预留边界，但当前没有
-RAG 或向量库。`DeadlineTracker` 只计算 15/45 天窗口、提醒节点与逾期标志；没有
-Scheduler/Messenger，不发送真实通知，也不改变生产状态。
+`X-Demo-Role` 只表达本地演示的提交/复核职责，不是生产认证。写操作由严格结构化命令、`confirmed:true` 和 `expected_revision` 约束；AI 提议必须经过人工确认，不因模型给出动作就自动执行。同一 `command_id` 和同一完整内容重试返回原回执；同 ID 不同内容冲突。案件变更、版本、审计和命令回执使用同一 SQLite 写事务。
 
-Prevention 只对 synthetic signals 给出建议；Safety Scan 不回显原输入；DecisionMetrics
-仅在进程内计数。请求中间件写 method/path/status/request/trace ID 的 PII-free 结构化
-日志，但这不是生产日志或 metrics backend。
+疑点由人工或结构化输入登记，保留字段、旧新值、两侧来源、版本、处理人与审核说明；来源未知自动形成待复核记录。这不声称从文件正文检测了矛盾。新材料、撤回、原因/卡组织纠正或疑点变化使旧审核历史化。当前人工审核只能覆盖所选登记范围，不能证明交易真实或材料正文一致。
+
+摘要保存案件说明、材料元数据、缺口、规则版本与限制、人工记录、下一步及未核验事项。生成不调用模型，不拼接不同版本结果；保存时校验案件及审核状态，规则指纹变化也要求重新生成。已保存的旧摘要只代表原版本，刷新或重启后可恢复读取。
+
+规则库按实际卡组织和原因进行精确映射。Visa 10.4、Visa 13.1、Mastercard 4853 引用各自版本；默认模板或无来源旧规则只可用于内部清单解释，不作为正式依据。内存 fallback 不使包自动获得可提交资格。兼容 `ready_to_submit` 仅反映内部模板准备条件，不能视为真实上游提交授权；HTTP 发送端点始终在调用模型或连接器前拒绝。
+
+旧 Chargeback HTTP/飞书渠道仍保留受理和登记兼容路径。只读案件/规则/材料预览 GET 使用确定性投影，不重新调用模型或隐式写入审核。`DeadlineTracker` 是内部演示窗口与提醒计算，没有 Scheduler/Messenger。Prevention 仅对 synthetic signals 给建议。日志为 PII-free 请求关联日志；DecisionMetrics 为进程内计数，均不是生产观测平台。
 
 ## 7. Storage Boundaries
 
 | Store | Tables / state | Current boundary |
 |---|---|---|
 | Foundation SQLite | `cases`、`evidence_items`、`diagnosis_snapshots`、`hypotheses`、`hypothesis_evidence_refs`、`audit_events` | Foundation snapshot/CAS/replay 与原子审计 |
-| Chargeback SQLite | `chargeback_cases`、`chargeback_evidence`、`chargeback_audit` | synthetic case/reason/evidence/finalize + revision CAS；不保存 assessment/package/appeal |
-| Feishu callback SQLite | 事件/动作回执、chat↔Foundation case 绑定、确认审计 | 独立文件；不存拒付集群状态 |
+| Chargeback / Workspace SQLite | 案件、材料、审计、Agent 回合、人审记录、工作台元数据/疑点、命令回执、摘要 | 同一文件中的版本化协作；部分传统预览按当前状态计算；不保存可发送的冻结包或上游回执 |
+| Rules SQLite | 文档来源、规则版本、Demo 映射 | 独立未核验摘要库；导出检查规则指纹变化 |
+| Feishu callback SQLite | 事件/动作回执、chat↔Foundation case 绑定、确认审计 | 独立回调回执与绑定；拒付案件自身写入 Chargeback Store |
 
 Store 从不调用领域规则或外部服务。当前没有文件上传、对象存储、WORM、JCS、哈希链、
 云数据库或备份声明。
 
 ## 8. HTTP and Trust Boundary
 
-OpenAPI 当前冻结 19 条路径；根跳转和 `/demo` 不进入 OpenAPI：
+当前准确路径以 `/docs` 和生成的 OpenAPI 为准；不沿用历史版本的固定路径总数。
 
-| Surface | Paths | Current result |
-|---|---:|---|
-| Foundation core | 5 | `/health` + Foundation 建案/读案/补证/诊断 |
-| Foundation Feishu integration | 2 | 签名 events/card-actions；未配置返回固定安全 `503` |
-| Chargeback case workflow | 8 | 建案/读案/reason 确认/补证/finalize/package/appeal/audit |
-| Chargeback support | 4 | catalog、process-local metrics、prevention、safety scan |
+| Surface | Current result |
+|---|---|
+| Foundation core / Feishu | 健康、建案/读案/补证/诊断及签名回调；未配置回调凭据安全拒绝 |
+| Chargeback compatibility | 受理/读案/确认/登记/撤回/finalize、只读规则与材料预览；最终发送禁用 |
+| Case Agent | 保存当前版本分析与明确动作建议，写入仍受人工与后端门槛约束 |
+| Workspace | 同案列表/详情、结构化命令与回执、当前人审、疑点、HTML/JSON 摘要 |
+| Web | 用户端 `/demo`、业务端 `/business`；运行维护端另行 `/admin` |
+
+完整字段、错误与重试语义见 [工作台合同](implementation/2026-09-06-workspace-contract.md)。
 
 Foundation 请求拒绝未知字段、非 UUIDv4 ID、非严格 `true` 的 synthetic 值、NaN/Infinity、
 非闭合 typed value 和无时区时间。Chargeback 请求由独立严格 DTO/枚举约束。可疑敏感
@@ -181,7 +189,9 @@ Foundation 请求拒绝未知字段、非 UUIDv4 ID、非严格 `true` 的 synth
 
 ## 9. Deferred Extension Boundary
 
-`v0.2.1` 已具备 synthetic 演示、Docker 和基础可观测性，但仍不声明生产就绪。后续项为：
+本版具备合成双端协作与复核摘要，仍不声明生产就绪。后续项为：
+
+- 冻结版本发送批准、持久化幂等提交、Mock 回执恢复；验收前后端拒绝发送；
 
 - #21 公司流程、保密等级、真实 reason-code/证据模板/银行规则与脱敏案例；
 - 公网 HTTPS 部署与 chargeback 真实 tenant smoke；

@@ -90,6 +90,13 @@ def render_delivery(
     elif step.phase is SupervisorPhase.ASSESSED and step.assessment is not None:
         outcome = step.assessment
         result = outcome.assessment
+        missing = tuple(code.value for code in result.missing_evidence)
+        if result.missing_evidence:
+            next_evidence = result.missing_evidence[0].value
+            question = (
+                f"当前仅提供有限分析，仍需补充「{label_of(result.missing_evidence[0])}」"
+                "或由人工记录无法补充的原因；不能形成登记审核通过结论。"
+            )
         assessment = DeliveryAssessment(
             win_likelihood=str(result.win_likelihood),
             completeness=str(result.completeness),

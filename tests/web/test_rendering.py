@@ -1,6 +1,10 @@
 from html.parser import HTMLParser
 
-from oceanpilot.web.rendering import render_merchant_page, render_operations_page
+from oceanpilot.web.rendering import (
+    render_business_page,
+    render_merchant_page,
+    render_operations_page,
+)
 
 
 class AssetReferences(HTMLParser):
@@ -20,7 +24,11 @@ class AssetReferences(HTMLParser):
 
 
 def test_composed_pages_still_embed_every_runtime_asset():
-    for body in (render_merchant_page(), render_operations_page("http://127.0.0.1:8002")):
+    for body in (
+        render_merchant_page(),
+        render_business_page(),
+        render_operations_page("http://127.0.0.1:8002"),
+    ):
         references = AssetReferences()
         references.feed(body)
         assert not references.external_assets
@@ -29,6 +37,8 @@ def test_composed_pages_still_embed_every_runtime_asset():
         assert "__PAGE_SCRIPT__" not in body
         assert "__PAGE_STYLES__" not in body
         assert "__OCEANPAYMENT_LOGO__" not in body
+        assert "__WORKSPACE_CONFIG__" not in body
+        assert "__ROLE_LABEL__" not in body
 
 
 def test_operations_configuration_does_not_leak_between_app_instances():
