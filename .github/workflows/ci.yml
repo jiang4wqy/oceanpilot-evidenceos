@@ -107,6 +107,7 @@ jobs:
 
           assert health == {"status": "ok"}
           assert "Oceanpayment · 商户工作台" in demo
+          assert '"role":"MERCHANT"' in demo
           assert "案件中心" in demo
           assert "新建案件" in demo
           assert 'class="ocean-logo"' in demo
@@ -114,6 +115,8 @@ jobs:
           assert "CASE-20260814" not in demo
           assert "案件复核摘要（合成示例）" in demo
           assert "最终发送未开放" in demo
+          assert "Oceanpayment · 企业争议运营" in business
+          assert '"role":"BUSINESS"' in business
           assert "企业争议运营区" in business
           assert "预览本版本复核" in business
           PY
