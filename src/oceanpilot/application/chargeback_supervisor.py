@@ -100,14 +100,33 @@ class ChargebackSupervisor:
         state.collection_finalized = True
 
     def advance(self, state: ChargebackCaseState) -> SupervisorStep:
+        """Explain the current step after an explicit command."""
+        step = self.snapshot(state)
+        if step.phase is SupervisorPhase.NEED_EVIDENCE:
+            assert state.reason_code is not None
+            return SupervisorStep(
+                phase=step.phase,
+                evidence_request=self._evidence.next_request(state.reason_code, state.collected),
+            )
+        if step.phase is SupervisorPhase.ASSESSED:
+            assert state.reason_code is not None
+            return SupervisorStep(
+                phase=step.phase,
+                assessment=self._assess.assess(state.reason_code, state.collected),
+            )
+        return step
+
+    @staticmethod
+    def snapshot(state: ChargebackCaseState) -> SupervisorStep:
+        """Project persisted state without models, writes, or decision metrics."""
         if state.reason_code is None:
             return SupervisorStep(phase=SupervisorPhase.NEEDS_INTAKE)
         if not state.reason_confirmed:
             # Kernel proposed a reason but a human has not confirmed it yet.
             return SupervisorStep(phase=SupervisorPhase.REASON_PROPOSED)
-        request = self._evidence.next_request(state.reason_code, state.collected)
+        request = EvidenceAgent.preview(state.reason_code, state.collected)
         # Keep asking only while the human has not declared collection finished.
         if not request.complete and not state.collection_finalized:
             return SupervisorStep(phase=SupervisorPhase.NEED_EVIDENCE, evidence_request=request)
-        outcome = self._assess.assess(state.reason_code, state.collected)
+        outcome = ChargebackAssessAgent.preview(state.reason_code, state.collected)
         return SupervisorStep(phase=SupervisorPhase.ASSESSED, assessment=outcome)

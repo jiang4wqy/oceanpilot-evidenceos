@@ -8,7 +8,7 @@ its order. Application layer: depends on the KB + ModelProvider protocols only.
 """
 
 from collections.abc import Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from decimal import ROUND_HALF_UP, Decimal
 
 from oceanpilot.application.chargeback_agents import ExplanationSource
@@ -90,6 +90,33 @@ class PackagerAgent:
         bank_id: str | None = None,
         card_network: str | None = None,
     ) -> RepresentmentPackage:
+        """Explicitly compose a package and ask the model for its cover note."""
+        entry, package = self._prepare(
+            reason_code, present, bank_id=bank_id, card_network=card_network
+        )
+        note, source = self._cover_note(entry, package.ordered_evidence, package.missing_evidence)
+        return replace(package, cover_note=note, cover_note_source=source)
+
+    def preview(
+        self,
+        reason_code: DisputeReasonCode,
+        present: Iterable[ChargebackEvidenceCode],
+        *,
+        bank_id: str | None = None,
+        card_network: str | None = None,
+    ) -> RepresentmentPackage:
+        """Read the deterministic package from one rule lookup, without a model."""
+        _, package = self._prepare(reason_code, present, bank_id=bank_id, card_network=card_network)
+        return package
+
+    def _prepare(
+        self,
+        reason_code: DisputeReasonCode,
+        present: Iterable[ChargebackEvidenceCode],
+        *,
+        bank_id: str | None = None,
+        card_network: str | None = None,
+    ) -> tuple[BankRuleEntry, RepresentmentPackage]:
         entry = self._kb.lookup(reason_code, bank_id=bank_id, card_network=card_network)
         present_set = set(present)
         ordered = tuple(c for c in entry.template_order if c in present_set)
@@ -103,8 +130,7 @@ class PackagerAgent:
             else Decimal("1.0000")
         )
 
-        note, source = self._cover_note(entry, ordered, missing)
-        return RepresentmentPackage(
+        return entry, RepresentmentPackage(
             reason_code=reason_code,
             bank_id=bank_id,
             card_network=card_network,
@@ -123,8 +149,8 @@ class PackagerAgent:
             rule_version_id=entry.rule_version_id,
             verification_status=entry.verification_status,
             submission_window_basis=entry.submission_window_basis,
-            cover_note=note,
-            cover_note_source=source,
+            cover_note=_fallback_note(entry, ordered, missing),
+            cover_note_source=ExplanationSource.FALLBACK,
         )
 
     def _cover_note(

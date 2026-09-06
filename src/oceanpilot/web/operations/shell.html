@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<script>if(location.hash.includes("figmacapture=")){const s=document.createElement("script");s.src="https://mcp.figma.com/mcp/html-to-design/capture.js";s.async=true;document.head.appendChild(s)}</script>
+<title>Oceanpayment · 维护中心</title>
+<style>
+__PAGE_STYLES__
+</style>
+</head>
+<body>
+<div class="app">
+<aside class="side"><div class="brand"><img src="__OCEANPAYMENT_LOGO__" alt="Oceanpayment"><span>运行维护中心</span></div><div class="navlabel">监控中心</div>
+<nav class="nav"><button class="on" data-view="overview">运行总览</button><button data-view="api">API 监控</button><button data-view="prediction">故障预判</button><button data-view="business">业务指标</button><button data-view="audit">审计与配置</button></nav></aside>
+<main class="main"><header class="top"><div class="crumb"><b>运行维护</b> / <span id="crumb">运行总览</span></div><div class="grow"></div><label class="language-control"><span>语言</span><select id="languageSelect" aria-label="语言"><option value="zh">中文</option><option value="en">English</option></select></label><span class="env">Sandbox</span><div class="source">监控客户服务 <span id="sourceHost"></span></div><button class="refresh" id="refresh" onclick="loadOverview()">立即刷新</button></header>
+<div class="content"><div class="banner" id="offline">客户服务暂时不可达。请确认 8002 端口已启动，再检查网络和服务日志。</div>
+
+<section class="view on" id="view-overview"><div class="pagehead"><div><h1>运行总览</h1><p>集中查看服务、数据库、API 与业务流程的当前状态。</p></div><div class="updated" id="updatedOverview">等待首次刷新</div></div>
+<div class="cards"><div class="card metric"><div class="label">客户服务</div><div class="value" id="serviceValue">—</div><div class="hint">应用与数据库综合状态</div></div>
+<div class="card metric"><div class="label">近 15 分钟请求</div><div class="value" id="requestValue">0</div><div class="hint">不记录请求正文和敏感数据</div></div>
+<div class="card metric"><div class="label">P95 延迟</div><div class="value" id="latencyValue">0 ms</div><div class="hint">风险阈值 800 ms</div></div>
+<div class="card metric"><div class="label">5xx 错误</div><div class="value" id="errorValue">0</div><div class="hint">出现即进入严重预警</div></div></div>
+<div class="grid2"><div class="card"><div class="hd"><h2>故障风险预判</h2><span class="badge notcalled">阈值判断</span></div><div class="bd" id="overviewSignals"><span class="empty">等待数据</span></div></div>
+<div class="card"><div class="hd"><h2>关键接口</h2><span class="badge notcalled">近 15 分钟</span></div><div class="bd" id="keyEndpoints"><span class="empty">等待数据</span></div></div></div></section>
+
+<section class="view" id="view-api"><div class="pagehead"><div><h1>API 监控</h1><p>按接口查看调用量、错误率和延迟，未调用接口单独标记。</p></div><div class="updated" id="updatedApi">等待首次刷新</div></div>
+<div class="toolbar"><select id="apiGroup" onchange="renderEndpoints()"><option value="ALL">全部接口分组</option></select></div>
+<div class="card tablewrap"><table class="table"><thead><tr><th>接口</th><th>状态</th><th>调用量</th><th>4xx</th><th>5xx</th><th>错误率</th><th>平均延迟</th><th>P95</th><th>最近状态</th></tr></thead><tbody id="endpointRows"></tbody></table></div></section>
+
+<section class="view" id="view-prediction"><div class="pagehead"><div><h1>故障预判</h1><p>在明显报错前发现延迟、错误率和业务积压的上升信号。</p></div><div class="updated" id="updatedPrediction">等待首次刷新</div></div>
+<div class="card"><div class="hd"><h2>当前预警</h2><span class="badge notcalled">可解释规则</span></div><div class="bd" id="allSignals"><span class="empty">等待数据</span></div></div><div class="methodnote" id="predictionNote">预判只使用确定性阈值，不是故障概率。</div></section>
+
+<section class="view" id="view-business"><div class="pagehead"><div><h1>业务指标</h1><p>观察有效案件实体、人工复核、申诉阻断和交易风险等流程指标。</p></div><div class="updated" id="updatedBusiness">等待首次刷新</div></div>
+<div class="card"><div class="hd"><h2>拒付处理指标</h2><span class="badge notcalled">当前进程</span></div><div class="bd"><div class="business" id="businessMetrics"><span class="empty">尚无业务数据</span></div></div></div>
+<div class="card caseboard"><div class="hd"><h2>案件库有效实体</h2><span class="live-note">每 5 秒重新读取</span></div><div class="tablewrap"><table class="table"><thead><tr><th>案件</th><th>争议原因</th><th>状态</th><th>待补资料</th><th>创建时间</th></tr></thead><tbody id="caseRows"><tr><td colspan="5" class="empty">等待数据</td></tr></tbody></table></div></div></section>
+
+<section class="view" id="view-audit"><div class="pagehead"><div><h1>审计与配置</h1><p>确认监控采集边界、运行参数和外部连接状态。</p></div><div class="updated" id="updatedAudit">只读</div></div>
+<div class="card"><div class="hd"><h2>监控边界</h2><span class="badge healthy">已启用</span></div><div class="bd"><div class="scopegrid"><div class="scopeitem"><strong>请求遥测</strong><p>仅记录规范化路由、方法、状态码和耗时；不记录请求正文、卡号或原始 URL。</p></div><div class="scopeitem"><strong>滚动窗口</strong><p>近 15 分钟进程内统计；服务重启后自动清空，不声明长期历史。</p></div><div class="scopeitem"><strong>故障预判</strong><p>使用可解释阈值识别 5xx、错误率、P95 延迟及业务积压，不输出虚构概率。</p></div><div class="scopeitem"><strong>外部连接</strong><p>Oceanpayment 真实 API、生产数据和上游申诉接口尚未接入；当前为本地合成链路。</p></div></div></div></div></section>
+</div></main></div>
+<script>__ADMIN_I18N__</script>
+<script>
+__PAGE_SCRIPT__
+</script>
+</body>
+</html>

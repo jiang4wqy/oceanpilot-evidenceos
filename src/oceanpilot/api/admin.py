@@ -12,8 +12,9 @@ from oceanpilot.api.admin_schemas import (
     RequestSummaryDTO,
     ServiceStatusDTO,
 )
-from oceanpilot.application.chargeback_supervisor import SupervisorPhase
+from oceanpilot.application.case_snapshot import CaseSnapshotReader
 from oceanpilot.application.monitoring import EndpointTelemetry, predict_failure_risks
+from oceanpilot.domain.chargeback import DisputeReasonCode
 from oceanpilot.domain.reason_catalog import reason_label
 
 router = APIRouter(prefix="/api/v1/admin", tags=["operations"])
@@ -130,26 +131,22 @@ def get_admin_overview(request: Request) -> AdminOverviewResponse:
             )
     endpoints = tuple(endpoints_list)
     case_store = request.app.state.chargeback_store
-    supervisor = request.app.state.chargeback_supervisor
+    reader = CaseSnapshotReader(case_store)
     persisted_cases: list[PersistedCaseDTO] = []
-    for case_id in case_store.list_case_ids():
-        state = case_store.load(case_id)
-        if state is None:
-            continue
-        step = supervisor.advance(state)
-        missing_count = (
-            len(step.evidence_request.missing)
-            if step.phase is SupervisorPhase.NEED_EVIDENCE and step.evidence_request is not None
-            else 0
-        )
+    for case in reader.list_cases():
+        delivery = case.delivery
         persisted_cases.append(
             PersistedCaseDTO(
-                case_id=case_id,
-                phase=step.phase.value,
-                reason_code=state.reason_code.value if state.reason_code else None,
-                reason_label=reason_label(state.reason_code) if state.reason_code else None,
-                missing_count=missing_count,
-                created_at=state.created_at.isoformat() if state.created_at else None,
+                case_id=delivery.case_id,
+                phase=delivery.phase,
+                reason_code=delivery.reason_code,
+                reason_label=(
+                    reason_label(DisputeReasonCode(delivery.reason_code))
+                    if delivery.reason_code
+                    else None
+                ),
+                missing_count=len(delivery.missing or ()),
+                created_at=case.created_at.isoformat() if case.created_at else None,
             )
         )
     predictions = predict_failure_risks(
