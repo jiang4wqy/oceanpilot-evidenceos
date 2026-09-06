@@ -299,23 +299,11 @@ def create_case(
     responses={**COMMON_PROBLEMS},
 )
 def list_cases(
-    store: Annotated[ChargebackCaseStore, Depends(get_store)],
     service: Annotated[ChargebackChannelService, Depends(get_channel_service)],
 ) -> list[ChargebackCaseResponse]:
     """List persisted cases; every item is reloaded through the canonical case path."""
 
-    return [
-        _response(
-            service.handle(
-                NormalizedInbound(
-                    kind=InboundKind.GET_CASE,
-                    channel=_CHANNEL,
-                    case_id=case_id,
-                )
-            )
-        )
-        for case_id in store.list_case_ids()
-    ]
+    return [_response(delivery) for delivery in service.list_cases()]
 
 
 @router.post(
@@ -501,7 +489,7 @@ def get_package(
     if state is None or state.reason_code is None:
         raise CaseNotFound()
     selected_network = _case_network(state, card_network)
-    package = packager.build(
+    package = packager.preview(
         state.reason_code,
         state.collected,
         bank_id=bank_id,

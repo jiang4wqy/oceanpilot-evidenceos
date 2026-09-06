@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 
 from oceanpilot.config import Settings
 from oceanpilot.main import create_app
+from oceanpilot.web.rendering import resource_text
 
 
 def _client(tmp_path):
@@ -290,6 +291,10 @@ def test_unselected_network_does_not_request_or_render_rule_link(tmp_path):
         script = _embedded_app_script(client.get("/demo").text)
     source = "\n".join(
         (
+            resource_text("shared/request.js"),
+            _js_function(script, "createCaseContext"),
+            "const caseContext=createCaseContext();caseContext.select('case-diagnosis');",
+            "caseContext.accept({case_id:'case-diagnosis',revision:1});",
             "const elements={network:{value:'VISA'},diagnosisNetwork:{value:''},",
             "diagnosisRuleReferenceOut:{innerHTML:''}};",
             "const $=id=>elements[id]||(elements[id]={value:'',innerHTML:''});",

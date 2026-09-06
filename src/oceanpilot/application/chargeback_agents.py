@@ -81,12 +81,25 @@ class ChargebackAssessAgent:
         present_evidence: Iterable[ChargebackEvidenceCode],
     ) -> AssessOutcome:
         # Deterministic kernel decides; the model never overrides it.
-        assessment = assess_chargeback(reason_code, present_evidence)
+        assessment = self.preview(reason_code, present_evidence).assessment
         explanation, source = self._explain(assessment)
         return AssessOutcome(
             assessment=assessment,
             explanation=explanation,
             explanation_source=source,
+        )
+
+    @staticmethod
+    def preview(
+        reason_code: DisputeReasonCode,
+        present_evidence: Iterable[ChargebackEvidenceCode],
+    ) -> AssessOutcome:
+        """Read-only assessment using the same kernel, without a model request."""
+        assessment = assess_chargeback(reason_code, present_evidence)
+        return AssessOutcome(
+            assessment=assessment,
+            explanation=_fallback(assessment),
+            explanation_source=ExplanationSource.FALLBACK,
         )
 
     def _explain(self, assessment: ChargebackAssessment) -> tuple[str, ExplanationSource]:
@@ -427,6 +440,25 @@ class EvidenceAgent:
         reason_code: DisputeReasonCode,
         present: Iterable[ChargebackEvidenceCode],
     ) -> EvidenceRequest:
+        request = self.preview(reason_code, present)
+        if request.next_evidence is None:
+            return request
+        question, source = self._ask(reason_code, request.next_evidence, len(request.missing))
+        return EvidenceRequest(
+            reason_code=reason_code,
+            complete=request.complete,
+            next_evidence=request.next_evidence,
+            missing=request.missing,
+            question=question,
+            question_source=source,
+        )
+
+    @staticmethod
+    def preview(
+        reason_code: DisputeReasonCode,
+        present: Iterable[ChargebackEvidenceCode],
+    ) -> EvidenceRequest:
+        """Return the canonical evidence gap without asking a model to phrase it."""
         assessment = assess_chargeback(reason_code, present)
         if assessment.ready_to_submit:
             return EvidenceRequest(
@@ -442,14 +474,13 @@ class EvidenceAgent:
             if assessment.missing_critical
             else assessment.missing_evidence[0]
         )
-        question, source = self._ask(reason_code, next_code, len(assessment.missing_evidence))
         return EvidenceRequest(
             reason_code=reason_code,
             complete=False,
             next_evidence=next_code,
             missing=assessment.missing_evidence,
-            question=question,
-            question_source=source,
+            question=_fallback_question(next_code, len(assessment.missing_evidence)),
+            question_source=ExplanationSource.FALLBACK,
         )
 
     def _ask(

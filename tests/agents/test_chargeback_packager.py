@@ -1,3 +1,4 @@
+from dataclasses import replace
 from decimal import Decimal
 
 from oceanpilot.adapters.knowledge.bank_rules import InMemoryBankRules
@@ -14,6 +15,24 @@ from oceanpilot.domain.chargeback import (
 
 def _agent(model):
     return PackagerAgent(model, InMemoryBankRules())
+
+
+def test_preview_and_model_build_share_one_deterministic_package():
+    model = ScriptedModelProvider(default_text="model cover note")
+    agent = _agent(model)
+    reason = DisputeReasonCode.FRAUD_CARD_NOT_PRESENT
+    present = required_evidence_for(reason)
+
+    preview = agent.preview(reason, iter(present), card_network="VISA")
+    assert model.requests == []
+    assert preview.cover_note_source is ExplanationSource.FALLBACK
+    built = agent.build(reason, iter(present), card_network="VISA")
+
+    assert len(model.requests) == 1
+    assert (
+        replace(built, cover_note=preview.cover_note, cover_note_source=preview.cover_note_source)
+        == preview
+    )
 
 
 def test_full_default_evidence_is_ready_and_ordered():
