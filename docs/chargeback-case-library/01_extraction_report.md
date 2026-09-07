@@ -49,4 +49,5 @@ Visa 各步响应天数、Mastercard CVM 限额数值（外部 Excel）、真实
 - 全部 SOURCE_EXPLICIT 案例带页码或章节定位；金额/日期/结局凡原文未给均记 NOT_STATED。
 - 规则还原案例均标注“规则还原场景”，未冒充真实案例。
 - 合成案例均含 synthetic_meta（derived_from_rule_ids / fields_from_source / fields_invented）。
+- **Provenance 双分类**：每个案例与每条规则均带 `provenance` 字段（evidence_level 与 verification_status 分离，绝对不混用）；`production_eligible=false` 的内容不得进入生产规则。
 - JSON/CSV 已做语法与 ID 校验（见最终汇报）。

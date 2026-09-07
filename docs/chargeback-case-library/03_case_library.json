@@ -1,6 +1,19 @@
 {
-  "schema_version": "1.0",
-  "generated_at": "2026-09-07T11:48:36Z",
+  "schema_version": "1.1",
+  "generated_at": "2026-09-07T15:34:14Z",
+  "provenance_taxonomy": {
+    "evidence_level": [
+      "SOURCE_EXPLICIT",
+      "RULE_DERIVED",
+      "SYNTHETIC_DEMO"
+    ],
+    "verification_status": [
+      "VERIFIED_EXTRACTED",
+      "NEEDS_CONFIRMATION",
+      "CONFLICTING_SOURCES"
+    ],
+    "note": "两套分类维度不同，绝对不混用：evidence_level 表示内容性质，verification_status 表示来源核验状态；production_eligible=false 的内容不得直接进入生产规则。"
+  },
   "sources": [
     {
       "source_id": "SRC-01",
@@ -188,7 +201,40 @@
       "duplicate_group_id": null,
       "related_case_ids": [],
       "core": true,
-      "core_reason": "通俗规则示例，适合规则引擎边界测试与路演说明"
+      "core_reason": "通俗规则示例，适合规则引擎边界测试与路演说明",
+      "provenance": {
+        "scheme": "Mastercard",
+        "reason_code": "4853/4854",
+        "source_type": "卡组织规则内置示例",
+        "source_id": [
+          "SRC-02"
+        ],
+        "source_locator": [
+          "P152",
+          "P460",
+          "P950",
+          "P1157"
+        ],
+        "rule_version": [
+          "2026-05-19（Chargeback Guide Merchant Edition）"
+        ],
+        "effective_date": "NOT_STATED",
+        "derived_from_rule_ids": [],
+        "conflict_ids": [],
+        "conflict_status": "NONE",
+        "verification_status": "VERIFIED_EXTRACTED",
+        "required_evidence": [
+          "规则界定"
+        ],
+        "deadline_policy": "未说明（需收单机构确认）",
+        "intended_use": [
+          "网站/比赛演示",
+          "规则引擎测试",
+          "Agent 测试",
+          "路演故事"
+        ],
+        "production_eligible": true
+      }
     },
     {
       "case_template_id": "CB-CASE-002",
@@ -322,7 +368,41 @@
       "duplicate_group_id": "MC-LIFETIME",
       "related_case_ids": [],
       "core": true,
-      "core_reason": "唯一带明确计算公式的金额案例"
+      "core_reason": "唯一带明确计算公式的金额案例",
+      "provenance": {
+        "scheme": "Mastercard",
+        "reason_code": "4853",
+        "source_type": "卡组织规则内置示例（含明确算式）",
+        "source_id": [
+          "SRC-02"
+        ],
+        "source_locator": [
+          "P178",
+          "P968",
+          "P1511"
+        ],
+        "rule_version": [
+          "2026-05-19（Chargeback Guide Merchant Edition）"
+        ],
+        "effective_date": "NOT_STATED",
+        "derived_from_rule_ids": [],
+        "conflict_ids": [],
+        "conflict_status": "NONE",
+        "verification_status": "VERIFIED_EXTRACTED",
+        "required_evidence": [
+          "18 个月折算规则"
+        ],
+        "deadline_policy": "明确",
+        "intended_use": [
+          "网站/比赛演示",
+          "Sandbox seed",
+          "规则引擎测试",
+          "Agent 测试",
+          "UI 测试",
+          "路演故事"
+        ],
+        "production_eligible": true
+      }
     },
     {
       "case_template_id": "CB-CASE-003",
@@ -470,7 +550,42 @@
       "related_case_ids": [
         "CB-CASE-029"
       ],
-      "core": false
+      "core": false,
+      "provenance": {
+        "scheme": "Mastercard",
+        "reason_code": "4853",
+        "source_type": "卡组织规则内置示例",
+        "source_id": [
+          "SRC-02"
+        ],
+        "source_locator": [
+          "P178",
+          "P968",
+          "P1511"
+        ],
+        "rule_version": [
+          "2026-05-19（Chargeback Guide Merchant Edition）"
+        ],
+        "effective_date": "NOT_STATED",
+        "derived_from_rule_ids": [],
+        "conflict_ids": [],
+        "conflict_status": "NONE",
+        "verification_status": "VERIFIED_EXTRACTED",
+        "required_evidence": [
+          "持卡人签署的免责弃权书",
+          "发货凭证"
+        ],
+        "deadline_policy": "明确",
+        "intended_use": [
+          "网站/比赛演示",
+          "Sandbox seed",
+          "规则引擎测试",
+          "Agent 测试",
+          "UI 测试",
+          "路演故事"
+        ],
+        "production_eligible": true
+      }
     },
     {
       "case_template_id": "CB-CASE-004",
@@ -618,7 +733,40 @@
       "related_case_ids": [
         "CB-CASE-045"
       ],
-      "core": false
+      "core": false,
+      "provenance": {
+        "scheme": "Mastercard",
+        "reason_code": "4853",
+        "source_type": "卡组织规则内置示例",
+        "source_id": [
+          "SRC-02"
+        ],
+        "source_locator": [
+          "P178",
+          "P967",
+          "P1511"
+        ],
+        "rule_version": [
+          "2026-05-19（Chargeback Guide Merchant Edition）"
+        ],
+        "effective_date": "NOT_STATED",
+        "derived_from_rule_ids": [],
+        "conflict_ids": [],
+        "conflict_status": "NONE",
+        "verification_status": "VERIFIED_EXTRACTED",
+        "required_evidence": [
+          "签收证明",
+          "称重/监控/打包记录"
+        ],
+        "deadline_policy": "明确",
+        "intended_use": [
+          "网站/比赛演示",
+          "Sandbox seed",
+          "规则引擎测试",
+          "Agent 测试"
+        ],
+        "production_eligible": true
+      }
     },
     {
       "case_template_id": "CB-CASE-005",
@@ -756,7 +904,43 @@
       },
       "duplicate_group_id": "MC-ALTERED-RECEIPT",
       "related_case_ids": [],
-      "core": false
+      "core": false,
+      "provenance": {
+        "scheme": "Mastercard",
+        "reason_code": "4853（抗辩码 2001）",
+        "source_type": "卡组织规则内置示例",
+        "source_id": [
+          "SRC-02"
+        ],
+        "source_locator": [
+          "P162",
+          "P184",
+          "P335",
+          "P694",
+          "P957",
+          "P1094",
+          "P1330"
+        ],
+        "rule_version": [
+          "2026-05-19（Chargeback Guide Merchant Edition）"
+        ],
+        "effective_date": "NOT_STATED",
+        "derived_from_rule_ids": [],
+        "conflict_ids": [],
+        "conflict_status": "NONE",
+        "verification_status": "VERIFIED_EXTRACTED",
+        "required_evidence": [
+          "商户对篡改的合理具体说明"
+        ],
+        "deadline_policy": "存在版本差异（见冲突清单）",
+        "intended_use": [
+          "网站/比赛演示",
+          "Sandbox seed",
+          "规则引擎测试",
+          "Agent 测试"
+        ],
+        "production_eligible": true
+      }
     },
     {
       "case_template_id": "CB-CASE-006",
@@ -889,7 +1073,39 @@
       },
       "duplicate_group_id": "MC-RETURN-FRAUD",
       "related_case_ids": [],
-      "core": false
+      "core": false,
+      "provenance": {
+        "scheme": "Mastercard",
+        "reason_code": "4853（抗辩码 2004）",
+        "source_type": "卡组织规则内置示例",
+        "source_id": [
+          "SRC-02"
+        ],
+        "source_locator": [
+          "P163",
+          "P279",
+          "P958",
+          "P1042"
+        ],
+        "rule_version": [
+          "2026-05-19（Chargeback Guide Merchant Edition）"
+        ],
+        "effective_date": "NOT_STATED",
+        "derived_from_rule_ids": [],
+        "conflict_ids": [],
+        "conflict_status": "NONE",
+        "verification_status": "VERIFIED_EXTRACTED",
+        "required_evidence": [
+          "退货开箱检验记录"
+        ],
+        "deadline_policy": "存在版本差异（见冲突清单）",
+        "intended_use": [
+          "网站/比赛演示",
+          "规则引擎测试",
+          "Agent 测试"
+        ],
+        "production_eligible": true
+      }
     },
     {
       "case_template_id": "CB-CASE-007",
@@ -1021,7 +1237,41 @@
       },
       "duplicate_group_id": "MC-PARTIAL-REVERSAL",
       "related_case_ids": [],
-      "core": false
+      "core": false,
+      "provenance": {
+        "scheme": "Mastercard",
+        "reason_code": "4808",
+        "source_type": "卡组织规则内置示例",
+        "source_id": [
+          "SRC-02"
+        ],
+        "source_locator": [
+          "P64-65",
+          "P84",
+          "P934"
+        ],
+        "rule_version": [
+          "2026-05-19（Chargeback Guide Merchant Edition）"
+        ],
+        "effective_date": "NOT_STATED",
+        "derived_from_rule_ids": [],
+        "conflict_ids": [
+          "CONFLICT-006"
+        ],
+        "conflict_status": "CONFLICTING_SOURCES",
+        "verification_status": "CONFLICTING_SOURCES",
+        "required_evidence": [
+          "授权与撤销报文记录"
+        ],
+        "deadline_policy": "明确",
+        "intended_use": [
+          "网站/比赛演示",
+          "Sandbox seed",
+          "规则引擎测试",
+          "Agent 测试"
+        ],
+        "production_eligible": false
+      }
     },
     {
       "case_template_id": "CB-CASE-008",
@@ -1146,7 +1396,36 @@
       },
       "duplicate_group_id": null,
       "related_case_ids": [],
-      "core": false
+      "core": false,
+      "provenance": {
+        "scheme": "Mastercard",
+        "reason_code": "4808",
+        "source_type": "卡组织规则内置示例",
+        "source_id": [
+          "SRC-02"
+        ],
+        "source_locator": [
+          "P61",
+          "P885-886"
+        ],
+        "rule_version": [
+          "2026-05-19（Chargeback Guide Merchant Edition）"
+        ],
+        "effective_date": "NOT_STATED",
+        "derived_from_rule_ids": [],
+        "conflict_ids": [],
+        "conflict_status": "NONE",
+        "verification_status": "VERIFIED_EXTRACTED",
+        "required_evidence": [
+          "交易记录（MCC/金额/授权）"
+        ],
+        "deadline_policy": "明确",
+        "intended_use": [
+          "规则引擎测试",
+          "Agent 测试"
+        ],
+        "production_eligible": true
+      }
     },
     {
       "case_template_id": "CB-CASE-009",
@@ -1272,7 +1551,37 @@
       },
       "duplicate_group_id": null,
       "related_case_ids": [],
-      "core": false
+      "core": false,
+      "provenance": {
+        "scheme": "Mastercard",
+        "reason_code": "4808",
+        "source_type": "卡组织规则内置示例",
+        "source_id": [
+          "SRC-02"
+        ],
+        "source_locator": [
+          "P115",
+          "P921-922",
+          "P56-57"
+        ],
+        "rule_version": [
+          "2026-05-19（Chargeback Guide Merchant Edition）"
+        ],
+        "effective_date": "NOT_STATED",
+        "derived_from_rule_ids": [],
+        "conflict_ids": [],
+        "conflict_status": "NONE",
+        "verification_status": "VERIFIED_EXTRACTED",
+        "required_evidence": [
+          "终端标识与交易要素"
+        ],
+        "deadline_policy": "明确",
+        "intended_use": [
+          "规则引擎测试",
+          "Agent 测试"
+        ],
+        "production_eligible": true
+      }
     },
     {
       "case_template_id": "CB-CASE-010",
@@ -1408,7 +1717,41 @@
       "related_case_ids": [
         "CB-CASE-027"
       ],
-      "core": false
+      "core": false,
+      "provenance": {
+        "scheme": "Mastercard",
+        "reason_code": "4853/4850",
+        "source_type": "卡组织规则内置示例",
+        "source_id": [
+          "SRC-02"
+        ],
+        "source_locator": [
+          "P312",
+          "P330",
+          "P1064",
+          "P1076"
+        ],
+        "rule_version": [
+          "2026-05-19（Chargeback Guide Merchant Edition）"
+        ],
+        "effective_date": "NOT_STATED",
+        "derived_from_rule_ids": [],
+        "conflict_ids": [],
+        "conflict_status": "NONE",
+        "verification_status": "VERIFIED_EXTRACTED",
+        "required_evidence": [
+          "合同/扣款协议"
+        ],
+        "deadline_policy": "明确",
+        "intended_use": [
+          "网站/比赛演示",
+          "Sandbox seed",
+          "规则引擎测试",
+          "Agent 测试",
+          "路演故事"
+        ],
+        "production_eligible": true
+      }
     },
     {
       "case_template_id": "CB-CASE-011",
@@ -1556,7 +1899,44 @@
       },
       "duplicate_group_id": "MC-ADDENDUM",
       "related_case_ids": [],
-      "core": false
+      "core": false,
+      "provenance": {
+        "scheme": "Mastercard",
+        "reason_code": "4853/4837",
+        "source_type": "卡组织规则内置示例",
+        "source_id": [
+          "SRC-02"
+        ],
+        "source_locator": [
+          "P350",
+          "P353",
+          "P501",
+          "P1090",
+          "P1093",
+          "P1189"
+        ],
+        "rule_version": [
+          "2026-05-19（Chargeback Guide Merchant Edition）"
+        ],
+        "effective_date": "NOT_STATED",
+        "derived_from_rule_ids": [],
+        "conflict_ids": [],
+        "conflict_status": "NONE",
+        "verification_status": "VERIFIED_EXTRACTED",
+        "required_evidence": [
+          "原交易合同/租赁协议",
+          "违章记录（30 日内提交）"
+        ],
+        "deadline_policy": "明确",
+        "intended_use": [
+          "网站/比赛演示",
+          "Sandbox seed",
+          "规则引擎测试",
+          "Agent 测试",
+          "路演故事"
+        ],
+        "production_eligible": true
+      }
     },
     {
       "case_template_id": "CB-CASE-012",
@@ -1706,7 +2086,46 @@
       "related_case_ids": [
         "CB-CASE-033"
       ],
-      "core": false
+      "core": false,
+      "provenance": {
+        "scheme": "Mastercard",
+        "reason_code": "4853",
+        "source_type": "卡组织规则内置示例",
+        "source_id": [
+          "SRC-02"
+        ],
+        "source_locator": [
+          "P368",
+          "P371",
+          "P381",
+          "P1103",
+          "P1106",
+          "P1112"
+        ],
+        "rule_version": [
+          "2026-05-19（Chargeback Guide Merchant Edition）"
+        ],
+        "effective_date": "NOT_STATED",
+        "derived_from_rule_ids": [],
+        "conflict_ids": [
+          "CONFLICT-006"
+        ],
+        "conflict_status": "CONFLICTING_SOURCES",
+        "verification_status": "CONFLICTING_SOURCES",
+        "required_evidence": [
+          "预订前政策告知证明",
+          "电话账单（取消时限内联系证明）"
+        ],
+        "deadline_policy": "明确",
+        "intended_use": [
+          "网站/比赛演示",
+          "Sandbox seed",
+          "规则引擎测试",
+          "Agent 测试",
+          "路演故事"
+        ],
+        "production_eligible": false
+      }
     },
     {
       "case_template_id": "CB-CASE-013",
@@ -1837,7 +2256,39 @@
       },
       "duplicate_group_id": null,
       "related_case_ids": [],
-      "core": false
+      "core": false,
+      "provenance": {
+        "scheme": "Mastercard",
+        "reason_code": "4853（Change of Reason）",
+        "source_type": "卡组织规则内置示例",
+        "source_id": [
+          "SRC-02"
+        ],
+        "source_locator": [
+          "P477",
+          "P1171"
+        ],
+        "rule_version": [
+          "2026-05-19（Chargeback Guide Merchant Edition）"
+        ],
+        "effective_date": "NOT_STATED",
+        "derived_from_rule_ids": [],
+        "conflict_ids": [
+          "CONFLICT-006"
+        ],
+        "conflict_status": "CONFLICTING_SOURCES",
+        "verification_status": "CONFLICTING_SOURCES",
+        "required_evidence": [
+          "新原因所需支持文档"
+        ],
+        "deadline_policy": "明确",
+        "intended_use": [
+          "网站/比赛演示",
+          "规则引擎测试",
+          "Agent 测试"
+        ],
+        "production_eligible": false
+      }
     },
     {
       "case_template_id": "CB-CASE-014",
@@ -1970,7 +2421,38 @@
       "related_case_ids": [
         "CB-CASE-015"
       ],
-      "core": false
+      "core": false,
+      "provenance": {
+        "scheme": "Mastercard",
+        "reason_code": "4834（Currency Errors）",
+        "source_type": "卡组织规则内置示例",
+        "source_id": [
+          "SRC-02"
+        ],
+        "source_locator": [
+          "P741-742",
+          "P1371"
+        ],
+        "rule_version": [
+          "2026-05-19（Chargeback Guide Merchant Edition）"
+        ],
+        "effective_date": "NOT_STATED",
+        "derived_from_rule_ids": [],
+        "conflict_ids": [],
+        "conflict_status": "NONE",
+        "verification_status": "VERIFIED_EXTRACTED",
+        "required_evidence": [
+          "显示金额与币种的收据"
+        ],
+        "deadline_policy": "明确",
+        "intended_use": [
+          "网站/比赛演示",
+          "Sandbox seed",
+          "规则引擎测试",
+          "Agent 测试"
+        ],
+        "production_eligible": true
+      }
     },
     {
       "case_template_id": "CB-CASE-015",
@@ -2097,7 +2579,36 @@
       "related_case_ids": [
         "CB-CASE-014"
       ],
-      "core": false
+      "core": false,
+      "provenance": {
+        "scheme": "Mastercard",
+        "reason_code": "4834（ATM Cash and Currency Errors）",
+        "source_type": "卡组织规则内置示例",
+        "source_id": [
+          "SRC-02"
+        ],
+        "source_locator": [
+          "P741",
+          "P872-873"
+        ],
+        "rule_version": [
+          "2026-05-19（Chargeback Guide Merchant Edition）"
+        ],
+        "effective_date": "NOT_STATED",
+        "derived_from_rule_ids": [],
+        "conflict_ids": [],
+        "conflict_status": "NONE",
+        "verification_status": "VERIFIED_EXTRACTED",
+        "required_evidence": [
+          "ATM 日志与币种选择记录"
+        ],
+        "deadline_policy": "明确",
+        "intended_use": [
+          "规则引擎测试",
+          "Agent 测试"
+        ],
+        "production_eligible": true
+      }
     },
     {
       "case_template_id": "CB-CASE-016",
@@ -2230,7 +2741,42 @@
       },
       "duplicate_group_id": "MC-DOUBLE-CREDIT",
       "related_case_ids": [],
-      "core": false
+      "core": false,
+      "provenance": {
+        "scheme": "Mastercard",
+        "reason_code": "2011（Refund previously issued）",
+        "source_type": "卡组织规则内置示例",
+        "source_id": [
+          "SRC-02"
+        ],
+        "source_locator": [
+          "P38",
+          "P68-69",
+          "P510-512",
+          "P935"
+        ],
+        "rule_version": [
+          "2026-05-19（Chargeback Guide Merchant Edition）"
+        ],
+        "effective_date": "NOT_STATED",
+        "derived_from_rule_ids": [],
+        "conflict_ids": [
+          "CONFLICT-006"
+        ],
+        "conflict_status": "CONFLICTING_SOURCES",
+        "verification_status": "CONFLICTING_SOURCES",
+        "required_evidence": [
+          "退款记录（CRED MMDDYY ARD）"
+        ],
+        "deadline_policy": "存在版本差异（见冲突清单）",
+        "intended_use": [
+          "网站/比赛演示",
+          "Sandbox seed",
+          "规则引擎测试",
+          "Agent 测试"
+        ],
+        "production_eligible": false
+      }
     },
     {
       "case_template_id": "CB-CASE-017",
@@ -2358,7 +2904,36 @@
       "related_case_ids": [
         "CB-CASE-045"
       ],
-      "core": false
+      "core": false,
+      "provenance": {
+        "scheme": "Mastercard",
+        "reason_code": "4834（Duplicate / Paid by Other Means）",
+        "source_type": "卡组织规则内置示例",
+        "source_id": [
+          "SRC-02"
+        ],
+        "source_locator": [
+          "P690",
+          "P1327-1328"
+        ],
+        "rule_version": [
+          "2026-05-19（Chargeback Guide Merchant Edition）"
+        ],
+        "effective_date": "NOT_STATED",
+        "derived_from_rule_ids": [],
+        "conflict_ids": [],
+        "conflict_status": "NONE",
+        "verification_status": "VERIFIED_EXTRACTED",
+        "required_evidence": [
+          "第三方支付凭证与卡扣款说明"
+        ],
+        "deadline_policy": "明确",
+        "intended_use": [
+          "规则引擎测试",
+          "Agent 测试"
+        ],
+        "production_eligible": true
+      }
     },
     {
       "case_template_id": "CB-CASE-018",
@@ -2496,7 +3071,37 @@
       },
       "duplicate_group_id": null,
       "related_case_ids": [],
-      "core": false
+      "core": false,
+      "provenance": {
+        "scheme": "Mastercard",
+        "reason_code": "4834（Unreasonable Amount）",
+        "source_type": "卡组织规则内置示例",
+        "source_id": [
+          "SRC-02"
+        ],
+        "source_locator": [
+          "P770",
+          "P1395"
+        ],
+        "rule_version": [
+          "2026-05-19（Chargeback Guide Merchant Edition）"
+        ],
+        "effective_date": "NOT_STATED",
+        "derived_from_rule_ids": [],
+        "conflict_ids": [],
+        "conflict_status": "NONE",
+        "verification_status": "VERIFIED_EXTRACTED",
+        "required_evidence": [
+          "持卡人签字的逐项价目表",
+          "按价目表计算的收据"
+        ],
+        "deadline_policy": "明确",
+        "intended_use": [
+          "规则引擎测试",
+          "Agent 测试"
+        ],
+        "production_eligible": true
+      }
     },
     {
       "case_template_id": "CB-CASE-019",
@@ -2633,7 +3238,36 @@
       },
       "duplicate_group_id": null,
       "related_case_ids": [],
-      "core": false
+      "core": false,
+      "provenance": {
+        "scheme": "Mastercard",
+        "reason_code": "Compliance Case（All Other Rules Violations）",
+        "source_type": "卡组织规则内置示例",
+        "source_id": [
+          "SRC-02"
+        ],
+        "source_locator": [
+          "P1495-1497"
+        ],
+        "rule_version": [
+          "2026-05-19（Chargeback Guide Merchant Edition）"
+        ],
+        "effective_date": "NOT_STATED",
+        "derived_from_rule_ids": [],
+        "conflict_ids": [],
+        "conflict_status": "NONE",
+        "verification_status": "VERIFIED_EXTRACTED",
+        "required_evidence": [
+          "原交易时间戳收据/授权日志",
+          "持卡人函件或 Form 0412"
+        ],
+        "deadline_policy": "明确",
+        "intended_use": [
+          "规则引擎测试",
+          "Agent 测试"
+        ],
+        "production_eligible": true
+      }
     },
     {
       "case_template_id": "CB-CASE-020",
@@ -2764,7 +3398,39 @@
       "related_case_ids": [
         "CB-CASE-030"
       ],
-      "core": false
+      "core": false,
+      "provenance": {
+        "scheme": "Visa",
+        "reason_code": "13.7（Cancelled Merchandise/Services 相关）",
+        "source_type": "卡组织指南披露示例（图片不在文本层）",
+        "source_id": [
+          "SRC-01"
+        ],
+        "source_locator": [
+          "P18"
+        ],
+        "rule_version": [
+          "June 2024（Dispute Management Guidelines for Visa Merchants）"
+        ],
+        "effective_date": "NOT_STATED",
+        "derived_from_rule_ids": [],
+        "conflict_ids": [
+          "CONFLICT-012"
+        ],
+        "conflict_status": "NEEDS_CONFIRMATION",
+        "verification_status": "NEEDS_CONFIRMATION",
+        "required_evidence": [
+          "结账页政策披露截图"
+        ],
+        "deadline_policy": "未说明（需收单机构确认）",
+        "intended_use": [
+          "网站/比赛演示",
+          "Sandbox seed",
+          "规则引擎测试",
+          "Agent 测试"
+        ],
+        "production_eligible": false
+      }
     },
     {
       "case_template_id": "CB-CASE-021",
@@ -2909,7 +3575,41 @@
       "related_case_ids": [
         "CB-CASE-028"
       ],
-      "core": false
+      "core": false,
+      "provenance": {
+        "scheme": "Visa",
+        "reason_code": "13.3",
+        "source_type": "卡组织指南内置示例",
+        "source_id": [
+          "SRC-01"
+        ],
+        "source_locator": [
+          "P43-44"
+        ],
+        "rule_version": [
+          "June 2024（Dispute Management Guidelines for Visa Merchants）"
+        ],
+        "effective_date": "NOT_STATED",
+        "derived_from_rule_ids": [],
+        "conflict_ids": [
+          "CONFLICT-012"
+        ],
+        "conflict_status": "NEEDS_CONFIRMATION",
+        "verification_status": "NEEDS_CONFIRMATION",
+        "required_evidence": [
+          "发票/合同",
+          "中立第三方意见"
+        ],
+        "deadline_policy": "未说明（需收单机构确认）",
+        "intended_use": [
+          "网站/比赛演示",
+          "Sandbox seed",
+          "规则引擎测试",
+          "Agent 测试",
+          "路演故事"
+        ],
+        "production_eligible": false
+      }
     },
     {
       "case_template_id": "CB-CASE-022",
@@ -3040,7 +3740,40 @@
       "related_case_ids": [
         "CB-CASE-040"
       ],
-      "core": false
+      "core": false,
+      "provenance": {
+        "scheme": "Visa",
+        "reason_code": "10.4（Fraud 类保护规则）",
+        "source_type": "卡组织指南内置规则示例",
+        "source_id": [
+          "SRC-01"
+        ],
+        "source_locator": [
+          "P14"
+        ],
+        "rule_version": [
+          "June 2024（Dispute Management Guidelines for Visa Merchants）"
+        ],
+        "effective_date": "NOT_STATED",
+        "derived_from_rule_ids": [],
+        "conflict_ids": [
+          "CONFLICT-012"
+        ],
+        "conflict_status": "NEEDS_CONFIRMATION",
+        "verification_status": "NEEDS_CONFIRMATION",
+        "required_evidence": [
+          "认证结果（ECI 值）"
+        ],
+        "deadline_policy": "未说明（需收单机构确认）",
+        "intended_use": [
+          "网站/比赛演示",
+          "Sandbox seed",
+          "规则引擎测试",
+          "Agent 测试",
+          "路演故事"
+        ],
+        "production_eligible": false
+      }
     },
     {
       "case_template_id": "CB-CASE-023",
@@ -3172,7 +3905,40 @@
       "related_case_ids": [
         "CB-CASE-033"
       ],
-      "core": false
+      "core": false,
+      "provenance": {
+        "scheme": "Visa",
+        "reason_code": "13.7",
+        "source_type": "卡组织指南内置规则示例",
+        "source_id": [
+          "SRC-01"
+        ],
+        "source_locator": [
+          "P17",
+          "P49-50"
+        ],
+        "rule_version": [
+          "June 2024（Dispute Management Guidelines for Visa Merchants）"
+        ],
+        "effective_date": "NOT_STATED",
+        "derived_from_rule_ids": [],
+        "conflict_ids": [
+          "CONFLICT-012"
+        ],
+        "conflict_status": "NEEDS_CONFIRMATION",
+        "verification_status": "NEEDS_CONFIRMATION",
+        "required_evidence": [
+          "取消时间证明"
+        ],
+        "deadline_policy": "未说明（需收单机构确认）",
+        "intended_use": [
+          "网站/比赛演示",
+          "Sandbox seed",
+          "规则引擎测试",
+          "Agent 测试"
+        ],
+        "production_eligible": false
+      }
     },
     {
       "case_template_id": "CB-CASE-024",
@@ -3296,7 +4062,37 @@
       },
       "duplicate_group_id": null,
       "related_case_ids": [],
-      "core": false
+      "core": false,
+      "provenance": {
+        "scheme": "Visa",
+        "reason_code": "Compliance（无 Dispute Condition）",
+        "source_type": "卡组织指南内置示例",
+        "source_id": [
+          "SRC-01"
+        ],
+        "source_locator": [
+          "P20"
+        ],
+        "rule_version": [
+          "June 2024（Dispute Management Guidelines for Visa Merchants）"
+        ],
+        "effective_date": "NOT_STATED",
+        "derived_from_rule_ids": [],
+        "conflict_ids": [
+          "CONFLICT-012"
+        ],
+        "conflict_status": "NEEDS_CONFIRMATION",
+        "verification_status": "NEEDS_CONFIRMATION",
+        "required_evidence": [
+          "违规事实证据"
+        ],
+        "deadline_policy": "未说明（需收单机构确认）",
+        "intended_use": [
+          "规则引擎测试",
+          "Agent 测试"
+        ],
+        "production_eligible": false
+      }
     },
     {
       "case_template_id": "CB-CASE-025",
@@ -3445,7 +4241,43 @@
         "CB-CASE-061"
       ],
       "core": true,
-      "core_reason": "CE3.0 欺诈证据链的最佳演示案件"
+      "core_reason": "CE3.0 欺诈证据链的最佳演示案件",
+      "provenance": {
+        "scheme": "Visa",
+        "reason_code": "10.4",
+        "source_type": "源文件自标注虚构演示案例",
+        "source_id": [
+          "SRC-03"
+        ],
+        "source_locator": [
+          "§3（第 3 章，约 60-90 行）"
+        ],
+        "rule_version": [
+          "无版本号（内部整理稿）"
+        ],
+        "effective_date": "2024-10-19 起（CE3.0 相关变更，SRC-01 P26）",
+        "derived_from_rule_ids": [],
+        "conflict_ids": [
+          "CONFLICT-003",
+          "CONFLICT-012"
+        ],
+        "conflict_status": "CONFLICTING_SOURCES",
+        "verification_status": "CONFLICTING_SOURCES",
+        "required_evidence": [
+          "3DS/Device ID/IP/账号/邮箱/电话/账单地址/收货地址",
+          "历史未争议交易"
+        ],
+        "deadline_policy": "未说明（需收单机构确认）",
+        "intended_use": [
+          "网站/比赛演示",
+          "Sandbox seed",
+          "规则引擎测试",
+          "Agent 测试",
+          "UI 测试",
+          "路演故事"
+        ],
+        "production_eligible": false
+      }
     },
     {
       "case_template_id": "CB-CASE-026",
@@ -3593,7 +4425,42 @@
         "CB-CASE-060"
       ],
       "core": true,
-      "core_reason": "未收到商品证据链的最佳演示案件"
+      "core_reason": "未收到商品证据链的最佳演示案件",
+      "provenance": {
+        "scheme": "Visa",
+        "reason_code": "13.1",
+        "source_type": "源文件自标注虚构演示案例",
+        "source_id": [
+          "SRC-03"
+        ],
+        "source_locator": [
+          "§5（第 5 章）"
+        ],
+        "rule_version": [
+          "无版本号（内部整理稿）"
+        ],
+        "effective_date": "NOT_STATED",
+        "derived_from_rule_ids": [],
+        "conflict_ids": [
+          "CONFLICT-012"
+        ],
+        "conflict_status": "NEEDS_CONFIRMATION",
+        "verification_status": "NEEDS_CONFIRMATION",
+        "required_evidence": [
+          "物流轨迹",
+          "签收证明（含收件人）"
+        ],
+        "deadline_policy": "未说明（需收单机构确认）",
+        "intended_use": [
+          "网站/比赛演示",
+          "Sandbox seed",
+          "规则引擎测试",
+          "Agent 测试",
+          "UI 测试",
+          "路演故事"
+        ],
+        "production_eligible": false
+      }
     },
     {
       "case_template_id": "CB-CASE-027",
@@ -3739,7 +4606,42 @@
         "CB-CASE-010"
       ],
       "core": true,
-      "core_reason": "取消订阅时间线演示案件"
+      "core_reason": "取消订阅时间线演示案件",
+      "provenance": {
+        "scheme": "Visa",
+        "reason_code": "13.2",
+        "source_type": "源文件自标注虚构演示案例",
+        "source_id": [
+          "SRC-03"
+        ],
+        "source_locator": [
+          "§6（第 6 章）"
+        ],
+        "rule_version": [
+          "无版本号（内部整理稿）"
+        ],
+        "effective_date": "NOT_STATED",
+        "derived_from_rule_ids": [],
+        "conflict_ids": [
+          "CONFLICT-012"
+        ],
+        "conflict_status": "NEEDS_CONFIRMATION",
+        "verification_status": "NEEDS_CONFIRMATION",
+        "required_evidence": [
+          "取消时间戳与确认",
+          "循环扣款协议/MIT 标识"
+        ],
+        "deadline_policy": "未说明（需收单机构确认）",
+        "intended_use": [
+          "网站/比赛演示",
+          "Sandbox seed",
+          "规则引擎测试",
+          "Agent 测试",
+          "UI 测试",
+          "路演故事"
+        ],
+        "production_eligible": false
+      }
     },
     {
       "case_template_id": "CB-CASE-028",
@@ -3897,7 +4799,42 @@
       "related_case_ids": [
         "CB-CASE-021"
       ],
-      "core": false
+      "core": false,
+      "provenance": {
+        "scheme": "Visa",
+        "reason_code": "13.3",
+        "source_type": "源文件自标注虚构演示案例",
+        "source_id": [
+          "SRC-03"
+        ],
+        "source_locator": [
+          "§7（第 7 章）"
+        ],
+        "rule_version": [
+          "无版本号（内部整理稿）"
+        ],
+        "effective_date": "NOT_STATED",
+        "derived_from_rule_ids": [],
+        "conflict_ids": [
+          "CONFLICT-012"
+        ],
+        "conflict_status": "NEEDS_CONFIRMATION",
+        "verification_status": "NEEDS_CONFIRMATION",
+        "required_evidence": [
+          "商品页/SKU/描述",
+          "发货/收货记录",
+          "检验报告"
+        ],
+        "deadline_policy": "未说明（需收单机构确认）",
+        "intended_use": [
+          "网站/比赛演示",
+          "Sandbox seed",
+          "规则引擎测试",
+          "Agent 测试",
+          "UI 测试"
+        ],
+        "production_eligible": false
+      }
     },
     {
       "case_template_id": "CB-CASE-029",
@@ -4029,7 +4966,40 @@
       "related_case_ids": [
         "CB-CASE-072"
       ],
-      "core": false
+      "core": false,
+      "provenance": {
+        "scheme": "Visa",
+        "reason_code": "13.6",
+        "source_type": "源文件自标注虚构演示案例",
+        "source_id": [
+          "SRC-03"
+        ],
+        "source_locator": [
+          "§8（第 8 章）"
+        ],
+        "rule_version": [
+          "无版本号（内部整理稿）"
+        ],
+        "effective_date": "NOT_STATED",
+        "derived_from_rule_ids": [],
+        "conflict_ids": [
+          "CONFLICT-012"
+        ],
+        "conflict_status": "NEEDS_CONFIRMATION",
+        "verification_status": "NEEDS_CONFIRMATION",
+        "required_evidence": [
+          "退款交易（ARN/日期/金额/卡号/结算状态）"
+        ],
+        "deadline_policy": "未说明（需收单机构确认）",
+        "intended_use": [
+          "网站/比赛演示",
+          "Sandbox seed",
+          "规则引擎测试",
+          "Agent 测试",
+          "UI 测试"
+        ],
+        "production_eligible": false
+      }
     },
     {
       "case_template_id": "CB-CASE-030",
@@ -4161,7 +5131,41 @@
       "related_case_ids": [
         "CB-CASE-073"
       ],
-      "core": false
+      "core": false,
+      "provenance": {
+        "scheme": "Visa",
+        "reason_code": "12.6.1",
+        "source_type": "源文件自标注虚构演示案例",
+        "source_id": [
+          "SRC-03"
+        ],
+        "source_locator": [
+          "§9（第 9 章）"
+        ],
+        "rule_version": [
+          "无版本号（内部整理稿）"
+        ],
+        "effective_date": "NOT_STATED",
+        "derived_from_rule_ids": [],
+        "conflict_ids": [
+          "CONFLICT-002",
+          "CONFLICT-012"
+        ],
+        "conflict_status": "NEEDS_CONFIRMATION",
+        "verification_status": "NEEDS_CONFIRMATION",
+        "required_evidence": [
+          "订单/发票/服务对应关系"
+        ],
+        "deadline_policy": "未说明（需收单机构确认）",
+        "intended_use": [
+          "网站/比赛演示",
+          "Sandbox seed",
+          "规则引擎测试",
+          "Agent 测试",
+          "UI 测试"
+        ],
+        "production_eligible": false
+      }
     },
     {
       "case_template_id": "CB-CASE-031",
@@ -4294,7 +5298,39 @@
         "CB-CASE-046"
       ],
       "core": true,
-      "core_reason": "数字商品消费证据链演示案件"
+      "core_reason": "数字商品消费证据链演示案件",
+      "provenance": {
+        "scheme": "Mastercard",
+        "reason_code": "4853",
+        "source_type": "源文件自标注虚构演示案例",
+        "source_id": [
+          "SRC-03"
+        ],
+        "source_locator": [
+          "§12（第 12 章）"
+        ],
+        "rule_version": [
+          "无版本号（内部整理稿）"
+        ],
+        "effective_date": "NOT_STATED",
+        "derived_from_rule_ids": [],
+        "conflict_ids": [],
+        "conflict_status": "NONE",
+        "verification_status": "VERIFIED_EXTRACTED",
+        "required_evidence": [
+          "登录/访问/消费记录"
+        ],
+        "deadline_policy": "明确",
+        "intended_use": [
+          "网站/比赛演示",
+          "Sandbox seed",
+          "规则引擎测试",
+          "Agent 测试",
+          "UI 测试",
+          "路演故事"
+        ],
+        "production_eligible": true
+      }
     },
     {
       "case_template_id": "CB-CASE-032",
@@ -4439,7 +5475,40 @@
       "related_case_ids": [
         "CB-CASE-033"
       ],
-      "core": false
+      "core": false,
+      "provenance": {
+        "scheme": "American Express",
+        "reason_code": "C04",
+        "source_type": "源文件自标注虚构演示案例",
+        "source_id": [
+          "SRC-03"
+        ],
+        "source_locator": [
+          "§15（第 15 章）"
+        ],
+        "rule_version": [
+          "无版本号（内部整理稿）"
+        ],
+        "effective_date": "NOT_STATED",
+        "derived_from_rule_ids": [],
+        "conflict_ids": [
+          "CONFLICT-014"
+        ],
+        "conflict_status": "NEEDS_CONFIRMATION",
+        "verification_status": "NEEDS_CONFIRMATION",
+        "required_evidence": [
+          "退货政策及披露",
+          "商品未实际退回的证据"
+        ],
+        "deadline_policy": "未说明（需收单机构确认）",
+        "intended_use": [
+          "网站/比赛演示",
+          "Sandbox seed",
+          "规则引擎测试",
+          "Agent 测试"
+        ],
+        "production_eligible": false
+      }
     },
     {
       "case_template_id": "CB-CASE-033",
@@ -4585,7 +5654,40 @@
         "CB-CASE-012",
         "CB-CASE-023"
       ],
-      "core": false
+      "core": false,
+      "provenance": {
+        "scheme": "American Express",
+        "reason_code": "C05",
+        "source_type": "源文件自标注虚构演示案例",
+        "source_id": [
+          "SRC-03"
+        ],
+        "source_locator": [
+          "§16（第 16 章）"
+        ],
+        "rule_version": [
+          "无版本号（内部整理稿）"
+        ],
+        "effective_date": "NOT_STATED",
+        "derived_from_rule_ids": [],
+        "conflict_ids": [
+          "CONFLICT-014"
+        ],
+        "conflict_status": "NEEDS_CONFIRMATION",
+        "verification_status": "NEEDS_CONFIRMATION",
+        "required_evidence": [
+          "取消政策及披露",
+          "取消时间戳"
+        ],
+        "deadline_policy": "未说明（需收单机构确认）",
+        "intended_use": [
+          "网站/比赛演示",
+          "Sandbox seed",
+          "规则引擎测试",
+          "Agent 测试"
+        ],
+        "production_eligible": false
+      }
     },
     {
       "case_template_id": "CB-CASE-034",
@@ -4716,7 +5818,40 @@
         "CB-CASE-071"
       ],
       "core": true,
-      "core_reason": "唯一真实案例，适合路演开场故事"
+      "core_reason": "唯一真实案例，适合路演开场故事",
+      "provenance": {
+        "scheme": "Mastercard（Ethoca）",
+        "reason_code": "预防类（对应 4837/4863 场景）",
+        "source_type": "卡组织官方营销案例（源标注真实案例）",
+        "source_id": [
+          "SRC-03"
+        ],
+        "source_locator": [
+          "§20（第 20 章）"
+        ],
+        "rule_version": [
+          "无版本号（内部整理稿）"
+        ],
+        "effective_date": "NOT_STATED",
+        "derived_from_rule_ids": [],
+        "conflict_ids": [
+          "CONFLICT-013"
+        ],
+        "conflict_status": "NEEDS_CONFIRMATION",
+        "verification_status": "NEEDS_CONFIRMATION",
+        "required_evidence": [
+          "清晰账单描述与交易详情"
+        ],
+        "deadline_policy": "未说明（需收单机构确认）",
+        "intended_use": [
+          "网站/比赛演示",
+          "Sandbox seed",
+          "Agent 测试",
+          "UI 测试",
+          "路演故事"
+        ],
+        "production_eligible": false
+      }
     },
     {
       "case_template_id": "CB-CASE-040",
@@ -4868,7 +6003,46 @@
         "CB-CASE-061"
       ],
       "core": true,
-      "core_reason": "欺诈类规则还原的基准场景"
+      "core_reason": "欺诈类规则还原的基准场景",
+      "provenance": {
+        "scheme": "Visa",
+        "reason_code": "10.4",
+        "source_type": "规则还原场景（原文仅给原因码+规则，无完整故事）",
+        "source_id": [
+          "SRC-01",
+          "SRC-03"
+        ],
+        "source_locator": [
+          "SRC-01 P26/P54-58",
+          "SRC-03 §3"
+        ],
+        "rule_version": [
+          "June 2024（Dispute Management Guidelines for Visa Merchants）",
+          "无版本号（内部整理稿）"
+        ],
+        "effective_date": "2024-10-19 起（CE3.0 相关变更，SRC-01 P26）",
+        "derived_from_rule_ids": [],
+        "conflict_ids": [
+          "CONFLICT-003",
+          "CONFLICT-012"
+        ],
+        "conflict_status": "CONFLICTING_SOURCES",
+        "verification_status": "CONFLICTING_SOURCES",
+        "required_evidence": [
+          "3DS/认证记录",
+          "2 笔同设备/同IP历史未争议交易"
+        ],
+        "deadline_policy": "未说明（需收单机构确认）",
+        "intended_use": [
+          "网站/比赛演示",
+          "Sandbox seed",
+          "规则引擎测试",
+          "Agent 测试",
+          "UI 测试",
+          "路演故事"
+        ],
+        "production_eligible": false
+      }
     },
     {
       "case_template_id": "CB-CASE-041",
@@ -5017,7 +6191,44 @@
         "CB-CASE-060"
       ],
       "core": false,
-      "core_reason": ""
+      "core_reason": "",
+      "provenance": {
+        "scheme": "Visa",
+        "reason_code": "13.1",
+        "source_type": "规则还原场景（原文仅给原因码+规则，无完整故事）",
+        "source_id": [
+          "SRC-01",
+          "SRC-03"
+        ],
+        "source_locator": [
+          "SRC-01 P40-41",
+          "SRC-03 §5"
+        ],
+        "rule_version": [
+          "June 2024（Dispute Management Guidelines for Visa Merchants）",
+          "无版本号（内部整理稿）"
+        ],
+        "effective_date": "NOT_STATED",
+        "derived_from_rule_ids": [],
+        "conflict_ids": [
+          "CONFLICT-012"
+        ],
+        "conflict_status": "NEEDS_CONFIRMATION",
+        "verification_status": "NEEDS_CONFIRMATION",
+        "required_evidence": [
+          "物流轨迹/航班起飞证明",
+          "签收证明/自提记录/服务使用日志"
+        ],
+        "deadline_policy": "未说明（需收单机构确认）",
+        "intended_use": [
+          "网站/比赛演示",
+          "Sandbox seed",
+          "规则引擎测试",
+          "Agent 测试",
+          "UI 测试"
+        ],
+        "production_eligible": false
+      }
     },
     {
       "case_template_id": "CB-CASE-042",
@@ -5149,7 +6360,43 @@
       "duplicate_group_id": null,
       "related_case_ids": [],
       "core": false,
-      "core_reason": ""
+      "core_reason": "",
+      "provenance": {
+        "scheme": "Visa",
+        "reason_code": "11.3",
+        "source_type": "规则还原场景（原文仅给原因码+规则，无完整故事）",
+        "source_id": [
+          "SRC-01",
+          "SRC-03"
+        ],
+        "source_locator": [
+          "SRC-01 P31",
+          "SRC-03 §10"
+        ],
+        "rule_version": [
+          "June 2024（Dispute Management Guidelines for Visa Merchants）",
+          "无版本号（内部整理稿）"
+        ],
+        "effective_date": "2024-04-13 起（11.3 生效，SRC-01 P2/P31）",
+        "derived_from_rule_ids": [],
+        "conflict_ids": [
+          "CONFLICT-001",
+          "CONFLICT-012"
+        ],
+        "conflict_status": "NEEDS_CONFIRMATION",
+        "verification_status": "NEEDS_CONFIRMATION",
+        "required_evidence": [
+          "授权响应/授权码/金额/清算日期"
+        ],
+        "deadline_policy": "未说明（需收单机构确认）",
+        "intended_use": [
+          "网站/比赛演示",
+          "Sandbox seed",
+          "规则引擎测试",
+          "Agent 测试"
+        ],
+        "production_eligible": false
+      }
     },
     {
       "case_template_id": "CB-CASE-043",
@@ -5284,7 +6531,43 @@
         "CB-CASE-073"
       ],
       "core": false,
-      "core_reason": ""
+      "core_reason": "",
+      "provenance": {
+        "scheme": "Visa",
+        "reason_code": "12.6.1/12.6.2",
+        "source_type": "规则还原场景（原文仅给原因码+规则，无完整故事）",
+        "source_id": [
+          "SRC-01",
+          "SRC-03"
+        ],
+        "source_locator": [
+          "SRC-01 P37-38",
+          "SRC-03 §9"
+        ],
+        "rule_version": [
+          "June 2024（Dispute Management Guidelines for Visa Merchants）",
+          "无版本号（内部整理稿）"
+        ],
+        "effective_date": "NOT_STATED",
+        "derived_from_rule_ids": [],
+        "conflict_ids": [
+          "CONFLICT-002",
+          "CONFLICT-012"
+        ],
+        "conflict_status": "NEEDS_CONFIRMATION",
+        "verification_status": "NEEDS_CONFIRMATION",
+        "required_evidence": [
+          "订单/授权/清算多字段比对"
+        ],
+        "deadline_policy": "未说明（需收单机构确认）",
+        "intended_use": [
+          "网站/比赛演示",
+          "Sandbox seed",
+          "规则引擎测试",
+          "Agent 测试"
+        ],
+        "production_eligible": false
+      }
     },
     {
       "case_template_id": "CB-CASE-044",
@@ -5430,7 +6713,40 @@
         "CB-CASE-033"
       ],
       "core": false,
-      "core_reason": ""
+      "core_reason": "",
+      "provenance": {
+        "scheme": "Visa",
+        "reason_code": "13.7",
+        "source_type": "规则还原场景（原文仅给原因码+规则，无完整故事）",
+        "source_id": [
+          "SRC-01"
+        ],
+        "source_locator": [
+          "SRC-01 P49-50"
+        ],
+        "rule_version": [
+          "June 2024（Dispute Management Guidelines for Visa Merchants）"
+        ],
+        "effective_date": "NOT_STATED",
+        "derived_from_rule_ids": [],
+        "conflict_ids": [
+          "CONFLICT-012"
+        ],
+        "conflict_status": "NEEDS_CONFIRMATION",
+        "verification_status": "NEEDS_CONFIRMATION",
+        "required_evidence": [
+          "取消/退款政策披露证明",
+          "取消时间/未按政策取消证明"
+        ],
+        "deadline_policy": "未说明（需收单机构确认）",
+        "intended_use": [
+          "网站/比赛演示",
+          "Sandbox seed",
+          "规则引擎测试",
+          "Agent 测试"
+        ],
+        "production_eligible": false
+      }
     },
     {
       "case_template_id": "CB-CASE-045",
@@ -5578,7 +6894,44 @@
         "CB-CASE-028"
       ],
       "core": false,
-      "core_reason": ""
+      "core_reason": "",
+      "provenance": {
+        "scheme": "Mastercard",
+        "reason_code": "4853",
+        "source_type": "规则还原场景（原文仅给原因码+规则，无完整故事）",
+        "source_id": [
+          "SRC-02",
+          "SRC-03"
+        ],
+        "source_locator": [
+          "SRC-02 P157-177/P953-967",
+          "SRC-03 §28"
+        ],
+        "rule_version": [
+          "2026-05-19（Chargeback Guide Merchant Edition）",
+          "无版本号（内部整理稿）"
+        ],
+        "effective_date": "NOT_STATED",
+        "derived_from_rule_ids": [],
+        "conflict_ids": [
+          "CONFLICT-006"
+        ],
+        "conflict_status": "CONFLICTING_SOURCES",
+        "verification_status": "CONFLICTING_SOURCES",
+        "required_evidence": [
+          "已修/已换/按约交付说明",
+          "专家/检验意见"
+        ],
+        "deadline_policy": "存在版本差异（见冲突清单）",
+        "intended_use": [
+          "网站/比赛演示",
+          "Sandbox seed",
+          "规则引擎测试",
+          "Agent 测试",
+          "UI 测试"
+        ],
+        "production_eligible": false
+      }
     },
     {
       "case_template_id": "CB-CASE-046",
@@ -5711,7 +7064,39 @@
         "CB-CASE-031"
       ],
       "core": false,
-      "core_reason": ""
+      "core_reason": "",
+      "provenance": {
+        "scheme": "Mastercard",
+        "reason_code": "4853",
+        "source_type": "规则还原场景（原文仅给原因码+规则，无完整故事）",
+        "source_id": [
+          "SRC-02"
+        ],
+        "source_locator": [
+          "SRC-02 P177-184/P967-983"
+        ],
+        "rule_version": [
+          "2026-05-19（Chargeback Guide Merchant Edition）"
+        ],
+        "effective_date": "NOT_STATED",
+        "derived_from_rule_ids": [],
+        "conflict_ids": [
+          "CONFLICT-006"
+        ],
+        "conflict_status": "CONFLICTING_SOURCES",
+        "verification_status": "CONFLICTING_SOURCES",
+        "required_evidence": [
+          "交付证明（签收/QR/PIN 使用/航班已发生）"
+        ],
+        "deadline_policy": "明确",
+        "intended_use": [
+          "网站/比赛演示",
+          "Sandbox seed",
+          "规则引擎测试",
+          "Agent 测试"
+        ],
+        "production_eligible": false
+      }
     },
     {
       "case_template_id": "CB-CASE-047",
@@ -5844,7 +7229,39 @@
         "CB-CASE-072"
       ],
       "core": false,
-      "core_reason": ""
+      "core_reason": "",
+      "provenance": {
+        "scheme": "Mastercard",
+        "reason_code": "4853",
+        "source_type": "规则还原场景（原文仅给原因码+规则，无完整故事）",
+        "source_id": [
+          "SRC-02"
+        ],
+        "source_locator": [
+          "SRC-02 P273-276/P1036-1051"
+        ],
+        "rule_version": [
+          "2026-05-19（Chargeback Guide Merchant Edition）"
+        ],
+        "effective_date": "NOT_STATED",
+        "derived_from_rule_ids": [],
+        "conflict_ids": [
+          "CONFLICT-006"
+        ],
+        "conflict_status": "CONFLICTING_SOURCES",
+        "verification_status": "CONFLICTING_SOURCES",
+        "required_evidence": [
+          "退款记录"
+        ],
+        "deadline_policy": "明确",
+        "intended_use": [
+          "网站/比赛演示",
+          "Sandbox seed",
+          "规则引擎测试",
+          "Agent 测试"
+        ],
+        "production_eligible": false
+      }
     },
     {
       "case_template_id": "CB-CASE-048",
@@ -5994,7 +7411,45 @@
         "CB-CASE-061"
       ],
       "core": false,
-      "core_reason": ""
+      "core_reason": "",
+      "provenance": {
+        "scheme": "Mastercard",
+        "reason_code": "4837",
+        "source_type": "规则还原场景（原文仅给原因码+规则，无完整故事）",
+        "source_id": [
+          "SRC-02",
+          "SRC-03"
+        ],
+        "source_locator": [
+          "SRC-02 P489-563",
+          "SRC-03 §28"
+        ],
+        "rule_version": [
+          "2026-05-19（Chargeback Guide Merchant Edition）",
+          "无版本号（内部整理稿）"
+        ],
+        "effective_date": "NOT_STATED",
+        "derived_from_rule_ids": [],
+        "conflict_ids": [
+          "CONFLICT-006"
+        ],
+        "conflict_status": "CONFLICTING_SOURCES",
+        "verification_status": "CONFLICTING_SOURCES",
+        "required_evidence": [
+          "3DS 认证（ECI 211/212/217/242）",
+          "Compelling Evidence（注册/历史交易等）"
+        ],
+        "deadline_policy": "明确",
+        "intended_use": [
+          "网站/比赛演示",
+          "Sandbox seed",
+          "规则引擎测试",
+          "Agent 测试",
+          "UI 测试",
+          "路演故事"
+        ],
+        "production_eligible": false
+      }
     },
     {
       "case_template_id": "CB-CASE-049",
@@ -6127,7 +7582,39 @@
         "CB-CASE-008"
       ],
       "core": false,
-      "core_reason": ""
+      "core_reason": "",
+      "provenance": {
+        "scheme": "Mastercard",
+        "reason_code": "4808",
+        "source_type": "规则还原场景（原文仅给原因码+规则，无完整故事）",
+        "source_id": [
+          "SRC-02"
+        ],
+        "source_locator": [
+          "SRC-02 P54-150/P880-947"
+        ],
+        "rule_version": [
+          "2026-05-19（Chargeback Guide Merchant Edition）"
+        ],
+        "effective_date": "NOT_STATED",
+        "derived_from_rule_ids": [],
+        "conflict_ids": [
+          "CONFLICT-006"
+        ],
+        "conflict_status": "CONFLICTING_SOURCES",
+        "verification_status": "CONFLICTING_SOURCES",
+        "required_evidence": [
+          "授权记录"
+        ],
+        "deadline_policy": "存在版本差异（见冲突清单）",
+        "intended_use": [
+          "网站/比赛演示",
+          "Sandbox seed",
+          "规则引擎测试",
+          "Agent 测试"
+        ],
+        "production_eligible": false
+      }
     },
     {
       "case_template_id": "CB-CASE-050",
@@ -6261,7 +7748,40 @@
         "CB-CASE-073"
       ],
       "core": false,
-      "core_reason": ""
+      "core_reason": "",
+      "provenance": {
+        "scheme": "Mastercard",
+        "reason_code": "4834",
+        "source_type": "规则还原场景（原文仅给原因码+规则，无完整故事）",
+        "source_id": [
+          "SRC-02"
+        ],
+        "source_locator": [
+          "SRC-02 P685-776/P1324-1407"
+        ],
+        "rule_version": [
+          "2026-05-19（Chargeback Guide Merchant Edition）"
+        ],
+        "effective_date": "NOT_STATED",
+        "derived_from_rule_ids": [],
+        "conflict_ids": [
+          "CONFLICT-004",
+          "CONFLICT-006"
+        ],
+        "conflict_status": "CONFLICTING_SOURCES",
+        "verification_status": "CONFLICTING_SOURCES",
+        "required_evidence": [
+          "终端/交易记录（按子类）"
+        ],
+        "deadline_policy": "明确",
+        "intended_use": [
+          "网站/比赛演示",
+          "Sandbox seed",
+          "规则引擎测试",
+          "Agent 测试"
+        ],
+        "production_eligible": false
+      }
     },
     {
       "case_template_id": "CB-CASE-051",
@@ -6386,7 +7906,38 @@
       "duplicate_group_id": null,
       "related_case_ids": [],
       "core": false,
-      "core_reason": ""
+      "core_reason": "",
+      "provenance": {
+        "scheme": "Mastercard",
+        "reason_code": "4870/4871",
+        "source_type": "规则还原场景（原文仅给原因码+规则，无完整故事）",
+        "source_id": [
+          "SRC-02"
+        ],
+        "source_locator": [
+          "SRC-02 P578-636/P1241-1288"
+        ],
+        "rule_version": [
+          "2026-05-19（Chargeback Guide Merchant Edition）"
+        ],
+        "effective_date": "NOT_STATED",
+        "derived_from_rule_ids": [],
+        "conflict_ids": [
+          "CONFLICT-009"
+        ],
+        "conflict_status": "CONFLICTING_SOURCES",
+        "verification_status": "CONFLICTING_SOURCES",
+        "required_evidence": [
+          "DE 55/芯片数据/终端能力"
+        ],
+        "deadline_policy": "明确",
+        "intended_use": [
+          "Sandbox seed",
+          "规则引擎测试",
+          "Agent 测试"
+        ],
+        "production_eligible": false
+      }
     },
     {
       "case_template_id": "CB-CASE-052",
@@ -6516,7 +8067,37 @@
         "CB-CASE-033"
       ],
       "core": false,
-      "core_reason": ""
+      "core_reason": "",
+      "provenance": {
+        "scheme": "American Express",
+        "reason_code": "C08 / C02",
+        "source_type": "规则还原场景（原文仅给原因码+规则，无完整故事）",
+        "source_id": [
+          "SRC-03"
+        ],
+        "source_locator": [
+          "SRC-03 §28"
+        ],
+        "rule_version": [
+          "无版本号（内部整理稿）"
+        ],
+        "effective_date": "NOT_STATED",
+        "derived_from_rule_ids": [],
+        "conflict_ids": [
+          "CONFLICT-014"
+        ],
+        "conflict_status": "NEEDS_CONFIRMATION",
+        "verification_status": "NEEDS_CONFIRMATION",
+        "required_evidence": [
+          "交付/退款证明（类比）"
+        ],
+        "deadline_policy": "未说明（需收单机构确认）",
+        "intended_use": [
+          "规则引擎测试",
+          "Agent 测试"
+        ],
+        "production_eligible": false
+      }
     },
     {
       "case_template_id": "CB-CASE-060",
@@ -6688,7 +8269,47 @@
         "CB-CASE-041"
       ],
       "core": true,
-      "core_reason": "证据充分抗辩的正面主路径演示"
+      "core_reason": "证据充分抗辩的正面主路径演示",
+      "provenance": {
+        "scheme": "Visa",
+        "reason_code": "13.1",
+        "source_type": "项目合成演示案例（虚构商户/虚构用户）",
+        "source_id": [
+          "SRC-01",
+          "SRC-03"
+        ],
+        "source_locator": [
+          "合成案例，无原文定位（见 derived_from_rule_ids）"
+        ],
+        "rule_version": [
+          "June 2024（Dispute Management Guidelines for Visa Merchants）",
+          "无版本号（内部整理稿）"
+        ],
+        "effective_date": "NOT_STATED",
+        "derived_from_rule_ids": [
+          "CB-CASE-026",
+          "CB-CASE-041"
+        ],
+        "conflict_ids": [
+          "CONFLICT-012"
+        ],
+        "conflict_status": "NEEDS_CONFIRMATION",
+        "verification_status": "NEEDS_CONFIRMATION",
+        "required_evidence": [
+          "物流轨迹",
+          "签收证明"
+        ],
+        "deadline_policy": "未说明（Visa 需收单机构确认 / 演示设定）",
+        "intended_use": [
+          "网站/比赛演示",
+          "Sandbox seed",
+          "规则引擎测试",
+          "Agent 测试",
+          "UI 测试",
+          "路演故事"
+        ],
+        "production_eligible": false
+      }
     },
     {
       "case_template_id": "CB-CASE-061",
@@ -6856,7 +8477,49 @@
         "CB-CASE-040"
       ],
       "core": true,
-      "core_reason": "证据不足阻止提交+建议接受的负面路径"
+      "core_reason": "证据不足阻止提交+建议接受的负面路径",
+      "provenance": {
+        "scheme": "Visa",
+        "reason_code": "10.4",
+        "source_type": "项目合成演示案例（虚构商户/虚构用户）",
+        "source_id": [
+          "SRC-01",
+          "SRC-03"
+        ],
+        "source_locator": [
+          "合成案例，无原文定位（见 derived_from_rule_ids）"
+        ],
+        "rule_version": [
+          "June 2024（Dispute Management Guidelines for Visa Merchants）",
+          "无版本号（内部整理稿）"
+        ],
+        "effective_date": "2024-10-19 起（CE3.0 相关变更）",
+        "derived_from_rule_ids": [
+          "CB-CASE-025",
+          "CB-CASE-040"
+        ],
+        "conflict_ids": [
+          "CONFLICT-003",
+          "CONFLICT-012"
+        ],
+        "conflict_status": "CONFLICTING_SOURCES",
+        "verification_status": "CONFLICTING_SOURCES",
+        "required_evidence": [
+          "3DS 认证记录",
+          "同设备历史未争议交易"
+        ],
+        "deadline_policy": "未说明（Visa 需收单机构确认 / 演示设定）",
+        "intended_use": [
+          "网站/比赛演示",
+          "Sandbox seed",
+          "规则引擎测试",
+          "Agent 测试",
+          "UI 测试",
+          "飞书演示",
+          "路演故事"
+        ],
+        "production_eligible": false
+      }
     },
     {
       "case_template_id": "CB-CASE-062",
@@ -7002,7 +8665,43 @@
         "CB-CASE-049"
       ],
       "core": true,
-      "core_reason": "规则直判+接受路径演示"
+      "core_reason": "规则直判+接受路径演示",
+      "provenance": {
+        "scheme": "Mastercard",
+        "reason_code": "4808",
+        "source_type": "项目合成演示案例（虚构商户/虚构用户）",
+        "source_id": [
+          "SRC-02"
+        ],
+        "source_locator": [
+          "合成案例，无原文定位（见 derived_from_rule_ids）"
+        ],
+        "rule_version": [
+          "2026-05-19（Chargeback Guide Merchant Edition）"
+        ],
+        "effective_date": "NOT_STATED",
+        "derived_from_rule_ids": [
+          "CB-CASE-049",
+          "CB-CASE-007"
+        ],
+        "conflict_ids": [
+          "CONFLICT-006"
+        ],
+        "conflict_status": "CONFLICTING_SOURCES",
+        "verification_status": "CONFLICTING_SOURCES",
+        "required_evidence": [
+          "授权记录"
+        ],
+        "deadline_policy": "未说明（Visa 需收单机构确认 / 演示设定）",
+        "intended_use": [
+          "网站/比赛演示",
+          "Sandbox seed",
+          "规则引擎测试",
+          "Agent 测试",
+          "UI 测试"
+        ],
+        "production_eligible": false
+      }
     },
     {
       "case_template_id": "CB-CASE-063",
@@ -7150,7 +8849,47 @@
         "CB-CASE-026"
       ],
       "core": true,
-      "core_reason": "临近截止+飞书提醒演示"
+      "core_reason": "临近截止+飞书提醒演示",
+      "provenance": {
+        "scheme": "Visa",
+        "reason_code": "13.1",
+        "source_type": "项目合成演示案例（虚构商户/虚构用户）",
+        "source_id": [
+          "SRC-01",
+          "SRC-03"
+        ],
+        "source_locator": [
+          "合成案例，无原文定位（见 derived_from_rule_ids）"
+        ],
+        "rule_version": [
+          "June 2024（Dispute Management Guidelines for Visa Merchants）",
+          "无版本号（内部整理稿）"
+        ],
+        "effective_date": "NOT_STATED",
+        "derived_from_rule_ids": [
+          "CB-CASE-026",
+          "CB-CASE-041"
+        ],
+        "conflict_ids": [
+          "CONFLICT-012"
+        ],
+        "conflict_status": "NEEDS_CONFIRMATION",
+        "verification_status": "NEEDS_CONFIRMATION",
+        "required_evidence": [
+          "签收证明"
+        ],
+        "deadline_policy": "未说明（Visa 需收单机构确认 / 演示设定）",
+        "intended_use": [
+          "网站/比赛演示",
+          "Sandbox seed",
+          "规则引擎测试",
+          "Agent 测试",
+          "UI 测试",
+          "飞书演示",
+          "路演故事"
+        ],
+        "production_eligible": false
+      }
     },
     {
       "case_template_id": "CB-CASE-064",
@@ -7298,7 +9037,43 @@
         "CB-CASE-045"
       ],
       "core": true,
-      "core_reason": "已过期状态机演示"
+      "core_reason": "已过期状态机演示",
+      "provenance": {
+        "scheme": "Mastercard",
+        "reason_code": "4853",
+        "source_type": "项目合成演示案例（虚构商户/虚构用户）",
+        "source_id": [
+          "SRC-02"
+        ],
+        "source_locator": [
+          "合成案例，无原文定位（见 derived_from_rule_ids）"
+        ],
+        "rule_version": [
+          "2026-05-19（Chargeback Guide Merchant Edition）"
+        ],
+        "effective_date": "NOT_STATED",
+        "derived_from_rule_ids": [
+          "CB-CASE-045",
+          "CB-CASE-047"
+        ],
+        "conflict_ids": [],
+        "conflict_status": "NONE",
+        "verification_status": "NEEDS_CONFIRMATION",
+        "required_evidence": [
+          "退款记录"
+        ],
+        "deadline_policy": "未说明（Visa 需收单机构确认 / 演示设定）",
+        "intended_use": [
+          "网站/比赛演示",
+          "Sandbox seed",
+          "规则引擎测试",
+          "Agent 测试",
+          "UI 测试",
+          "飞书演示",
+          "路演故事"
+        ],
+        "production_eligible": false
+      }
     },
     {
       "case_template_id": "CB-CASE-065",
@@ -7445,7 +9220,45 @@
         "CB-CASE-026"
       ],
       "core": true,
-      "core_reason": "文件抽取人工修正路径演示"
+      "core_reason": "文件抽取人工修正路径演示",
+      "provenance": {
+        "scheme": "Visa",
+        "reason_code": "13.1",
+        "source_type": "项目合成演示案例（虚构商户/虚构用户）",
+        "source_id": [
+          "SRC-01",
+          "SRC-03"
+        ],
+        "source_locator": [
+          "合成案例，无原文定位（见 derived_from_rule_ids）"
+        ],
+        "rule_version": [
+          "June 2024（Dispute Management Guidelines for Visa Merchants）",
+          "无版本号（内部整理稿）"
+        ],
+        "effective_date": "NOT_STATED",
+        "derived_from_rule_ids": [
+          "CB-CASE-026",
+          "CB-CASE-041"
+        ],
+        "conflict_ids": [
+          "CONFLICT-012"
+        ],
+        "conflict_status": "NEEDS_CONFIRMATION",
+        "verification_status": "NEEDS_CONFIRMATION",
+        "required_evidence": [
+          "签收证明"
+        ],
+        "deadline_policy": "未说明（Visa 需收单机构确认 / 演示设定）",
+        "intended_use": [
+          "网站/比赛演示",
+          "Sandbox seed",
+          "规则引擎测试",
+          "Agent 测试",
+          "UI 测试"
+        ],
+        "production_eligible": false
+      }
     },
     {
       "case_template_id": "CB-CASE-066",
@@ -7596,7 +9409,44 @@
         "CB-CASE-031"
       ],
       "core": true,
-      "core_reason": "Agent 提案+用户确认的产品交互演示"
+      "core_reason": "Agent 提案+用户确认的产品交互演示",
+      "provenance": {
+        "scheme": "Mastercard",
+        "reason_code": "4853",
+        "source_type": "项目合成演示案例（虚构商户/虚构用户）",
+        "source_id": [
+          "SRC-02",
+          "SRC-03"
+        ],
+        "source_locator": [
+          "合成案例，无原文定位（见 derived_from_rule_ids）"
+        ],
+        "rule_version": [
+          "2026-05-19（Chargeback Guide Merchant Edition）",
+          "无版本号（内部整理稿）"
+        ],
+        "effective_date": "NOT_STATED",
+        "derived_from_rule_ids": [
+          "CB-CASE-031",
+          "CB-CASE-046"
+        ],
+        "conflict_ids": [],
+        "conflict_status": "NONE",
+        "verification_status": "NEEDS_CONFIRMATION",
+        "required_evidence": [
+          "登录/访问记录"
+        ],
+        "deadline_policy": "未说明（Visa 需收单机构确认 / 演示设定）",
+        "intended_use": [
+          "网站/比赛演示",
+          "Sandbox seed",
+          "规则引擎测试",
+          "Agent 测试",
+          "UI 测试",
+          "路演故事"
+        ],
+        "production_eligible": false
+      }
     },
     {
       "case_template_id": "CB-CASE-067",
@@ -7743,7 +9593,40 @@
         "CB-CASE-066"
       ],
       "core": true,
-      "core_reason": "乐观锁/case revision 并发演示"
+      "core_reason": "乐观锁/case revision 并发演示",
+      "provenance": {
+        "scheme": "Mastercard",
+        "reason_code": "4853",
+        "source_type": "项目合成演示案例（虚构商户/虚构用户）",
+        "source_id": [
+          "SRC-02"
+        ],
+        "source_locator": [
+          "合成案例，无原文定位（见 derived_from_rule_ids）"
+        ],
+        "rule_version": [
+          "2026-05-19（Chargeback Guide Merchant Edition）"
+        ],
+        "effective_date": "NOT_STATED",
+        "derived_from_rule_ids": [
+          "CB-CASE-045"
+        ],
+        "conflict_ids": [],
+        "conflict_status": "NONE",
+        "verification_status": "NEEDS_CONFIRMATION",
+        "required_evidence": [
+          "按约交付说明"
+        ],
+        "deadline_policy": "未说明（Visa 需收单机构确认 / 演示设定）",
+        "intended_use": [
+          "网站/比赛演示",
+          "Sandbox seed",
+          "规则引擎测试",
+          "Agent 测试",
+          "UI 测试"
+        ],
+        "production_eligible": false
+      }
     },
     {
       "case_template_id": "CB-CASE-068",
@@ -7891,7 +9774,46 @@
         "CB-CASE-060"
       ],
       "core": true,
-      "core_reason": "上游超时幂等重试的可靠性演示"
+      "core_reason": "上游超时幂等重试的可靠性演示",
+      "provenance": {
+        "scheme": "Visa",
+        "reason_code": "13.1",
+        "source_type": "项目合成演示案例（虚构商户/虚构用户）",
+        "source_id": [
+          "SRC-01",
+          "SRC-03"
+        ],
+        "source_locator": [
+          "合成案例，无原文定位（见 derived_from_rule_ids）"
+        ],
+        "rule_version": [
+          "June 2024（Dispute Management Guidelines for Visa Merchants）",
+          "无版本号（内部整理稿）"
+        ],
+        "effective_date": "NOT_STATED",
+        "derived_from_rule_ids": [
+          "CB-CASE-026",
+          "CB-CASE-041"
+        ],
+        "conflict_ids": [
+          "CONFLICT-012"
+        ],
+        "conflict_status": "NEEDS_CONFIRMATION",
+        "verification_status": "NEEDS_CONFIRMATION",
+        "required_evidence": [
+          "签收证明"
+        ],
+        "deadline_policy": "未说明（Visa 需收单机构确认 / 演示设定）",
+        "intended_use": [
+          "网站/比赛演示",
+          "Sandbox seed",
+          "规则引擎测试",
+          "Agent 测试",
+          "UI 测试",
+          "路演故事"
+        ],
+        "production_eligible": false
+      }
     },
     {
       "case_template_id": "CB-CASE-069",
@@ -8022,7 +9944,39 @@
       "duplicate_group_id": null,
       "related_case_ids": [],
       "core": true,
-      "core_reason": "跨租户安全测试用例"
+      "core_reason": "跨租户安全测试用例",
+      "provenance": {
+        "scheme": "N/A（产品安全）",
+        "reason_code": "N/A",
+        "source_type": "项目合成演示案例（虚构商户/虚构用户）",
+        "source_id": [
+          "SRC-01",
+          "SRC-02"
+        ],
+        "source_locator": [
+          "合成案例，无原文定位（见 derived_from_rule_ids）"
+        ],
+        "rule_version": [
+          "June 2024（Dispute Management Guidelines for Visa Merchants）",
+          "2026-05-19（Chargeback Guide Merchant Edition）"
+        ],
+        "effective_date": "NOT_STATED",
+        "derived_from_rule_ids": [
+          "CB-CASE-060"
+        ],
+        "conflict_ids": [],
+        "conflict_status": "NONE",
+        "verification_status": "NEEDS_CONFIRMATION",
+        "required_evidence": [],
+        "deadline_policy": "明确",
+        "intended_use": [
+          "网站/比赛演示",
+          "Agent 测试",
+          "UI 测试",
+          "安全测试"
+        ],
+        "production_eligible": false
+      }
     },
     {
       "case_template_id": "CB-CASE-070",
@@ -8168,7 +10122,44 @@
         "CB-CASE-046"
       ],
       "core": true,
-      "core_reason": "规则版本与历史快照演示"
+      "core_reason": "规则版本与历史快照演示",
+      "provenance": {
+        "scheme": "Mastercard",
+        "reason_code": "4853/4855",
+        "source_type": "项目合成演示案例（虚构商户/虚构用户）",
+        "source_id": [
+          "SRC-02",
+          "SRC-03"
+        ],
+        "source_locator": [
+          "合成案例，无原文定位（见 derived_from_rule_ids）"
+        ],
+        "rule_version": [
+          "2026-05-19（Chargeback Guide Merchant Edition）",
+          "无版本号（内部整理稿）"
+        ],
+        "effective_date": "淘汰码并入生效日待卡组织公告（CONFLICT-005）",
+        "derived_from_rule_ids": [
+          "CB-CASE-046"
+        ],
+        "conflict_ids": [
+          "CONFLICT-005"
+        ],
+        "conflict_status": "NEEDS_CONFIRMATION",
+        "verification_status": "NEEDS_CONFIRMATION",
+        "required_evidence": [
+          "交付证明"
+        ],
+        "deadline_policy": "未说明（Visa 需收单机构确认 / 演示设定）",
+        "intended_use": [
+          "网站/比赛演示",
+          "Sandbox seed",
+          "规则引擎测试",
+          "Agent 测试",
+          "UI 测试"
+        ],
+        "production_eligible": false
+      }
     },
     {
       "case_template_id": "CB-CASE-071",
@@ -8345,7 +10336,51 @@
         "CB-CASE-034"
       ],
       "core": true,
-      "core_reason": "路演开场故事（通俗+真实规则支撑）"
+      "core_reason": "路演开场故事（通俗+真实规则支撑）",
+      "provenance": {
+        "scheme": "Visa",
+        "reason_code": "10.4",
+        "source_type": "项目合成演示案例（虚构商户/虚构用户）",
+        "source_id": [
+          "SRC-01",
+          "SRC-03"
+        ],
+        "source_locator": [
+          "合成案例，无原文定位（见 derived_from_rule_ids）"
+        ],
+        "rule_version": [
+          "June 2024（Dispute Management Guidelines for Visa Merchants）",
+          "无版本号（内部整理稿）"
+        ],
+        "effective_date": "2024-10-19 起（CE3.0 相关变更）",
+        "derived_from_rule_ids": [
+          "CB-CASE-025",
+          "CB-CASE-034",
+          "CB-CASE-040"
+        ],
+        "conflict_ids": [
+          "CONFLICT-003",
+          "CONFLICT-012"
+        ],
+        "conflict_status": "CONFLICTING_SOURCES",
+        "verification_status": "CONFLICTING_SOURCES",
+        "required_evidence": [
+          "3DS 认证（ECI 5）",
+          "同设备历史交易",
+          "签收证明"
+        ],
+        "deadline_policy": "未说明（Visa 需收单机构确认 / 演示设定）",
+        "intended_use": [
+          "网站/比赛演示",
+          "Sandbox seed",
+          "规则引擎测试",
+          "Agent 测试",
+          "UI 测试",
+          "飞书演示",
+          "路演故事"
+        ],
+        "production_eligible": false
+      }
     },
     {
       "case_template_id": "CB-CASE-072",
@@ -8492,7 +10527,43 @@
         "CB-CASE-029"
       ],
       "core": false,
-      "core_reason": ""
+      "core_reason": "",
+      "provenance": {
+        "scheme": "Visa",
+        "reason_code": "13.6",
+        "source_type": "项目合成演示案例（虚构商户/虚构用户）",
+        "source_id": [
+          "SRC-01",
+          "SRC-03"
+        ],
+        "source_locator": [
+          "合成案例，无原文定位（见 derived_from_rule_ids）"
+        ],
+        "rule_version": [
+          "June 2024（Dispute Management Guidelines for Visa Merchants）",
+          "无版本号（内部整理稿）"
+        ],
+        "effective_date": "NOT_STATED",
+        "derived_from_rule_ids": [
+          "CB-CASE-029",
+          "CB-CASE-047"
+        ],
+        "conflict_ids": [],
+        "conflict_status": "NONE",
+        "verification_status": "NEEDS_CONFIRMATION",
+        "required_evidence": [
+          "退款 ARN/日期/金额/结算状态"
+        ],
+        "deadline_policy": "未说明（Visa 需收单机构确认 / 演示设定）",
+        "intended_use": [
+          "网站/比赛演示",
+          "Sandbox seed",
+          "规则引擎测试",
+          "Agent 测试",
+          "UI 测试"
+        ],
+        "production_eligible": false
+      }
     },
     {
       "case_template_id": "CB-CASE-073",
@@ -8640,7 +10711,44 @@
         "CB-CASE-030"
       ],
       "core": false,
-      "core_reason": ""
+      "core_reason": "",
+      "provenance": {
+        "scheme": "Mastercard",
+        "reason_code": "4834",
+        "source_type": "项目合成演示案例（虚构商户/虚构用户）",
+        "source_id": [
+          "SRC-02",
+          "SRC-03"
+        ],
+        "source_locator": [
+          "合成案例，无原文定位（见 derived_from_rule_ids）"
+        ],
+        "rule_version": [
+          "2026-05-19（Chargeback Guide Merchant Edition）",
+          "无版本号（内部整理稿）"
+        ],
+        "effective_date": "NOT_STATED",
+        "derived_from_rule_ids": [
+          "CB-CASE-030",
+          "CB-CASE-043",
+          "CB-CASE-050"
+        ],
+        "conflict_ids": [],
+        "conflict_status": "NONE",
+        "verification_status": "NEEDS_CONFIRMATION",
+        "required_evidence": [
+          "订单/授权/清算比对"
+        ],
+        "deadline_policy": "未说明（Visa 需收单机构确认 / 演示设定）",
+        "intended_use": [
+          "网站/比赛演示",
+          "Sandbox seed",
+          "规则引擎测试",
+          "Agent 测试",
+          "UI 测试"
+        ],
+        "production_eligible": false
+      }
     },
     {
       "case_template_id": "CB-CASE-074",
@@ -8799,7 +10907,984 @@
         "CB-CASE-028"
       ],
       "core": false,
-      "core_reason": ""
+      "core_reason": "",
+      "provenance": {
+        "scheme": "Mastercard",
+        "reason_code": "4853",
+        "source_type": "项目合成演示案例（虚构商户/虚构用户）",
+        "source_id": [
+          "SRC-02",
+          "SRC-03"
+        ],
+        "source_locator": [
+          "合成案例，无原文定位（见 derived_from_rule_ids）"
+        ],
+        "rule_version": [
+          "2026-05-19（Chargeback Guide Merchant Edition）",
+          "无版本号（内部整理稿）"
+        ],
+        "effective_date": "NOT_STATED",
+        "derived_from_rule_ids": [
+          "CB-CASE-028",
+          "CB-CASE-045"
+        ],
+        "conflict_ids": [],
+        "conflict_status": "NONE",
+        "verification_status": "NEEDS_CONFIRMATION",
+        "required_evidence": [
+          "SKU/商品页快照",
+          "发货序列号记录"
+        ],
+        "deadline_policy": "未说明（Visa 需收单机构确认 / 演示设定）",
+        "intended_use": [
+          "网站/比赛演示",
+          "Sandbox seed",
+          "规则引擎测试",
+          "Agent 测试"
+        ],
+        "production_eligible": false
+      }
+    }
+  ],
+  "rule_provenance": [
+    {
+      "scheme": "American Express",
+      "reason_code": "C04",
+      "reason_code_name": "Goods/Services Returned or Refused",
+      "case_template_ids": [
+        "CB-CASE-032"
+      ],
+      "source_ids": [
+        "SRC-03"
+      ],
+      "source_locators": [
+        "§15（第 15 章）"
+      ],
+      "conflict_ids": [
+        "CONFLICT-014"
+      ],
+      "verification_statuses": [
+        "NEEDS_CONFIRMATION"
+      ],
+      "production_eligible": false,
+      "deadline_policy": [
+        "未说明（需收单机构确认）"
+      ]
+    },
+    {
+      "scheme": "American Express",
+      "reason_code": "C05",
+      "reason_code_name": "Goods/Services Cancelled",
+      "case_template_ids": [
+        "CB-CASE-033"
+      ],
+      "source_ids": [
+        "SRC-03"
+      ],
+      "source_locators": [
+        "§16（第 16 章）"
+      ],
+      "conflict_ids": [
+        "CONFLICT-014"
+      ],
+      "verification_statuses": [
+        "NEEDS_CONFIRMATION"
+      ],
+      "production_eligible": false,
+      "deadline_policy": [
+        "未说明（需收单机构确认）"
+      ]
+    },
+    {
+      "scheme": "American Express",
+      "reason_code": "C08 / C02",
+      "reason_code_name": "Goods/Services Not Received / Credit Not Processed",
+      "case_template_ids": [
+        "CB-CASE-052"
+      ],
+      "source_ids": [
+        "SRC-03"
+      ],
+      "source_locators": [
+        "SRC-03 §28"
+      ],
+      "conflict_ids": [
+        "CONFLICT-014"
+      ],
+      "verification_statuses": [
+        "NEEDS_CONFIRMATION"
+      ],
+      "production_eligible": false,
+      "deadline_policy": [
+        "未说明（需收单机构确认）"
+      ]
+    },
+    {
+      "scheme": "Mastercard",
+      "reason_code": "2011（Refund previously issued）",
+      "reason_code_name": "Credit Previously Issued",
+      "case_template_ids": [
+        "CB-CASE-016"
+      ],
+      "source_ids": [
+        "SRC-02"
+      ],
+      "source_locators": [
+        "P38",
+        "P510-512",
+        "P68-69",
+        "P935"
+      ],
+      "conflict_ids": [
+        "CONFLICT-006"
+      ],
+      "verification_statuses": [
+        "CONFLICTING_SOURCES"
+      ],
+      "production_eligible": false,
+      "deadline_policy": [
+        "存在版本差异（见冲突清单）"
+      ]
+    },
+    {
+      "scheme": "Mastercard",
+      "reason_code": "4808",
+      "reason_code_name": "Authorization-related Chargeback",
+      "case_template_ids": [
+        "CB-CASE-007",
+        "CB-CASE-008",
+        "CB-CASE-009",
+        "CB-CASE-049",
+        "CB-CASE-062"
+      ],
+      "source_ids": [
+        "SRC-02"
+      ],
+      "source_locators": [
+        "P115",
+        "P56-57",
+        "P61",
+        "P64-65",
+        "P84",
+        "P885-886",
+        "P921-922",
+        "P934",
+        "SRC-02 P54-150/P880-947",
+        "合成案例，无原文定位（见 derived_from_rule_ids）"
+      ],
+      "conflict_ids": [
+        "CONFLICT-006"
+      ],
+      "verification_statuses": [
+        "CONFLICTING_SOURCES",
+        "VERIFIED_EXTRACTED"
+      ],
+      "production_eligible": false,
+      "deadline_policy": [
+        "存在版本差异（见冲突清单）",
+        "明确",
+        "未说明（Visa 需收单机构确认 / 演示设定）"
+      ]
+    },
+    {
+      "scheme": "Mastercard",
+      "reason_code": "4834",
+      "reason_code_name": "Point-of-Interaction Error",
+      "case_template_ids": [
+        "CB-CASE-050",
+        "CB-CASE-073"
+      ],
+      "source_ids": [
+        "SRC-02",
+        "SRC-03"
+      ],
+      "source_locators": [
+        "SRC-02 P685-776/P1324-1407",
+        "合成案例，无原文定位（见 derived_from_rule_ids）"
+      ],
+      "conflict_ids": [
+        "CONFLICT-004",
+        "CONFLICT-006"
+      ],
+      "verification_statuses": [
+        "CONFLICTING_SOURCES",
+        "NEEDS_CONFIRMATION"
+      ],
+      "production_eligible": false,
+      "deadline_policy": [
+        "明确",
+        "未说明（Visa 需收单机构确认 / 演示设定）"
+      ]
+    },
+    {
+      "scheme": "Mastercard",
+      "reason_code": "4834（ATM Cash and Currency Errors）",
+      "reason_code_name": "Point-of-Interaction Error",
+      "case_template_ids": [
+        "CB-CASE-015"
+      ],
+      "source_ids": [
+        "SRC-02"
+      ],
+      "source_locators": [
+        "P741",
+        "P872-873"
+      ],
+      "conflict_ids": [],
+      "verification_statuses": [
+        "VERIFIED_EXTRACTED"
+      ],
+      "production_eligible": true,
+      "deadline_policy": [
+        "明确"
+      ]
+    },
+    {
+      "scheme": "Mastercard",
+      "reason_code": "4834（Currency Errors）",
+      "reason_code_name": "Point-of-Interaction Error",
+      "case_template_ids": [
+        "CB-CASE-014"
+      ],
+      "source_ids": [
+        "SRC-02"
+      ],
+      "source_locators": [
+        "P1371",
+        "P741-742"
+      ],
+      "conflict_ids": [],
+      "verification_statuses": [
+        "VERIFIED_EXTRACTED"
+      ],
+      "production_eligible": true,
+      "deadline_policy": [
+        "明确"
+      ]
+    },
+    {
+      "scheme": "Mastercard",
+      "reason_code": "4834（Duplicate / Paid by Other Means）",
+      "reason_code_name": "Point-of-Interaction Error",
+      "case_template_ids": [
+        "CB-CASE-017"
+      ],
+      "source_ids": [
+        "SRC-02"
+      ],
+      "source_locators": [
+        "P1327-1328",
+        "P690"
+      ],
+      "conflict_ids": [],
+      "verification_statuses": [
+        "VERIFIED_EXTRACTED"
+      ],
+      "production_eligible": true,
+      "deadline_policy": [
+        "明确"
+      ]
+    },
+    {
+      "scheme": "Mastercard",
+      "reason_code": "4834（Unreasonable Amount）",
+      "reason_code_name": "Point-of-Interaction Error",
+      "case_template_ids": [
+        "CB-CASE-018"
+      ],
+      "source_ids": [
+        "SRC-02"
+      ],
+      "source_locators": [
+        "P1395",
+        "P770"
+      ],
+      "conflict_ids": [],
+      "verification_statuses": [
+        "VERIFIED_EXTRACTED"
+      ],
+      "production_eligible": true,
+      "deadline_policy": [
+        "明确"
+      ]
+    },
+    {
+      "scheme": "Mastercard",
+      "reason_code": "4837",
+      "reason_code_name": "No Cardholder Authorization",
+      "case_template_ids": [
+        "CB-CASE-048"
+      ],
+      "source_ids": [
+        "SRC-02",
+        "SRC-03"
+      ],
+      "source_locators": [
+        "SRC-02 P489-563",
+        "SRC-03 §28"
+      ],
+      "conflict_ids": [
+        "CONFLICT-006"
+      ],
+      "verification_statuses": [
+        "CONFLICTING_SOURCES"
+      ],
+      "production_eligible": false,
+      "deadline_policy": [
+        "明确"
+      ]
+    },
+    {
+      "scheme": "Mastercard",
+      "reason_code": "4853",
+      "reason_code_name": "Cardholder Dispute",
+      "case_template_ids": [
+        "CB-CASE-002",
+        "CB-CASE-003",
+        "CB-CASE-004",
+        "CB-CASE-012",
+        "CB-CASE-031",
+        "CB-CASE-045",
+        "CB-CASE-046",
+        "CB-CASE-047",
+        "CB-CASE-064",
+        "CB-CASE-066",
+        "CB-CASE-067",
+        "CB-CASE-074"
+      ],
+      "source_ids": [
+        "SRC-02",
+        "SRC-03"
+      ],
+      "source_locators": [
+        "P1103",
+        "P1106",
+        "P1112",
+        "P1511",
+        "P178",
+        "P368",
+        "P371",
+        "P381",
+        "P967",
+        "P968",
+        "SRC-02 P157-177/P953-967",
+        "SRC-02 P177-184/P967-983",
+        "SRC-02 P273-276/P1036-1051",
+        "SRC-03 §28",
+        "§12（第 12 章）",
+        "合成案例，无原文定位（见 derived_from_rule_ids）"
+      ],
+      "conflict_ids": [
+        "CONFLICT-006"
+      ],
+      "verification_statuses": [
+        "CONFLICTING_SOURCES",
+        "NEEDS_CONFIRMATION",
+        "VERIFIED_EXTRACTED"
+      ],
+      "production_eligible": false,
+      "deadline_policy": [
+        "存在版本差异（见冲突清单）",
+        "明确",
+        "未说明（Visa 需收单机构确认 / 演示设定）"
+      ]
+    },
+    {
+      "scheme": "Mastercard",
+      "reason_code": "4853/4837",
+      "reason_code_name": "Cardholder Dispute / No Cardholder Authorization",
+      "case_template_ids": [
+        "CB-CASE-011"
+      ],
+      "source_ids": [
+        "SRC-02"
+      ],
+      "source_locators": [
+        "P1090",
+        "P1093",
+        "P1189",
+        "P350",
+        "P353",
+        "P501"
+      ],
+      "conflict_ids": [],
+      "verification_statuses": [
+        "VERIFIED_EXTRACTED"
+      ],
+      "production_eligible": true,
+      "deadline_policy": [
+        "明确"
+      ]
+    },
+    {
+      "scheme": "Mastercard",
+      "reason_code": "4853/4850",
+      "reason_code_name": "Cardholder Dispute / Installment Billing Dispute",
+      "case_template_ids": [
+        "CB-CASE-010"
+      ],
+      "source_ids": [
+        "SRC-02"
+      ],
+      "source_locators": [
+        "P1064",
+        "P1076",
+        "P312",
+        "P330"
+      ],
+      "conflict_ids": [],
+      "verification_statuses": [
+        "VERIFIED_EXTRACTED"
+      ],
+      "production_eligible": true,
+      "deadline_policy": [
+        "明确"
+      ]
+    },
+    {
+      "scheme": "Mastercard",
+      "reason_code": "4853/4854",
+      "reason_code_name": "Cardholder Dispute / NEC",
+      "case_template_ids": [
+        "CB-CASE-001"
+      ],
+      "source_ids": [
+        "SRC-02"
+      ],
+      "source_locators": [
+        "P1157",
+        "P152",
+        "P460",
+        "P950"
+      ],
+      "conflict_ids": [],
+      "verification_statuses": [
+        "VERIFIED_EXTRACTED"
+      ],
+      "production_eligible": true,
+      "deadline_policy": [
+        "未说明（需收单机构确认）"
+      ]
+    },
+    {
+      "scheme": "Mastercard",
+      "reason_code": "4853/4855",
+      "reason_code_name": "Cardholder Dispute（版本切换）",
+      "case_template_ids": [
+        "CB-CASE-070"
+      ],
+      "source_ids": [
+        "SRC-02",
+        "SRC-03"
+      ],
+      "source_locators": [
+        "合成案例，无原文定位（见 derived_from_rule_ids）"
+      ],
+      "conflict_ids": [
+        "CONFLICT-005"
+      ],
+      "verification_statuses": [
+        "NEEDS_CONFIRMATION"
+      ],
+      "production_eligible": false,
+      "deadline_policy": [
+        "未说明（Visa 需收单机构确认 / 演示设定）"
+      ]
+    },
+    {
+      "scheme": "Mastercard",
+      "reason_code": "4853（Change of Reason）",
+      "reason_code_name": "Cardholder Dispute",
+      "case_template_ids": [
+        "CB-CASE-013"
+      ],
+      "source_ids": [
+        "SRC-02"
+      ],
+      "source_locators": [
+        "P1171",
+        "P477"
+      ],
+      "conflict_ids": [
+        "CONFLICT-006"
+      ],
+      "verification_statuses": [
+        "CONFLICTING_SOURCES"
+      ],
+      "production_eligible": false,
+      "deadline_policy": [
+        "明确"
+      ]
+    },
+    {
+      "scheme": "Mastercard",
+      "reason_code": "4853（抗辩码 2001）",
+      "reason_code_name": "Cardholder Dispute / Suspected Altered Documentation",
+      "case_template_ids": [
+        "CB-CASE-005"
+      ],
+      "source_ids": [
+        "SRC-02"
+      ],
+      "source_locators": [
+        "P1094",
+        "P1330",
+        "P162",
+        "P184",
+        "P335",
+        "P694",
+        "P957"
+      ],
+      "conflict_ids": [],
+      "verification_statuses": [
+        "VERIFIED_EXTRACTED"
+      ],
+      "production_eligible": true,
+      "deadline_policy": [
+        "存在版本差异（见冲突清单）"
+      ]
+    },
+    {
+      "scheme": "Mastercard",
+      "reason_code": "4853（抗辩码 2004）",
+      "reason_code_name": "Cardholder Dispute / Suspected Return Fraud",
+      "case_template_ids": [
+        "CB-CASE-006"
+      ],
+      "source_ids": [
+        "SRC-02"
+      ],
+      "source_locators": [
+        "P1042",
+        "P163",
+        "P279",
+        "P958"
+      ],
+      "conflict_ids": [],
+      "verification_statuses": [
+        "VERIFIED_EXTRACTED"
+      ],
+      "production_eligible": true,
+      "deadline_policy": [
+        "存在版本差异（见冲突清单）"
+      ]
+    },
+    {
+      "scheme": "Mastercard",
+      "reason_code": "4870/4871",
+      "reason_code_name": "Chip Liability Shift (Counterfeit / Lost-Stolen-NRI)",
+      "case_template_ids": [
+        "CB-CASE-051"
+      ],
+      "source_ids": [
+        "SRC-02"
+      ],
+      "source_locators": [
+        "SRC-02 P578-636/P1241-1288"
+      ],
+      "conflict_ids": [
+        "CONFLICT-009"
+      ],
+      "verification_statuses": [
+        "CONFLICTING_SOURCES"
+      ],
+      "production_eligible": false,
+      "deadline_policy": [
+        "明确"
+      ]
+    },
+    {
+      "scheme": "Mastercard",
+      "reason_code": "Compliance Case（All Other Rules Violations）",
+      "reason_code_name": "Compliance",
+      "case_template_ids": [
+        "CB-CASE-019"
+      ],
+      "source_ids": [
+        "SRC-02"
+      ],
+      "source_locators": [
+        "P1495-1497"
+      ],
+      "conflict_ids": [],
+      "verification_statuses": [
+        "VERIFIED_EXTRACTED"
+      ],
+      "production_eligible": true,
+      "deadline_policy": [
+        "明确"
+      ]
+    },
+    {
+      "scheme": "Mastercard（Ethoca）",
+      "reason_code": "预防类（对应 4837/4863 场景）",
+      "reason_code_name": "预防（No Cardholder Authorization 前置）",
+      "case_template_ids": [
+        "CB-CASE-034"
+      ],
+      "source_ids": [
+        "SRC-03"
+      ],
+      "source_locators": [
+        "§20（第 20 章）"
+      ],
+      "conflict_ids": [
+        "CONFLICT-013"
+      ],
+      "verification_statuses": [
+        "NEEDS_CONFIRMATION"
+      ],
+      "production_eligible": false,
+      "deadline_policy": [
+        "未说明（需收单机构确认）"
+      ]
+    },
+    {
+      "scheme": "N/A（产品安全）",
+      "reason_code": "N/A",
+      "reason_code_name": "Cross-tenant access",
+      "case_template_ids": [
+        "CB-CASE-069"
+      ],
+      "source_ids": [
+        "SRC-01",
+        "SRC-02"
+      ],
+      "source_locators": [
+        "合成案例，无原文定位（见 derived_from_rule_ids）"
+      ],
+      "conflict_ids": [],
+      "verification_statuses": [
+        "NEEDS_CONFIRMATION"
+      ],
+      "production_eligible": false,
+      "deadline_policy": [
+        "明确"
+      ]
+    },
+    {
+      "scheme": "Visa",
+      "reason_code": "10.4",
+      "reason_code_name": "Other Fraud – Card-Absent Environment",
+      "case_template_ids": [
+        "CB-CASE-025",
+        "CB-CASE-040",
+        "CB-CASE-061",
+        "CB-CASE-071"
+      ],
+      "source_ids": [
+        "SRC-01",
+        "SRC-03"
+      ],
+      "source_locators": [
+        "SRC-01 P26/P54-58",
+        "SRC-03 §3",
+        "§3（第 3 章，约 60-90 行）",
+        "合成案例，无原文定位（见 derived_from_rule_ids）"
+      ],
+      "conflict_ids": [
+        "CONFLICT-003",
+        "CONFLICT-012"
+      ],
+      "verification_statuses": [
+        "CONFLICTING_SOURCES"
+      ],
+      "production_eligible": false,
+      "deadline_policy": [
+        "未说明（Visa 需收单机构确认 / 演示设定）",
+        "未说明（需收单机构确认）"
+      ]
+    },
+    {
+      "scheme": "Visa",
+      "reason_code": "10.4（Fraud 类保护规则）",
+      "reason_code_name": "Other Fraud – Card-Absent",
+      "case_template_ids": [
+        "CB-CASE-022"
+      ],
+      "source_ids": [
+        "SRC-01"
+      ],
+      "source_locators": [
+        "P14"
+      ],
+      "conflict_ids": [
+        "CONFLICT-012"
+      ],
+      "verification_statuses": [
+        "NEEDS_CONFIRMATION"
+      ],
+      "production_eligible": false,
+      "deadline_policy": [
+        "未说明（需收单机构确认）"
+      ]
+    },
+    {
+      "scheme": "Visa",
+      "reason_code": "11.3",
+      "reason_code_name": "No Authorization / Late Presentment",
+      "case_template_ids": [
+        "CB-CASE-042"
+      ],
+      "source_ids": [
+        "SRC-01",
+        "SRC-03"
+      ],
+      "source_locators": [
+        "SRC-01 P31",
+        "SRC-03 §10"
+      ],
+      "conflict_ids": [
+        "CONFLICT-001",
+        "CONFLICT-012"
+      ],
+      "verification_statuses": [
+        "NEEDS_CONFIRMATION"
+      ],
+      "production_eligible": false,
+      "deadline_policy": [
+        "未说明（需收单机构确认）"
+      ]
+    },
+    {
+      "scheme": "Visa",
+      "reason_code": "12.6.1",
+      "reason_code_name": "Duplicate Processing",
+      "case_template_ids": [
+        "CB-CASE-030"
+      ],
+      "source_ids": [
+        "SRC-03"
+      ],
+      "source_locators": [
+        "§9（第 9 章）"
+      ],
+      "conflict_ids": [
+        "CONFLICT-002",
+        "CONFLICT-012"
+      ],
+      "verification_statuses": [
+        "NEEDS_CONFIRMATION"
+      ],
+      "production_eligible": false,
+      "deadline_policy": [
+        "未说明（需收单机构确认）"
+      ]
+    },
+    {
+      "scheme": "Visa",
+      "reason_code": "12.6.1/12.6.2",
+      "reason_code_name": "Duplicate Processing / Paid by Other Means",
+      "case_template_ids": [
+        "CB-CASE-043"
+      ],
+      "source_ids": [
+        "SRC-01",
+        "SRC-03"
+      ],
+      "source_locators": [
+        "SRC-01 P37-38",
+        "SRC-03 §9"
+      ],
+      "conflict_ids": [
+        "CONFLICT-002",
+        "CONFLICT-012"
+      ],
+      "verification_statuses": [
+        "NEEDS_CONFIRMATION"
+      ],
+      "production_eligible": false,
+      "deadline_policy": [
+        "未说明（需收单机构确认）"
+      ]
+    },
+    {
+      "scheme": "Visa",
+      "reason_code": "13.1",
+      "reason_code_name": "Merchandise/Services Not Received",
+      "case_template_ids": [
+        "CB-CASE-026",
+        "CB-CASE-041",
+        "CB-CASE-060",
+        "CB-CASE-063",
+        "CB-CASE-065",
+        "CB-CASE-068"
+      ],
+      "source_ids": [
+        "SRC-01",
+        "SRC-03"
+      ],
+      "source_locators": [
+        "SRC-01 P40-41",
+        "SRC-03 §5",
+        "§5（第 5 章）",
+        "合成案例，无原文定位（见 derived_from_rule_ids）"
+      ],
+      "conflict_ids": [
+        "CONFLICT-012"
+      ],
+      "verification_statuses": [
+        "NEEDS_CONFIRMATION"
+      ],
+      "production_eligible": false,
+      "deadline_policy": [
+        "未说明（Visa 需收单机构确认 / 演示设定）",
+        "未说明（需收单机构确认）"
+      ]
+    },
+    {
+      "scheme": "Visa",
+      "reason_code": "13.2",
+      "reason_code_name": "Cancelled Recurring Transaction",
+      "case_template_ids": [
+        "CB-CASE-027"
+      ],
+      "source_ids": [
+        "SRC-03"
+      ],
+      "source_locators": [
+        "§6（第 6 章）"
+      ],
+      "conflict_ids": [
+        "CONFLICT-012"
+      ],
+      "verification_statuses": [
+        "NEEDS_CONFIRMATION"
+      ],
+      "production_eligible": false,
+      "deadline_policy": [
+        "未说明（需收单机构确认）"
+      ]
+    },
+    {
+      "scheme": "Visa",
+      "reason_code": "13.3",
+      "reason_code_name": "Not as Described or Defective",
+      "case_template_ids": [
+        "CB-CASE-021",
+        "CB-CASE-028"
+      ],
+      "source_ids": [
+        "SRC-01",
+        "SRC-03"
+      ],
+      "source_locators": [
+        "P43-44",
+        "§7（第 7 章）"
+      ],
+      "conflict_ids": [
+        "CONFLICT-012"
+      ],
+      "verification_statuses": [
+        "NEEDS_CONFIRMATION"
+      ],
+      "production_eligible": false,
+      "deadline_policy": [
+        "未说明（需收单机构确认）"
+      ]
+    },
+    {
+      "scheme": "Visa",
+      "reason_code": "13.6",
+      "reason_code_name": "Credit Not Processed",
+      "case_template_ids": [
+        "CB-CASE-029",
+        "CB-CASE-072"
+      ],
+      "source_ids": [
+        "SRC-01",
+        "SRC-03"
+      ],
+      "source_locators": [
+        "§8（第 8 章）",
+        "合成案例，无原文定位（见 derived_from_rule_ids）"
+      ],
+      "conflict_ids": [
+        "CONFLICT-012"
+      ],
+      "verification_statuses": [
+        "NEEDS_CONFIRMATION"
+      ],
+      "production_eligible": false,
+      "deadline_policy": [
+        "未说明（Visa 需收单机构确认 / 演示设定）",
+        "未说明（需收单机构确认）"
+      ]
+    },
+    {
+      "scheme": "Visa",
+      "reason_code": "13.7",
+      "reason_code_name": "Cancelled Merchandise/Services",
+      "case_template_ids": [
+        "CB-CASE-023",
+        "CB-CASE-044"
+      ],
+      "source_ids": [
+        "SRC-01"
+      ],
+      "source_locators": [
+        "P17",
+        "P49-50",
+        "SRC-01 P49-50"
+      ],
+      "conflict_ids": [
+        "CONFLICT-012"
+      ],
+      "verification_statuses": [
+        "NEEDS_CONFIRMATION"
+      ],
+      "production_eligible": false,
+      "deadline_policy": [
+        "未说明（需收单机构确认）"
+      ]
+    },
+    {
+      "scheme": "Visa",
+      "reason_code": "13.7（Cancelled Merchandise/Services 相关）",
+      "reason_code_name": "Cancelled Merchandise/Services",
+      "case_template_ids": [
+        "CB-CASE-020"
+      ],
+      "source_ids": [
+        "SRC-01"
+      ],
+      "source_locators": [
+        "P18"
+      ],
+      "conflict_ids": [
+        "CONFLICT-012"
+      ],
+      "verification_statuses": [
+        "NEEDS_CONFIRMATION"
+      ],
+      "production_eligible": false,
+      "deadline_policy": [
+        "未说明（需收单机构确认）"
+      ]
+    },
+    {
+      "scheme": "Visa",
+      "reason_code": "Compliance（无 Dispute Condition）",
+      "reason_code_name": "Compliance",
+      "case_template_ids": [
+        "CB-CASE-024"
+      ],
+      "source_ids": [
+        "SRC-01"
+      ],
+      "source_locators": [
+        "P20"
+      ],
+      "conflict_ids": [
+        "CONFLICT-012"
+      ],
+      "verification_statuses": [
+        "NEEDS_CONFIRMATION"
+      ],
+      "production_eligible": false,
+      "deadline_policy": [
+        "未说明（需收单机构确认）"
+      ]
     }
   ],
   "conflicts": [

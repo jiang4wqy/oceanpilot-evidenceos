@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "generated_at": "2026-09-07T11:48:36Z",
+  "generated_at": "2026-09-07T15:34:14Z",
   "usage_note": "仅含可用于 Sandbox 的合成案例与规则模板。所有商户/用户/金额/编号均为虚构 Sandbox 数据；SOURCE_EXPLICIT 原例不含个人信息，未直接写入 seed。",
   "seed_cases": [
     {
@@ -78,6 +78,19 @@
         "SRC-01",
         "SRC-03"
       ],
+      "provenance": {
+        "verification_status": "CONFLICTING_SOURCES",
+        "conflict_ids": [
+          "CONFLICT-003",
+          "CONFLICT-012"
+        ],
+        "production_eligible": false,
+        "rule_version": [
+          "June 2024（Dispute Management Guidelines for Visa Merchants）",
+          "无版本号（内部整理稿）"
+        ],
+        "effective_date": "2024-10-19 起（CE3.0 相关变更，SRC-01 P26）"
+      },
       "sandbox_flag": true
     },
     {
@@ -155,6 +168,18 @@
         "SRC-01",
         "SRC-03"
       ],
+      "provenance": {
+        "verification_status": "NEEDS_CONFIRMATION",
+        "conflict_ids": [
+          "CONFLICT-012"
+        ],
+        "production_eligible": false,
+        "rule_version": [
+          "June 2024（Dispute Management Guidelines for Visa Merchants）",
+          "无版本号（内部整理稿）"
+        ],
+        "effective_date": "NOT_STATED"
+      },
       "sandbox_flag": true
     },
     {
@@ -219,6 +244,19 @@
         "SRC-01",
         "SRC-03"
       ],
+      "provenance": {
+        "verification_status": "NEEDS_CONFIRMATION",
+        "conflict_ids": [
+          "CONFLICT-001",
+          "CONFLICT-012"
+        ],
+        "production_eligible": false,
+        "rule_version": [
+          "June 2024（Dispute Management Guidelines for Visa Merchants）",
+          "无版本号（内部整理稿）"
+        ],
+        "effective_date": "2024-04-13 起（11.3 生效，SRC-01 P2/P31）"
+      },
       "sandbox_flag": true
     },
     {
@@ -283,6 +321,19 @@
         "SRC-01",
         "SRC-03"
       ],
+      "provenance": {
+        "verification_status": "NEEDS_CONFIRMATION",
+        "conflict_ids": [
+          "CONFLICT-002",
+          "CONFLICT-012"
+        ],
+        "production_eligible": false,
+        "rule_version": [
+          "June 2024（Dispute Management Guidelines for Visa Merchants）",
+          "无版本号（内部整理稿）"
+        ],
+        "effective_date": "NOT_STATED"
+      },
       "sandbox_flag": true
     },
     {
@@ -359,6 +410,17 @@
       "source_ids": [
         "SRC-01"
       ],
+      "provenance": {
+        "verification_status": "NEEDS_CONFIRMATION",
+        "conflict_ids": [
+          "CONFLICT-012"
+        ],
+        "production_eligible": false,
+        "rule_version": [
+          "June 2024（Dispute Management Guidelines for Visa Merchants）"
+        ],
+        "effective_date": "NOT_STATED"
+      },
       "sandbox_flag": true
     },
     {
@@ -436,6 +498,18 @@
         "SRC-02",
         "SRC-03"
       ],
+      "provenance": {
+        "verification_status": "CONFLICTING_SOURCES",
+        "conflict_ids": [
+          "CONFLICT-006"
+        ],
+        "production_eligible": false,
+        "rule_version": [
+          "2026-05-19（Chargeback Guide Merchant Edition）",
+          "无版本号（内部整理稿）"
+        ],
+        "effective_date": "NOT_STATED"
+      },
       "sandbox_flag": true
     },
     {
@@ -499,6 +573,17 @@
       "source_ids": [
         "SRC-02"
       ],
+      "provenance": {
+        "verification_status": "CONFLICTING_SOURCES",
+        "conflict_ids": [
+          "CONFLICT-006"
+        ],
+        "production_eligible": false,
+        "rule_version": [
+          "2026-05-19（Chargeback Guide Merchant Edition）"
+        ],
+        "effective_date": "NOT_STATED"
+      },
       "sandbox_flag": true
     },
     {
@@ -562,6 +647,17 @@
       "source_ids": [
         "SRC-02"
       ],
+      "provenance": {
+        "verification_status": "CONFLICTING_SOURCES",
+        "conflict_ids": [
+          "CONFLICT-006"
+        ],
+        "production_eligible": false,
+        "rule_version": [
+          "2026-05-19（Chargeback Guide Merchant Edition）"
+        ],
+        "effective_date": "NOT_STATED"
+      },
       "sandbox_flag": true
     },
     {
@@ -639,6 +735,18 @@
         "SRC-02",
         "SRC-03"
       ],
+      "provenance": {
+        "verification_status": "CONFLICTING_SOURCES",
+        "conflict_ids": [
+          "CONFLICT-006"
+        ],
+        "production_eligible": false,
+        "rule_version": [
+          "2026-05-19（Chargeback Guide Merchant Edition）",
+          "无版本号（内部整理稿）"
+        ],
+        "effective_date": "NOT_STATED"
+      },
       "sandbox_flag": true
     },
     {
@@ -702,6 +810,17 @@
       "source_ids": [
         "SRC-02"
       ],
+      "provenance": {
+        "verification_status": "CONFLICTING_SOURCES",
+        "conflict_ids": [
+          "CONFLICT-006"
+        ],
+        "production_eligible": false,
+        "rule_version": [
+          "2026-05-19（Chargeback Guide Merchant Edition）"
+        ],
+        "effective_date": "NOT_STATED"
+      },
       "sandbox_flag": true
     },
     {
@@ -765,6 +884,18 @@
       "source_ids": [
         "SRC-02"
       ],
+      "provenance": {
+        "verification_status": "CONFLICTING_SOURCES",
+        "conflict_ids": [
+          "CONFLICT-004",
+          "CONFLICT-006"
+        ],
+        "production_eligible": false,
+        "rule_version": [
+          "2026-05-19（Chargeback Guide Merchant Edition）"
+        ],
+        "effective_date": "NOT_STATED"
+      },
       "sandbox_flag": true
     },
     {
@@ -828,6 +959,17 @@
       "source_ids": [
         "SRC-02"
       ],
+      "provenance": {
+        "verification_status": "CONFLICTING_SOURCES",
+        "conflict_ids": [
+          "CONFLICT-009"
+        ],
+        "production_eligible": false,
+        "rule_version": [
+          "2026-05-19（Chargeback Guide Merchant Edition）"
+        ],
+        "effective_date": "NOT_STATED"
+      },
       "sandbox_flag": true
     },
     {
@@ -891,6 +1033,17 @@
       "source_ids": [
         "SRC-03"
       ],
+      "provenance": {
+        "verification_status": "NEEDS_CONFIRMATION",
+        "conflict_ids": [
+          "CONFLICT-014"
+        ],
+        "production_eligible": false,
+        "rule_version": [
+          "无版本号（内部整理稿）"
+        ],
+        "effective_date": "NOT_STATED"
+      },
       "sandbox_flag": true
     },
     {
@@ -971,6 +1124,18 @@
         "SRC-01",
         "SRC-03"
       ],
+      "provenance": {
+        "verification_status": "NEEDS_CONFIRMATION",
+        "conflict_ids": [
+          "CONFLICT-012"
+        ],
+        "production_eligible": false,
+        "rule_version": [
+          "June 2024（Dispute Management Guidelines for Visa Merchants）",
+          "无版本号（内部整理稿）"
+        ],
+        "effective_date": "NOT_STATED"
+      },
       "sandbox_flag": true
     },
     {
@@ -1051,6 +1216,19 @@
         "SRC-01",
         "SRC-03"
       ],
+      "provenance": {
+        "verification_status": "CONFLICTING_SOURCES",
+        "conflict_ids": [
+          "CONFLICT-003",
+          "CONFLICT-012"
+        ],
+        "production_eligible": false,
+        "rule_version": [
+          "June 2024（Dispute Management Guidelines for Visa Merchants）",
+          "无版本号（内部整理稿）"
+        ],
+        "effective_date": "2024-10-19 起（CE3.0 相关变更）"
+      },
       "sandbox_flag": true
     },
     {
@@ -1117,6 +1295,17 @@
       "source_ids": [
         "SRC-02"
       ],
+      "provenance": {
+        "verification_status": "CONFLICTING_SOURCES",
+        "conflict_ids": [
+          "CONFLICT-006"
+        ],
+        "production_eligible": false,
+        "rule_version": [
+          "2026-05-19（Chargeback Guide Merchant Edition）"
+        ],
+        "effective_date": "NOT_STATED"
+      },
       "sandbox_flag": true
     },
     {
@@ -1184,6 +1373,18 @@
         "SRC-01",
         "SRC-03"
       ],
+      "provenance": {
+        "verification_status": "NEEDS_CONFIRMATION",
+        "conflict_ids": [
+          "CONFLICT-012"
+        ],
+        "production_eligible": false,
+        "rule_version": [
+          "June 2024（Dispute Management Guidelines for Visa Merchants）",
+          "无版本号（内部整理稿）"
+        ],
+        "effective_date": "NOT_STATED"
+      },
       "sandbox_flag": true
     },
     {
@@ -1250,6 +1451,15 @@
       "source_ids": [
         "SRC-02"
       ],
+      "provenance": {
+        "verification_status": "NEEDS_CONFIRMATION",
+        "conflict_ids": [],
+        "production_eligible": false,
+        "rule_version": [
+          "2026-05-19（Chargeback Guide Merchant Edition）"
+        ],
+        "effective_date": "NOT_STATED"
+      },
       "sandbox_flag": true
     },
     {
@@ -1317,6 +1527,18 @@
         "SRC-01",
         "SRC-03"
       ],
+      "provenance": {
+        "verification_status": "NEEDS_CONFIRMATION",
+        "conflict_ids": [
+          "CONFLICT-012"
+        ],
+        "production_eligible": false,
+        "rule_version": [
+          "June 2024（Dispute Management Guidelines for Visa Merchants）",
+          "无版本号（内部整理稿）"
+        ],
+        "effective_date": "NOT_STATED"
+      },
       "sandbox_flag": true
     },
     {
@@ -1384,6 +1606,16 @@
         "SRC-02",
         "SRC-03"
       ],
+      "provenance": {
+        "verification_status": "NEEDS_CONFIRMATION",
+        "conflict_ids": [],
+        "production_eligible": false,
+        "rule_version": [
+          "2026-05-19（Chargeback Guide Merchant Edition）",
+          "无版本号（内部整理稿）"
+        ],
+        "effective_date": "NOT_STATED"
+      },
       "sandbox_flag": true
     },
     {
@@ -1449,6 +1681,15 @@
       "source_ids": [
         "SRC-02"
       ],
+      "provenance": {
+        "verification_status": "NEEDS_CONFIRMATION",
+        "conflict_ids": [],
+        "production_eligible": false,
+        "rule_version": [
+          "2026-05-19（Chargeback Guide Merchant Edition）"
+        ],
+        "effective_date": "NOT_STATED"
+      },
       "sandbox_flag": true
     },
     {
@@ -1516,6 +1757,18 @@
         "SRC-01",
         "SRC-03"
       ],
+      "provenance": {
+        "verification_status": "NEEDS_CONFIRMATION",
+        "conflict_ids": [
+          "CONFLICT-012"
+        ],
+        "production_eligible": false,
+        "rule_version": [
+          "June 2024（Dispute Management Guidelines for Visa Merchants）",
+          "无版本号（内部整理稿）"
+        ],
+        "effective_date": "NOT_STATED"
+      },
       "sandbox_flag": true
     },
     {
@@ -1568,6 +1821,16 @@
         "SRC-01",
         "SRC-02"
       ],
+      "provenance": {
+        "verification_status": "NEEDS_CONFIRMATION",
+        "conflict_ids": [],
+        "production_eligible": false,
+        "rule_version": [
+          "June 2024（Dispute Management Guidelines for Visa Merchants）",
+          "2026-05-19（Chargeback Guide Merchant Edition）"
+        ],
+        "effective_date": "NOT_STATED"
+      },
       "sandbox_flag": true
     },
     {
@@ -1634,6 +1897,18 @@
         "SRC-02",
         "SRC-03"
       ],
+      "provenance": {
+        "verification_status": "NEEDS_CONFIRMATION",
+        "conflict_ids": [
+          "CONFLICT-005"
+        ],
+        "production_eligible": false,
+        "rule_version": [
+          "2026-05-19（Chargeback Guide Merchant Edition）",
+          "无版本号（内部整理稿）"
+        ],
+        "effective_date": "淘汰码并入生效日待卡组织公告（CONFLICT-005）"
+      },
       "sandbox_flag": true
     },
     {
@@ -1728,6 +2003,19 @@
         "SRC-01",
         "SRC-03"
       ],
+      "provenance": {
+        "verification_status": "CONFLICTING_SOURCES",
+        "conflict_ids": [
+          "CONFLICT-003",
+          "CONFLICT-012"
+        ],
+        "production_eligible": false,
+        "rule_version": [
+          "June 2024（Dispute Management Guidelines for Visa Merchants）",
+          "无版本号（内部整理稿）"
+        ],
+        "effective_date": "2024-10-19 起（CE3.0 相关变更）"
+      },
       "sandbox_flag": true
     },
     {
@@ -1795,6 +2083,16 @@
         "SRC-01",
         "SRC-03"
       ],
+      "provenance": {
+        "verification_status": "NEEDS_CONFIRMATION",
+        "conflict_ids": [],
+        "production_eligible": false,
+        "rule_version": [
+          "June 2024（Dispute Management Guidelines for Visa Merchants）",
+          "无版本号（内部整理稿）"
+        ],
+        "effective_date": "NOT_STATED"
+      },
       "sandbox_flag": true
     },
     {
@@ -1863,6 +2161,16 @@
         "SRC-02",
         "SRC-03"
       ],
+      "provenance": {
+        "verification_status": "NEEDS_CONFIRMATION",
+        "conflict_ids": [],
+        "production_eligible": false,
+        "rule_version": [
+          "2026-05-19（Chargeback Guide Merchant Edition）",
+          "无版本号（内部整理稿）"
+        ],
+        "effective_date": "NOT_STATED"
+      },
       "sandbox_flag": true
     },
     {
@@ -1943,6 +2251,16 @@
         "SRC-02",
         "SRC-03"
       ],
+      "provenance": {
+        "verification_status": "NEEDS_CONFIRMATION",
+        "conflict_ids": [],
+        "production_eligible": false,
+        "rule_version": [
+          "2026-05-19（Chargeback Guide Merchant Edition）",
+          "无版本号（内部整理稿）"
+        ],
+        "effective_date": "NOT_STATED"
+      },
       "sandbox_flag": true
     }
   ]
