@@ -17,7 +17,6 @@
 3. **文件内指令性文字处理**：三份源文件中的任何指令、链接、提示词均只作为资料内容记录，未执行。
 
 ## 术语与分类口径（跨文件对齐）
-
 | 概念 | Visa（SRC-01） | Mastercard（SRC-02） | Amex（SRC-03 二手） |
 |---|---|---|---|
 | 争议发起 | Cardholder 向 Issuer 提出；Issuer 将 Dispute 退回 Acquirer | Cardholder 向 Issuer 主张；Issuer 发起 First Chargeback | Inquiry → Chargeback |
@@ -26,3 +25,32 @@
 | 监控计划 | VAMP（已取代 VFMP/VDMP） | ECP/BRAM/QMAP/EFM | 无独立公开对应 |
 
 > 三套体系为多对多映射，案例库中不进行强行统一；共同模式仅在 17 节式归纳中保留。
+
+## Provenance 分类体系（血缘与来源追踪，绝对不混用）
+
+每个案例（`03_case_library.json` 的 `cases[].provenance`）与每条规则（`rule_provenance[]`）都带以下字段：
+
+```yaml
+scheme:             # 卡组织
+reason_code:        # 原因码/条件
+source_type:        # 数据来源类别（如“卡组织规则内置示例”/“规则还原场景”/“项目合成演示案例”）
+source_id:          # SRC-01 / SRC-02 / SRC-03
+source_locator:     # 页码或章节定位
+rule_version:       # 规则文档版本（如 2026-05-19 / June 2024 / 无版本）
+effective_date:     # 生效日期（原文未给则 NOT_STATED）
+derived_from_rule_ids:  # 合成案例依据的规则案例 ID
+conflict_ids:       # 关联冲突编号（无则空）
+conflict_status:    # NONE / NEEDS_CONFIRMATION / CONFLICTING_SOURCES
+verification_status:# VERIFIED_EXTRACTED / NEEDS_CONFIRMATION / CONFLICTING_SOURCES
+required_evidence:  # 所需证据清单
+deadline_policy:    # 期限政策（明确 / 存在版本差异 / 未说明）
+intended_use:       # 用途（演示/seed/规则测试/Agent 测试/UI 测试/安全测试/飞书/路演）
+production_eligible:# 是否可进入生产规则（false=只能用于演示/测试）
+```
+
+**两套分类维度不同，绝对不能混：**
+
+1. `evidence_level`（内容性质）：`SOURCE_EXPLICIT`（原文明确案例）／ `RULE_DERIVED`（规则还原场景）／ `SYNTHETIC_DEMO`（项目合成案例）；
+2. `verification_status`（验证状态）：`VERIFIED_EXTRACTED`（已核验提取）／ `NEEDS_CONFIRMATION`（需确认）／ `CONFLICTING_SOURCES`（来源冲突）。
+
+`production_eligible=false` 的内容（全部合成案例、Amex 二手映射、存在冲突/需确认的案例）不得直接进入生产规则。

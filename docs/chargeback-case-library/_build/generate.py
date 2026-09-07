@@ -35,12 +35,195 @@ print(f"校验通过：{len(CASES)} 个案例（SOURCE_EXPLICIT={len(E)}，RULE_
 
 generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
+# ---------- Provenance（数据血缘与来源追踪）----------
+# 两套分类绝对不混用：
+#   1) evidence_level（内容性质）：SOURCE_EXPLICIT / RULE_DERIVED / SYNTHETIC_DEMO
+#   2) verification_status（验证状态）：VERIFIED_EXTRACTED / NEEDS_CONFIRMATION / CONFLICTING_SOURCES
+
+# 案例 → 关联冲突 ID（CONFLICT-006 为 MC SP 时限 45/30 差异；CONFLICT-012 为 Visa 响应天数缺失）
+CONFLICT_LINK = {
+    "CB-CASE-040": ["CONFLICT-003", "CONFLICT-012"],
+    "CB-CASE-025": ["CONFLICT-003", "CONFLICT-012"],
+    "CB-CASE-061": ["CONFLICT-003", "CONFLICT-012"],
+    "CB-CASE-071": ["CONFLICT-003", "CONFLICT-012"],
+    "CB-CASE-042": ["CONFLICT-001", "CONFLICT-012"],
+    "CB-CASE-041": ["CONFLICT-012"], "CB-CASE-043": ["CONFLICT-002", "CONFLICT-012"],
+    "CB-CASE-044": ["CONFLICT-012"], "CB-CASE-026": ["CONFLICT-012"],
+    "CB-CASE-027": ["CONFLICT-012"], "CB-CASE-028": ["CONFLICT-012"],
+    "CB-CASE-029": ["CONFLICT-012"], "CB-CASE-030": ["CONFLICT-002", "CONFLICT-012"],
+    "CB-CASE-020": ["CONFLICT-012"], "CB-CASE-021": ["CONFLICT-012"],
+    "CB-CASE-022": ["CONFLICT-012"], "CB-CASE-023": ["CONFLICT-012"],
+    "CB-CASE-024": ["CONFLICT-012"],
+    "CB-CASE-060": ["CONFLICT-012"], "CB-CASE-063": ["CONFLICT-012"],
+    "CB-CASE-065": ["CONFLICT-012"], "CB-CASE-068": ["CONFLICT-012"],
+    "CB-CASE-045": ["CONFLICT-006"], "CB-CASE-046": ["CONFLICT-006"],
+    "CB-CASE-047": ["CONFLICT-006"], "CB-CASE-048": ["CONFLICT-006"],
+    "CB-CASE-049": ["CONFLICT-006"],
+    "CB-CASE-050": ["CONFLICT-004", "CONFLICT-006"],
+    "CB-CASE-051": ["CONFLICT-009"],
+    "CB-CASE-062": ["CONFLICT-006"],
+    "CB-CASE-070": ["CONFLICT-005"],
+    "CB-CASE-032": ["CONFLICT-014"], "CB-CASE-033": ["CONFLICT-014"], "CB-CASE-052": ["CONFLICT-014"],
+    "CB-CASE-034": ["CONFLICT-013"],
+    "CB-CASE-012": ["CONFLICT-006"], "CB-CASE-013": ["CONFLICT-006"],
+    "CB-CASE-007": ["CONFLICT-006"], "CB-CASE-016": ["CONFLICT-006"],
+}
+
+# 案例 → 规则生效日期（原文明确才标注，否则 NOT_STATED）
+EFFECTIVE_DATE = {
+    "CB-CASE-040": "2024-10-19 起（CE3.0 相关变更，SRC-01 P26）",
+    "CB-CASE-025": "2024-10-19 起（CE3.0 相关变更，SRC-01 P26）",
+    "CB-CASE-061": "2024-10-19 起（CE3.0 相关变更）",
+    "CB-CASE-071": "2024-10-19 起（CE3.0 相关变更）",
+    "CB-CASE-042": "2024-04-13 起（11.3 生效，SRC-01 P2/P31）",
+    "CB-CASE-070": "淘汰码并入生效日待卡组织公告（CONFLICT-005）",
+}
+
+RULE_VERSION = {
+    "SRC-01": "June 2024（Dispute Management Guidelines for Visa Merchants）",
+    "SRC-02": "2026-05-19（Chargeback Guide Merchant Edition）",
+    "SRC-03": "无版本号（内部整理稿）",
+}
+
+CONFLICT_STATUS_CN = {"VERIFIED_EXTRACTED": "已核验提取", "NEEDS_CONFIRMATION": "需确认", "CONFLICTING_SOURCES": "来源冲突"}
+
+
+# 文档级冲突 vs 案例级冲突：以下冲突对具体案例而言更准确的判定是“需确认”
+# （例如 Visa 未公布天数需向收单机构确认有效版本，而非两个来源给出了矛盾数值）
+WEAKEN_TO_CONFIRM = {"CONFLICT-012", "CONFLICT-001", "CONFLICT-002", "CONFLICT-005", "CONFLICT-013", "CONFLICT-014"}
+
+
+def conflict_status_of(c):
+    links = CONFLICT_LINK.get(c["case_template_id"], [])
+    if not links:
+        return None
+    sts = {next(x["status"] for x in CONFLICTS if x["conflict_id"] == l) for l in links}
+    hard = [l for l in links if l not in WEAKEN_TO_CONFIRM
+            and "CONFLICTING_SOURCES" in next(x["status"] for x in CONFLICTS if x["conflict_id"] == l)]
+    if hard:
+        return "CONFLICTING_SOURCES"
+    if any("NEEDS_CONFIRMATION" in s for s in sts) or links:
+        return "NEEDS_CONFIRMATION"
+    return None
+
+
+def verification_status_of(c):
+    st = conflict_status_of(c)
+    if st:
+        return st
+    if c["evidence_level"] == "SYNTHETIC_DEMO":
+        return "NEEDS_CONFIRMATION"  # 产品设定参数（阈值/截止/幂等等）需业务确认
+    if c["scheme"] == "American Express":
+        return "NEEDS_CONFIRMATION"  # 无 Amex 官方原文（GAP-005）
+    if c.get("requires_human_review") or c["extraction_confidence"] != "HIGH":
+        return "NEEDS_CONFIRMATION"
+    return "VERIFIED_EXTRACTED"
+
+
+def deadline_policy_of(c):
+    dl = c["dispute_facts"].get("response_deadline", "NOT_STATED")
+    if "30/45" in dl or "地区而异" in dl or "差异" in dl:
+        return "存在版本差异（见冲突清单）"
+    if "NOT_STATED" in dl or "演示设定" in dl:
+        return "未说明（Visa 需收单机构确认 / 演示设定）" if "演示设定" in dl else "未说明（需收单机构确认）"
+    return "明确"
+
+
+def production_eligible_of(c):
+    if c["evidence_level"] == "SYNTHETIC_DEMO":
+        return False
+    if c["scheme"] == "American Express":
+        return False
+    if conflict_status_of(c):
+        return False
+    if c.get("requires_human_review") or c["extraction_confidence"] != "HIGH":
+        return False
+    return True
+
+
+def intended_use_of(c):
+    om = c["oceanpilot_mapping"]
+    uses = []
+    if om["suitable_for_demo"]:
+        uses.append("网站/比赛演示")
+    if om["suitable_for_seed_data"]:
+        uses.append("Sandbox seed")
+    if om["suitable_for_rule_test"]:
+        uses.append("规则引擎测试")
+    if om["suitable_for_agent_test"]:
+        uses.append("Agent 测试")
+    if om["suitable_for_ui_test"]:
+        uses.append("UI 测试")
+    if om["suitable_for_security_test"]:
+        uses.append("安全测试")
+    if om["suitable_for_feishu_demo"]:
+        uses.append("飞书演示")
+    if om["suitable_for_presentation_story"]:
+        uses.append("路演故事")
+    return uses
+
+
+def build_provenance(c):
+    links = CONFLICT_LINK.get(c["case_template_id"], [])
+    rule_versions = [RULE_VERSION[s] for s in c["source_ids"] if s in RULE_VERSION]
+    return {
+        "scheme": c["scheme"],
+        "reason_code": c["reason_code"],
+        "source_type": c["data_source_type"],
+        "source_id": c["source_ids"],
+        "source_locator": c["source_locations"],
+        "rule_version": rule_versions if rule_versions else "NOT_STATED",
+        "effective_date": EFFECTIVE_DATE.get(c["case_template_id"], "NOT_STATED"),
+        "derived_from_rule_ids": c.get("synthetic_meta", {}).get("derived_from_rule_ids", []),
+        "conflict_ids": links,
+        "conflict_status": conflict_status_of(c) or "NONE",
+        "verification_status": verification_status_of(c),
+        "required_evidence": [e["evidence_name_cn"] for e in c["evidence_required"]],
+        "deadline_policy": deadline_policy_of(c),
+        "intended_use": intended_use_of(c),
+        "production_eligible": production_eligible_of(c),
+    }
+
+
+for _c in CASES:
+    _c["provenance"] = build_provenance(_c)
+
+# 按（卡组织 × 原因码）聚合的规则血缘清单
+rule_prov = {}
+for c in CASES:
+    key = (c["scheme"], c["reason_code"])
+    rp = rule_prov.setdefault(key, {
+        "scheme": c["scheme"], "reason_code": c["reason_code"], "reason_code_name": c["reason_code_name"],
+        "case_template_ids": [], "source_ids": set(), "source_locators": [], "conflict_ids": set(),
+        "verification_statuses": set(), "production_eligible": True, "deadline_policy": set()})
+    rp["case_template_ids"].append(c["case_template_id"])
+    rp["source_ids"].update(c["source_ids"])
+    rp["source_locators"] += c["source_locations"]
+    rp["conflict_ids"].update(CONFLICT_LINK.get(c["case_template_id"], []))
+    rp["verification_statuses"].add(c["provenance"]["verification_status"])
+    rp["deadline_policy"].add(c["provenance"]["deadline_policy"])
+    if not c["provenance"]["production_eligible"]:
+        rp["production_eligible"] = False
+for rp in rule_prov.values():
+    rp["source_ids"] = sorted(rp["source_ids"])
+    rp["source_locators"] = sorted(set(rp["source_locators"]))
+    rp["conflict_ids"] = sorted(rp["conflict_ids"])
+    rp["verification_statuses"] = sorted(rp["verification_statuses"])
+    rp["deadline_policy"] = sorted(rp["deadline_policy"])
+RULE_PROVENANCE = sorted(rule_prov.values(), key=lambda x: (x["scheme"], x["reason_code"]))
+
 # ---------- 03_case_library.json ----------
 library = {
-    "schema_version": "1.0",
+    "schema_version": "1.1",
     "generated_at": generated_at,
+    "provenance_taxonomy": {
+        "evidence_level": ["SOURCE_EXPLICIT", "RULE_DERIVED", "SYNTHETIC_DEMO"],
+        "verification_status": ["VERIFIED_EXTRACTED", "NEEDS_CONFIRMATION", "CONFLICTING_SOURCES"],
+        "note": "两套分类维度不同，绝对不混用：evidence_level 表示内容性质，verification_status 表示来源核验状态；production_eligible=false 的内容不得直接进入生产规则。"
+    },
     "sources": SOURCES,
     "cases": CASES,
+    "rule_provenance": RULE_PROVENANCE,
     "conflicts": CONFLICTS,
     "data_gaps": DATA_GAPS,
 }
@@ -141,6 +324,7 @@ for c in CASES:
         source_type = "rule_template"
     else:
         continue
+    p = c["provenance"]
     seed["seed_cases"].append({
         "case_template_id": c["case_template_id"],
         "source_type": source_type,
@@ -151,8 +335,15 @@ for c in CASES:
         "dispute_facts": c["dispute_facts"], "evidence_required": c["evidence_required"],
         "should_accept_or_contest": c["dispute_facts"].get("should_accept_or_contest"),
         "expected_result": c["outcome"]["result"],
-        "derived_from_rule_ids": c.get("synthetic_meta", {}).get("derived_from_rule_ids", []),
+        "derived_from_rule_ids": p["derived_from_rule_ids"],
         "source_ids": c["source_ids"],
+        "provenance": {
+            "verification_status": p["verification_status"],
+            "conflict_ids": p["conflict_ids"],
+            "production_eligible": p["production_eligible"],
+            "rule_version": p["rule_version"],
+            "effective_date": p["effective_date"],
+        },
         "sandbox_flag": True,
     })
 with open(os.path.join(OUT, "06_seed_cases.json"), "w", encoding="utf-8") as f:
@@ -320,6 +511,9 @@ for c in CASES:
     lines.append(f"- **一句话场景**：{c['scenario_one_line']}")
     lines.append(f"- **业务分类**：卡组织 {c['scheme']}｜原因码 {c['reason_code']}（{c['reason_code_name']}）｜大类 {c['dispute_category']}｜行业 {c['industry']}｜渠道 {c['channel']}｜交易类型 {c['transaction_type']}｜数据来源类别 {c['data_source_type']}")
     lines.append(f"- **来源**：{'、'.join(c['source_ids'])}｜定位：{'; '.join(c['source_locations'])}｜置信度 {c['extraction_confidence']}｜需人工复核 {'是' if c['requires_human_review'] else '否'}")
+    p = c.get("provenance") or build_provenance(c)
+    rv = p["rule_version"] if isinstance(p["rule_version"], list) else [p["rule_version"]]
+    lines.append(f"- **Provenance**：验证状态 {p['verification_status']}｜冲突 {p['conflict_ids'] or '无'}｜规则版本 {'; '.join(rv)}｜生效日期 {p['effective_date']}｜期限政策 {p['deadline_policy']}｜用途 {'、'.join(p['intended_use'])}｜生产可用 {'是' if p['production_eligible'] else '否'}")
     if c.get("source_excerpt_short") and c["source_excerpt_short"] != "N/A（合成案例，无原文摘录）":
         lines.append(f"- **原文摘录（≤50 词）**：{c['source_excerpt_short']}")
     lines.append("- **参与者**：" + "；".join(f"{k}={v}" for k, v in c["parties"].items() if v not in ("NOT_STATED", "N/A")))
@@ -378,7 +572,11 @@ for c in CASES:
     key = (c["scheme"], c["reason_code"])
     grouped.setdefault(key, []).append(c["case_template_id"])
 for (scheme, code), case_ids in sorted(grouped.items()):
-    lines.append(f"## {scheme}｜{code}\n")
+    rp = next(x for x in RULE_PROVENANCE if x["scheme"] == scheme and x["reason_code"] == code)
+    lines.append(f"## {scheme}｜{code}｜{rp['reason_code_name']}\n")
+    lines.append(f"- **Provenance**：验证状态 {' / '.join(rp['verification_statuses'])}｜冲突 {rp['conflict_ids'] or '无'}｜期限政策 {' / '.join(rp['deadline_policy'])}｜生产可用 {'是' if rp['production_eligible'] else '否'}｜来源 {', '.join(rp['source_ids'])}")
+    lines.append(f"- **规则定位**：{'；'.join(rp['source_locators'])}")
+    lines.append("")
     lines.append(f"| 案例 | 规则依据 | 预期判断 | 阻塞条件 | 边界/例外 | 测试断言 |")
     lines.append("|---|---|---|---|---|---|")
     for cid in case_ids:

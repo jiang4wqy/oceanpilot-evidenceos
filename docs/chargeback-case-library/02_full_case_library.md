@@ -1,6 +1,6 @@
 # OceanPilot 拒付案例库（完整版）
 
-> 生成时间：2026-09-07T11:48:36Z ｜ 案例总数：62（SOURCE_EXPLICIT 34 / RULE_DERIVED 13 / SYNTHETIC_DEMO 15）
+> 生成时间：2026-09-07T15:34:14Z ｜ 案例总数：62（SOURCE_EXPLICIT 34 / RULE_DERIVED 13 / SYNTHETIC_DEMO 15）
 > 证据纪律：SOURCE_EXPLICIT=原文明确案例；RULE_DERIVED=规则还原场景；SYNTHETIC_DEMO=项目合成案例（虚构）。
 > 缺失值约定：NOT_STATED=原文未说明；NOT_APPLICABLE=不适用；NEEDS_CONFIRMATION=需业务确认。
 
@@ -9,6 +9,7 @@
 - **一句话场景**：持卡人雇人刷墙 USD 500，工人打翻油漆毁沙发 USD 300，发卡行不能用 4853/4854 对 USD 300 拒付。
 - **业务分类**：卡组织 Mastercard｜原因码 4853/4854（Cardholder Dispute / NEC）｜大类 Consumer Dispute｜行业 家装服务｜渠道 线下｜交易类型 服务｜数据来源类别 卡组织规则内置示例
 - **来源**：SRC-02｜定位：P152; P460; P950; P1157｜置信度 HIGH｜需人工复核 否
+- **Provenance**：验证状态 VERIFIED_EXTRACTED｜冲突 无｜规则版本 2026-05-19（Chargeback Guide Merchant Edition）｜生效日期 NOT_STATED｜期限政策 未说明（需收单机构确认）｜用途 网站/比赛演示、规则引擎测试、Agent 测试、路演故事｜生产可用 是
 - **原文摘录（≤50 词）**：a cardholder contracts with a painter to paint his or her living room for USD 500. The painter accidentally spills paint on the couch, causing USD 300 worth of damage.
 - **参与者**：cardholder=持卡人（房主）；issuer=发卡行；acquirer=收单行；merchant=油漆工/家装商户；platform=无
 - **资金关系**：who_paid_whom：持卡人向商户支付 USD 500 服务费；who_initiated：持卡人向发卡行主张拒付；who_received_notice：商户（经收单行）；who_bears_risk：侵权损失 USD 300 不属于拒付受理范围
@@ -28,6 +29,7 @@
 - **一句话场景**：USD 1,000 终身会员，商户 3 个月后倒闭，可拒付金额 = 1000/18×(18−3) ≈ USD 833。
 - **业务分类**：卡组织 Mastercard｜原因码 4853（Cardholder Dispute）｜大类 Consumer Dispute｜行业 订阅/会员服务｜渠道 订阅｜交易类型 服务（终身会员）｜数据来源类别 卡组织规则内置示例（含明确算式）
 - **来源**：SRC-02｜定位：P178; P968; P1511｜置信度 HIGH｜需人工复核 否
+- **Provenance**：验证状态 VERIFIED_EXTRACTED｜冲突 无｜规则版本 2026-05-19（Chargeback Guide Merchant Edition）｜生效日期 NOT_STATED｜期限政策 明确｜用途 网站/比赛演示、Sandbox seed、规则引擎测试、Agent 测试、UI 测试、路演故事｜生产可用 是
 - **原文摘录（≤50 词）**：the cardholder purchased a lifetime membership for USD 1,000. The merchant goes out of business after three months. The amount to be charged back is USD 833
 - **参与者**：cardholder=持卡人；issuer=发卡行；acquirer=收单行；merchant=会员服务商户（已倒闭）；platform=无
 - **资金关系**：who_paid_whom：持卡人向商户预付 USD 1,000；who_initiated：持卡人向发卡行主张拒付；who_received_notice：商户/收单行；who_bears_risk：商户承担未提供服务的对价（USD 833）
@@ -47,6 +49,7 @@
 - **一句话场景**：持卡人签弃权书（发货证明即约束持卡人），花瓶未到但商户能证明已发货，不可拒付；拒绝购买运输保险同理需弃权书+发货凭证。
 - **业务分类**：卡组织 Mastercard｜原因码 4853（Cardholder Dispute）｜大类 Consumer Dispute｜行业 跨境电商（实物）｜渠道 线上｜交易类型 实物商品（海运）｜数据来源类别 卡组织规则内置示例
 - **来源**：SRC-02｜定位：P178; P968; P1511｜置信度 HIGH｜需人工复核 否
+- **Provenance**：验证状态 VERIFIED_EXTRACTED｜冲突 无｜规则版本 2026-05-19（Chargeback Guide Merchant Edition）｜生效日期 NOT_STATED｜期限政策 明确｜用途 网站/比赛演示、Sandbox seed、规则引擎测试、Agent 测试、UI 测试、路演故事｜生产可用 是
 - **原文摘录（≤50 词）**：A cardholder purchases vases and arranges with the merchant to have the vases shipped to the United States... signs a waiver form... 'PROOF OF DISPATCH OF THE MERCHANDISE WILL BIND THE CARDHOLDER.'
 - **参与者**：cardholder=持卡人（买方）；issuer=发卡行；acquirer=收单行；merchant=跨境电商商户；platform=承运方（海运）
 - **资金关系**：who_paid_whom：持卡人向商户支付货款；who_initiated：持卡人主张未收到货；who_received_notice：商户/收单行；who_bears_risk：持卡人已通过弃权书自担运输风险
@@ -67,6 +70,7 @@
 - **一句话场景**：持卡人收到空箱或装砖块、废纸的箱子，适用 Goods or Services Not Provided 拒付。
 - **业务分类**：卡组织 Mastercard｜原因码 4853（Cardholder Dispute（Goods/Services Not Provided））｜大类 Consumer Dispute｜行业 电商（实物）｜渠道 线上｜交易类型 实物商品｜数据来源类别 卡组织规则内置示例
 - **来源**：SRC-02｜定位：P178; P967; P1511｜置信度 HIGH｜需人工复核 否
+- **Provenance**：验证状态 VERIFIED_EXTRACTED｜冲突 无｜规则版本 2026-05-19（Chargeback Guide Merchant Edition）｜生效日期 NOT_STATED｜期限政策 明确｜用途 网站/比赛演示、Sandbox seed、规则引擎测试、Agent 测试｜生产可用 是
 - **原文摘录（≤50 词）**：This chargeback applies when the cardholder receives an empty box or a box containing worthless items, such as a brick or a stack of paper.
 - **参与者**：cardholder=持卡人；issuer=发卡行；acquirer=收单行；merchant=电商商户；platform=物流承运方
 - **资金关系**：who_paid_whom：持卡人向商户支付货款；who_initiated：持卡人主张收到空箱；who_received_notice：商户/收单行；who_bears_risk：商户需证明实际交付了对应商品
@@ -87,6 +91,7 @@
 - **一句话场景**：持卡人把退款收据涂改成更大金额，商户可合理说明篡改情况并二次呈请（码 2001）。
 - **业务分类**：卡组织 Mastercard｜原因码 4853（抗辩码 2001）（Cardholder Dispute / Suspected Altered Documentation）｜大类 Consumer Dispute / Fraud｜行业 通用零售｜渠道 线上/线下｜交易类型 商品/服务｜数据来源类别 卡组织规则内置示例
 - **来源**：SRC-02｜定位：P162; P184; P335; P694; P957; P1094; P1330｜置信度 HIGH｜需人工复核 否
+- **Provenance**：验证状态 VERIFIED_EXTRACTED｜冲突 无｜规则版本 2026-05-19（Chargeback Guide Merchant Edition）｜生效日期 NOT_STATED｜期限政策 存在版本差异（见冲突清单）｜用途 网站/比赛演示、Sandbox seed、规则引擎测试、Agent 测试｜生产可用 是
 - **原文摘录（≤50 词）**：a refund receipt was altered to show a larger refund amount.
 - **参与者**：cardholder=持卡人；issuer=发卡行；acquirer=收单行；merchant=商户；platform=无
 - **资金关系**：who_paid_whom：持卡人向商户付款，商户部分/全额退款；who_initiated：持卡人提交被篡改单据主张拒付；who_received_notice：商户/收单行；who_bears_risk：若抗辩成立，争议金额回到持卡人
@@ -105,6 +110,7 @@
 - **一句话场景**：退回商品被替换（面霜变酸奶、零件被换低质件），商户可用疑似退货欺诈（码 2004）抗辩。
 - **业务分类**：卡组织 Mastercard｜原因码 4853（抗辩码 2004）（Cardholder Dispute / Suspected Return Fraud）｜大类 Consumer Dispute｜行业 零售/电子商品｜渠道 线上｜交易类型 实物商品（退货）｜数据来源类别 卡组织规则内置示例
 - **来源**：SRC-02｜定位：P163; P279; P958; P1042｜置信度 HIGH｜需人工复核 否
+- **Provenance**：验证状态 VERIFIED_EXTRACTED｜冲突 无｜规则版本 2026-05-19（Chargeback Guide Merchant Edition）｜生效日期 NOT_STATED｜期限政策 存在版本差异（见冲突清单）｜用途 网站/比赛演示、规则引擎测试、Agent 测试｜生产可用 是
 - **原文摘录（≤50 词）**：Returned product was replaced with a substance that resembled the original product (for example, face moisturizer replaced with yogurt)... parts removed and replaced with lower quality parts.
 - **参与者**：cardholder=持卡人（退货方）；issuer=发卡行；acquirer=收单行；merchant=商户；platform=退货物流
 - **资金关系**：who_paid_whom：持卡人付款后申请退款；who_initiated：持卡人主张已退货应退款；who_received_notice：商户/收单行；who_bears_risk：商户承担退款，除非证明退货欺诈
@@ -123,6 +129,7 @@
 - **一句话场景**：授权请求 USD 100、部分批准 USD 75，部分撤销必须 ≤ USD 74.99，否则收单行对未撤销余额担责；全额批准后全额撤销则交易与批准全部取消。
 - **业务分类**：卡组织 Mastercard｜原因码 4808（Authorization-related Chargeback）｜大类 Authorization｜行业 通用（规则）｜渠道 线上/线下｜交易类型 规则金额示例｜数据来源类别 卡组织规则内置示例
 - **来源**：SRC-02｜定位：P64-65; P84; P934｜置信度 HIGH｜需人工复核 否
+- **Provenance**：验证状态 CONFLICTING_SOURCES｜冲突 ['CONFLICT-006']｜规则版本 2026-05-19（Chargeback Guide Merchant Edition）｜生效日期 NOT_STATED｜期限政策 明确｜用途 网站/比赛演示、Sandbox seed、规则引擎测试、Agent 测试｜生产可用 否
 - **原文摘录（≤50 词）**：An authorization is requested for USD 100, the issuer partially approved USD 75, the partial reversal must be USD 74.99 or less.
 - **参与者**：cardholder=持卡人；issuer=发卡行；acquirer=收单行；merchant=商户；platform=无
 - **资金关系**：who_paid_whom：持卡人向商户付款；who_initiated：发卡行发起授权类拒付；who_received_notice：收单行/商户；who_bears_risk：收单行对未撤销余额担责
@@ -141,6 +148,7 @@
 - **一句话场景**：美国 MCC 5542 加油机以 USD 1 授权：公司卡 ≤ USD 500、其他卡 ≤ USD 175 不得拒付，超出部分只扣差额。
 - **业务分类**：卡组织 Mastercard｜原因码 4808（Authorization-related Chargeback）｜大类 Authorization｜行业 加油/交通｜渠道 线下（无人终端）｜交易类型 规则金额示例｜数据来源类别 卡组织规则内置示例
 - **来源**：SRC-02｜定位：P61; P885-886｜置信度 HIGH｜需人工复核 否
+- **Provenance**：验证状态 VERIFIED_EXTRACTED｜冲突 无｜规则版本 2026-05-19（Chargeback Guide Merchant Edition）｜生效日期 NOT_STATED｜期限政策 明确｜用途 规则引擎测试、Agent 测试｜生产可用 是
 - **原文摘录（≤50 词）**：US MCC 5542 AFD transactions authorized for USD 1: corporate cards ≤ USD 500 and other cards ≤ USD 175 cannot be charged back; only the excess amount.
 - **参与者**：cardholder=持卡人；issuer=发卡行；acquirer=收单行；merchant=加油站；platform=无
 - **资金关系**：who_paid_whom：持卡人向加油站付款；who_initiated：发卡行发起授权类拒付；who_received_notice：收单行/商户；who_bears_risk：超额部分商户担责
@@ -158,6 +166,7 @@
 - **一句话场景**：CAT 3 限额（香港 HKD 500 / 欧洲 EUR 50 / 其他 USD 40）超出可拒付；英国非接触公交 GBP 0.10 授权后 14 天内 split clearing 属正确标识不可拒付。
 - **业务分类**：卡组织 Mastercard｜原因码 4808（Authorization-related Chargeback）｜大类 Authorization｜行业 交通/无人零售｜渠道 线下（无人终端）｜交易类型 小额非接触｜数据来源类别 卡组织规则内置示例
 - **来源**：SRC-02｜定位：P115; P921-922; P56-57｜置信度 HIGH｜需人工复核 否
+- **Provenance**：验证状态 VERIFIED_EXTRACTED｜冲突 无｜规则版本 2026-05-19（Chargeback Guide Merchant Edition）｜生效日期 NOT_STATED｜期限政策 明确｜用途 规则引擎测试、Agent 测试｜生产可用 是
 - **原文摘录（≤50 词）**：CAT 3 limits: Hong Kong MCC 7523 HKD 500; Europe EUR 50; other CAT 3 USD 40 or local equivalent.
 - **参与者**：cardholder=持卡人；issuer=发卡行；acquirer=收单行；merchant=交通/无人终端商户；platform=无
 - **资金关系**：who_paid_whom：持卡人小额非接触支付；who_initiated：发卡行授权类拒付；who_received_notice：收单行/商户；who_bears_risk：超限部分商户担责
@@ -175,6 +184,7 @@
 - **一句话场景**：每月 EUR 250×3 年购车=分期；每月 EUR 25 健身会员（无终止日）=循环；水电自动扣款=循环。定性决定适用 4850 还是循环拒付规则。
 - **业务分类**：卡组织 Mastercard｜原因码 4853/4850（Cardholder Dispute / Installment Billing Dispute）｜大类 Consumer Dispute｜行业 汽车零售/健身/公用事业｜渠道 订阅/分期｜交易类型 周期扣款｜数据来源类别 卡组织规则内置示例
 - **来源**：SRC-02｜定位：P312; P330; P1064; P1076｜置信度 HIGH｜需人工复核 否
+- **Provenance**：验证状态 VERIFIED_EXTRACTED｜冲突 无｜规则版本 2026-05-19（Chargeback Guide Merchant Edition）｜生效日期 NOT_STATED｜期限政策 明确｜用途 网站/比赛演示、Sandbox seed、规则引擎测试、Agent 测试、路演故事｜生产可用 是
 - **原文摘录（≤50 词）**：A cardholder contracted to pay EUR 250 on a monthly basis for three years for an automobile. This transaction is an installment transaction because an end date is specified.
 - **参与者**：cardholder=持卡人；issuer=发卡行；acquirer=收单行；merchant=汽车商/健身房/公用事业；platform=无
 - **资金关系**：who_paid_whom：持卡人按周期向商户付款；who_initiated：持卡人主张取消/未授权；who_received_notice：商户/收单行；who_bears_risk：定性错误导致规则错用
@@ -194,6 +204,7 @@
 - **一句话场景**：与有效原交易关联的后续单独收费属于 addendum（房账餐费、租车期间停车罚单）；两笔独立交易（早/午餐）或直接刷卡餐费则不是。
 - **业务分类**：卡组织 Mastercard｜原因码 4853/4837（Cardholder Dispute / No Cardholder Authorization）｜大类 Consumer Dispute / Fraud｜行业 酒店/租车｜渠道 线下｜交易类型 后续附加收费｜数据来源类别 卡组织规则内置示例
 - **来源**：SRC-02｜定位：P350; P353; P501; P1090; P1093; P1189｜置信度 HIGH｜需人工复核 否
+- **Provenance**：验证状态 VERIFIED_EXTRACTED｜冲突 无｜规则版本 2026-05-19（Chargeback Guide Merchant Edition）｜生效日期 NOT_STATED｜期限政策 明确｜用途 网站/比赛演示、Sandbox seed、规则引擎测试、Agent 测试、路演故事｜生产可用 是
 - **原文摘录（≤50 词）**：A transaction for a meal eaten in the hotel restaurant and charged to the cardholder's room, but not included in the final hotel folio... billed for a separate additional amount that represents unpaid parking tickets.
 - **参与者**：cardholder=持卡人；issuer=发卡行；acquirer=收单行；merchant=酒店/租车行；platform=当地交管（罚单来源）
 - **资金关系**：who_paid_whom：持卡人先付原交易，后被追加收费；who_initiated：持卡人主张未授权后续扣款；who_received_notice：商户/收单行；who_bears_risk：商户需证明持卡人对 addendum 负责
@@ -213,6 +224,7 @@
 - **一句话场景**：到店无房被安排他店却仍被收费可拒付；商户提前告知 18:00 前未取消收一晚房费+税则可抗辩；持卡人需以电话账单证明按时取消。
 - **业务分类**：卡组织 Mastercard｜原因码 4853（Cardholder Dispute（No-Show））｜大类 Consumer Dispute｜行业 酒店｜渠道 预订｜交易类型 住宿预订（No-show）｜数据来源类别 卡组织规则内置示例
 - **来源**：SRC-02｜定位：P368; P371; P381; P1103; P1106; P1112｜置信度 HIGH｜需人工复核 否
+- **Provenance**：验证状态 CONFLICTING_SOURCES｜冲突 ['CONFLICT-006']｜规则版本 2026-05-19（Chargeback Guide Merchant Edition）｜生效日期 NOT_STATED｜期限政策 明确｜用途 网站/比赛演示、Sandbox seed、规则引擎测试、Agent 测试、路演故事｜生产可用 否
 - **原文摘录（≤50 词）**：the cardholder arrived at the hotel and no room was available... the merchant billed the cardholder in error... no-show fee if the reservation was not cancelled before 18:00 (merchant's local time).
 - **参与者**：cardholder=持卡人（住客）；issuer=发卡行；acquirer=收单行；merchant=酒店；platform=替代住宿酒店
 - **资金关系**：who_paid_whom：持卡人支付房费；who_initiated：持卡人主张错收/no-show 费不当；who_received_notice：酒店/收单行；who_bears_risk：错误收费由酒店承担
@@ -233,6 +245,7 @@
 - **一句话场景**：原拒付称货未收到，争议中货到达但损坏——发卡行可在预仲裁中变更为“货不对板”原因；为规避欺诈责任而换码无效。
 - **业务分类**：卡组织 Mastercard｜原因码 4853（Change of Reason）（Cardholder Dispute）｜大类 Consumer Dispute｜行业 电商（实物）｜渠道 线上｜交易类型 实物商品｜数据来源类别 卡组织规则内置示例
 - **来源**：SRC-02｜定位：P477; P1171｜置信度 HIGH｜需人工复核 否
+- **Provenance**：验证状态 CONFLICTING_SOURCES｜冲突 ['CONFLICT-006']｜规则版本 2026-05-19（Chargeback Guide Merchant Edition）｜生效日期 NOT_STATED｜期限政策 明确｜用途 网站/比赛演示、规则引擎测试、Agent 测试｜生产可用 否
 - **原文摘录（≤50 词）**：the original chargeback claims the goods were not received; however, during the course of the dispute the goods arrived damaged.
 - **参与者**：cardholder=持卡人；issuer=发卡行；acquirer=收单行；merchant=电商商户；platform=物流方
 - **资金关系**：who_paid_whom：持卡人向商户付款；who_initiated：发卡行变更原因继续争议；who_received_notice：商户/收单行；who_bears_risk：商户需应对新原因的举证
@@ -251,6 +264,7 @@
 - **一句话场景**：报价比索按欧元扣款、报价欧元按比索扣款可拒付差额；仅“信息性”展示外币金额不构成拒付理由。
 - **业务分类**：卡组织 Mastercard｜原因码 4834（Currency Errors）（Point-of-Interaction Error）｜大类 Processing Error｜行业 酒店/旅游｜渠道 线上预订｜交易类型 币种错误｜数据来源类别 卡组织规则内置示例
 - **来源**：SRC-02｜定位：P741-742; P1371｜置信度 HIGH｜需人工复核 否
+- **Provenance**：验证状态 VERIFIED_EXTRACTED｜冲突 无｜规则版本 2026-05-19（Chargeback Guide Merchant Edition）｜生效日期 NOT_STATED｜期限政策 明确｜用途 网站/比赛演示、Sandbox seed、规则引擎测试、Agent 测试｜生产可用 是
 - **原文摘录（≤50 词）**：A merchant located in Mexico quoted the hotel reservation for 24,000 Pesos. The cardholder's currency is Euros. The transaction was performed for 24,000 Euros.
 - **参与者**：cardholder=持卡人（欧元账户）；issuer=发卡行；acquirer=收单行；merchant=墨西哥酒店；platform=无
 - **资金关系**：who_paid_whom：持卡人按错误币种被扣款；who_initiated：持卡人主张币种错误；who_received_notice：商户/收单行；who_bears_risk：差额部分由商户承担
@@ -270,6 +284,7 @@
 - **一句话场景**：法国持卡人在丹麦 ATM 选择欧元取现但交易按丹麦克朗执行可拒付；ATM 仅“信息性”显示欧元则不可拒付。
 - **业务分类**：卡组织 Mastercard｜原因码 4834（ATM Cash and Currency Errors）（Point-of-Interaction Error）｜大类 Processing Error｜行业 银行/ATM｜渠道 线下（ATM）｜交易类型 ATM 取现币种错误｜数据来源类别 卡组织规则内置示例
 - **来源**：SRC-02｜定位：P741; P872-873｜置信度 HIGH｜需人工复核 否
+- **Provenance**：验证状态 VERIFIED_EXTRACTED｜冲突 无｜规则版本 2026-05-19（Chargeback Guide Merchant Edition）｜生效日期 NOT_STATED｜期限政策 明确｜用途 规则引擎测试、Agent 测试｜生产可用 是
 - **原文摘录（≤50 词）**：A cardholder from France used an ATM located in Denmark. The ATM offered to dispense the cash in either Danish Krone or Euros. The cardholder chose Euros. The ATM transaction was performed in the Danish Krone.
 - **参与者**：cardholder=法国持卡人；issuer=发卡行；acquirer=ATM 收单行；merchant=ATM 所有人；platform=无
 - **资金关系**：who_paid_whom：持卡人从 ATM 取现；who_initiated：持卡人主张币种处理错误；who_received_notice：ATM 收单行；who_bears_risk：ATM 侧承担币种错误差额
@@ -288,6 +303,7 @@
 - **一句话场景**：持卡人既获拒付退款又收商户退款（双重入账），收单行须及时二次呈请注明退款；超期只能走流程外善意催款函，发卡行书面接受后按 Fee Collection/1740 划款。
 - **业务分类**：卡组织 Mastercard｜原因码 2011（Refund previously issued）（Credit Previously Issued）｜大类 Processing Error（流程）｜行业 通用（流程）｜渠道 通用｜交易类型 退款/拒付流程｜数据来源类别 卡组织规则内置示例
 - **来源**：SRC-02｜定位：P38; P68-69; P510-512; P935｜置信度 HIGH｜需人工复核 否
+- **Provenance**：验证状态 CONFLICTING_SOURCES｜冲突 ['CONFLICT-006']｜规则版本 2026-05-19（Chargeback Guide Merchant Edition）｜生效日期 NOT_STATED｜期限政策 存在版本差异（见冲突清单）｜用途 网站/比赛演示、Sandbox seed、规则引擎测试、Agent 测试｜生产可用 否
 - **原文摘录（≤50 词）**：a good faith collection letter is written correspondence from the acquirer to the issuer requesting the return of the refunded amount.
 - **参与者**：cardholder=持卡人（被双重入账）；issuer=发卡行；acquirer=收单行；merchant=商户（已退款）；platform=无
 - **资金关系**：who_paid_whom：商户退款+发卡行拒付退款双重入账；who_initiated：收单行追回多退资金；who_received_notice：发卡行；who_bears_risk：超期则追回困难
@@ -306,6 +322,7 @@
 - **一句话场景**：持卡人已向第三方旅行商户付款，又被商户刷卡扣同一笔；商户可证明两笔对应不同内容或收单拒收第三方支付。
 - **业务分类**：卡组织 Mastercard｜原因码 4834（Duplicate / Paid by Other Means）（Point-of-Interaction Error）｜大类 Processing Error｜行业 旅游/OTA｜渠道 线上｜交易类型 重复付款｜数据来源类别 卡组织规则内置示例
 - **来源**：SRC-02｜定位：P690; P1327-1328｜置信度 HIGH｜需人工复核 否
+- **Provenance**：验证状态 VERIFIED_EXTRACTED｜冲突 无｜规则版本 2026-05-19（Chargeback Guide Merchant Edition）｜生效日期 NOT_STATED｜期限政策 明确｜用途 规则引擎测试、Agent 测试｜生产可用 是
 - **原文摘录（≤50 词）**：travel purchased through a third-party travel merchant (for example an online travel merchant)... the supporting documentation must state that the merchant accepted the third-party travel payment and billed the cardholder's account.
 - **参与者**：cardholder=持卡人；issuer=发卡行；acquirer=收单行；merchant=商户；platform=第三方旅行商户（OTA）
 - **资金关系**：who_paid_whom：持卡人先付 OTA、又被商户扣卡；who_initiated：持卡人主张重复付款；who_received_notice：商户/收单行；who_bears_risk：商户需证明扣款正当
@@ -324,6 +341,7 @@
 - **一句话场景**：EEA/英国金额不合理争议中，商户可出示持卡人签字的逐项价目表+据此计算的收据，证明金额在同意区间内。
 - **业务分类**：卡组织 Mastercard｜原因码 4834（Unreasonable Amount）（Point-of-Interaction Error）｜大类 Processing Error｜行业 服务行业（维修等）｜渠道 线下｜交易类型 服务金额争议｜数据来源类别 卡组织规则内置示例
 - **来源**：SRC-02｜定位：P770; P1395｜置信度 HIGH｜需人工复核 否
+- **Provenance**：验证状态 VERIFIED_EXTRACTED｜冲突 无｜规则版本 2026-05-19（Chargeback Guide Merchant Edition）｜生效日期 NOT_STATED｜期限政策 明确｜用途 规则引擎测试、Agent 测试｜生产可用 是
 - **原文摘录（≤50 词）**：An itemized price list signed by the cardholder and an itemized transaction receipt showing that the transaction amount was calculated on the basis of this price list.
 - **参与者**：cardholder=持卡人；issuer=发卡行；acquirer=收单行；merchant=服务商户；platform=无
 - **资金关系**：who_paid_whom：持卡人支付服务费；who_initiated：持卡人主张金额不合理；who_received_notice：商户/收单行；who_bears_risk：超约定区间部分商户担责
@@ -342,6 +360,7 @@
 - **一句话场景**：合法当面交易后 15 分钟内出现多笔持卡人否认的磁条/芯片当面交易（无 PIN/CDCVM），发卡行可提合规案（特定地区组合）。
 - **业务分类**：卡组织 Mastercard｜原因码 Compliance Case（All Other Rules Violations）（Compliance）｜大类 Fraud｜行业 通用线下零售｜渠道 线下｜交易类型 当面重复交易欺诈｜数据来源类别 卡组织规则内置示例
 - **来源**：SRC-02｜定位：P1495-1497｜置信度 HIGH｜需人工复核 否
+- **Provenance**：验证状态 VERIFIED_EXTRACTED｜冲突 无｜规则版本 2026-05-19（Chargeback Guide Merchant Edition）｜生效日期 NOT_STATED｜期限政策 明确｜用途 规则引擎测试、Agent 测试｜生产可用 是
 - **原文摘录（≤50 词）**：The issuer claims two or more face-to-face, magnetic stripe or chip (contact or contactless) transactions occurred, within 15 minutes of the original, cardholder authorized transaction.
 - **参与者**：cardholder=持卡人；issuer=发卡行（Filing Customer）；acquirer=收单行；merchant=线下商户；platform=无
 - **资金关系**：who_paid_whom：持卡人正常付款+后续幽灵交易；who_initiated：发卡行提合规案；who_received_notice：收单行；who_bears_risk：幽灵交易金额
@@ -360,6 +379,7 @@
 - **一句话场景**：官网用可点击的取消政策超链接+确认按钮展示条款，构成有效披露（原文以图片示例说明）。
 - **业务分类**：卡组织 Visa｜原因码 13.7（Cancelled Merchandise/Services 相关）（Cancelled Merchandise/Services）｜大类 Consumer Dispute｜行业 通用电商｜渠道 线上｜交易类型 取消政策披露｜数据来源类别 卡组织指南披露示例（图片不在文本层）
 - **来源**：SRC-01｜定位：P18｜置信度 MEDIUM｜需人工复核 否
+- **Provenance**：验证状态 NEEDS_CONFIRMATION｜冲突 ['CONFLICT-012']｜规则版本 June 2024（Dispute Management Guidelines for Visa Merchants）｜生效日期 NOT_STATED｜期限政策 未说明（需收单机构确认）｜用途 网站/比赛演示、Sandbox seed、规则引擎测试、Agent 测试｜生产可用 否
 - **原文摘录（≤50 词）**：The image below is an example of valid proper disclosure. It illustrates the details or text behind the cancellation policy hyperlink.
 - **参与者**：cardholder=持卡人；merchant=电商商户；platform=网站
 - **资金关系**：who_paid_whom：NOT_STATED；who_initiated：N/A（披露规范示例）；who_received_notice：N/A；who_bears_risk：未有效披露时商户在 13.7 类争议中不利
@@ -379,6 +399,7 @@
 - **一句话场景**：质量争议指客户不认可已收到商品/服务的状况（如修车、酒店房间质量）；可辅以中立第三方意见抗辩。
 - **业务分类**：卡组织 Visa｜原因码 13.3（Not as Described or Defective）｜大类 Consumer Dispute｜行业 汽车维修/酒店｜渠道 线下｜交易类型 服务质量争议｜数据来源类别 卡组织指南内置示例
 - **来源**：SRC-01｜定位：P43-44｜置信度 HIGH｜需人工复核 否
+- **Provenance**：验证状态 NEEDS_CONFIRMATION｜冲突 ['CONFLICT-012']｜规则版本 June 2024（Dispute Management Guidelines for Visa Merchants）｜生效日期 NOT_STATED｜期限政策 未说明（需收单机构确认）｜用途 网站/比赛演示、Sandbox seed、规则引擎测试、Agent 测试、路演故事｜生产可用 否
 - **原文摘录（≤50 词）**：Quality disputes are where the customer does not agree with the condition of merchandise or service received (e.g., a car repair situation or quality of a hotel room).
 - **参与者**：cardholder=持卡人；issuer=发卡行；acquirer=收单行；merchant=修车行/酒店；platform=无
 - **资金关系**：who_paid_whom：持卡人支付服务费；who_initiated：持卡人主张质量不符；who_received_notice：商户/收单行；who_bears_risk：质量举证
@@ -399,6 +420,7 @@
 - **一句话场景**：认证成功(ECI 5)→免欺诈争议；双方未参与(ECI 6)→免欺诈争议；商户未认证(ECI 7)→不保护。
 - **业务分类**：卡组织 Visa｜原因码 10.4（Fraud 类保护规则）（Other Fraud – Card-Absent）｜大类 Fraud｜行业 电商｜渠道 线上｜交易类型 3DS 认证场景｜数据来源类别 卡组织指南内置规则示例
 - **来源**：SRC-01｜定位：P14｜置信度 HIGH｜需人工复核 否
+- **Provenance**：验证状态 NEEDS_CONFIRMATION｜冲突 ['CONFLICT-012']｜规则版本 June 2024（Dispute Management Guidelines for Visa Merchants）｜生效日期 NOT_STATED｜期限政策 未说明（需收单机构确认）｜用途 网站/比赛演示、Sandbox seed、规则引擎测试、Agent 测试、路演故事｜生产可用 否
 - **原文摘录（≤50 词）**：The cardholder is successfully authenticated → The merchant is protected from fraud-related disputes... using ECI of '5'.
 - **参与者**：cardholder=持卡人；issuer=发卡行；acquirer=收单行；merchant=电商商户；platform=Visa Secure/3DS
 - **资金关系**：who_paid_whom：持卡人向商户付款；who_initiated：持卡人欺诈争议；who_received_notice：商户/收单行；who_bears_risk：ECI 7 时商户承担欺诈争议
@@ -418,6 +440,7 @@
 - **一句话场景**：持卡人在合同日期（或收到文件）后 14 个日历日内取消分时度假，商户必须全额退款，否则进入 13.7 争议。
 - **业务分类**：卡组织 Visa｜原因码 13.7（Cancelled Merchandise/Services）｜大类 Consumer Dispute｜行业 分时度假/旅游｜渠道 线下/电话销售｜交易类型 取消退款｜数据来源类别 卡组织指南内置规则示例
 - **来源**：SRC-01｜定位：P17; P49-50｜置信度 HIGH｜需人工复核 否
+- **Provenance**：验证状态 NEEDS_CONFIRMATION｜冲突 ['CONFLICT-012']｜规则版本 June 2024（Dispute Management Guidelines for Visa Merchants）｜生效日期 NOT_STATED｜期限政策 未说明（需收单机构确认）｜用途 网站/比赛演示、Sandbox seed、规则引擎测试、Agent 测试｜生产可用 否
 - **原文摘录（≤50 词）**：You must provide a full credit when the cardholder has cancelled the transaction within 14 calendar days of the contract date.
 - **参与者**：cardholder=持卡人；issuer=发卡行；acquirer=收单行；merchant=分时度假销售商；platform=无
 - **资金关系**：who_paid_whom：持卡人预付款；who_initiated：持卡人在 14 天内取消；who_received_notice：商户；who_bears_risk：未按 14 天规则退款由商户担责
@@ -437,6 +460,7 @@
 - **一句话场景**：未经同意加收费用、RDR 争议后重复退款、无原交易贷记后撤销、同日多笔手输仅承认一笔——均走 Compliance 而非争议流程。
 - **业务分类**：卡组织 Visa｜原因码 Compliance（无 Dispute Condition）（Compliance）｜大类 Processing Error / Compliance｜行业 通用｜渠道 通用｜交易类型 合规违规｜数据来源类别 卡组织指南内置示例
 - **来源**：SRC-01｜定位：P20｜置信度 HIGH｜需人工复核 否
+- **Provenance**：验证状态 NEEDS_CONFIRMATION｜冲突 ['CONFLICT-012']｜规则版本 June 2024（Dispute Management Guidelines for Visa Merchants）｜生效日期 NOT_STATED｜期限政策 未说明（需收单机构确认）｜用途 规则引擎测试、Agent 测试｜生产可用 否
 - **原文摘录（≤50 词）**：The merchant bills the cardholder for a delayed or amended charge without cardholder's consent.
 - **参与者**：cardholder=持卡人；issuer=发卡行；acquirer=收单行；merchant=商户；platform=无
 - **资金关系**：who_paid_whom：多场景；who_initiated：受损方向 Visa 提合规案；who_received_notice：对方机构；who_bears_risk：违规方
@@ -454,6 +478,7 @@
 - **一句话场景**：持卡人否认 SGD 899 电商交易；商户以 3DS/设备/IP/账号/历史交易等证据链应对 CE3.0。
 - **业务分类**：卡组织 Visa｜原因码 10.4（Other Fraud – Card-Absent Environment）｜大类 Fraud｜行业 电子消费品｜渠道 线上（CNP）｜交易类型 CNP 欺诈｜数据来源类别 源文件自标注虚构演示案例
 - **来源**：SRC-03｜定位：§3（第 3 章，约 60-90 行）｜置信度 HIGH｜需人工复核 否
+- **Provenance**：验证状态 CONFLICTING_SOURCES｜冲突 ['CONFLICT-003', 'CONFLICT-012']｜规则版本 无版本号（内部整理稿）｜生效日期 2024-10-19 起（CE3.0 相关变更，SRC-01 P26）｜期限政策 未说明（需收单机构确认）｜用途 网站/比赛演示、Sandbox seed、规则引擎测试、Agent 测试、UI 测试、路演故事｜生产可用 否
 - **原文摘录（≤50 词）**：Amount: SGD 899 / Merchant: ABC Electronics / Channel: Ecommerce / CNP. Cardholder: "I did not make this purchase."
 - **参与者**：cardholder=持卡人（否认交易）；issuer=发卡行；acquirer=收单行；merchant=ABC Electronics；platform=电商网站
 - **资金关系**：who_paid_whom：持卡人（被扣款）→ 商户；who_initiated：持卡人向发卡行声称未参与；who_received_notice：商户；who_bears_risk：若无 CE3.0 证据则商户承担
@@ -475,6 +500,7 @@
 - **一句话场景**：持卡人称未收到 USD 1,200 的 iPhone；商户需以 Tracking→Delivery→Recipient→POD 完整证据链抗辩。
 - **业务分类**：卡组织 Visa｜原因码 13.1（Merchandise/Services Not Received）｜大类 Consumer Dispute｜行业 电商（3C）｜渠道 线上｜交易类型 实物商品｜数据来源类别 源文件自标注虚构演示案例
 - **来源**：SRC-03｜定位：§5（第 5 章）｜置信度 HIGH｜需人工复核 否
+- **Provenance**：验证状态 NEEDS_CONFIRMATION｜冲突 ['CONFLICT-012']｜规则版本 无版本号（内部整理稿）｜生效日期 NOT_STATED｜期限政策 未说明（需收单机构确认）｜用途 网站/比赛演示、Sandbox seed、规则引擎测试、Agent 测试、UI 测试、路演故事｜生产可用 否
 - **原文摘录（≤50 词）**：Product: iPhone / Amount: USD 1,200 / Courier: DHL. Cardholder: "I never received the merchandise."
 - **参与者**：cardholder=持卡人；issuer=发卡行；acquirer=收单行；merchant=电商商户；platform=DHL 物流
 - **资金关系**：who_paid_whom：持卡人 → 商户 USD 1,200；who_initiated：持卡人主张未收到；who_received_notice：商户；who_bears_risk：无法证明履约则商户担责
@@ -496,6 +522,7 @@
 - **一句话场景**：6 月 1 日取消订阅，6 月 15 日仍被扣 USD 99；核心判断是争议交易发生时商户是否仍有有效扣款授权。
 - **业务分类**：卡组织 Visa｜原因码 13.2（Cancelled Recurring Transaction）｜大类 Consumer Dispute｜行业 SaaS｜渠道 订阅｜交易类型 循环扣款｜数据来源类别 源文件自标注虚构演示案例
 - **来源**：SRC-03｜定位：§6（第 6 章）｜置信度 HIGH｜需人工复核 否
+- **Provenance**：验证状态 NEEDS_CONFIRMATION｜冲突 ['CONFLICT-012']｜规则版本 无版本号（内部整理稿）｜生效日期 NOT_STATED｜期限政策 未说明（需收单机构确认）｜用途 网站/比赛演示、Sandbox seed、规则引擎测试、Agent 测试、UI 测试、路演故事｜生产可用 否
 - **原文摘录（≤50 词）**：June 1: Customer cancelled SaaS subscription / June 15: Merchant charged USD 99.
 - **参与者**：cardholder=持卡人；issuer=发卡行；acquirer=收单行；merchant=SaaS 商户；platform=订阅系统
 - **资金关系**：who_paid_whom：持卡人被扣 USD 99；who_initiated：持卡人主张已取消；who_received_notice：商户；who_bears_risk：取消后扣款商户担责
@@ -517,6 +544,7 @@
 - **一句话场景**：买全新 MacBook 收到翻新机；商户需证明 Delivered Product ≈ Product Description at Purchase。
 - **业务分类**：卡组织 Visa｜原因码 13.3（Not as Described or Defective）｜大类 Consumer Dispute｜行业 电商（3C）｜渠道 线上｜交易类型 实物商品｜数据来源类别 源文件自标注虚构演示案例
 - **来源**：SRC-03｜定位：§7（第 7 章）｜置信度 HIGH｜需人工复核 否
+- **Provenance**：验证状态 NEEDS_CONFIRMATION｜冲突 ['CONFLICT-012']｜规则版本 无版本号（内部整理稿）｜生效日期 NOT_STATED｜期限政策 未说明（需收单机构确认）｜用途 网站/比赛演示、Sandbox seed、规则引擎测试、Agent 测试、UI 测试｜生产可用 否
 - **原文摘录（≤50 词）**：消费者购买 Brand New MacBook，实际收到 Refurbished MacBook。
 - **参与者**：cardholder=持卡人；issuer=发卡行；acquirer=收单行；merchant=电商商户；platform=无
 - **资金关系**：who_paid_whom：持卡人 → 商户；who_initiated：持卡人主张货不对板；who_received_notice：商户；who_bears_risk：货不对板商户担责
@@ -538,6 +566,7 @@
 - **一句话场景**：商户承诺退款但持卡人未收到；系统应先关联 Original Transaction ↓ Refund Transaction，ARN 比客服聊天更关键。
 - **业务分类**：卡组织 Visa｜原因码 13.6（Credit Not Processed）｜大类 Consumer Dispute｜行业 通用｜渠道 通用｜交易类型 退款未到账｜数据来源类别 源文件自标注虚构演示案例
 - **来源**：SRC-03｜定位：§8（第 8 章）｜置信度 HIGH｜需人工复核 否
+- **Provenance**：验证状态 NEEDS_CONFIRMATION｜冲突 ['CONFLICT-012']｜规则版本 无版本号（内部整理稿）｜生效日期 NOT_STATED｜期限政策 未说明（需收单机构确认）｜用途 网站/比赛演示、Sandbox seed、规则引擎测试、Agent 测试、UI 测试｜生产可用 否
 - **原文摘录（≤50 词）**：消费者：Merchant promised refund, but I never received it.
 - **参与者**：cardholder=持卡人；issuer=发卡行；acquirer=收单行；merchant=商户；platform=无
 - **资金关系**：who_paid_whom：持卡人 → 商户；退款未达；who_initiated：持卡人主张退款未到；who_received_notice：商户；who_bears_risk：未退金额
@@ -557,6 +586,7 @@
 - **一句话场景**：两笔 USD 100 相隔 1 分钟被扣；不能只看同商户同金额即判重复，需比对 Order ID/SKU/授权/清算。
 - **业务分类**：卡组织 Visa｜原因码 12.6.1（Duplicate Processing）｜大类 Processing Error｜行业 通用｜渠道 线上｜交易类型 重复扣款｜数据来源类别 源文件自标注虚构演示案例
 - **来源**：SRC-03｜定位：§9（第 9 章）｜置信度 HIGH｜需人工复核 否
+- **Provenance**：验证状态 NEEDS_CONFIRMATION｜冲突 ['CONFLICT-002', 'CONFLICT-012']｜规则版本 无版本号（内部整理稿）｜生效日期 NOT_STATED｜期限政策 未说明（需收单机构确认）｜用途 网站/比赛演示、Sandbox seed、规则引擎测试、Agent 测试、UI 测试｜生产可用 否
 - **原文摘录（≤50 词）**：TXN001 USD 100 10:01 / TXN002 USD 100 10:02. 消费者：Charged twice.
 - **参与者**：cardholder=持卡人；issuer=发卡行；acquirer=收单行；merchant=商户；platform=无
 - **资金关系**：who_paid_whom：持卡人被扣两笔 USD 100；who_initiated：持卡人主张重复扣款；who_received_notice：商户；who_bears_risk：重复部分商户担责
@@ -576,6 +606,7 @@
 - **一句话场景**：持卡人称课程无法访问，商户发现登录 17 次；证据链=Payment→Account→Login→Content Access→Consumption。
 - **业务分类**：卡组织 Mastercard｜原因码 4853（Cardholder Dispute）｜大类 Consumer Dispute｜行业 在线教育｜渠道 线上（数字商品）｜交易类型 数字服务｜数据来源类别 源文件自标注虚构演示案例
 - **来源**：SRC-03｜定位：§12（第 12 章）｜置信度 HIGH｜需人工复核 否
+- **Provenance**：验证状态 VERIFIED_EXTRACTED｜冲突 无｜规则版本 无版本号（内部整理稿）｜生效日期 NOT_STATED｜期限政策 明确｜用途 网站/比赛演示、Sandbox seed、规则引擎测试、Agent 测试、UI 测试、路演故事｜生产可用 是
 - **原文摘录（≤50 词）**：消费者购买 Online Course / USD 499，声称"课程无法访问"；Merchant 发现 Login Count: 17。
 - **参与者**：cardholder=持卡人；issuer=发卡行；acquirer=收单行；merchant=在线课程商户；platform=课程平台
 - **资金关系**：who_paid_whom：持卡人 → 商户 USD 499；who_initiated：持卡人主张服务不可用；who_received_notice：商户；who_bears_risk：无法证明履约则商户担责
@@ -596,6 +627,7 @@
 - **一句话场景**：持卡人声称已退货，商户称从未收到；需退货政策披露+商品未实际退回的证据。
 - **业务分类**：卡组织 American Express｜原因码 C04（Goods/Services Returned or Refused）｜大类 Consumer Dispute｜行业 零售｜渠道 线上/线下｜交易类型 退货｜数据来源类别 源文件自标注虚构演示案例
 - **来源**：SRC-03｜定位：§15（第 15 章）｜置信度 HIGH｜需人工复核 否
+- **Provenance**：验证状态 NEEDS_CONFIRMATION｜冲突 ['CONFLICT-014']｜规则版本 无版本号（内部整理稿）｜生效日期 NOT_STATED｜期限政策 未说明（需收单机构确认）｜用途 网站/比赛演示、Sandbox seed、规则引擎测试、Agent 测试｜生产可用 否
 - **原文摘录（≤50 词）**：消费者：I returned the merchandise. Merchant：We never received the return.
 - **参与者**：cardholder=持卡人；issuer=Amex 发卡方；acquirer=收单方；merchant=商户；platform=退货物流
 - **资金关系**：who_paid_whom：持卡人 → 商户；who_initiated：持卡人主张已退货；who_received_notice：商户；who_bears_risk：退货未到责任
@@ -616,6 +648,7 @@
 - **一句话场景**：持卡人称已取消预订，商户称已过取消截止；需取消政策+时间戳证明。
 - **业务分类**：卡组织 American Express｜原因码 C05（Goods/Services Cancelled）｜大类 Consumer Dispute｜行业 旅游/预订｜渠道 预订｜交易类型 取消争议｜数据来源类别 源文件自标注虚构演示案例
 - **来源**：SRC-03｜定位：§16（第 16 章）｜置信度 HIGH｜需人工复核 否
+- **Provenance**：验证状态 NEEDS_CONFIRMATION｜冲突 ['CONFLICT-014']｜规则版本 无版本号（内部整理稿）｜生效日期 NOT_STATED｜期限政策 未说明（需收单机构确认）｜用途 网站/比赛演示、Sandbox seed、规则引擎测试、Agent 测试｜生产可用 否
 - **原文摘录（≤50 词）**：消费者：I cancelled my booking. Merchant：Cancellation deadline had already passed.
 - **参与者**：cardholder=持卡人；issuer=Amex 发卡方；acquirer=收单方；merchant=预订商户；platform=预订系统
 - **资金关系**：who_paid_whom：持卡人支付预订费；who_initiated：持卡人主张已取消；who_received_notice：商户；who_bears_risk：取消超期则持卡人担责
@@ -636,6 +669,7 @@
 - **一句话场景**：银行 Sicredi 用 Ethoca Consumer Clarity 向持卡人展示交易详情，把“不认识账单”的争议化解在拒付之前。
 - **业务分类**：卡组织 Mastercard（Ethoca）｜原因码 预防类（对应 4837/4863 场景）（预防（No Cardholder Authorization 前置））｜大类 Fraud（预防）｜行业 银行/零售｜渠道 通用｜交易类型 Friendly Fraud 预防｜数据来源类别 卡组织官方营销案例（源标注真实案例）
 - **来源**：SRC-03｜定位：§20（第 20 章）｜置信度 MEDIUM｜需人工复核 是
+- **Provenance**：验证状态 NEEDS_CONFIRMATION｜冲突 ['CONFLICT-013']｜规则版本 无版本号（内部整理稿）｜生效日期 NOT_STATED｜期限政策 未说明（需收单机构确认）｜用途 网站/比赛演示、Sandbox seed、Agent 测试、UI 测试、路演故事｜生产可用 否
 - **原文摘录（≤50 词）**：Mastercard 公开 Sicredi 使用 Ethoca Consumer Clarity 的案例：持卡人看到不清晰账单描述→Consumer Clarity 提供交易详情→持卡人认出交易→争议被避免。
 - **参与者**：cardholder=持卡人；issuer=Sicredi（银行）；merchant=交易商户；psp=Ethoca；platform=Ethoca Consumer Clarity
 - **资金关系**：who_paid_whom：持卡人 → 商户；who_initiated：持卡人因账单描述不清准备争议；who_received_notice：发卡行；who_bears_risk：争议被提前化解
@@ -656,6 +690,7 @@
 - **一句话场景**：持卡人否认一笔无卡交易。商户可提交认证记录+2 笔 120–365 天内清算的同设备历史交易（CE），或 16 项 Compelling Evidence 之一。
 - **业务分类**：卡组织 Visa｜原因码 10.4（Other Fraud – Card-Absent Environment）｜大类 Fraud｜行业 电商｜渠道 线上｜交易类型 CNP 欺诈｜数据来源类别 规则还原场景（原文仅给原因码+规则，无完整故事）
 - **来源**：SRC-01、SRC-03｜定位：SRC-01 P26/P54-58; SRC-03 §3｜置信度 HIGH｜需人工复核 否
+- **Provenance**：验证状态 CONFLICTING_SOURCES｜冲突 ['CONFLICT-003', 'CONFLICT-012']｜规则版本 June 2024（Dispute Management Guidelines for Visa Merchants）; 无版本号（内部整理稿）｜生效日期 2024-10-19 起（CE3.0 相关变更，SRC-01 P26）｜期限政策 未说明（需收单机构确认）｜用途 网站/比赛演示、Sandbox seed、规则引擎测试、Agent 测试、UI 测试、路演故事｜生产可用 否
 - **原文摘录（≤50 词）**：The cardholder is claiming that they did not authorize or participate in a transaction conducted in a card-absent environment.
 - **参与者**：cardholder=持卡人；issuer=发卡行；acquirer=收单行；merchant=电商商户；platform=电商网站
 - **资金关系**：who_paid_whom：持卡人被扣款；who_initiated：持卡人向发卡行否认交易；who_received_notice：商户；who_bears_risk：默认商户承担，除非 CE 成立
@@ -677,6 +712,7 @@
 - **一句话场景**：持卡人声称未收到商品。商户需证明该争议交易对应的商品确实履约给了该消费者（签收、自提、航班起飞、NFT 钱包哈希等）。
 - **业务分类**：卡组织 Visa｜原因码 13.1（Merchandise/Services Not Received）｜大类 Consumer Dispute｜行业 电商/物流｜渠道 线上｜交易类型 实物商品/服务｜数据来源类别 规则还原场景（原文仅给原因码+规则，无完整故事）
 - **来源**：SRC-01、SRC-03｜定位：SRC-01 P40-41; SRC-03 §5｜置信度 HIGH｜需人工复核 否
+- **Provenance**：验证状态 NEEDS_CONFIRMATION｜冲突 ['CONFLICT-012']｜规则版本 June 2024（Dispute Management Guidelines for Visa Merchants）; 无版本号（内部整理稿）｜生效日期 NOT_STATED｜期限政策 未说明（需收单机构确认）｜用途 网站/比赛演示、Sandbox seed、规则引擎测试、Agent 测试、UI 测试｜生产可用 否
 - **原文摘录（≤50 词）**：The cardholder claims that merchandise or services that they ordered were not received by the expected date.
 - **参与者**：cardholder=持卡人；issuer=发卡行；acquirer=收单行；merchant=商户；platform=物流商
 - **资金关系**：who_paid_whom：持卡人付款；who_initiated：持卡人主张未收到；who_received_notice：商户；who_bears_risk：无法证明履约则商户
@@ -697,6 +733,7 @@
 - **一句话场景**：交易未获授权、超额、或未在时限内清算（2024-04-13 起并入 11.3）。大量依据是结构化交易数据，适合自动判责。
 - **业务分类**：卡组织 Visa｜原因码 11.3（No Authorization / Late Presentment）｜大类 Authorization｜行业 通用｜渠道 线上/线下｜交易类型 授权问题｜数据来源类别 规则还原场景（原文仅给原因码+规则，无完整故事）
 - **来源**：SRC-01、SRC-03｜定位：SRC-01 P31; SRC-03 §10｜置信度 HIGH｜需人工复核 否
+- **Provenance**：验证状态 NEEDS_CONFIRMATION｜冲突 ['CONFLICT-001', 'CONFLICT-012']｜规则版本 June 2024（Dispute Management Guidelines for Visa Merchants）; 无版本号（内部整理稿）｜生效日期 2024-04-13 起（11.3 生效，SRC-01 P2/P31）｜期限政策 未说明（需收单机构确认）｜用途 网站/比赛演示、Sandbox seed、规则引擎测试、Agent 测试｜生产可用 否
 - **原文摘录（≤50 词）**：A transaction was processed without obtaining the required authorization, or the transaction was not processed within the required transaction processing time limit.
 - **参与者**：cardholder=持卡人；issuer=发卡行；acquirer=收单行；merchant=商户；platform=无
 - **资金关系**：who_paid_whom：交易入账；who_initiated：发卡行拒付；who_received_notice：收单行/商户；who_bears_risk：授权缺失由商户承担
@@ -715,6 +752,7 @@
 - **一句话场景**：同一凭证同交易日同金额处理多次（12.6.1），或持卡人已用其他方式付款（12.6.2）。需多字段比对而非仅凭金额。
 - **业务分类**：卡组织 Visa｜原因码 12.6.1/12.6.2（Duplicate Processing / Paid by Other Means）｜大类 Processing Error｜行业 通用｜渠道 线上/线下｜交易类型 处理错误｜数据来源类别 规则还原场景（原文仅给原因码+规则，无完整故事）
 - **来源**：SRC-01、SRC-03｜定位：SRC-01 P37-38; SRC-03 §9｜置信度 HIGH｜需人工复核 否
+- **Provenance**：验证状态 NEEDS_CONFIRMATION｜冲突 ['CONFLICT-002', 'CONFLICT-012']｜规则版本 June 2024（Dispute Management Guidelines for Visa Merchants）; 无版本号（内部整理稿）｜生效日期 NOT_STATED｜期限政策 未说明（需收单机构确认）｜用途 网站/比赛演示、Sandbox seed、规则引擎测试、Agent 测试｜生产可用 否
 - **原文摘录（≤50 词）**：The cardholder claims that a single transaction was processed more than once using the same Payment Credential on the same Transaction date, and for the same Transaction amount.
 - **参与者**：cardholder=持卡人；issuer=发卡行；acquirer=收单行；merchant=商户；platform=无
 - **资金关系**：who_paid_whom：持卡人付款（可能两次）；who_initiated：持卡人主张重复/已另行付款；who_received_notice：商户；who_bears_risk：重复部分商户
@@ -734,6 +772,7 @@
 - **一句话场景**：持卡人取消商品/服务但账单未退款（含分时度假 14 天、担保预订 No-show 费）。商户需披露政策+证明取消不符合约定。
 - **业务分类**：卡组织 Visa｜原因码 13.7（Cancelled Merchandise/Services）｜大类 Consumer Dispute｜行业 旅游/服务｜渠道 预订｜交易类型 取消退款｜数据来源类别 规则还原场景（原文仅给原因码+规则，无完整故事）
 - **来源**：SRC-01｜定位：SRC-01 P49-50｜置信度 HIGH｜需人工复核 否
+- **Provenance**：验证状态 NEEDS_CONFIRMATION｜冲突 ['CONFLICT-012']｜规则版本 June 2024（Dispute Management Guidelines for Visa Merchants）｜生效日期 NOT_STATED｜期限政策 未说明（需收单机构确认）｜用途 网站/比赛演示、Sandbox seed、规则引擎测试、Agent 测试｜生产可用 否
 - **原文摘录（≤50 词）**：A Timeshare cancellation was not processed within 14 days of the contract or receipt date.
 - **参与者**：cardholder=持卡人；issuer=发卡行；acquirer=收单行；merchant=商户；platform=无
 - **资金关系**：who_paid_whom：持卡人预付；who_initiated：持卡人主张取消未退款；who_received_notice：商户；who_bears_risk：未按政策退款商户
@@ -754,6 +793,7 @@
 - **一句话场景**：持卡人称商品与描述不符或损坏。商户可抗辩：已修/已换/按约交付（2700）、单据篡改（2001）、退货欺诈（2004）、已退款（2011）、拒付无效。
 - **业务分类**：卡组织 Mastercard｜原因码 4853（Cardholder Dispute）｜大类 Consumer Dispute｜行业 电商/零售｜渠道 线上｜交易类型 实物商品｜数据来源类别 规则还原场景（原文仅给原因码+规则，无完整故事）
 - **来源**：SRC-02、SRC-03｜定位：SRC-02 P157-177/P953-967; SRC-03 §28｜置信度 HIGH｜需人工复核 否
+- **Provenance**：验证状态 CONFLICTING_SOURCES｜冲突 ['CONFLICT-006']｜规则版本 2026-05-19（Chargeback Guide Merchant Edition）; 无版本号（内部整理稿）｜生效日期 NOT_STATED｜期限政策 存在版本差异（见冲突清单）｜用途 网站/比赛演示、Sandbox seed、规则引擎测试、Agent 测试、UI 测试｜生产可用 否
 - **原文摘录（≤50 词）**：The cardholder engaged in the transaction; the merchandise or services were not as described or were defective.
 - **参与者**：cardholder=持卡人；issuer=发卡行；acquirer=收单行；merchant=商户；platform=无
 - **资金关系**：who_paid_whom：持卡人付款；who_initiated：持卡人主张货不对板；who_received_notice：商户；who_bears_risk：举证责任在商户
@@ -774,6 +814,7 @@
 - **一句话场景**：持卡人称未收到商品（含空箱、延迟交付、商户停业）。时限：120 天（大陆 90 天）；延迟交付无约定日期须等 30 天后提。
 - **业务分类**：卡组织 Mastercard｜原因码 4853（Cardholder Dispute（Goods or Services Not Provided））｜大类 Consumer Dispute｜行业 电商/服务｜渠道 线上｜交易类型 实物/服务｜数据来源类别 规则还原场景（原文仅给原因码+规则，无完整故事）
 - **来源**：SRC-02｜定位：SRC-02 P177-184/P967-983｜置信度 HIGH｜需人工复核 否
+- **Provenance**：验证状态 CONFLICTING_SOURCES｜冲突 ['CONFLICT-006']｜规则版本 2026-05-19（Chargeback Guide Merchant Edition）｜生效日期 NOT_STATED｜期限政策 明确｜用途 网站/比赛演示、Sandbox seed、规则引擎测试、Agent 测试｜生产可用 否
 - **原文摘录（≤50 词）**：This chargeback applies when the cardholder receives an empty box or a box containing worthless items, such as a brick or a stack of paper.
 - **参与者**：cardholder=持卡人；issuer=发卡行；acquirer=收单行；merchant=商户；platform=物流
 - **资金关系**：who_paid_whom：持卡人付款；who_initiated：持卡人主张未收到；who_received_notice：商户；who_bears_risk：商户举证履约
@@ -793,6 +834,7 @@
 - **一句话场景**：持卡人应得退款未处理（含 VAT 退税）。商户抗辩：退款本不欠（2700）/已退款（2011）/退货欺诈（2004）。退款须在 SP 中记录。
 - **业务分类**：卡组织 Mastercard｜原因码 4853（Cardholder Dispute（Refund Not Processed））｜大类 Consumer Dispute｜行业 通用｜渠道 通用｜交易类型 退款｜数据来源类别 规则还原场景（原文仅给原因码+规则，无完整故事）
 - **来源**：SRC-02｜定位：SRC-02 P273-276/P1036-1051｜置信度 HIGH｜需人工复核 否
+- **Provenance**：验证状态 CONFLICTING_SOURCES｜冲突 ['CONFLICT-006']｜规则版本 2026-05-19（Chargeback Guide Merchant Edition）｜生效日期 NOT_STATED｜期限政策 明确｜用途 网站/比赛演示、Sandbox seed、规则引擎测试、Agent 测试｜生产可用 否
 - **原文摘录（≤50 词）**：The cardholder claims that a refund or credit was expected but not processed.
 - **参与者**：cardholder=持卡人；issuer=发卡行；acquirer=收单行；merchant=商户；platform=无
 - **资金关系**：who_paid_whom：应退款未退；who_initiated：持卡人主张退款未处理；who_received_notice：商户；who_bears_risk：未退款商户
@@ -812,6 +854,7 @@
 - **一句话场景**：持卡人声称未授权交易。商户抗辩路径多：addendum 责任、AVS 匹配、认证（ECI 211/212/217/242）、Compelling Evidence、No-show、退款、14 项无效拒付。
 - **业务分类**：卡组织 Mastercard｜原因码 4837（No Cardholder Authorization）｜大类 Fraud｜行业 通用｜渠道 线上/线下｜交易类型 欺诈/未授权｜数据来源类别 规则还原场景（原文仅给原因码+规则，无完整故事）
 - **来源**：SRC-02、SRC-03｜定位：SRC-02 P489-563; SRC-03 §28｜置信度 HIGH｜需人工复核 否
+- **Provenance**：验证状态 CONFLICTING_SOURCES｜冲突 ['CONFLICT-006']｜规则版本 2026-05-19（Chargeback Guide Merchant Edition）; 无版本号（内部整理稿）｜生效日期 NOT_STATED｜期限政策 明确｜用途 网站/比赛演示、Sandbox seed、规则引擎测试、Agent 测试、UI 测试、路演故事｜生产可用 否
 - **原文摘录（≤50 词）**：The cardholder claims that he or she did not authorize the transaction.
 - **参与者**：cardholder=持卡人；issuer=发卡行；acquirer=收单行；merchant=商户；platform=无
 - **资金关系**：who_paid_whom：交易扣款；who_initiated：持卡人否认授权；who_received_notice：商户；who_bears_risk：商户默认
@@ -832,6 +875,7 @@
 - **一句话场景**：发卡行主张授权类问题：未获授权、离线芯片超 7 天清算、退款超 5 天、账户状态化、拒绝后 Stand-in 批准、CAT 3 违规、Transit FRR/FRIL。
 - **业务分类**：卡组织 Mastercard｜原因码 4808（Authorization-related Chargeback）｜大类 Authorization｜行业 通用｜渠道 通用｜交易类型 授权｜数据来源类别 规则还原场景（原文仅给原因码+规则，无完整故事）
 - **来源**：SRC-02｜定位：SRC-02 P54-150/P880-947｜置信度 HIGH｜需人工复核 否
+- **Provenance**：验证状态 CONFLICTING_SOURCES｜冲突 ['CONFLICT-006']｜规则版本 2026-05-19（Chargeback Guide Merchant Edition）｜生效日期 NOT_STATED｜期限政策 存在版本差异（见冲突清单）｜用途 网站/比赛演示、Sandbox seed、规则引擎测试、Agent 测试｜生产可用 否
 - **原文摘录（≤50 词）**：Authorization-related chargeback message reason code 4808/08.
 - **参与者**：cardholder=持卡人；issuer=发卡行；acquirer=收单行；merchant=商户；platform=无
 - **资金关系**：who_paid_whom：交易入账；who_initiated：发卡行拒付；who_received_notice：收单行；who_bears_risk：授权违规方
@@ -851,6 +895,7 @@
 - **一句话场景**：POI 错误九类：重复扣款、金额错、cash back 未给、ATM 未出钞、loss/theft/damage、币种错、退款纠错汇损、不当附加费、不合理金额。
 - **业务分类**：卡组织 Mastercard｜原因码 4834（Point-of-Interaction Error）｜大类 Processing Error｜行业 通用/ATM/零售｜渠道 通用｜交易类型 处理错误｜数据来源类别 规则还原场景（原文仅给原因码+规则，无完整故事）
 - **来源**：SRC-02｜定位：SRC-02 P685-776/P1324-1407｜置信度 HIGH｜需人工复核 否
+- **Provenance**：验证状态 CONFLICTING_SOURCES｜冲突 ['CONFLICT-004', 'CONFLICT-006']｜规则版本 2026-05-19（Chargeback Guide Merchant Edition）｜生效日期 NOT_STATED｜期限政策 明确｜用途 网站/比赛演示、Sandbox seed、规则引擎测试、Agent 测试｜生产可用 否
 - **原文摘录（≤50 词）**：Point-of-Interaction Error (Message Reason Codes 4834/34).
 - **参与者**：cardholder=持卡人；issuer=发卡行；acquirer=收单行；merchant=商户/ATM；platform=无
 - **资金关系**：who_paid_whom：交易扣款；who_initiated：持卡人主张处理错误；who_received_notice：商户；who_bears_risk：处理错误方
@@ -870,6 +915,7 @@
 - **一句话场景**：伪卡/遗失被盗卡在非芯片终端交易，责任向未处理芯片的一方转移。商户抗辩：DE 55 已提供、非芯片责任交易、FNS>35、未上报欺诈库等。
 - **业务分类**：卡组织 Mastercard｜原因码 4870/4871（Chip Liability Shift (Counterfeit / Lost-Stolen-NRI)）｜大类 Fraud｜行业 线下零售｜渠道 线下｜交易类型 欺诈｜数据来源类别 规则还原场景（原文仅给原因码+规则，无完整故事）
 - **来源**：SRC-02｜定位：SRC-02 P578-636/P1241-1288｜置信度 HIGH｜需人工复核 否
+- **Provenance**：验证状态 CONFLICTING_SOURCES｜冲突 ['CONFLICT-009']｜规则版本 2026-05-19（Chargeback Guide Merchant Edition）｜生效日期 NOT_STATED｜期限政策 明确｜用途 Sandbox seed、规则引擎测试、Agent 测试｜生产可用 否
 - **原文摘录（≤50 词）**：Chip Liability Shift (Message Reason Codes 4870/70 and 4871).
 - **参与者**：cardholder=持卡人；issuer=发卡行；acquirer=收单行；merchant=线下商户；platform=无
 - **资金关系**：who_paid_whom：交易扣款；who_initiated：持卡人否认交易；who_received_notice：商户；who_bears_risk：按芯片责任规则转移
@@ -887,6 +933,7 @@
 - **一句话场景**：Amex 无官方原文时仅据 SRC-03 映射：C08=未收到商品、C02=退款未处理；证据要求按 Visa/MC 同类场景类比，需 Amex 原文确认。
 - **业务分类**：卡组织 American Express｜原因码 C08 / C02（Goods/Services Not Received / Credit Not Processed）｜大类 Consumer Dispute｜行业 通用｜渠道 通用｜交易类型 商品/退款｜数据来源类别 规则还原场景（原文仅给原因码+规则，无完整故事）
 - **来源**：SRC-03｜定位：SRC-03 §28｜置信度 HIGH｜需人工复核 否
+- **Provenance**：验证状态 NEEDS_CONFIRMATION｜冲突 ['CONFLICT-014']｜规则版本 无版本号（内部整理稿）｜生效日期 NOT_STATED｜期限政策 未说明（需收单机构确认）｜用途 规则引擎测试、Agent 测试｜生产可用 否
 - **原文摘录（≤50 词）**：编号2 服务未提供或未收到商品→C08；编号8 未收到退款→C02（ODPM 映射表）。
 - **参与者**：cardholder=持卡人；issuer=Amex；acquirer=收单方；merchant=商户；platform=无
 - **资金关系**：who_paid_whom：持卡人付款；who_initiated：持卡人主张未收到/未退款；who_received_notice：商户；who_bears_risk：商户
@@ -905,6 +952,7 @@
 - **一句话场景**：虚构商户「云岚数码」(sandbox-mer-001) 被拒付 USD 299 耳机：物流轨迹完整、POD 签收人=持卡人、收货地址与账单地址一致。系统判定可抗辩并生成材料包。
 - **业务分类**：卡组织 Visa｜原因码 13.1（Merchandise/Services Not Received）｜大类 Consumer Dispute｜行业 3C 电商｜渠道 线上｜交易类型 实物商品｜数据来源类别 项目合成演示案例（虚构商户/虚构用户）
 - **来源**：SRC-01、SRC-03｜定位：合成案例，无原文定位（见 derived_from_rule_ids）｜置信度 HIGH｜需人工复核 否
+- **Provenance**：验证状态 NEEDS_CONFIRMATION｜冲突 ['CONFLICT-012']｜规则版本 June 2024（Dispute Management Guidelines for Visa Merchants）; 无版本号（内部整理稿）｜生效日期 NOT_STATED｜期限政策 未说明（Visa 需收单机构确认 / 演示设定）｜用途 网站/比赛演示、Sandbox seed、规则引擎测试、Agent 测试、UI 测试、路演故事｜生产可用 否
 - **参与者**：cardholder=Sandbox 用户 sandbox-user-001；issuer=发卡行（模拟）；acquirer=收单机构（模拟）；merchant=云岚数码 sandbox-mer-001；psp=OceanPilot；platform=物流 sandbox-courier-001
 - **资金关系**：who_paid_whom：持卡人向商户支付 USD 299；who_initiated：持卡人主张未收到；who_received_notice：商户（OceanPilot 案件中心）；who_bears_risk：商户（可抗辩）
 - **交易事实**：金额 USD 299｜时间 2026-08-01T10:30:00Z｜商品 无线降噪耳机｜渠道 电商 CNP｜认证 3DS 未强制（ECI 7）｜履约 已签收（POD 收件人=持卡人）｜退款 未退款
@@ -926,6 +974,7 @@
 - **一句话场景**：虚构商户被 10.4 欺诈拒付：无 3DS、无设备指纹、无历史交易（guest checkout）。系统准备度 12%，阻止提交并建议接受。
 - **业务分类**：卡组织 Visa｜原因码 10.4（Other Fraud – Card-Absent Environment）｜大类 Fraud｜行业 跨境电商｜渠道 线上｜交易类型 CNP 欺诈｜数据来源类别 项目合成演示案例（虚构商户/虚构用户）
 - **来源**：SRC-01、SRC-03｜定位：合成案例，无原文定位（见 derived_from_rule_ids）｜置信度 HIGH｜需人工复核 否
+- **Provenance**：验证状态 CONFLICTING_SOURCES｜冲突 ['CONFLICT-003', 'CONFLICT-012']｜规则版本 June 2024（Dispute Management Guidelines for Visa Merchants）; 无版本号（内部整理稿）｜生效日期 2024-10-19 起（CE3.0 相关变更）｜期限政策 未说明（Visa 需收单机构确认 / 演示设定）｜用途 网站/比赛演示、Sandbox seed、规则引擎测试、Agent 测试、UI 测试、飞书演示、路演故事｜生产可用 否
 - **参与者**：cardholder=Sandbox 用户 sandbox-user-002；issuer=发卡行（模拟）；acquirer=收单机构（模拟）；merchant=环球优选 sandbox-mer-002；psp=OceanPilot；platform=独立站
 - **资金关系**：who_paid_whom：持卡人被扣 EUR 459；who_initiated：持卡人否认交易；who_received_notice：商户；who_bears_risk：商户（无证据）
 - **交易事实**：金额 EUR 459｜时间 2026-08-10T18:00:00Z｜商品 智能手表｜渠道 独立站 CNP｜认证 无 3DS（guest checkout）｜履约 已发货（无签收）｜退款 未退款
@@ -947,6 +996,7 @@
 - **一句话场景**：清算记录显示该笔交易从未获得授权批准（拒绝后无 Stand-in），结构化比对直接命中 4808。系统建议接受，不浪费时间收集证据。
 - **业务分类**：卡组织 Mastercard｜原因码 4808（Authorization-related Chargeback）｜大类 Authorization｜行业 餐饮｜渠道 线下｜交易类型 授权问题｜数据来源类别 项目合成演示案例（虚构商户/虚构用户）
 - **来源**：SRC-02｜定位：合成案例，无原文定位（见 derived_from_rule_ids）｜置信度 HIGH｜需人工复核 否
+- **Provenance**：验证状态 CONFLICTING_SOURCES｜冲突 ['CONFLICT-006']｜规则版本 2026-05-19（Chargeback Guide Merchant Edition）｜生效日期 NOT_STATED｜期限政策 未说明（Visa 需收单机构确认 / 演示设定）｜用途 网站/比赛演示、Sandbox seed、规则引擎测试、Agent 测试、UI 测试｜生产可用 否
 - **参与者**：cardholder=Sandbox 用户 sandbox-user-003；issuer=发卡行（模拟）；acquirer=收单机构（模拟）；merchant=南巷小馆 sandbox-mer-003；psp=OceanPilot；platform=无
 - **资金关系**：who_paid_whom：交易入账 USD 68；who_initiated：发卡行授权类拒付；who_received_notice：商户；who_bears_risk：商户（无授权）
 - **交易事实**：金额 USD 68｜时间 2026-08-15T12:10:00Z｜商品 堂食消费｜渠道 POS｜认证 无授权批准（拒绝后无 Stand-in）｜履约 已提供｜退款 未退款
@@ -967,6 +1017,7 @@
 - **一句话场景**：证据已齐全但商户迟迟未处理，距离响应截止仅剩 3 天。系统向运营群发送飞书提醒卡片，运营当日完成提交。
 - **业务分类**：卡组织 Visa｜原因码 13.1（Merchandise/Services Not Received）｜大类 Consumer Dispute｜行业 服装电商｜渠道 线上｜交易类型 实物商品｜数据来源类别 项目合成演示案例（虚构商户/虚构用户）
 - **来源**：SRC-01、SRC-03｜定位：合成案例，无原文定位（见 derived_from_rule_ids）｜置信度 HIGH｜需人工复核 否
+- **Provenance**：验证状态 NEEDS_CONFIRMATION｜冲突 ['CONFLICT-012']｜规则版本 June 2024（Dispute Management Guidelines for Visa Merchants）; 无版本号（内部整理稿）｜生效日期 NOT_STATED｜期限政策 未说明（Visa 需收单机构确认 / 演示设定）｜用途 网站/比赛演示、Sandbox seed、规则引擎测试、Agent 测试、UI 测试、飞书演示、路演故事｜生产可用 否
 - **参与者**：cardholder=Sandbox 用户 sandbox-user-004；issuer=发卡行（模拟）；acquirer=收单机构（模拟）；merchant=织语服饰 sandbox-mer-004；psp=OceanPilot；platform=物流 sandbox-courier-002
 - **资金关系**：who_paid_whom：持卡人支付 USD 89；who_initiated：持卡人主张未收到；who_received_notice：商户；who_bears_risk：超期则视为放弃抗辩
 - **交易事实**：金额 USD 89｜时间 2026-08-05T09:00:00Z｜商品 针织衫｜渠道 电商｜认证 无｜履约 已签收｜退款 未退款
@@ -987,6 +1038,7 @@
 - **一句话场景**：商户错过响应截止 6 天。系统锁定提交入口，状态置为 EXPIRED，并展示规则依据与商户改进建议。
 - **业务分类**：卡组织 Mastercard｜原因码 4853（Cardholder Dispute）｜大类 Consumer Dispute｜行业 旅游｜渠道 预订｜交易类型 取消退款｜数据来源类别 项目合成演示案例（虚构商户/虚构用户）
 - **来源**：SRC-02｜定位：合成案例，无原文定位（见 derived_from_rule_ids）｜置信度 HIGH｜需人工复核 否
+- **Provenance**：验证状态 NEEDS_CONFIRMATION｜冲突 无｜规则版本 2026-05-19（Chargeback Guide Merchant Edition）｜生效日期 NOT_STATED｜期限政策 未说明（Visa 需收单机构确认 / 演示设定）｜用途 网站/比赛演示、Sandbox seed、规则引擎测试、Agent 测试、UI 测试、飞书演示、路演故事｜生产可用 否
 - **参与者**：cardholder=Sandbox 用户 sandbox-user-005；issuer=发卡行（模拟）；acquirer=收单机构（模拟）；merchant=远方假期 sandbox-mer-005；psp=OceanPilot；platform=无
 - **资金关系**：who_paid_whom：持卡人支付订金；who_initiated：持卡人主张退款未处理；who_received_notice：商户；who_bears_risk：商户（已失抗辩机会）
 - **交易事实**：金额 USD 420｜时间 2026-06-20T10:00:00Z｜商品 度假套餐订金｜渠道 卡支付｜认证 无｜履约 已取消｜退款 未退款
@@ -1007,6 +1059,7 @@
 - **一句话场景**：上传的 POD 被 OCR 识别为收件人「张珊」，人工比对原件实为「张杉」且与持卡人一致。系统标记低置信度字段，运营修正后重新校验通过。
 - **业务分类**：卡组织 Visa｜原因码 13.1（Merchandise/Services Not Received）｜大类 Consumer Dispute｜行业 家居电商｜渠道 线上｜交易类型 实物商品｜数据来源类别 项目合成演示案例（虚构商户/虚构用户）
 - **来源**：SRC-01、SRC-03｜定位：合成案例，无原文定位（见 derived_from_rule_ids）｜置信度 HIGH｜需人工复核 否
+- **Provenance**：验证状态 NEEDS_CONFIRMATION｜冲突 ['CONFLICT-012']｜规则版本 June 2024（Dispute Management Guidelines for Visa Merchants）; 无版本号（内部整理稿）｜生效日期 NOT_STATED｜期限政策 未说明（Visa 需收单机构确认 / 演示设定）｜用途 网站/比赛演示、Sandbox seed、规则引擎测试、Agent 测试、UI 测试｜生产可用 否
 - **参与者**：cardholder=张杉 sandbox-user-006；issuer=发卡行（模拟）；acquirer=收单机构（模拟）；merchant=素居生活 sandbox-mer-006；psp=OceanPilot；platform=物流 sandbox-courier-003
 - **资金关系**：who_paid_whom：持卡人支付 USD 156；who_initiated：持卡人主张未收到；who_received_notice：商户；who_bears_risk：商户（可抗辩）
 - **交易事实**：金额 USD 156｜时间 2026-08-08T14:00:00Z｜商品 台灯｜渠道 电商｜认证 无｜履约 已签收｜退款 未退款
@@ -1027,6 +1080,7 @@
 - **一句话场景**：数字课程拒付：Agent 检索到 17 次登录记录，生成「提交抗辩」操作提案，附材料包与规则引用；用户确认后提案被执行，全程留痕。
 - **业务分类**：卡组织 Mastercard｜原因码 4853（Cardholder Dispute）｜大类 Consumer Dispute｜行业 在线教育｜渠道 线上｜交易类型 数字服务｜数据来源类别 项目合成演示案例（虚构商户/虚构用户）
 - **来源**：SRC-02、SRC-03｜定位：合成案例，无原文定位（见 derived_from_rule_ids）｜置信度 HIGH｜需人工复核 否
+- **Provenance**：验证状态 NEEDS_CONFIRMATION｜冲突 无｜规则版本 2026-05-19（Chargeback Guide Merchant Edition）; 无版本号（内部整理稿）｜生效日期 NOT_STATED｜期限政策 未说明（Visa 需收单机构确认 / 演示设定）｜用途 网站/比赛演示、Sandbox seed、规则引擎测试、Agent 测试、UI 测试、路演故事｜生产可用 否
 - **参与者**：cardholder=Sandbox 用户 sandbox-user-007；issuer=发卡行（模拟）；acquirer=收单机构（模拟）；merchant=启明学堂 sandbox-mer-007；psp=OceanPilot；platform=课程平台
 - **资金关系**：who_paid_whom：持卡人支付 USD 499；who_initiated：持卡人主张课程不可访问；who_received_notice：商户；who_bears_risk：商户（可抗辩）
 - **交易事实**：金额 USD 499｜时间 2026-08-02T11:00:00Z｜商品 在线课程｜渠道 电商｜认证 账号｜履约 登录 17 次｜退款 未退款
@@ -1047,6 +1101,7 @@
 - **一句话场景**：Agent 生成提案后，另一运营同时更新了案件（版本号 +1）。用户点击确认时系统检测 revision 不匹配，拒绝执行并要求基于最新版本重新生成。
 - **业务分类**：卡组织 Mastercard｜原因码 4853（Cardholder Dispute）｜大类 Consumer Dispute｜行业 3C 电商｜渠道 线上｜交易类型 实物商品｜数据来源类别 项目合成演示案例（虚构商户/虚构用户）
 - **来源**：SRC-02｜定位：合成案例，无原文定位（见 derived_from_rule_ids）｜置信度 HIGH｜需人工复核 否
+- **Provenance**：验证状态 NEEDS_CONFIRMATION｜冲突 无｜规则版本 2026-05-19（Chargeback Guide Merchant Edition）｜生效日期 NOT_STATED｜期限政策 未说明（Visa 需收单机构确认 / 演示设定）｜用途 网站/比赛演示、Sandbox seed、规则引擎测试、Agent 测试、UI 测试｜生产可用 否
 - **参与者**：cardholder=Sandbox 用户 sandbox-user-008；issuer=发卡行（模拟）；acquirer=收单机构（模拟）；merchant=极光数码 sandbox-mer-008；psp=OceanPilot；platform=无
 - **资金关系**：who_paid_whom：持卡人支付 USD 88；who_initiated：持卡人主张货不对板；who_received_notice：商户；who_bears_risk：商户
 - **交易事实**：金额 USD 88｜时间 2026-08-11T15:00:00Z｜商品 键盘｜渠道 电商｜认证 无｜履约 已收货｜退款 未退款
@@ -1067,6 +1122,7 @@
 - **一句话场景**：提交抗辩时上游接口超时。系统以幂等键重试，未产生重复提交，最终收到成功回执；审计记录显示一次业务提交+两次网络重试。
 - **业务分类**：卡组织 Visa｜原因码 13.1（Merchandise/Services Not Received）｜大类 Consumer Dispute｜行业 服装电商｜渠道 线上｜交易类型 实物商品｜数据来源类别 项目合成演示案例（虚构商户/虚构用户）
 - **来源**：SRC-01、SRC-03｜定位：合成案例，无原文定位（见 derived_from_rule_ids）｜置信度 HIGH｜需人工复核 否
+- **Provenance**：验证状态 NEEDS_CONFIRMATION｜冲突 ['CONFLICT-012']｜规则版本 June 2024（Dispute Management Guidelines for Visa Merchants）; 无版本号（内部整理稿）｜生效日期 NOT_STATED｜期限政策 未说明（Visa 需收单机构确认 / 演示设定）｜用途 网站/比赛演示、Sandbox seed、规则引擎测试、Agent 测试、UI 测试、路演故事｜生产可用 否
 - **参与者**：cardholder=Sandbox 用户 sandbox-user-009；issuer=发卡行（模拟）；acquirer=上游收单（模拟）；merchant=栖木服饰 sandbox-mer-009；psp=OceanPilot；platform=无
 - **资金关系**：who_paid_whom：持卡人支付 USD 132；who_initiated：持卡人主张未收到；who_received_notice：商户；who_bears_risk：商户（可抗辩）
 - **交易事实**：金额 USD 132｜时间 2026-08-12T16:00:00Z｜商品 风衣｜渠道 电商｜认证 无｜履约 已签收｜退款 未退款
@@ -1087,6 +1143,7 @@
 - **一句话场景**：租户 A 的运营人员携带租户 B 的案件 ID 访问，系统鉴权层返回 403；越权尝试被写入安全审计，触发告警。
 - **业务分类**：卡组织 N/A（产品安全）｜原因码 N/A（Cross-tenant access）｜大类 Security｜行业 通用（安全）｜渠道 通用｜交易类型 安全测试｜数据来源类别 项目合成演示案例（虚构商户/虚构用户）
 - **来源**：SRC-01、SRC-02｜定位：合成案例，无原文定位（见 derived_from_rule_ids）｜置信度 HIGH｜需人工复核 否
+- **Provenance**：验证状态 NEEDS_CONFIRMATION｜冲突 无｜规则版本 June 2024（Dispute Management Guidelines for Visa Merchants）; 2026-05-19（Chargeback Guide Merchant Edition）｜生效日期 NOT_STATED｜期限政策 明确｜用途 网站/比赛演示、Agent 测试、UI 测试、安全测试｜生产可用 否
 - **参与者**：merchant=租户 A=云岚数码 sandbox-mer-001；租户 B=环球优选 sandbox-mer-002；psp=OceanPilot
 - **资金关系**：who_paid_whom：N/A；who_initiated：租户 A 成员试图访问租户 B 案件；who_received_notice：N/A；who_bears_risk：越权访问风险
 - **交易事实**：金额 N/A｜时间 N/A｜商品 N/A｜渠道 N/A｜认证 租户鉴权｜履约 N/A｜退款 N/A
@@ -1105,6 +1162,7 @@
 - **一句话场景**：案件处理期间 Mastercard 旧码 4855 被标记将淘汰、并入 4853。案件仍按受理时的规则版本 2026-05 展示证据要求；新案件使用 2026-06 版本。
 - **业务分类**：卡组织 Mastercard｜原因码 4853/4855（Cardholder Dispute（版本切换））｜大类 Consumer Dispute｜行业 电商｜渠道 线上｜交易类型 商品未收到｜数据来源类别 项目合成演示案例（虚构商户/虚构用户）
 - **来源**：SRC-02、SRC-03｜定位：合成案例，无原文定位（见 derived_from_rule_ids）｜置信度 HIGH｜需人工复核 否
+- **Provenance**：验证状态 NEEDS_CONFIRMATION｜冲突 ['CONFLICT-005']｜规则版本 2026-05-19（Chargeback Guide Merchant Edition）; 无版本号（内部整理稿）｜生效日期 淘汰码并入生效日待卡组织公告（CONFLICT-005）｜期限政策 未说明（Visa 需收单机构确认 / 演示设定）｜用途 网站/比赛演示、Sandbox seed、规则引擎测试、Agent 测试、UI 测试｜生产可用 否
 - **参与者**：cardholder=Sandbox 用户 sandbox-user-010；issuer=发卡行（模拟）；acquirer=收单机构（模拟）；merchant=森屿杂货 sandbox-mer-010；psp=OceanPilot；platform=无
 - **资金关系**：who_paid_whom：持卡人支付 USD 45；who_initiated：持卡人主张未收到；who_received_notice：商户；who_bears_risk：商户
 - **交易事实**：金额 USD 45｜时间 2026-08-13T10:00:00Z｜商品 家居用品｜渠道 电商｜认证 无｜履约 已发货｜退款 未退款
@@ -1125,6 +1183,7 @@
 - **一句话场景**：路演开场：一家独立设计店铺收到「持卡人不认识这笔交易」的拒付。Agent 调出订单照片与商品描述后，运营发现是友好欺诈，用历史交易+设备证据抗辩成功。
 - **业务分类**：卡组织 Visa｜原因码 10.4（Other Fraud – Card-Absent Environment）｜大类 Fraud｜行业 原创设计零售｜渠道 线上｜交易类型 CNP 欺诈/友好欺诈｜数据来源类别 项目合成演示案例（虚构商户/虚构用户）
 - **来源**：SRC-01、SRC-03｜定位：合成案例，无原文定位（见 derived_from_rule_ids）｜置信度 HIGH｜需人工复核 否
+- **Provenance**：验证状态 CONFLICTING_SOURCES｜冲突 ['CONFLICT-003', 'CONFLICT-012']｜规则版本 June 2024（Dispute Management Guidelines for Visa Merchants）; 无版本号（内部整理稿）｜生效日期 2024-10-19 起（CE3.0 相关变更）｜期限政策 未说明（Visa 需收单机构确认 / 演示设定）｜用途 网站/比赛演示、Sandbox seed、规则引擎测试、Agent 测试、UI 测试、飞书演示、路演故事｜生产可用 否
 - **参与者**：cardholder=Sandbox 用户 sandbox-user-011；issuer=发卡行（模拟）；acquirer=收单机构（模拟）；merchant=拾光设计 sandbox-mer-011；psp=OceanPilot；platform=独立站
 - **资金关系**：who_paid_whom：持卡人支付 USD 310；who_initiated：持卡人称不认识交易；who_received_notice：商户；who_bears_risk：商户（可抗辩）
 - **交易事实**：金额 USD 310｜时间 2026-08-06T20:00:00Z｜商品 手工皮包｜渠道 独立站 CNP｜认证 3DS（ECI 5）｜履约 已签收｜退款 未退款
@@ -1147,6 +1206,7 @@
 - **一句话场景**：商户 8 月 20 日发起退款 USD 120，持卡人 8 月 30 日仍称未收到。系统检索到退款 ARN 与结算状态，生成 2011/13.6 抗辩。
 - **业务分类**：卡组织 Visa｜原因码 13.6（Credit Not Processed）｜大类 Consumer Dispute｜行业 美妆电商｜渠道 线上｜交易类型 退款未到账｜数据来源类别 项目合成演示案例（虚构商户/虚构用户）
 - **来源**：SRC-01、SRC-03｜定位：合成案例，无原文定位（见 derived_from_rule_ids）｜置信度 HIGH｜需人工复核 否
+- **Provenance**：验证状态 NEEDS_CONFIRMATION｜冲突 无｜规则版本 June 2024（Dispute Management Guidelines for Visa Merchants）; 无版本号（内部整理稿）｜生效日期 NOT_STATED｜期限政策 未说明（Visa 需收单机构确认 / 演示设定）｜用途 网站/比赛演示、Sandbox seed、规则引擎测试、Agent 测试、UI 测试｜生产可用 否
 - **参与者**：cardholder=Sandbox 用户 sandbox-user-012；issuer=发卡行（模拟）；acquirer=收单机构（模拟）；merchant=澄心美妆 sandbox-mer-012；psp=OceanPilot；platform=无
 - **资金关系**：who_paid_whom：持卡人支付后商户退款；who_initiated：持卡人主张退款未到；who_received_notice：商户；who_bears_risk：商户（可证已退）
 - **交易事实**：金额 USD 120｜时间 2026-08-18T09:00:00Z｜商品 护肤品套装｜渠道 电商｜认证 无｜履约 已退货｜退款 已发起退款（ARN sandbox-arn-072）
@@ -1166,6 +1226,7 @@
 - **一句话场景**：同一订单被扣两笔 USD 66。系统比对订单号/授权/清算发现两笔指向同一订单，判定重复；商户确认后走退款补救并接受拒付。
 - **业务分类**：卡组织 Mastercard｜原因码 4834（Point-of-Interaction Error）｜大类 Processing Error｜行业 运动电商｜渠道 线上｜交易类型 重复扣款｜数据来源类别 项目合成演示案例（虚构商户/虚构用户）
 - **来源**：SRC-02、SRC-03｜定位：合成案例，无原文定位（见 derived_from_rule_ids）｜置信度 HIGH｜需人工复核 否
+- **Provenance**：验证状态 NEEDS_CONFIRMATION｜冲突 无｜规则版本 2026-05-19（Chargeback Guide Merchant Edition）; 无版本号（内部整理稿）｜生效日期 NOT_STATED｜期限政策 未说明（Visa 需收单机构确认 / 演示设定）｜用途 网站/比赛演示、Sandbox seed、规则引擎测试、Agent 测试、UI 测试｜生产可用 否
 - **参与者**：cardholder=Sandbox 用户 sandbox-user-013；issuer=发卡行（模拟）；acquirer=收单机构（模拟）；merchant=锐动体育 sandbox-mer-013；psp=OceanPilot；platform=无
 - **资金关系**：who_paid_whom：持卡人被扣两笔 USD 66；who_initiated：持卡人主张重复；who_received_notice：商户；who_bears_risk：重复部分商户
 - **交易事实**：金额 USD 66 × 2｜时间 2026-08-14T10:01:00Z / 10:02:00Z｜商品 跑鞋｜渠道 电商｜认证 无｜履约 已发货（一笔）｜退款 未退款
@@ -1185,6 +1246,7 @@
 - **一句话场景**：持卡人称收到的台灯为旧款。商户提供 SKU、发货序列号与商品页快照证明一致，生成 2700 抗辩。
 - **业务分类**：卡组织 Mastercard｜原因码 4853（Cardholder Dispute）｜大类 Consumer Dispute｜行业 家居电商｜渠道 线上｜交易类型 货不对板｜数据来源类别 项目合成演示案例（虚构商户/虚构用户）
 - **来源**：SRC-02、SRC-03｜定位：合成案例，无原文定位（见 derived_from_rule_ids）｜置信度 HIGH｜需人工复核 否
+- **Provenance**：验证状态 NEEDS_CONFIRMATION｜冲突 无｜规则版本 2026-05-19（Chargeback Guide Merchant Edition）; 无版本号（内部整理稿）｜生效日期 NOT_STATED｜期限政策 未说明（Visa 需收单机构确认 / 演示设定）｜用途 网站/比赛演示、Sandbox seed、规则引擎测试、Agent 测试｜生产可用 否
 - **参与者**：cardholder=Sandbox 用户 sandbox-user-014；issuer=发卡行（模拟）；acquirer=收单机构（模拟）；merchant=简居家居 sandbox-mer-014；psp=OceanPilot；platform=无
 - **资金关系**：who_paid_whom：持卡人支付 USD 98；who_initiated：持卡人主张货不对板；who_received_notice：商户；who_bears_risk：商户（可抗辩）
 - **交易事实**：金额 USD 98｜时间 2026-08-16T13:00:00Z｜商品 台灯（新款）｜渠道 电商｜认证 无｜履约 已收货｜退款 未退款
