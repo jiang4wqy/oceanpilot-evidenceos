@@ -66,10 +66,18 @@ def test_explicit_case_commands_still_use_the_model_and_record_assessment(tmp_pa
     model = ScriptedModelProvider(default_text="synthetic explanation")
     app = create_app(Settings(db_path=tmp_path / "api.db"), chargeback_model=model)
     with TestClient(app) as client:
-        created = client.post("/api/v1/chargeback/cases", json={"description": "没收到货，要拒付"})
+        created = client.post(
+            "/api/v1/chargeback/cases",
+            json={"formal_dispute": True, "description": "没收到货，要拒付"},
+        )
         assert created.status_code == 201
         assert model.requests
         case_id = created.json()["case_id"]
+        for code in ("fulfillment.tracking", "fulfillment.proof_of_delivery"):
+            registered = client.post(
+                f"/api/v1/chargeback/cases/{case_id}/evidence", json={"evidence_code": code}
+            )
+            assert registered.status_code == 200
         before_calls = len(model.requests)
         finalized = client.post(f"/api/v1/chargeback/cases/{case_id}/finalize")
         assert finalized.status_code == 200

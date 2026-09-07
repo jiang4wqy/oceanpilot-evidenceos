@@ -3,6 +3,7 @@ from collections.abc import Mapping, Sequence
 import anthropic
 
 from oceanpilot.application.model_provider import (
+    ModelFailureCode,
     ModelMessage,
     ModelProviderError,
     ModelResult,
@@ -35,7 +36,9 @@ class ClaudeProvider:
             raise ValueError("default_model must be non-empty")
         self._default_model = default_model
         self._overrides = dict(model_overrides or {})
-        self._client = client if client is not None else anthropic.Anthropic()
+        self._client = (
+            client if client is not None else anthropic.Anthropic(timeout=12.0, max_retries=0)
+        )
 
     def _model_for(self, task: TaskSpec) -> str:
         return self._overrides.get(task.kind, self._default_model)
@@ -70,6 +73,10 @@ class ClaudeProvider:
             ]
         try:
             response = self._client.messages.create(**request)
+        except anthropic.APITimeoutError:
+            raise ModelProviderError(ModelFailureCode.TIMEOUT) from None
+        except anthropic.RateLimitError:
+            raise ModelProviderError(ModelFailureCode.RATE_LIMITED) from None
         except Exception:
             raise ModelProviderError() from None
         return self._to_result(response)

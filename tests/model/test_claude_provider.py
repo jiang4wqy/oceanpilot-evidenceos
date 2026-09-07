@@ -114,3 +114,14 @@ def test_provider_failure_is_wrapped_and_never_leaks():
     with pytest.raises(ModelProviderError) as captured:
         provider.complete(TaskSpec(kind="intake"), _MSGS)
     assert "secret-key-xyz" not in str(captured.value)
+
+
+def test_production_sdk_disables_automatic_retries_and_long_default_timeout(monkeypatch):
+    from unittest.mock import Mock
+
+    import oceanpilot.adapters.model.claude as module
+
+    constructor = Mock()
+    monkeypatch.setattr(module.anthropic, "Anthropic", constructor)
+    module.ClaudeProvider()
+    constructor.assert_called_once_with(timeout=12.0, max_retries=0)

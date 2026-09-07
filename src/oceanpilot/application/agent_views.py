@@ -1,8 +1,7 @@
 """Immutable case Agent views and deterministic presentation helpers.
 
-These values describe the current demonstration behavior independently of HTTP.
-They deliberately preserve existing operator copy; tightening rules/material
-wording is a separate business change after the structural refactor.
+These values describe registered synthetic material, deterministic readiness,
+versioned rule summaries, and human review independently of HTTP.
 """
 
 import json
@@ -133,6 +132,9 @@ class AgentTurn:
     judgment: AgentJudgment
     recommended_action: AgentRecommendedAction
     agent_trace: tuple[AgentTraceStep, ...]
+    output_source: str = "DETERMINISTIC"
+    failure_code: str | None = None
+    rule_fingerprint: str | None = None
 
 
 def _saved_array(value: object) -> list[object]:
@@ -215,6 +217,13 @@ def assistant_message(delivery: Delivery, *, locale: str) -> str:
         if locale == "en":
             return f"Please provide {label}. I will re-check the case after it is added."
         return f"请补充「{label}」。提交后我会重新校验案件状态并给出下一步。"
+    if delivery.phase == "ASSESSED":
+        return (
+            "The internal material register is ready for human review; "
+            "file contents remain unverified."
+            if locale == "en"
+            else "内部材料登记清单齐备，等待人工复核；文件正文仍未核验。"
+        )
     return (
         "The case has been created. Please review the structured judgment below."
         if locale == "en"
@@ -308,14 +317,15 @@ def judgment(delivery: Delivery, *, locale: str) -> AgentJudgment:
     next_action = assistant_message(delivery, locale=locale)
     problem_type = reason_label(reason, locale=locale) if reason is not None else "待识别"
     if locale == "en":
+        readiness = readiness.replace(" 项", " items")
         summary = (
             f"The deterministic kernel classified this as {problem_type}; evidence readiness "
             f"is {readiness}, routed to {responsible_team}."
         )
     else:
         summary = (
-            f"确定性内核将问题归类为「{problem_type}」，当前证据就绪度为 {readiness}，"
-            f"责任域为 {responsible_team}；AI 只负责理解问题和生成说明。"
+            f"确定性内核将问题归类为「{problem_type}」，当前材料就绪度为 {readiness}，"
+            f"责任域为 {responsible_team}；仅登记合成材料，正文内容仍待人工核验。"
         )
     return AgentJudgment(
         problem_type=problem_type,
@@ -357,7 +367,13 @@ def analyzed_trace(
     runtime: AgentRuntime,
     outcome: CopilotOutcome,
 ) -> tuple[AgentTraceStep, ...]:
-    source = runtime.provider if outcome.source == "MODEL" else "DETERMINISTIC_FALLBACK"
+    source = (
+        runtime.provider
+        if outcome.source == "MODEL"
+        else "DETERMINISTIC_RULES"
+        if outcome.source == "DETERMINISTIC"
+        else "DETERMINISTIC_FALLBACK"
+    )
     return (
         AgentTraceStep(
             step=1,
@@ -381,7 +397,13 @@ def analyzed_trace(
             action="理解问题并生成案件说明",
             status="COMPLETED",
             source=source,
-            output_summary="模型说明受固定 JSON 合同和案件快照约束",
+            output_summary=(
+                "实时模型说明受固定 JSON 合同和案件快照约束"
+                if outcome.source == "MODEL"
+                else "当前说明来自确定性案件规则"
+                if outcome.source == "DETERMINISTIC"
+                else "模型请求未能提供可用说明，已降级为确定性案件规则"
+            ),
         ),
         AgentTraceStep(
             step=4,
@@ -411,7 +433,7 @@ def analyzed_action(
         label=outcome.action_label,
         evidence_code=evidence_code,
         evidence_label=evidence_label,
-        requires_confirmation=outcome.requires_confirmation,
+        requires_confirmation=True,
     )
 
 
@@ -441,6 +463,17 @@ def citations(
     entry = knowledge_base.lookup(reason, card_network=card_network)
     if entry.rule_version_id is None:
         return ()
+    primary = catalog.get_rule(entry.rule_version_id)
+    if (
+        primary is None
+        or primary.rule_version_id != entry.rule_version_id
+        or primary.category == "TECHNICAL_CONTEXT"
+        or primary.scheme != card_network
+        or primary.internal_reason_code != reason.value
+        or primary.demo_role != "DEMO_MAPPED"
+        or primary.scheme_reason_code != entry.scheme_reason_code
+    ):
+        return ()
 
     citation_ids = [entry.rule_version_id]
     if reason is DisputeReasonCode.FRAUD_CARD_NOT_PRESENT and card_network == "VISA":
@@ -448,15 +481,22 @@ def citations(
 
     citations: list[AgentCitation] = []
     for reference_id in citation_ids:
-        detail = catalog.get_rule(reference_id)
+        detail = (
+            primary if reference_id == primary.rule_version_id else catalog.get_rule(reference_id)
+        )
         if detail is None:
             continue
         technical = detail.category == "TECHNICAL_CONTEXT"
-        # Existing demo wording is preserved here for the separate P0 rules fix.
+        if reference_id != primary.rule_version_id and not technical:
+            continue
         claim = (
             "3DS 文档仅解释认证结果留存的技术语境，不参与责任转移、资格或期限判断。"
             if technical
-            else "本案按 Visa 10.4 Synthetic 映射准备无卡交易争议材料。"
+            else (
+                f"本案对应 {detail.scheme} {detail.scheme_reason_code}"
+                f"「{detail.display_name}」的 Synthetic 映射，用于整理待人工复核的材料。"
+                "该规则仅为未核验摘要，不代表正式适用依据或材料内容已获验证。"
+            )
         )
         citations.append(
             AgentCitation(
@@ -472,6 +512,17 @@ def citations(
             )
         )
     return tuple(citations)
+
+
+def rule_match_notice(references: tuple[AgentCitation, ...]) -> str:
+    """Explain missing mappings explicitly without manufacturing a citation."""
+    rules = [item for item in references if item.reference_type == "RULE"]
+    if not rules:
+        return (
+            "当前案件与卡组织未匹配到可追溯的精确规则摘要；"
+            "仅能使用内部材料准备清单，不能把默认模板作为正式依据。请人工核对规则适用范围。"
+        )
+    return "已匹配当前案件的合成规则摘要；规则版本、适用范围和材料内容仍待人工核验。"
 
 
 def review_proposal(
@@ -494,12 +545,16 @@ def review_proposal(
         summary = "已识别审核通过意图，但内部材料清单尚未齐备。"
         next_action = f"补充{judgment.missing_evidence[0]}"
         why = "仍有缺失资料，当前不能写入审核通过结论。"
+    elif judgment.phase != "ASSESSED":
+        review_status = ReviewStatus.NEEDS_MORE_INFO
+        summary = "当前案件尚未完成原因确认或材料就绪评估，不能写入通过结论。"
+        next_action = "确认案件原因与当前材料登记状态"
+        why = "只有当前版本的内部材料清单齐备并经过就绪评估，才允许提出登记审核通过。"
     else:
         review_status = ReviewStatus.APPROVED
-        # This legacy review wording is addressed by the separate P0 scope.
-        summary = "操作人员确认内部材料已齐备且内容一致；等待确认写入案件。"
-        next_action = "生成 Visa 10.4 Synthetic 材料包并预览"
-        why = "材料审核通过后，最终 mock 发送仍需经过独立人工审批。"
+        summary = "拟确认当前版本的内部材料登记清单齐备；等待人工确认写入案件。"
+        next_action = "生成当前版本的案件复核摘要（合成示例）"
+        why = "该审核仅确认登记清单，未读取或核验真实文件正文；内容与真实性仍待另行核验。"
 
     return AgentReviewProposal(
         status=review_status.value,
@@ -514,14 +569,14 @@ def review_proposal(
 
 def decision_reason(judgment: AgentJudgment, review_status: str) -> str:
     if review_status == ReviewStatus.APPROVED.value:
-        return "内部材料审核已由操作人员确认通过；最终 mock 发送仍受独立人工审批闸门约束。"
+        return "当前版本的内部材料登记审核已由操作人员确认通过；正文内容与真实性仍待另行核验。"
     if review_status == ReviewStatus.REJECTED.value:
         return "内部材料审核已由操作人员确认驳回，案件保留审核决定与审计记录。"
     if judgment.missing_evidence:
         return f"内部清单仍缺少 {len(judgment.missing_evidence)} 项材料，暂不能形成通过结论。"
     if judgment.human_gate:
-        return "内部清单已齐备；非本人交易属于强制人工复核类别，AI 不会自动判定通过。"
-    return "确定性证据门槛已经满足，下一步仍需按案件流程执行人工确认。"
+        return "内部材料登记清单已齐备；所有合成案件仍需人工复核，AI 不会自动判定通过。"
+    return "材料登记门槛已经满足，下一步仍需按案件流程执行人工确认。"
 
 
 def review_decision(decision: ReviewDecision | None) -> AgentReviewDecision | None:

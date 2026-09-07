@@ -1,0 +1,353 @@
+{
+  "case": {
+    "allowed_actions": [
+      "CONFIRM_REASON",
+      "SET_NETWORK",
+      "REGISTER_MATERIAL",
+      "WITHDRAW_MATERIAL",
+      "FINALIZE",
+      "ADD_CONCERN",
+      "REVIEW",
+      "RESOLVE_CONCERN",
+      "GENERATE_SUMMARY"
+    ],
+    "card_network": "VISA",
+    "case_id": "907498e0-41ed-4d5c-8699-cbe112d7c66b",
+    "concerns": [],
+    "created_at": "2026-09-06T13:33:51.587595Z",
+    "description": "合成正式争议：持卡人提出 Visa 10.4 无卡未授权交易争议。假定已进入正式争议流程，金额 USD 120。保留 3DS 登记缺口。",
+    "formal_dispute": true,
+    "gate": {
+      "can_package": true,
+      "can_review": true,
+      "reason": "当前版本材料登记复核已通过；正文与正式规则适用性仍未核验。",
+      "requires_human": true,
+      "status": "HUMAN_APPROVED"
+    },
+    "latest_analysis": null,
+    "materials": [
+      {
+        "active": true,
+        "code": "transaction.receipt",
+        "content_verification": "NOT_READ",
+        "file_name": "synthetic-transaction.receipt.txt",
+        "label": "交易收据",
+        "registered_at": "2026-09-06T13:33:51.592811Z",
+        "registered_by": "synthetic-merchant",
+        "registered_revision": 3,
+        "source": "SYNTHETIC_TEMPLATE",
+        "withdrawn_at": null
+      },
+      {
+        "active": true,
+        "code": "auth.avs_result",
+        "content_verification": "NOT_READ",
+        "file_name": "synthetic-auth.avs_result.txt",
+        "label": "AVS 地址验证结果",
+        "registered_at": "2026-09-06T13:33:51.592967Z",
+        "registered_by": "synthetic-merchant",
+        "registered_revision": 4,
+        "source": "SYNTHETIC_TEMPLATE",
+        "withdrawn_at": null
+      },
+      {
+        "active": true,
+        "code": "auth.cvv_result",
+        "content_verification": "NOT_READ",
+        "file_name": "synthetic-auth.cvv_result.txt",
+        "label": "CVV 校验结果",
+        "registered_at": "2026-09-06T13:33:51.593042Z",
+        "registered_by": "synthetic-merchant",
+        "registered_revision": 5,
+        "source": "SYNTHETIC_TEMPLATE",
+        "withdrawn_at": null
+      },
+      {
+        "active": true,
+        "code": "auth.device_ip_match",
+        "content_verification": "NOT_READ",
+        "file_name": "synthetic-auth.device_ip_match.txt",
+        "label": "设备/IP 匹配",
+        "registered_at": "2026-09-06T13:33:51.593112Z",
+        "registered_by": "synthetic-merchant",
+        "registered_revision": 6,
+        "source": "SYNTHETIC_TEMPLATE",
+        "withdrawn_at": null
+      },
+      {
+        "active": true,
+        "code": "history.prior_transactions",
+        "content_verification": "NOT_READ",
+        "file_name": "synthetic-history.prior_transactions.txt",
+        "label": "历史交易记录",
+        "registered_at": "2026-09-06T13:33:51.593176Z",
+        "registered_by": "synthetic-merchant",
+        "registered_revision": 7,
+        "source": "SYNTHETIC_TEMPLATE",
+        "withdrawn_at": null
+      },
+      {
+        "active": true,
+        "code": "auth.threeds",
+        "content_verification": "NOT_READ",
+        "file_name": "synthetic-auth-threeds.pdf",
+        "label": "3DS 认证结果",
+        "registered_at": "2026-09-06T13:34:25.411170Z",
+        "registered_by": "synthetic-merchant",
+        "registered_revision": 8,
+        "source": "SYNTHETIC_TEMPLATE",
+        "withdrawn_at": null
+      }
+    ],
+    "missing": [],
+    "missing_count": 0,
+    "next_action": {
+      "approval_required": true,
+      "expected_state": "留下当前版本人工复核记录或摘要",
+      "label": "生成复核摘要",
+      "owner": "BUSINESS",
+      "reason": "当前版本材料登记复核已通过；正文与正式规则适用性仍未核验。",
+      "required_materials": []
+    },
+    "next_actor": "BUSINESS",
+    "phase": "HUMAN_APPROVED",
+    "phase_label": "登记复核通过",
+    "readiness": {
+      "meaning": "内部材料登记清单完成度；不代表胜诉率、真实性或正文核验。",
+      "present": 6,
+      "ratio": "1.0000",
+      "total": 6
+    },
+    "reason_code": "FRAUD_CARD_NOT_PRESENT",
+    "reason_confirmed": true,
+    "reason_label": "无卡欺诈（未授权交易）",
+    "review": {
+      "current_record": {
+        "audit_event_id": "9f77f1c9-094e-459a-ac6c-7fc469bb8c28",
+        "case_id": "907498e0-41ed-4d5c-8699-cbe112d7c66b",
+        "case_revision": 10,
+        "citation_ids": [
+          "visa-10-4-demo-v1"
+        ],
+        "confirmed_at": "2026-09-06T13:55:08.690858Z",
+        "confirmed_by": "synthetic-business",
+        "confirmed_materials": [
+          "材料登记清单",
+          "内部处理门槛"
+        ],
+        "decision_id": "60367feb-e5cb-4d9e-87e6-b6464261832d",
+        "rule_fingerprint": "9b382d984dc55b3c43551f9c16a68cb6cfc7e58d04a74a1dd74e6724595da05e",
+        "source_turn_id": "4e1de776-2344-40f2-9024-13b4133605a4",
+        "status": "APPROVED",
+        "summary": "已复核当前合成材料登记清单和内部处理门槛；正文未读取，真实性及正式规则适用性仍待核验。"
+      },
+      "history": [
+        {
+          "audit_event_id": "4196cfa8-9297-4bfb-8d04-910322b04472",
+          "case_id": "907498e0-41ed-4d5c-8699-cbe112d7c66b",
+          "case_revision": 9,
+          "citation_ids": [
+            "visa-10-4-demo-v1"
+          ],
+          "confirmed_at": "2026-09-06T13:35:55.313779Z",
+          "confirmed_by": "synthetic-business",
+          "confirmed_materials": [
+            "材料登记清单",
+            "内部处理门槛"
+          ],
+          "decision_id": "17aa2b30-e378-4cd7-b314-acfa47095543",
+          "rule_fingerprint": null,
+          "source_turn_id": "e8b2f02b-68a8-4f32-bd77-a2c4a9acae5d",
+          "status": "APPROVED",
+          "summary": "已核对合成材料登记清单及内部处理门槛；未读取正文，正式规则适用性仍待企业专家复核。"
+        },
+        {
+          "audit_event_id": "9f77f1c9-094e-459a-ac6c-7fc469bb8c28",
+          "case_id": "907498e0-41ed-4d5c-8699-cbe112d7c66b",
+          "case_revision": 10,
+          "citation_ids": [
+            "visa-10-4-demo-v1"
+          ],
+          "confirmed_at": "2026-09-06T13:55:08.690858Z",
+          "confirmed_by": "synthetic-business",
+          "confirmed_materials": [
+            "材料登记清单",
+            "内部处理门槛"
+          ],
+          "decision_id": "60367feb-e5cb-4d9e-87e6-b6464261832d",
+          "rule_fingerprint": "9b382d984dc55b3c43551f9c16a68cb6cfc7e58d04a74a1dd74e6724595da05e",
+          "source_turn_id": "4e1de776-2344-40f2-9024-13b4133605a4",
+          "status": "APPROVED",
+          "summary": "已复核当前合成材料登记清单和内部处理门槛；正文未读取，真实性及正式规则适用性仍待核验。"
+        }
+      ],
+      "stale": false,
+      "status": "APPROVED"
+    },
+    "review_status": "APPROVED",
+    "revision": 10,
+    "rule_fingerprint": "9b382d984dc55b3c43551f9c16a68cb6cfc7e58d04a74a1dd74e6724595da05e",
+    "rule_reference": {
+      "display_name": "非本人交易（无卡环境）",
+      "limitation": "商户指南演示摘要；不自动判定 CE3.0、3DS 责任转移或正式申诉资格，15 天仅为原型内部准备窗口。",
+      "match_status": "EXACT_MATCH",
+      "rule_version": "June 2024",
+      "rule_version_id": "visa-10-4-demo-v1",
+      "scheme": "VISA",
+      "scheme_reason_code": "10.4",
+      "source_document": "Dispute Management Guidelines for Visa Merchants",
+      "source_section": "Condition 10.4 — Other Fraud, Card-Absent Environment",
+      "source_url": "https://by.visa.com/dam/VCOM/global/support-legal/documents/merchants-dispute-management-guidelines.pdf",
+      "verification_status": "UNVERIFIED_SUMMARY"
+    },
+    "runtime": {
+      "mode": "OFFLINE_FALLBACK",
+      "model": "offline-rules",
+      "provider": "DETERMINISTIC"
+    },
+    "scenario": "A",
+    "summaries": [
+      {
+        "case_id": "907498e0-41ed-4d5c-8699-cbe112d7c66b",
+        "generated_at": "2026-09-06T13:36:01.611371Z",
+        "html_url": "/api/v1/workspace/summaries/1bdd03cb-db58-4527-9a08-68400fc6aa91?format=html",
+        "json_url": "/api/v1/workspace/summaries/1bdd03cb-db58-4527-9a08-68400fc6aa91?format=json",
+        "revision": 9,
+        "summary_id": "1bdd03cb-db58-4527-9a08-68400fc6aa91",
+        "title": "案件复核摘要（合成示例）"
+      }
+    ],
+    "synthetic": true,
+    "timeline": [
+      {
+        "actor": "旧版演示操作",
+        "case_revision": 0,
+        "detail": null,
+        "event_type": "CASE_OPENED",
+        "occurred_at": "2026-09-06T13:33:51.587595Z"
+      },
+      {
+        "actor": "旧版演示操作",
+        "case_revision": 1,
+        "detail": "FRAUD_CARD_NOT_PRESENT",
+        "event_type": "REASON_CLASSIFIED",
+        "occurred_at": "2026-09-06T13:33:51.592426Z"
+      },
+      {
+        "actor": "旧版演示操作",
+        "case_revision": 1,
+        "detail": "FRAUD_CARD_NOT_PRESENT",
+        "event_type": "REASON_CONFIRMED",
+        "occurred_at": "2026-09-06T13:33:51.592447Z"
+      },
+      {
+        "actor": "旧版演示操作",
+        "case_revision": 2,
+        "detail": "VISA",
+        "event_type": "CARD_NETWORK_SELECTED",
+        "occurred_at": "2026-09-06T13:33:51.592487Z"
+      },
+      {
+        "actor": "旧版演示操作",
+        "case_revision": 3,
+        "detail": "transaction.receipt",
+        "event_type": "EVIDENCE_ADDED",
+        "occurred_at": "2026-09-06T13:33:51.592749Z"
+      },
+      {
+        "actor": "旧版演示操作",
+        "case_revision": 4,
+        "detail": "auth.avs_result",
+        "event_type": "EVIDENCE_ADDED",
+        "occurred_at": "2026-09-06T13:33:51.592949Z"
+      },
+      {
+        "actor": "旧版演示操作",
+        "case_revision": 5,
+        "detail": "auth.cvv_result",
+        "event_type": "EVIDENCE_ADDED",
+        "occurred_at": "2026-09-06T13:33:51.593027Z"
+      },
+      {
+        "actor": "旧版演示操作",
+        "case_revision": 6,
+        "detail": "auth.device_ip_match",
+        "event_type": "EVIDENCE_ADDED",
+        "occurred_at": "2026-09-06T13:33:51.593097Z"
+      },
+      {
+        "actor": "旧版演示操作",
+        "case_revision": 7,
+        "detail": "history.prior_transactions",
+        "event_type": "EVIDENCE_ADDED",
+        "occurred_at": "2026-09-06T13:33:51.593162Z"
+      },
+      {
+        "actor": "synthetic-merchant",
+        "case_revision": 7,
+        "detail": "已明确确认并执行合成案件操作。",
+        "event_type": "COPY_SAMPLE",
+        "occurred_at": "2026-09-06T13:33:51.593228Z"
+      },
+      {
+        "actor": "旧版演示操作",
+        "case_revision": 8,
+        "detail": "auth.threeds",
+        "event_type": "EVIDENCE_ADDED",
+        "occurred_at": "2026-09-06T13:34:25.409765Z"
+      },
+      {
+        "actor": "synthetic-merchant",
+        "case_revision": 8,
+        "detail": "已明确确认并执行合成案件操作。",
+        "event_type": "REGISTER_MATERIAL",
+        "occurred_at": "2026-09-06T13:34:25.411837Z"
+      },
+      {
+        "actor": "synthetic-business",
+        "case_revision": 9,
+        "detail": "已核对合成材料登记清单及内部处理门槛；未读取正文，正式规则适用性仍待企业专家复核。",
+        "event_type": "REVIEW_DECISION_CONFIRMED",
+        "occurred_at": "2026-09-06T13:35:55.313779Z"
+      },
+      {
+        "actor": "synthetic-business",
+        "case_revision": 9,
+        "detail": "已明确确认并执行合成案件操作。",
+        "event_type": "REVIEW",
+        "occurred_at": "2026-09-06T13:35:55.314009Z"
+      },
+      {
+        "actor": "synthetic-business",
+        "case_revision": 10,
+        "detail": "已复核当前合成材料登记清单和内部处理门槛；正文未读取，真实性及正式规则适用性仍待核验。",
+        "event_type": "REVIEW_DECISION_CONFIRMED",
+        "occurred_at": "2026-09-06T13:55:08.690858Z"
+      },
+      {
+        "actor": "synthetic-business",
+        "case_revision": 10,
+        "detail": "已明确确认并执行合成案件操作。",
+        "event_type": "REVIEW",
+        "occurred_at": "2026-09-06T13:55:08.691935Z"
+      }
+    ],
+    "title": "A · Visa 10.4 主案例",
+    "unverified_items": [
+      "真实文件正文未读取；仅登记合成材料元数据。",
+      "材料真实性及跨材料内容一致性尚未核验。",
+      "卡组织规则的地区、时效及正式适用性尚待企业专家复核。",
+      "材料就绪度仅表示内部清单完成度，不代表胜诉率或业务准确率。"
+    ],
+    "updated_at": "2026-09-06T13:55:08.690858Z"
+  },
+  "case_id": "907498e0-41ed-4d5c-8699-cbe112d7c66b",
+  "generated_at": "2026-09-06T13:55:14.855104Z",
+  "generated_by": "synthetic-business",
+  "notice": "材料登记与人工复核摘要；不是官方可提交证据包。假定已进入正式争议流程。",
+  "revision": 10,
+  "rule_fingerprint": "9b382d984dc55b3c43551f9c16a68cb6cfc7e58d04a74a1dd74e6724595da05e",
+  "summary_id": "c71f338a-3ce4-4c48-9df0-3e4500885193",
+  "synthetic": true,
+  "title": "案件复核摘要（合成示例）"
+}

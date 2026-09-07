@@ -1,60 +1,65 @@
-function renderAssess(d){const a=d.assessment;if(!a)return;
-  const pct=Math.round(parseFloat(a.evidence_readiness||a.win_likelihood||"0")*100);
-  const col=pct>=60?'var(--good)':(pct>=30?'var(--warn)':'var(--crit)');
-  const rev=a.requires_human?'<span class="pill p-warn">需人工复核</span>':'<span class="pill p-good">材料已齐全</span>';
-  const src=SOURCE_LABEL[a.explanation_source]||"规则说明";
-  const bd=a.evidence_breakdown||[];const have=bd.filter(i=>i.present).length;const cov=bd.length?Math.round(have/bd.length*100):0;
-  const chk=bd.map(i=>`<div class="ei"><span class="tick ${i.present?'y':'n'}">${i.present?'✓':'•'}</span>`
-    +`${esc(i.label)}${i.critical?' <span class="crit-tag">关键</span>':''}</div>`).join("");
-  $('verdictBody').innerHTML=`<div class="verdict"><div><div class="vnum" style="color:${col}">${pct}%</div>`
-    +`<div class="vcap">规则证据就绪度 · 非胜诉概率</div></div>`
-    +`<div class="vmeta"><div class="row"><span class="pill p-acc">规则评估</span>${rev}`
-    +`<span class="pill p-mut">负责团队 · ${esc(TEAM_LABEL[a.responsible_team]||a.responsible_team)}</span>`
-    +`<span class="pill p-mut">说明来源 · ${src}</span></div>`
-    +`<div class="cov"><div class="track"><i style="width:${cov}%"></i></div><span class="n">证据 ${have}/${bd.length}</span></div></div></div>`
-    +`<div class="field-label">内部案件准备清单 · ${bd.length} 项</div><div class="helper">驱动逐项补证与 Evidence Readiness；AVS/CVV 仅为内部准备项。</div>`
-    +`<div class="ev">${chk}</div>`
-    +`<div class="note"><b>该分数仅表示规则要求的材料就绪程度，不代表真实胜诉概率；AI 说明不会改变材料就绪度、责任团队或人工闸门。</b></div>`
-    +`<div class="field-label">卡组织规则</div><div class="helper">只有明确选择卡组织后，系统才会解析并引用具体条款；不会按原因码猜测。</div>`
-    +`<div class="actions"><select id="network" aria-label="卡组织" onchange="setRuleReferenceNetwork('flow',this.value)" style="max-width:180px">`
-    +`<option value="" ${S.cardNetwork===''?'selected':''}>请选择卡组织</option>`
-    +`<option value="VISA" ${S.cardNetwork==='VISA'?'selected':''}>Visa</option>`
-    +`<option value="MASTERCARD" ${S.cardNetwork==='MASTERCARD'?'selected':''}>Mastercard</option>`
-    +`<option value="AMEX" ${S.cardNetwork==='AMEX'?'selected':''}>American Express</option></select>`
-    +`<button class="tbtn" onclick="resolveCaseRuleReference('flow')">查看评估引用条款</button>`
-    +`<button class="tbtn primary" onclick="doPackage()">生成申诉材料包</button>`
-    +`<button class="tbtn" onclick="doAppeal(false)">验证未批准阻断</button></div>`
-    +`<div id="ruleReferenceOut" class="mt" aria-live="polite"></div>`
-    +`<label class="field-label" for="actorId">复核人 Actor ID</label><input id="actorId" autocomplete="off" placeholder="例如 judge_reviewer_01" aria-describedby="actorHelp">`
-    +`<div class="helper" id="actorHelp">只有填写复核人并显式确认，才会进入本地 mock connector。</div>`
-    +`<div class="actions"><button class="tbtn danger" id="submitAppealButton" onclick="doAppeal(true)">人工确认并模拟提交</button></div>`
-    +`<div id="pkgOut" class="mt" aria-live="polite"></div><div id="appealOut" class="mt" aria-live="polite"></div>`;}
-async function doPackage(){const context=caseContext.capture();const ticket=OceanRequest.begin('case-package');const network=currentCardNetwork();S.cardNetwork=network;
-  if(!network){$('pkgOut').innerHTML='<span class="pill p-warn">请先明确选择卡组织</span>';return;}
-  const {ok,data}=await api("GET",`/cases/${S.caseId}/package?locale=${S.loc}&card_network=${encodeURIComponent(network)}`);
-  if(!caseContext.isCurrent(context)||!OceanRequest.isLatest(ticket))return;
-  if(!ok){$('pkgOut').innerHTML='<span class="pill p-warn">案件未就绪</span>';return;}
-  S.packaged=true;renderStages();
-  $('pkgOut').innerHTML=`<div class="kv"><span class="k">材料包</span><span><b style="color:var(--ink)">${esc(data.reason_label)}</b>`
-    +` · ${esc(data.card_network||"")} ${esc(data.scheme_reason_code||"")} · 完整度 ${esc(data.completeness)} `
-    +`${data.ready_to_submit?'<span class="pill p-good">可提交</span>':'<span class="pill p-warn">未就绪</span>'}</span></div>`
-    +`<div class="kv"><span class="k">需证明</span><span>${data.required_assertions.map(esc).join("；")||"—"}</span></div>`
-    +`<div class="kv"><span class="k">卡组织打包摘要</span><span>${data.ordered_evidence.length} 项 · ${data.ordered_evidence.map(e=>esc(e.label)).join("、")||"—"}</span></div>`
-    +`<div class="kv"><span class="k">依据</span><span>${esc(data.source_document||"合成默认规则")} ${esc(data.rule_version||"")} · ${esc(data.source_section||"")}</span></div>`
-    +(data.rule_version_id?`<div class="kv"><span class="k">规则追溯</span><span><button class="tbtn" onclick="showRuleReference('${esc(data.rule_version_id)}',ruleReturnContext('flow'))">${esc(data.rule_version_id)}</button> · ${esc(data.verification_status||'待核验')} · ${esc(data.submission_window_basis||'INTERNAL_DEMO')} ${esc(data.submission_window_days)} 天</span></div>`:'')
-    +`<div class="note">${esc(data.cover_note)}${data.rule_limitation?`<br><b>边界：</b>${esc(data.rule_limitation)}`:""}</div>`;}
-async function doAppeal(approve){const context=caseContext.capture();const network=currentCardNetwork();
-  const submitButton=approve?$('submitAppealButton'):null;if(approve&&S.appealed){$('appealOut').innerHTML='<div class="note"><b>本次会话已完成 mock 提交。</b> 为避免重复回执，提交按钮保持禁用。</div>';if(submitButton)submitButton.disabled=true;return;}
-  const base={card_network:network};const actor=approve&&$('actorId')?$('actorId').value.trim():'';
-  if(approve&&!actor){$('appealOut').innerHTML='<div class="error-state" role="alert"><strong>需要复核人 Actor ID</strong><br>未发送 mock 提交请求。</div>';return;}
-  if(submitButton){submitButton.disabled=true;submitButton.textContent='正在发送至 mock connector…';}
-  const payload=approve?{...base,human_approved:true,actor_id:actor}:base;
-  const result=await api("POST",`/cases/${S.caseId}/appeal`,payload);const data=result.data||{};
-  if(!caseContext.isCurrent(context))return;
-  if(!result.ok){$('appealOut').innerHTML=`<div class="error-state" role="alert"><strong>人工闸门请求失败</strong><br>${esc(data.detail||'请检查案件与复核人信息。')}</div>`;if(submitButton){submitButton.disabled=false;submitButton.textContent='人工确认并模拟提交';}return;}
-  if(data.submitted){S.appealed=true;renderStages();if(submitButton)submitButton.textContent='本次已模拟提交';}else if(submitButton){submitButton.disabled=false;submitButton.textContent='人工确认并模拟提交';}
-  const b=data.submitted?'<span class="pill p-good">模拟提交成功</span>':`<span class="pill p-warn">仅生成草稿 · ${esc(data.blocked_reason||"")}</span>`;
-  $('appealOut').innerHTML=`<div class="field-label">${data.submitted?'本次 mock 回执':'人工闸门结果'}</div><div class="kv"><span class="k">申诉</span><span>${b}`
-    +(data.submission_id?` <code>${esc(data.submission_id)}</code>`:"")+`</span></div>`
-    +(actor?`<div class="kv"><span class="k">复核人</span><span>${esc(actor)}</span></div>`:'')
-    +`<div class="note" style="white-space:pre-wrap">${esc(data.draft)}</div>`;refreshAudit();refreshMetrics();}
+function renderReview(c){
+  const review=c.review||{},current=review.current_record;
+  $('reviewVersion').textContent=`当前版本 ${c.revision}`;
+  $('currentReview').innerHTML=current&&current.case_revision===c.revision?`<div class="review-current"><span class="pill ${current.status==='APPROVED'?'p-good':'p-warn'}">${esc(reviewStatusLabel(current.status))}</span><p data-no-i18n>${esc(current.summary)}</p><div class="meta">${esc(current.confirmed_by)} · ${esc(dateLabel(current.confirmed_at))} · 版本 ${esc(current.case_revision)}<br>审计 ${esc(current.audit_event_id)}</div></div>`:`<div class="review-current"><strong>当前版本尚未完成登记复核</strong><p>${review.stale?'旧复核未覆盖当前规则与材料版本，只作历史记录。':'企业运营方可在核对材料登记清单与内部处理门槛后记录决定。'}</p></div>`;
+  $('reviewForm').hidden=!allowed('REVIEW');
+  const approve=$('reviewDecision').querySelector('option[value="APPROVED"]');if(approve)approve.disabled=!(c.gate&&c.gate.can_review);
+  if(!(c.gate&&c.gate.can_review)&&$('reviewDecision').value==='APPROVED')$('reviewDecision').value='NEEDS_MORE_INFO';
+  $('reviewHistory').innerHTML=(review.history||[]).slice().reverse().map(item=>`<div class="review-history-item"><span class="pill ${current&&item.decision_id===current.decision_id?'p-acc':'p-mut'}">版本 ${esc(item.case_revision)}${current&&item.decision_id===current.decision_id?' · 当前复核决定':' · 历史记录'}</span> ${esc(reviewStatusLabel(item.status))}<p>${recordHtml(item.summary)}</p><div class="meta">${esc(item.confirmed_by)} · ${esc(dateLabel(item.confirmed_at))} · 审计 ${esc(item.audit_event_id)}</div></div>`).join('')||'<p class="empty">暂无历史复核</p>';
+  renderSummaryRows(c);
+}
+function previewReview(){
+  formError('reviewError','');
+  if(ROLE!=='BUSINESS'||!allowed('REVIEW'))return;
+  if(!S.caseSnapshot.rule_fingerprint){formError('reviewError','尚未读取当前规则依据，请刷新本案后再预览复核。');return;}
+  const summary=$('reviewSummary').value.trim(),decision=$('reviewDecision').value;
+  if(summary.length>1200){formError('reviewError','输入超过允许长度，请缩短后重试。');return;}
+  if(summary.length<3){formError('reviewError','请填写至少 3 个字符的复核意见。');return;}
+  if(decision==='APPROVED'&&!S.caseSnapshot.gate.can_review){formError('reviewError','当前版本仍有阻断项，不能批准登记复核。可退回补充或驳回。');return;}
+  S.reviewDraft={caseId:S.caseId,revision:S.caseRevision,ruleFingerprint:S.caseSnapshot.rule_fingerprint,decision,summary,scope:['材料登记清单','内部处理门槛']};
+  const rule=S.caseSnapshot.rule_reference||{},readiness=S.caseSnapshot.readiness||{};
+  $('reviewProposal').innerHTML=`<div class="review-proposal"><h4>待确认：${esc(reviewStatusLabel(decision))}</h4><p>案件 ${esc(S.caseId)} · 版本 ${esc(S.caseRevision)}</p><p>登记清单 ${esc(readiness.present)}/${esc(readiness.total)} · 规则 ${esc(rule.rule_version_id||'没有精确匹配')}（${esc(codeLabel(rule.verification_status||'未核验'))}）</p><p><b>复核范围：</b>材料登记清单、内部处理门槛。<br><b>不包含：</b>材料正文、真实性、一致性或真实交易核验。</p><p data-no-i18n>${esc(summary)}</p><div class="actions"><button class="tbtn primary" data-write onclick="confirmWorkspaceReview()">确认写入复核决定</button><button class="tbtn" onclick="cancelWorkspaceReview()">返回修改</button></div></div>`;
+  syncWriteButtons();applyLanguage();
+}
+function cancelWorkspaceReview(){S.reviewDraft=null;$('reviewProposal').innerHTML='';}
+async function confirmWorkspaceReview(){
+  const draft=S.reviewDraft;if(!draft||S.pendingCommand)return;
+  if(draft.caseId!==S.caseId||draft.revision!==S.caseRevision||draft.ruleFingerprint!==S.caseSnapshot.rule_fingerprint){cancelWorkspaceReview();formError('reviewError','案件版本或规则依据已变化，请重新预览本版本复核范围。');return;}
+  const result=await runCommand('REVIEW',{decision:draft.decision,summary:draft.summary,scope:draft.scope,expected_rule_fingerprint:draft.ruleFingerprint},{caseId:draft.caseId,revision:draft.revision});
+  if(result)cancelWorkspaceReview();
+}
+function renderSummaryRows(c){
+  $('summaryRows').innerHTML=(c.summaries||[]).slice().reverse().map(item=>`<div class="summary-row"><strong>${esc(item.title||'案件复核摘要（合成示例）')}</strong><div class="helper">冻结版本 ${esc(item.revision)}${item.revision===c.revision?' · 案件版本相同，规则以摘要为准':' · 历史案件版本'} · ${esc(dateLabel(item.generated_at))}</div><div class="actions"><button class="tbtn" onclick="downloadSummary('${esc(item.summary_id)}','html')">下载 HTML</button><button class="tbtn" onclick="downloadSummary('${esc(item.summary_id)}','json')">下载 JSON</button></div></div>`).join('')||'<p class="empty">尚无已生成摘要。企业运营方可生成当前版本的复核摘要。</p>';
+  $('generateSummaryButton').disabled=S.summaryGenerating||Boolean(S.pendingCommand);
+}
+async function generateSummary(){
+  if(ROLE!=='BUSINESS'||!S.caseId||S.summaryGenerating||S.pendingCommand)return;
+  const context=caseContext.capture();S.summaryGenerating=true;$('generateSummaryButton').disabled=true;$('summaryStatus').textContent='正在从当前版本生成确定性复核摘要…';
+  try{
+    const result=await workspaceApi('POST',`/cases/${encodeURIComponent(context.caseId)}/summaries`,{expected_revision:context.revision});
+    if(!caseContext.isCurrent(context)){if(S.caseId===context.caseId)$('summaryStatus').textContent='案件版本已变化，请刷新案件后重新生成。';return;}
+    if(!result.ok){
+      $('summaryStatus').textContent=result.status===409?'案件版本已变化，请刷新案件后重新生成。':'摘要生成结果尚未确认，请刷新本案查看已保存摘要，再决定是否重试。';
+      if(result.status===0||result.status>=500)await refreshCase();return;
+    }
+    if(result.data.case_id!==context.caseId||result.data.revision!==context.revision){$('summaryStatus').textContent='摘要版本与本次请求不一致，请刷新案件后重新生成。';return;}
+    $('summaryStatus').textContent=`摘要已保存 · 案件 ${context.caseId} · 版本 ${context.revision}`;
+    await refreshCase();
+  }finally{S.summaryGenerating=false;$('generateSummaryButton').disabled=Boolean(S.pendingCommand);}
+}
+async function downloadSummary(summaryId,format){
+  const item=(S.caseSnapshot&&S.caseSnapshot.summaries||[]).find(value=>value.summary_id===summaryId);
+  if(!item||!['html','json'].includes(format))return;
+  const path=format==='html'?item.html_url:item.json_url;
+  const url=new URL(path,location.origin);
+  if(url.origin!==location.origin||!url.pathname.startsWith(`${WORKSPACE_BASE}/summaries/`))return;
+  url.searchParams.set('locale',S.loc);
+  $('summaryStatus').textContent='正在读取已冻结摘要…';
+  const result=await OceanRequest.text(url.pathname+url.search,{method:'GET',headers:demoHeaders()},15000);
+  if(!result.ok){$('summaryStatus').textContent='摘要读取失败，请重试下载。';return;}
+  const blob=new Blob([result.data],{type:format==='html'?'text/html;charset=utf-8':'application/json;charset=utf-8'});
+  const objectUrl=URL.createObjectURL(blob),link=document.createElement('a');
+  link.href=objectUrl;link.download=`${S.loc==='en'?'case-review-summary-synthetic':'案件复核摘要（合成示例）'}-${item.case_id}-v${item.revision}.${format}`;
+  document.body.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(objectUrl),1000);
+  $('summaryStatus').textContent=`已下载冻结版本 ${item.revision} 的 ${format.toUpperCase()} 摘要。`;
+}

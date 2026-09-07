@@ -1,0 +1,35 @@
+........................................................................ [  4%]
+........................................................................ [  9%]
+..s..................................................................... [ 14%]
+........................................................................ [ 19%]
+........................................................................ [ 24%]
+........................................................................ [ 29%]
+........................................................................ [ 34%]
+........................................................................ [ 38%]
+........................................................................ [ 43%]
+........................................................................ [ 48%]
+........................................................................ [ 53%]
+........................................................................ [ 58%]
+........................................................................ [ 63%]
+................................s....................................... [ 68%]
+........................................................................ [ 73%]
+...............................................................ss....... [ 77%]
+.........ss............................................................. [ 82%]
+........................................................................ [ 87%]
+........................................................................ [ 92%]
+........................................................................ [ 97%]
+.....................................                                    [100%]
+=============================== warnings summary ===============================
+../oceanpilot-latest/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /Users/luxinyu/Desktop/飞书 ai 大赛/work/oceanpilot-latest/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+SKIPPED [1] tests/api/test_agent_api.py:240: DEEPSEEK_API_KEY not set; live agent turn skipped
+SKIPPED [1] tests/e2e/test_demo_script.py:116: PowerShell is not available
+SKIPPED [1] tests/model/test_claude_live.py:31: ANTHROPIC_API_KEY not set; live Claude integration test skipped
+SKIPPED [1] tests/model/test_claude_live.py:41: ANTHROPIC_API_KEY not set; live Claude integration test skipped
+SKIPPED [1] tests/model/test_deepseek_live.py:28: DEEPSEEK_API_KEY not set; live DeepSeek integration test skipped
+SKIPPED [1] tests/model/test_deepseek_live.py:37: DEEPSEEK_API_KEY not set; live DeepSeek integration test skipped
+1471 passed, 6 skipped, 1 warning in 10.45s

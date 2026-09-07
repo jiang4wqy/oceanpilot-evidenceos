@@ -34,7 +34,11 @@ def test_agent_turn_creates_a_case_and_returns_a_structured_judgment(tmp_path, m
     with TestClient(app, raise_server_exceptions=False) as client:
         response = client.post(
             "/api/v1/agent/turns",
-            json={"message": "客户下单后一直没收到货，请告诉我下一步", "locale": "zh-CN"},
+            json={
+                "formal_dispute": True,
+                "message": "客户下单后一直没收到货，请告诉我下一步",
+                "locale": "zh-CN",
+            },
         )
 
     assert response.status_code == 201
@@ -60,7 +64,7 @@ def test_agent_turn_rejects_sensitive_input_without_echoing_it(tmp_path, monkeyp
     with TestClient(app, raise_server_exceptions=False) as client:
         response = client.post(
             "/api/v1/agent/turns",
-            json={"message": sensitive, "locale": "zh-CN"},
+            json={"formal_dispute": True, "message": sensitive, "locale": "zh-CN"},
         )
 
     assert response.status_code == 422
@@ -76,7 +80,7 @@ def test_agent_turn_analyzes_bound_case_without_creating_a_duplicate(tmp_path, m
     with TestClient(app, raise_server_exceptions=False) as client:
         created = client.post(
             "/api/v1/agent/turns",
-            json={"message": "客户下单后一直没收到货", "locale": "zh-CN"},
+            json={"formal_dispute": True, "message": "客户下单后一直没收到货", "locale": "zh-CN"},
         ).json()
         response = client.post(
             "/api/v1/agent/turns",
@@ -104,9 +108,13 @@ def test_agent_review_proposal_requires_confirmation_and_replays(tmp_path, monke
     app = create_app(Settings(db_path=tmp_path / "agent-review.db"))
 
     with TestClient(app, raise_server_exceptions=False) as client:
+        client.headers.update({"X-Demo-Role": "BUSINESS", "X-Demo-Actor": "synthetic-business"})
         case = client.post(
             "/api/v1/chargeback/cases",
-            json={"description": "持卡人声称这笔无卡交易不是本人，属于非本人交易"},
+            json={
+                "formal_dispute": True,
+                "description": "持卡人声称这笔无卡交易未授权，属于非本人交易的合成拒付",
+            },
         ).json()
         case = client.post(
             f"/api/v1/chargeback/cases/{case['case_id']}/confirm",
@@ -120,7 +128,7 @@ def test_agent_review_proposal_requires_confirmation_and_replays(tmp_path, monke
         turn_response = client.post(
             "/api/v1/agent/turns",
             json={
-                "message": "审核通过，已核对全部 Synthetic 材料内容一致。",
+                "message": "审核通过，已复核 Synthetic 材料登记清单；正文尚未核验。",
                 "locale": "zh-CN",
                 "case_id": case["case_id"],
                 "card_network": "VISA",
@@ -201,9 +209,13 @@ def test_agent_downgrades_approval_when_evidence_is_missing(tmp_path, monkeypatc
     app = create_app(Settings(db_path=tmp_path / "agent-review-blocked.db"))
 
     with TestClient(app, raise_server_exceptions=False) as client:
+        client.headers.update({"X-Demo-Role": "BUSINESS", "X-Demo-Actor": "synthetic-business"})
         case = client.post(
             "/api/v1/chargeback/cases",
-            json={"description": "持卡人声称这笔无卡交易不是本人，属于非本人交易"},
+            json={
+                "formal_dispute": True,
+                "description": "持卡人声称这笔无卡交易未授权，属于非本人交易的合成拒付",
+            },
         ).json()
         case = client.post(
             f"/api/v1/chargeback/cases/{case['case_id']}/confirm",
@@ -238,6 +250,7 @@ def test_live_agent_turn_uses_deepseek_and_keeps_structured_contract(tmp_path, m
         response = client.post(
             "/api/v1/agent/turns",
             json={
+                "formal_dispute": True,
                 "message": "Synthetic 案件：客户下单后一直没收到货，请给出下一步",
                 "locale": "zh-CN",
             },

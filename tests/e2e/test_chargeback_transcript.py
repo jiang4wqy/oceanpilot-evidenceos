@@ -1,24 +1,21 @@
 from examples.chargeback_transcript import build
 
 
-def test_transcript_runs_full_http_flow_offline():
-    lines = build()
-    joined = "\n".join(lines)
-    # Each stage of the cluster appears in the transcript.
-    assert "拒付风险" in joined  # prevention
-    assert "判定原因" in joined  # intake
-    assert "补问" in joined  # evidence loop
-    assert "规则证据就绪度" in joined  # assessment, explicitly not a real win rate
-    assert "证据构成" in joined  # per-evidence breakdown
-    assert "representment" in joined  # packaging
-    assert "已提交上游(mock)" in joined  # appeal after approval
-    assert "CASE_OPENED" in joined  # audit trail
-    # Safety envelope is stated.
-    assert "不执行支付/退款/风控/提交动作" in joined
-
-
-def test_transcript_appeal_is_blocked_before_approval():
+def test_transcript_runs_review_and_versioned_summary_offline(monkeypatch):
+    # Explicit injection keeps the walkthrough offline even in a live shell.
+    monkeypatch.setenv("OCEANPILOT_CHARGEBACK_LIVE_MODEL", "1")
+    monkeypatch.setenv("OCEANPILOT_MODEL_PROVIDER", "unsupported")
     joined = "\n".join(build())
-    # The hard human-approval gate is visible: blocked first, submitted after.
-    assert "submitted=False" in joined
-    assert "NOT_APPROVED" in joined
+    for stage in ("材料就绪度 5/6", "补问", "操作回执", "人工登记复核", "HTML / JSON 已生成"):
+        assert stage in joined
+    assert "案件复核摘要（合成示例）" in joined
+    assert "未读取或核验真实文件正文" in joined
+    assert "不执行支付/退款/风控/提交动作" in joined
+    assert "已提交上游" not in joined
+
+
+def test_transcript_demonstrates_withdrawal_block_and_cross_scenario():
+    joined = "\n".join(build())
+    assert "旧审核已失效并保留历史" in joined
+    assert "Visa 13.1" in joined
+    assert "默认最终模拟发送由后端关闭" in joined

@@ -1,30 +1,10 @@
-# DeepSeek 本地接入与密钥存放指南
+# DeepSeek 演示配置、模型来源与故障恢复
 
-本指南供后续开发者在本机启用 OceanPilot 的 DeepSeek Provider。密钥只允许进入
-Git 忽略的 `.env` 或受控的部署 Secret Manager；禁止写入源码、测试、飞书文档、
-截图、Issue、PR、聊天记录或日志。
+正式演示配置固定选择 DeepSeek；Claude 与本地 provider 保留兼容和测试能力。演示过程中不切换供应商。没有可用凭据或外网时，使用同一系统的离线合成模式。
 
-## 1. 撤销已经暴露的密钥
+## 本地配置
 
-只要密钥曾出现在聊天、截图、提交记录或共享文档中，就应视为已经泄露。先在
-DeepSeek 控制台撤销旧密钥并生成新密钥。不要尝试继续使用或“删除后复用”旧密钥；
-聊天消息的删除能力也不能替代密钥轮换。
-
-## 2. 创建本机 `.env`
-
-在仓库根目录执行：
-
-```powershell
-Copy-Item .env.example .env
-```
-
-仓库位置：
-
-```text
-C:\Users\lenovo\Documents\Codex\2026-08-04\zhao\work\oceanpilot-master
-```
-
-只在本机编辑 `.env`，写入：
+从仓库根目录复制 `.env.example` 为 `.env`。本机 `.env` 必须被 Git 忽略，只放项目授权的凭据，不把配置内容复制到终端输出、聊天、文档或截图。
 
 ```dotenv
 OCEANPILOT_CHARGEBACK_LIVE_MODEL=1
@@ -34,77 +14,85 @@ DEEPSEEK_API_BASE=https://api.deepseek.com
 DEEPSEEK_MODEL=deepseek-chat
 ```
 
-在本机把新密钥粘贴到 `DEEPSEEK_API_KEY=` 的等号后；不要把填写后的内容复制到聊天或
-截图中。
+在本机编辑器填写 `DEEPSEEK_API_KEY`。若旧密钥已经泄露，先撤销并替换；不要写入源码。
 
-`.gitignore` 已忽略 `.env` 和 `.env.*`，但仍应在提交前主动验证：
+安装并启动（macOS/Linux）：
 
-```powershell
-git check-ignore .env
-git status --short
-```
-
-第一条命令应输出 `.env`；第二条命令不应把 `.env` 列为待提交文件。
-
-## 3. 安装依赖
-
-```powershell
-.\.venv\Scripts\python.exe -m pip install -e ".[dev]"
-```
-
-项目使用 `python-dotenv` 让 Uvicorn 的 `--env-file` 参数安全读取本机配置。应用代码、
-测试和 CI 默认不会自动加载 `.env`，避免测试意外访问外部模型。
-
-## 4. 在线连通性验证
-
-只使用 Synthetic 文本运行可选 live 测试：
-
-```powershell
-.\.venv\Scripts\dotenv.exe -f .env run -- `
-  .\.venv\Scripts\python.exe -m pytest tests/model/test_deepseek_live.py -q
-```
-
-通过标准：
-
-- IntakeAgent 能返回合法争议类型；
-- AssessAgent 返回非空模型说明；
-- 确定性评估结果没有被模型修改；
-- 终端和异常信息中不出现密钥。
-
-## 5. 启动 DeepSeek 演示服务
-
-```powershell
-.\.venv\Scripts\python.exe -m uvicorn oceanpilot.main:create_app --factory `
+```bash
+.venv/bin/python -m pip install -e '.[dev]'
+.venv/bin/python -m uvicorn oceanpilot.main:create_app --factory \
   --env-file .env --host 127.0.0.1 --port 8002
 ```
 
-打开：
+Windows 使用 `.venv\Scripts\python.exe`；PowerShell 换行使用反引号。打开 `http://127.0.0.1:8002/demo`。
 
-```text
-http://127.0.0.1:8002/demo
+应用代码和普通测试不会自动加载 `.env`。设置为实时模式但选定供应商没有凭据时，系统使用离线模式，不能显示成实时成功。
+
+实际交付时必须检查用户正在访问的服务端口，不能用另一临时服务的连通测试代替。启动时通过 `--env-file .env` 加载本机配置，并保留原数据库路径；若沿用已有页面地址，使用它原来的 `--port`。页面输入区显示当前服务配置，每条回复分别显示实际来源。旧的离线回复不会因为服务切成实时模式就变成模型输出。
+
+验收时，在同一案件分别发送“你是谁”和“目前缺什么，补充后会改变什么？”，核对新结果为 `MODEL`、供应商为 `DEEPSEEK`，并且回答与问题对应、案件版本及人工审核状态未被模型改变。“分析当前版本”和错误后的“重试分析”均明确发起新分析；普通刷新仍读取已保存结果，不自动调用模型。
+
+## 区分配置和实际结果
+
+运行时配置只说明选定供应商。本次结果另有实际来源：
+
+| 实际结果 | `source` | `offline` | `failure_code` |
+| --- | --- | --- | --- |
+| 模型请求成功且结构、动作通过校验 | `MODEL` | `false` | 空 |
+| 明确离线的确定性说明，无模型请求 | `DETERMINISTIC` | `true` | 空 |
+| 实时调用或输出校验失败后的确定性说明 | `FALLBACK` | `false` | 固定故障代码 |
+
+普通案件读取和材料预览也使用确定性规则，不调用模型。模型异常后会保留可操作的确定性结果，但这不能被记录为实时模型成功。历史分析回放保留原分析的来源。
+
+## 超时、并发与重试合同
+
+- 每次模型调用最多等待 **12秒**。
+- 同一业务请求内顺序进行的模型调用共享 **20秒**预算，后续调用只能使用剩余时间。
+- DeepSeek HTTP路径不自动重试；Claude兼容SDK显式配置 `timeout=12`、`max_retries=0`。
+- `DeadlineModelProvider` 对等待设置实际截止时间；每个服务进程最多4个并行模型调用。已超时但上游尚未结束的调用仍占用槽位，满额时立即返回 `BUSY`，避免持续创建后台任务。
+- 超时后忽略迟到的模型结果。后台线程只调用模型，不持有案件写入函数，不会在超时后补写案件。停止等待不保证供应商已经停止生成或停止计费。
+- 20秒约束模型等待，不是数据库事务、排队或浏览器网络的完整SLA。浏览器错误恢复应先读取已保存案件状态，再决定是否重试；重复建案由后端幂等机制控制。
+
+`model_request_budget()` 的上下文可以跨FastAPI的同步处理线程和模型工作线程传播。后续增加模型入口时，也须接入同一预算及deadline包装器。
+
+## 固定故障代码与恢复
+
+| 代码 | 含义 | 操作 |
+| --- | --- | --- |
+| `TIMEOUT` | 单次调用或请求模型预算耗尽 | 查看确定性结果；需要时明确重新分析 |
+| `RATE_LIMITED` | 上游429限流 | 稍后由用户重试，不在后台循环重试 |
+| `BUSY` | 模型并发槽已满 | 保留确定性结果，等待上游请求结束 |
+| `UNAVAILABLE` | 连接、鉴权或其他供应商故障 | 检查本地配置；需要时重启为离线模式 |
+| `INVALID_RESPONSE` | JSON、字段、返回结构不合规 | 使用明确标记的降级说明 |
+| `INVALID_ACTION` | 非法动作、错误目标或试图取消人工确认 | 丢弃模型动作，保留后端允许的建议 |
+| `UNSAFE_OUTPUT` | 输出含不允许的敏感信息 | 丢弃该输出，使用确定性说明 |
+
+异常文本固定为 `model provider request failed`；不得把上游响应正文、URL、凭据和请求内容回传给前端或日志。Copilot拒绝重复JSON键、额外字段、非法枚举、非当前缺口材料目标及 `requires_confirmation=false`；最终推荐始终需要人工确认。材料仅登记合成元数据，不因此证明材料正文一致、交易真实或胜诉概率。
+
+## 离线备用
+
+不传 `.env` 并显式关闭实时开关，启动同一应用：
+
+```bash
+OCEANPILOT_CHARGEBACK_LIVE_MODEL=0 .venv/bin/python -m uvicorn \
+  oceanpilot.main:create_app --factory --host 127.0.0.1 --port 8002
 ```
 
-不传 `--env-file .env`、关闭 `OCEANPILOT_CHARGEBACK_LIVE_MODEL` 或缺少有效密钥时，
-系统保持离线 `ScriptedModelProvider`，案件、规则、证据和人工闸门仍可运行。
+已有依赖、规则、合成数据和本地数据库应事先准备好；不要依赖现场下载。离线模式仍可进行案件登记、确定性材料清单、人工审核和本地摘要操作。
 
-## 6. 安全路由
+## 实时验证与验收记录
 
-- LOW：Synthetic、非敏感内容可直接发送给所选外部模型；
-- MEDIUM：经过 `RegexRedactor` 脱敏后发送；
-- HIGH：优先使用配置的本地隔离模型；未配置时只允许走脱敏外部路径；
-- 模型只负责理解、补问、解释和起草；
-- 证据就绪度、规则版本、责任路由和人工审批由确定性系统控制；
-- 不得向 DeepSeek 发送真实卡号、CVV、密钥、个人身份信息或未脱敏交易正文。
+只有本项目已授权的有效凭据存在时，才对合成内容执行最小实时验证：
 
-## 7. 密钥轮换与故障处理
+```bash
+.venv/bin/dotenv -f .env run -- .venv/bin/python -m pytest \
+  tests/model/test_deepseek_live.py -q
+```
 
-出现以下任一情况，应立即撤销并重建密钥：
+确认成功调用、结构解析、确定性结果保持和人审边界；记录供应商与验证时间，不记录密钥。缺少凭据时，测试会跳过，必须写明“实时模型尚未验证”，不能用离线测试替代。普通离线验收包括超时、429、错误JSON、非法动作、人工确认和FastAPI预算跨线程传播。
 
-- 密钥被发送到聊天或飞书；
-- 密钥出现在截图、终端录屏、日志或错误响应；
-- `.env` 被误加入 Git；
-- 开发设备丢失或成员权限发生变化；
-- DeepSeek 控制台出现未知调用或用量异常。
+2026-09-06 本轮检查：新工作副本未配置环境密钥或 `.env`；用户随后确认主项目目录中已有授权配置。从该项目的 `oceanpilot ds API.rtf` 仅在内存装载凭据，完成 **1次真实DeepSeek合成Copilot调用**：`deepseek-chat`，耗时2.35秒，结果来源 `MODEL`，无故障代码，动作属于允许枚举且 `requires_confirmation=true`。使用12秒单次及20秒请求预算；未输出密钥或模型正文。此记录验证最小连通与结构/确认边界，不代表长期可用性或真实业务准确率。
 
-密钥失效或上游不可用时，不要把错误详情返回给前端。OceanPilot 应记录固定、脱敏的
-Provider 失败状态并回退到确定性说明；不得为了“保证演示成功”把密钥硬编码到项目中。
+DeepSeek沿用官方的OpenAI兼容Chat Completions协议；接口说明见 [DeepSeek API文档](https://api-docs.deepseek.com/)。兼容SDK的自动重试与超时行为见 [Anthropic Python SDK](https://github.com/anthropics/anthropic-sdk-python#retries)。
+
+本轮追加浏览器验收：真实 DeepSeek 页面请求返回 `MODEL`，关键材料缺口及人工确认仍保留；重启后同版结果可恢复。独立合成延迟注入在12.03秒返回 `TIMEOUT/FALLBACK`，并非 DeepSeek 真实故障。见[验收记录](acceptance/2026-09-06/README.md)。

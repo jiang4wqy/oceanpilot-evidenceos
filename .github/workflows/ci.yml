@@ -91,6 +91,10 @@ jobs:
             http://127.0.0.1:8000/demo \
             --output "${oceanpilot_demo_file}"
 
+          curl --fail --silent --show-error \
+            http://127.0.0.1:8000/business \
+            --output "${RUNNER_TEMP}/oceanpilot-business.html"
+
           python - <<'PY'
           import json
           import os
@@ -99,13 +103,20 @@ jobs:
           runner_temp = Path(os.environ["RUNNER_TEMP"])
           health = json.loads((runner_temp / "oceanpilot-health.json").read_text())
           demo = (runner_temp / "oceanpilot-demo.html").read_text()
+          business = (runner_temp / "oceanpilot-business.html").read_text()
 
           assert health == {"status": "ok"}
           assert "Oceanpayment · 商户工作台" in demo
+          assert '"role":"MERCHANT"' in demo
           assert "案件中心" in demo
           assert "新建案件" in demo
           assert 'class="ocean-logo"' in demo
           assert "/api/v1/chargeback" in demo
           assert "CASE-20260814" not in demo
-          assert "人工确认并模拟提交" in demo
+          assert "案件复核摘要（合成示例）" in demo
+          assert "最终发送未开放" in demo
+          assert "Oceanpayment · 企业争议运营" in business
+          assert '"role":"BUSINESS"' in business
+          assert "企业争议运营区" in business
+          assert "预览本版本复核" in business
           PY

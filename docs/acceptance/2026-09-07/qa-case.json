@@ -1,0 +1,447 @@
+{
+  "case_id": "ab348095-4dbb-4247-b2f1-06da36a583f6",
+  "title": "A · Visa 10.4 主案例",
+  "description": "合成正式争议：持卡人提出 Visa 10.4 无卡未授权交易争议。假定已进入正式争议流程，金额 USD 120。初始预置时保留 3DS 登记缺口。",
+  "revision": 15,
+  "phase": "CRITICAL_MISSING",
+  "phase_label": "关键材料阻断",
+  "missing_count": 1,
+  "next_actor": "MERCHANT",
+  "created_at": "2026-09-06T16:31:54.662008Z",
+  "updated_at": "2026-09-06T16:47:34.991964Z",
+  "review_status": "REJECTED",
+  "synthetic": true,
+  "scenario": "A",
+  "formal_dispute": true,
+  "card_network": "VISA",
+  "reason_code": "FRAUD_CARD_NOT_PRESENT",
+  "reason_label": "无卡欺诈（未授权交易）",
+  "reason_confirmed": true,
+  "readiness": {
+    "present": 5,
+    "total": 6,
+    "ratio": "0.8333",
+    "meaning": "内部材料登记清单完成度；不代表胜诉率、真实性或正文核验。"
+  },
+  "materials": [
+    {
+      "active": true,
+      "code": "transaction.receipt",
+      "content_verification": "NOT_READ",
+      "file_name": "synthetic-transaction.receipt.txt",
+      "registered_at": "2026-09-06T16:31:54.663991Z",
+      "registered_by": "synthetic-merchant",
+      "registered_revision": 3,
+      "source": "SYNTHETIC_TEMPLATE",
+      "withdrawn_at": null,
+      "label": "交易收据"
+    },
+    {
+      "active": true,
+      "code": "auth.avs_result",
+      "content_verification": "NOT_READ",
+      "file_name": "synthetic-auth.avs_result.txt",
+      "registered_at": "2026-09-06T16:31:54.664416Z",
+      "registered_by": "synthetic-merchant",
+      "registered_revision": 4,
+      "source": "SYNTHETIC_TEMPLATE",
+      "withdrawn_at": null,
+      "label": "AVS 地址验证结果"
+    },
+    {
+      "active": true,
+      "code": "auth.cvv_result",
+      "content_verification": "NOT_READ",
+      "file_name": "synthetic-auth.cvv_result.txt",
+      "registered_at": "2026-09-06T16:31:54.664463Z",
+      "registered_by": "synthetic-merchant",
+      "registered_revision": 5,
+      "source": "SYNTHETIC_TEMPLATE",
+      "withdrawn_at": null,
+      "label": "CVV 校验结果"
+    },
+    {
+      "active": true,
+      "code": "auth.device_ip_match",
+      "content_verification": "NOT_READ",
+      "file_name": "synthetic-auth.device_ip_match.txt",
+      "registered_at": "2026-09-06T16:31:54.664513Z",
+      "registered_by": "synthetic-merchant",
+      "registered_revision": 6,
+      "source": "SYNTHETIC_TEMPLATE",
+      "withdrawn_at": null,
+      "label": "设备/IP 匹配"
+    },
+    {
+      "active": true,
+      "code": "history.prior_transactions",
+      "content_verification": "NOT_READ",
+      "file_name": "synthetic-history.prior_transactions.txt",
+      "registered_at": "2026-09-06T16:31:54.664557Z",
+      "registered_by": "synthetic-merchant",
+      "registered_revision": 7,
+      "source": "SYNTHETIC_TEMPLATE",
+      "withdrawn_at": null,
+      "label": "历史交易记录"
+    },
+    {
+      "active": false,
+      "code": "auth.threeds",
+      "content_verification": "NOT_READ",
+      "file_name": "synthetic-auth-threeds.pdf",
+      "registered_at": "2026-09-06T16:32:51.106818Z",
+      "registered_by": "synthetic-merchant",
+      "registered_revision": 8,
+      "source": "SYNTHETIC_TEMPLATE",
+      "withdrawn_at": "2026-09-06T16:47:05.896425Z",
+      "label": "3DS 认证结果"
+    }
+  ],
+  "missing": [
+    {
+      "code": "auth.threeds",
+      "label": "3DS 认证结果",
+      "critical": true,
+      "why": "属于本合成内部清单的关键项，供人工核对认证记录；不据此认定责任转移或举证资格。",
+      "what_changes": "补齐此关键登记项；其他缺口与疑点仍需处理，正文仍待核验。"
+    }
+  ],
+  "rule_reference": {
+    "match_status": "EXACT_MATCH",
+    "rule_version_id": "visa-10-4-demo-v1",
+    "scheme_reason_code": "10.4",
+    "scheme": "VISA",
+    "display_name": "非本人交易（无卡环境）",
+    "rule_version": "June 2024",
+    "source_document": "Dispute Management Guidelines for Visa Merchants",
+    "source_section": "Condition 10.4 — Other Fraud, Card-Absent Environment",
+    "source_url": "https://by.visa.com/dam/VCOM/global/support-legal/documents/merchants-dispute-management-guidelines.pdf",
+    "verification_status": "UNVERIFIED_SUMMARY",
+    "limitation": "商户指南演示摘要；不自动判定 CE3.0、3DS 责任转移或正式申诉资格，15 天仅为原型内部准备窗口。"
+  },
+  "rule_fingerprint": "9b382d984dc55b3c43551f9c16a68cb6cfc7e58d04a74a1dd74e6724595da05e",
+  "review": {
+    "status": "REJECTED",
+    "current_record": {
+      "decision_id": "d61f25d7-60ef-4624-8d60-75c500419a19",
+      "case_id": "ab348095-4dbb-4247-b2f1-06da36a583f6",
+      "source_turn_id": "ab4f6548-08cf-4cad-9ca9-ee529f8a31fc",
+      "status": "REJECTED",
+      "summary": "Synthetic rejection: the critical registration is still missing.",
+      "case_revision": 15,
+      "confirmed_by": "synthetic-business",
+      "confirmed_at": "2026-09-06T16:47:34.991964Z",
+      "audit_event_id": "9f1ae9be-4c0d-4a62-939d-a0069bfeff6e",
+      "confirmed_materials": [
+        "材料登记清单",
+        "内部处理门槛"
+      ],
+      "citation_ids": [
+        "visa-10-4-demo-v1"
+      ],
+      "rule_fingerprint": "9b382d984dc55b3c43551f9c16a68cb6cfc7e58d04a74a1dd74e6724595da05e"
+    },
+    "history": [
+      {
+        "decision_id": "ed450899-724e-48de-854a-866fb18a45c7",
+        "case_id": "ab348095-4dbb-4247-b2f1-06da36a583f6",
+        "source_turn_id": "56fac343-35d3-47fe-8de7-c3a98ba28ea6",
+        "status": "APPROVED",
+        "summary": "Synthetic UI audit: register only; document bodies remain unread.",
+        "case_revision": 9,
+        "confirmed_by": "synthetic-business",
+        "confirmed_at": "2026-09-06T16:34:54.457029Z",
+        "audit_event_id": "f1da0048-a6d4-41c7-895c-4375cf8380a1",
+        "confirmed_materials": [
+          "材料登记清单",
+          "内部处理门槛"
+        ],
+        "citation_ids": [
+          "visa-10-4-demo-v1"
+        ],
+        "rule_fingerprint": "9b382d984dc55b3c43551f9c16a68cb6cfc7e58d04a74a1dd74e6724595da05e"
+      },
+      {
+        "decision_id": "e5222163-73d4-4ec5-a062-b71c6b761f8d",
+        "case_id": "ab348095-4dbb-4247-b2f1-06da36a583f6",
+        "source_turn_id": "3d4df840-4f98-45ae-9f10-279d376c8b0f",
+        "status": "NEEDS_MORE_INFO",
+        "summary": "Synthetic request: register the missing 3DS metadata.",
+        "case_revision": 14,
+        "confirmed_by": "synthetic-business",
+        "confirmed_at": "2026-09-06T16:47:17.898987Z",
+        "audit_event_id": "04f06b2f-328d-42e5-bd0a-205024fccf56",
+        "confirmed_materials": [
+          "材料登记清单",
+          "内部处理门槛"
+        ],
+        "citation_ids": [
+          "visa-10-4-demo-v1"
+        ],
+        "rule_fingerprint": "9b382d984dc55b3c43551f9c16a68cb6cfc7e58d04a74a1dd74e6724595da05e"
+      },
+      {
+        "decision_id": "d61f25d7-60ef-4624-8d60-75c500419a19",
+        "case_id": "ab348095-4dbb-4247-b2f1-06da36a583f6",
+        "source_turn_id": "ab4f6548-08cf-4cad-9ca9-ee529f8a31fc",
+        "status": "REJECTED",
+        "summary": "Synthetic rejection: the critical registration is still missing.",
+        "case_revision": 15,
+        "confirmed_by": "synthetic-business",
+        "confirmed_at": "2026-09-06T16:47:34.991964Z",
+        "audit_event_id": "9f1ae9be-4c0d-4a62-939d-a0069bfeff6e",
+        "confirmed_materials": [
+          "材料登记清单",
+          "内部处理门槛"
+        ],
+        "citation_ids": [
+          "visa-10-4-demo-v1"
+        ],
+        "rule_fingerprint": "9b382d984dc55b3c43551f9c16a68cb6cfc7e58d04a74a1dd74e6724595da05e"
+      }
+    ],
+    "stale": false
+  },
+  "concerns": [
+    {
+      "case_revision": 10,
+      "concern_id": "ce039494-d480-4183-8b66-53c1d13ed0b4",
+      "field": "qa_note",
+      "kind": "FACT_CONFLICT",
+      "original_source": "Synthetic operator A",
+      "original_value": "Synthetic original",
+      "proposed_source": "Synthetic operator B",
+      "proposed_value": "Synthetic proposed",
+      "reported_at": "2026-09-06T16:38:30.285586Z",
+      "reported_by": "synthetic-business",
+      "resolution": "ACKNOWLEDGE",
+      "resolution_summary": "Synthetic QA acknowledgment only; source bodies remain unread.",
+      "resolved_at": "2026-09-06T16:38:53.123109Z",
+      "resolved_by": "synthetic-business",
+      "resolved_fact": null,
+      "status": "RESOLVED",
+      "summary": "Synthetic UI verification of human concern handling."
+    }
+  ],
+  "timeline": [
+    {
+      "event_type": "CASE_OPENED",
+      "detail": null,
+      "case_revision": 0,
+      "occurred_at": "2026-09-06T16:31:54.662008Z",
+      "actor": "旧版演示操作"
+    },
+    {
+      "event_type": "REASON_CLASSIFIED",
+      "detail": "FRAUD_CARD_NOT_PRESENT",
+      "case_revision": 1,
+      "occurred_at": "2026-09-06T16:31:54.663772Z",
+      "actor": "旧版演示操作"
+    },
+    {
+      "event_type": "REASON_CONFIRMED",
+      "detail": "FRAUD_CARD_NOT_PRESENT",
+      "case_revision": 1,
+      "occurred_at": "2026-09-06T16:31:54.663782Z",
+      "actor": "旧版演示操作"
+    },
+    {
+      "event_type": "CARD_NETWORK_SELECTED",
+      "detail": "VISA",
+      "case_revision": 2,
+      "occurred_at": "2026-09-06T16:31:54.663808Z",
+      "actor": "旧版演示操作"
+    },
+    {
+      "event_type": "EVIDENCE_ADDED",
+      "detail": "transaction.receipt",
+      "case_revision": 3,
+      "occurred_at": "2026-09-06T16:31:54.663955Z",
+      "actor": "旧版演示操作"
+    },
+    {
+      "event_type": "EVIDENCE_ADDED",
+      "detail": "auth.avs_result",
+      "case_revision": 4,
+      "occurred_at": "2026-09-06T16:31:54.664401Z",
+      "actor": "旧版演示操作"
+    },
+    {
+      "event_type": "EVIDENCE_ADDED",
+      "detail": "auth.cvv_result",
+      "case_revision": 5,
+      "occurred_at": "2026-09-06T16:31:54.664454Z",
+      "actor": "旧版演示操作"
+    },
+    {
+      "event_type": "EVIDENCE_ADDED",
+      "detail": "auth.device_ip_match",
+      "case_revision": 6,
+      "occurred_at": "2026-09-06T16:31:54.664502Z",
+      "actor": "旧版演示操作"
+    },
+    {
+      "event_type": "EVIDENCE_ADDED",
+      "detail": "history.prior_transactions",
+      "case_revision": 7,
+      "occurred_at": "2026-09-06T16:31:54.664547Z",
+      "actor": "旧版演示操作"
+    },
+    {
+      "event_type": "COPY_SAMPLE",
+      "detail": "已明确确认并执行合成案件操作。",
+      "case_revision": 7,
+      "occurred_at": "2026-09-06T16:31:54.664591Z",
+      "actor": "synthetic-merchant"
+    },
+    {
+      "event_type": "EVIDENCE_ADDED",
+      "detail": "auth.threeds",
+      "case_revision": 8,
+      "occurred_at": "2026-09-06T16:32:51.106608Z",
+      "actor": "旧版演示操作"
+    },
+    {
+      "event_type": "REGISTER_MATERIAL",
+      "detail": "已明确确认并执行合成案件操作。",
+      "case_revision": 8,
+      "occurred_at": "2026-09-06T16:32:51.107500Z",
+      "actor": "synthetic-merchant"
+    },
+    {
+      "event_type": "REVIEW_DECISION_CONFIRMED",
+      "detail": "Synthetic UI audit: register only; document bodies remain unread.",
+      "case_revision": 9,
+      "occurred_at": "2026-09-06T16:34:54.457029Z",
+      "actor": "synthetic-business"
+    },
+    {
+      "event_type": "REVIEW",
+      "detail": "已明确确认并执行合成案件操作。",
+      "case_revision": 9,
+      "occurred_at": "2026-09-06T16:34:54.458230Z",
+      "actor": "synthetic-business"
+    },
+    {
+      "event_type": "ADD_CONCERN",
+      "detail": "已明确确认并执行合成案件操作。",
+      "case_revision": 10,
+      "occurred_at": "2026-09-06T16:38:30.285879Z",
+      "actor": "synthetic-business"
+    },
+    {
+      "event_type": "RESOLVE_CONCERN",
+      "detail": "已明确确认并执行合成案件操作。",
+      "case_revision": 11,
+      "occurred_at": "2026-09-06T16:38:53.123458Z",
+      "actor": "synthetic-business"
+    },
+    {
+      "event_type": "EVIDENCE_WITHDRAWN",
+      "detail": "auth.threeds",
+      "case_revision": 12,
+      "occurred_at": "2026-09-06T16:47:05.896323Z",
+      "actor": "旧版演示操作"
+    },
+    {
+      "event_type": "WITHDRAW_MATERIAL",
+      "detail": "已明确确认并执行合成案件操作。",
+      "case_revision": 12,
+      "occurred_at": "2026-09-06T16:47:05.896515Z",
+      "actor": "synthetic-business"
+    },
+    {
+      "event_type": "COLLECTION_FINALIZED",
+      "detail": null,
+      "case_revision": 13,
+      "occurred_at": "2026-09-06T16:47:17.327674Z",
+      "actor": "旧版演示操作"
+    },
+    {
+      "event_type": "FINALIZE",
+      "detail": "已明确确认并执行合成案件操作。",
+      "case_revision": 13,
+      "occurred_at": "2026-09-06T16:47:17.327865Z",
+      "actor": "synthetic-business"
+    },
+    {
+      "event_type": "REVIEW_DECISION_CONFIRMED",
+      "detail": "Synthetic request: register the missing 3DS metadata.",
+      "case_revision": 14,
+      "occurred_at": "2026-09-06T16:47:17.898987Z",
+      "actor": "synthetic-business"
+    },
+    {
+      "event_type": "REVIEW",
+      "detail": "已明确确认并执行合成案件操作。",
+      "case_revision": 14,
+      "occurred_at": "2026-09-06T16:47:17.899918Z",
+      "actor": "synthetic-business"
+    },
+    {
+      "event_type": "REVIEW_DECISION_CONFIRMED",
+      "detail": "Synthetic rejection: the critical registration is still missing.",
+      "case_revision": 15,
+      "occurred_at": "2026-09-06T16:47:34.991964Z",
+      "actor": "synthetic-business"
+    },
+    {
+      "event_type": "REVIEW",
+      "detail": "已明确确认并执行合成案件操作。",
+      "case_revision": 15,
+      "occurred_at": "2026-09-06T16:47:34.993119Z",
+      "actor": "synthetic-business"
+    }
+  ],
+  "gate": {
+    "status": "CRITICAL_MISSING",
+    "reason": "关键材料缺失，不能进入正式评估。",
+    "can_review": false,
+    "can_package": false,
+    "requires_human": true
+  },
+  "next_action": {
+    "label": "补充材料",
+    "reason": "关键材料缺失，不能进入正式评估。",
+    "owner": "MERCHANT",
+    "required_materials": [
+      "auth.threeds"
+    ],
+    "expected_state": "更新登记状态并使旧审核失效",
+    "approval_required": true
+  },
+  "allowed_actions": [
+    "CONFIRM_REASON",
+    "SET_NETWORK",
+    "REGISTER_MATERIAL",
+    "WITHDRAW_MATERIAL",
+    "FINALIZE",
+    "ADD_CONCERN",
+    "REVIEW",
+    "RESOLVE_CONCERN",
+    "GENERATE_SUMMARY"
+  ],
+  "runtime": {
+    "mode": "DEEPSEEK_LIVE",
+    "provider": "DEEPSEEK",
+    "model": "deepseek-chat"
+  },
+  "latest_analysis": null,
+  "summaries": [
+    {
+      "summary_id": "5c08bc18-1c33-4989-8926-f4fc6343e4e3",
+      "case_id": "ab348095-4dbb-4247-b2f1-06da36a583f6",
+      "revision": 9,
+      "generated_at": "2026-09-06T16:34:54.692015Z",
+      "title": "案件复核摘要（合成示例）",
+      "html_url": "/api/v1/workspace/summaries/5c08bc18-1c33-4989-8926-f4fc6343e4e3?format=html",
+      "json_url": "/api/v1/workspace/summaries/5c08bc18-1c33-4989-8926-f4fc6343e4e3?format=json"
+    }
+  ],
+  "unverified_items": [
+    "真实文件正文未读取；仅登记合成材料元数据。",
+    "材料真实性及跨材料内容一致性尚未核验。",
+    "卡组织规则的地区、时效及正式适用性尚待企业专家复核。",
+    "材料就绪度仅表示内部清单完成度，不代表胜诉率或业务准确率。"
+  ]
+}

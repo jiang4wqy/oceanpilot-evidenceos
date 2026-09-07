@@ -12,6 +12,7 @@ def test_offline_demo_runs_full_loop_without_a_key():
     }
     assert result.win_likelihood == "1.0000"
     assert result.explanation
+    assert result.requires_human is True
 
 
 def test_demo_emits_synthetic_disclaimer_and_steps():

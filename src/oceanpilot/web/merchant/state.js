@@ -1,66 +1,70 @@
 const BASE="/api/v1/chargeback";
+const WORKSPACE_BASE="/api/v1/workspace";
+const ROLE=WORKSPACE_CONFIG.role;
 const caseContext=createCaseContext();
-const S={loc:window.oceanI18n.getLanguage(),currentView:"hub",packaged:false,appealed:false,caseCreating:false,evidenceSubmitting:false,evidenceSubmittingCases:new Set(),evidenceDraft:null,agentSubmitting:false,pendingAgentTurn:null,agentBoundCaseId:null,agentMessages:[],pendingReview:null,lastAgentInput:"",cardNetwork:"",expectedReason:null,
-  scenarioIndex:0,autoEvidence:["transaction.receipt","fulfillment.tracking"],cases:[],
-  rules:[],currentRuleId:null,ruleReturnContext:null,rulesRequestId:0,ruleDetailRequestId:0,
-  auditByCase:new Map(),withdrawDraft:null,dialogTrigger:null};
-// Compatibility names are read-only views, not independent mutable case copies.
+const S={
+  loc:window.oceanI18n.getLanguage(), currentView:'overview', section:'summary',
+  cases:[], currentRuleId:null, rules:[], rulesRequestId:0, ruleDetailRequestId:0,
+  ruleReturnContext:null, agentBoundCaseId:null, agentMessages:[], lastAgentTurn:null,
+  agentSubmitting:false, pendingAgentTurn:null, failedAgentTurn:null, reviewDraft:null, evidenceDraft:null,
+  withdrawDraft:null, dialogTrigger:null, pendingCommand:null, commandSending:false,
+  commandRecovery:null, commandProblem:null, lastReceipt:null, summaryGenerating:false,
+  snapshotStale:false, loadingCase:false, navigationGeneration:0,
+};
 Object.defineProperties(S, {
-  caseId: {get: () => caseContext.caseId},
-  caseRevision: {get: () => caseContext.snapshot ? caseContext.snapshot.revision : null},
-  caseSnapshot: {get: () => caseContext.snapshot},
-  selectedCase: {get: () => caseContext.snapshot},
-  last: {get: () => caseContext.snapshot},
-  agentCase: {get: () => S.agentBoundCaseId === S.caseId ? caseContext.snapshot : null},
+  caseId:{get:()=>caseContext.caseId},
+  caseRevision:{get:()=>caseContext.snapshot?caseContext.snapshot.revision:null},
+  caseSnapshot:{get:()=>caseContext.snapshot},
+  selectedCase:{get:()=>caseContext.snapshot},
+  last:{get:()=>caseContext.snapshot},
+  agentCase:{get:()=>S.agentBoundCaseId===S.caseId?caseContext.snapshot:null},
 });
-function selectCase(caseId) {
-  if (caseContext.select(caseId)) S.agentBoundCaseId=null;
-}
-function acceptCaseSnapshot(snapshot) {
-  const previous=caseContext.snapshot;
-  if (!caseContext.accept(snapshot)) return false;
-  S.cardNetwork=snapshot.card_network||'';
-  if(previous&&snapshot.revision!==previous.revision){
-    invalidateDerivedViews();
-    S.pendingReview=null;
-    const proposal=$('agentReviewProposal');
-    if(proposal)proposal.remove();
+const $=id=>document.getElementById(id);
+const esc=value=>String(value==null?'':value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const tr=value=>window.oceanI18n.translate(value);
+const REVIEW_LABEL={UNREVIEWED:'本版未复核',APPROVED:'登记复核通过',NEEDS_MORE_INFO:'待补充资料',REJECTED:'已驳回',STALE:'旧版复核已失效'};
+const OWNER_LABEL={MERCHANT:'材料提交方',BUSINESS:'企业运营方',NONE:'暂无待办',HUMAN:'人工确认'};
+const MATERIAL_SOURCE={SYNTHETIC_TEMPLATE:'合成演示模板',SYNTHETIC_USER_METADATA:'操作人员登记的合成元数据',UNKNOWN:'来源待确认'};
+const NETWORK_LABEL={VISA:'Visa',MASTERCARD:'Mastercard',AMEX:'American Express'};
+function reviewStatusLabel(value){return REVIEW_LABEL[value]||value||'本版未复核';}
+function ownerLabel(value){return OWNER_LABEL[value]||value||'待确认处理方';}
+function dateLabel(value){if(!value)return'未记录';const date=new Date(value);return Number.isNaN(date.getTime())?'未记录':date.toLocaleString(S.loc==='en'?'en-US':'zh-CN',{hour12:false});}
+function allowed(action){return Boolean(S.caseSnapshot&&(S.caseSnapshot.allowed_actions||[]).includes(action));}
+function currentActor(){return ROLE==='BUSINESS'?'synthetic-business':'synthetic-merchant';}
+function safeReadStorage(key){try{return sessionStorage.getItem(key);}catch(error){return null;}}
+function safeWriteStorage(key,value){try{if(value===null)sessionStorage.removeItem(key);else sessionStorage.setItem(key,value);}catch(error){void error;}}
+function selectCase(caseId){
+  if(caseContext.select(caseId)){
+    S.agentBoundCaseId=null;S.agentMessages=[];S.lastAgentTurn=null;S.pendingAgentTurn=null;S.failedAgentTurn=null;
+    S.reviewDraft=null;S.snapshotStale=false;
+    for(const id of ['reviewSummary','agentMessage','concernField','concernOriginal','concernProposed','concernOriginalSource','concernProposedSource','concernSummary']){const input=$(id);if(input)input.value='';}
+    for(const id of ['reviewError','summaryStatus','agentTurnStatus','concernError']){const status=$(id);if(status)status.textContent='';}
+    for(const id of ['reviewProposal','agentHistory']){const output=$(id);if(output)output.innerHTML='';}
   }
+}
+function invalidateDerivedViews(){
+  S.reviewDraft=null;S.lastAgentTurn=null;
+  const proposal=$('reviewProposal');if(proposal)proposal.innerHTML='';
+  const output=$('agentOutput');if(output)output.innerHTML='<p class="muted">案件版本或规则依据已变化；旧版分析不再作为当前结论。</p>';
+  const badge=$('agentRuntimeBadge');if(badge){badge.textContent='尚未生成输出';badge.className='pill p-mut runtime-badge';}
+}
+function acceptCaseSnapshot(snapshot){
+  const previous=caseContext.snapshot;
+  if(!caseContext.accept(snapshot))return false;
+  if(previous&&(snapshot.revision!==previous.revision||snapshot.rule_fingerprint!==previous.rule_fingerprint))invalidateDerivedViews();
+  S.agentBoundCaseId=snapshot.case_id;S.snapshotStale=false;
   return true;
 }
-const SCENARIOS=[
-  {label:"Visa 13.1 · 未收到货",meta:"已有 2 项 · 仍缺 3 项",network:"VISA",reason:"PRODUCT_NOT_RECEIVED",
-    available:["transaction.receipt","fulfillment.tracking"],
-    desc:"客户声称未收到商品；商户目前只有交易收据和物流轨迹，尚未取得签收证明、地址匹配及客服沟通。"},
-  {label:"Visa 10.4 · 非本人交易",meta:"已有 1 项 · 仍缺 5 项",network:"VISA",reason:"FRAUD_CARD_NOT_PRESENT",available:["transaction.receipt"],
-    desc:"持卡人声称这笔交易不是本人、属于盗刷；商户目前只有交易收据，缺少 3DS、AVS/CVV、设备/IP 和历史交易关联。"},
-  {label:"Mastercard 4853 · 商品不符",meta:"已有 2 项 · 仍缺 3 项",network:"MASTERCARD",reason:"PRODUCT_NOT_AS_DESCRIBED",
-    available:["transaction.receipt","product.description"],
-    desc:"客户声称收到的商品与下单页面描述不符；商户目前只有交易收据和商品页面，缺少签收、沟通和政策材料。"},
-];
-const PHASE={NEEDS_INTAKE:["未建案","p-mut","创建案件"],REASON_PROPOSED:["待确认原因","p-warn","确认原因"],
-  NEED_EVIDENCE:["补充材料","p-acc","补充材料"],ASSESSED:["评估完成","p-good","评估结果"]};
-const REASON_LABEL={FRAUD_CARD_NOT_PRESENT:"非本人交易",PRODUCT_NOT_RECEIVED:"未收到商品",
-  PRODUCT_NOT_AS_DESCRIBED:"商品或服务与描述不符",DUPLICATE_PROCESSING:"重复扣款",
-  CREDIT_NOT_PROCESSED:"退款未入账",SUBSCRIPTION_CANCELED:"订阅取消后仍扣款",AUTHORIZATION_ERROR:"授权异常"};
-const TEAM_LABEL={RISK:"风控团队",CUSTOMER_SUPPORT:"客服团队",BUSINESS:"业务团队",
-  TECHNICAL_SUPPORT:"技术支持",FINANCE:"财务团队",PSP_SUPPORT:"支付支持"};
-const AGENT_LABEL={IntakeAgent:"案件识别",EvidenceAgent:"材料校验",AssessAgent:"规则评估",HumanGate:"人工确认"};
-const SOURCE_LABEL={MODEL:"辅助说明",FALLBACK:"规则说明",HEURISTIC:"规则识别"};
-const EVENT_LABEL={CASE_OPENED:"案件创建",REASON_CLASSIFIED:"争议原因识别",REASON_CONFIRMED:"争议原因确认",
-  EVIDENCE_ADDED:"材料已补充",EVIDENCE_WITHDRAWN:"材料已撤回",COLLECTION_FINALIZED:"材料收集结束"};
-const RISK_LABEL={LOW:"低风险",MEDIUM:"中风险",HIGH:"高风险"};
-const FACTOR_LABEL={NO_3DS:"未完成 3DS",AVS_MISMATCH:"AVS 地址不匹配",CVV_MISMATCH:"CVV 不匹配",
-  DEVICE_IP_MISMATCH:"设备与 IP 异常",HIGH_TICKET:"高额交易",HIGH_RISK_MCC:"高风险行业",
-  CROSS_BORDER:"跨境交易",SHIPPING_BILLING_MISMATCH:"收货与账单地址不符",REPEAT_DISPUTER:"历史争议较多",DIGITAL_GOODS:"数字商品"};
-const EVIDENCE_LABEL={"transaction.receipt":"交易收据","auth.avs_result":"AVS 验证结果","auth.cvv_result":"CVV 验证结果",
-  "auth.threeds":"3DS 认证记录","auth.device_ip_match":"设备与 IP 关联","fulfillment.tracking":"物流跟踪号/轨迹",
-  "fulfillment.proof_of_delivery":"签收证明","fulfillment.address_match":"收货地址匹配","product.description":"商品页面",
-  "billing.refund_record":"退款记录","policy.terms_refund":"条款与退款政策","comms.customer":"客户沟通记录",
-  "subscription.cancellation_record":"取消订阅记录","history.prior_transactions":"历史交易记录","billing.duplicate_check":"重复扣款核验"};
-const $=(id)=>document.getElementById(id);
-const esc=(s)=>String(s==null?"":s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const tr=(s)=>window.oceanI18n.translate(s);
-const cleanCopy=(s)=>String(s||"").replace(/（合成模型输出，仅用于离线演示）/g,"").trim();
-const actionLabel=(s)=>cleanCopy(s).replace(/胜诉评估 ([0-9.]+)（数字由内核判定）/,"材料就绪度 $1（规则评估）");
-const detailLabel=(s)=>REASON_LABEL[s]||EVIDENCE_LABEL[s]||s;
+function syncWriteButtons(){
+  const busy=Boolean(S.pendingCommand)||S.commandSending;
+  document.querySelectorAll('[data-write]').forEach(button=>{button.disabled=busy||button.dataset.forbidden==='true';});
+  const actor=$('demoActor');if(actor)actor.disabled=busy;
+}
+function formError(id,text){const node=$(id);if(node)node.textContent=text;}
+function applyLanguage(){window.oceanI18n.apply();}
+
+const CODE_LABEL={COPY_SAMPLE:'新建样例副本',CREATE_CASE:'创建案件',CONFIRM_REASON:'确认争议原因',SET_NETWORK:'提交卡组织选择',REGISTER_MATERIAL:'登记材料',WITHDRAW_MATERIAL:'撤回登记',FINALIZE:'收集结束',REVIEW:'登记复核',ADD_CONCERN:'登记疑点',RESOLVE_CONCERN:'处理疑点',UNVERIFIED_SUMMARY:'未核验摘要',DEMO_MAPPED:'演示已映射',DISPLAY_ONLY:'仅供展示',GLOBAL:'全球（需核验适用地区）',REQUIRED:'必需',RECOMMENDED:'推荐',COMPLETED:'已完成',BLOCKED:'已阻断',INFO:'信息',CHANNEL:'输入渠道',KERNEL:'案件内核',COPILOT:'模型辅助',HUMAN_GATE:'人工确认门槛'};
+function codeLabel(value){return CODE_LABEL[value]||value||'未记录';}
+
+const TEMPLATE_RECORDS=new Set(['当前案件版本','材料登记','新选择与当前记录不同，须业务人员明确复核。','提交方未说明材料来源，暂停推进。','待人工说明来源','合成样例：已复核登记清单；正文未读取。']);
+function recordHtml(value){return TEMPLATE_RECORDS.has(value)?esc(value):`<span data-no-i18n>${esc(value)}</span>`;}

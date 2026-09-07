@@ -29,7 +29,13 @@ from oceanpilot.adapters.persistence.chargeback_schema import (
     CHARGEBACK_REQUIRED_TABLES,
     CHARGEBACK_SCHEMA_SQL,
 )
-from oceanpilot.adapters.persistence.sqlite import connect_sqlite, immediate_transaction
+from oceanpilot.adapters.persistence.chargeback_unit import (
+    BorrowedConnection,
+)
+from oceanpilot.adapters.persistence.chargeback_unit import (
+    chargeback_transaction as immediate_transaction,
+)
+from oceanpilot.adapters.persistence.sqlite import connect_sqlite
 from oceanpilot.application.chargeback_ports import ChargebackAuditEvent
 from oceanpilot.application.chargeback_supervisor import ChargebackCaseState
 from oceanpilot.application.errors import (
@@ -173,9 +179,14 @@ class SqliteChargebackCaseStore:
         path: Path,
         *,
         clock: Callable[[], datetime] = _default_clock,
+        connection: sqlite3.Connection | None = None,
     ) -> None:
         self._path = Path(path)
         self._clock = clock
+        self._borrowed = BorrowedConnection(connection) if connection is not None else None
+
+    def _connect(self):
+        return self._borrowed if self._borrowed is not None else connect_sqlite(self._path)
 
     # -- ChargebackCaseStore protocol -------------------------------------
 
@@ -184,7 +195,7 @@ class SqliteChargebackCaseStore:
 
         def operation() -> str:
             moment = self._clock()
-            connection = connect_sqlite(self._path)
+            connection = self._connect()
             try:
                 with immediate_transaction(connection):
                     cursor = connection.execute(
@@ -217,7 +228,7 @@ class SqliteChargebackCaseStore:
         """Return only case identifiers that currently exist in durable storage."""
 
         def operation() -> tuple[str, ...]:
-            connection = connect_sqlite(self._path)
+            connection = self._connect()
             try:
                 rows = connection.execute(
                     """
@@ -234,7 +245,7 @@ class SqliteChargebackCaseStore:
 
     def load(self, case_id: str) -> ChargebackCaseState | None:
         def operation() -> ChargebackCaseState | None:
-            connection = connect_sqlite(self._path)
+            connection = self._connect()
             try:
                 loaded = self._load_state(connection, case_id)
             finally:
@@ -246,10 +257,19 @@ class SqliteChargebackCaseStore:
     def save(self, case_id: str, state: ChargebackCaseState) -> None:
         self._save(case_id, state, expected_revision=None)
 
+    def withdraw_evidence(
+        self,
+        case_id: str,
+        evidence_code: ChargebackEvidenceCode,
+    ) -> ChargebackCaseState:
+        return self.withdraw_latest_evidence(case_id, evidence_code, _any_registered=True)
+
     def withdraw_latest_evidence(
         self,
         case_id: str,
         expected_evidence_code: ChargebackEvidenceCode,
+        *,
+        _any_registered: bool = False,
     ) -> ChargebackCaseState:
         """Atomically withdraw the expected latest evidence item.
 
@@ -262,7 +282,7 @@ class SqliteChargebackCaseStore:
             raise PersistenceInvariantViolation()
 
         def operation() -> ChargebackCaseState:
-            connection = connect_sqlite(self._path)
+            connection = self._connect()
             try:
                 with immediate_transaction(connection):
                     case_row = connection.execute(
@@ -276,11 +296,11 @@ class SqliteChargebackCaseStore:
                         """
                         SELECT evidence_code
                         FROM chargeback_evidence
-                        WHERE case_id = ?
+                        WHERE case_id = ? AND (? = 0 OR evidence_code = ?)
                         ORDER BY added_at_revision DESC, rowid DESC
                         LIMIT 1
                         """,
-                        (case_id,),
+                        (case_id, int(_any_registered), expected_evidence_code.value),
                     ).fetchone()
                     if evidence_row is None:
                         raise NoEvidenceToWithdraw()
@@ -343,7 +363,7 @@ class SqliteChargebackCaseStore:
             raise PersistenceInvariantViolation()
 
         def operation() -> ChargebackCaseState:
-            connection = connect_sqlite(self._path)
+            connection = self._connect()
             try:
                 with immediate_transaction(connection):
                     row = connection.execute(
@@ -405,7 +425,7 @@ class SqliteChargebackCaseStore:
 
     def load_with_revision(self, case_id: str) -> tuple[ChargebackCaseState, int] | None:
         def operation() -> tuple[ChargebackCaseState, int] | None:
-            connection = connect_sqlite(self._path)
+            connection = self._connect()
             try:
                 return self._load_state(connection, case_id)
             finally:
@@ -430,7 +450,7 @@ class SqliteChargebackCaseStore:
 
     def audit_trail(self, case_id: str) -> tuple[ChargebackAuditEvent, ...]:
         def operation() -> tuple[ChargebackAuditEvent, ...]:
-            connection = connect_sqlite(self._path)
+            connection = self._connect()
             try:
                 rows = connection.execute(
                     """
@@ -480,7 +500,7 @@ class SqliteChargebackCaseStore:
             raise PersistenceInvariantViolation()
 
         def operation() -> int:
-            connection = connect_sqlite(self._path)
+            connection = self._connect()
             try:
                 with immediate_transaction(connection):
                     row = connection.execute(

@@ -1,6 +1,6 @@
 """Chargeback agent cluster (application layer).
 
-Agents wrap the deterministic kernel: the decision (win likelihood, routing,
+Agents wrap the deterministic kernel: the decision (material readiness, routing,
 human-review flag) always comes from ``domain.chargeback``; the model only
 writes a plain-language explanation. If the model is unavailable or empty, a
 deterministic fallback explanation is used, so the agent never depends on a
@@ -36,7 +36,13 @@ from oceanpilot.domain.chargeback_prevention import (
     assess_chargeback_risk,
 )
 from oceanpilot.domain.errors import SensitiveDataRejected
-from oceanpilot.domain.evidence_catalog import describe, request_sentence
+from oceanpilot.domain.evidence_catalog import (
+    MATERIAL_REGISTRATION_BOUNDARY,
+    describe,
+    has_unsupported_material_claim,
+    label_of,
+    request_sentence,
+)
 from oceanpilot.domain.security import assert_no_sensitive_data
 
 _ASSESS_SYSTEM = (
@@ -47,7 +53,12 @@ _ASSESS_SYSTEM = (
     '"missing_evidence":["human-readable item"],'
     '"next_action":"one concrete Chinese action",'
     '"human_review_note":"Chinese review boundary"}. '
-    "This is synthetic data; never claim any business action was taken."
+    "Only synthetic material metadata is registered; no document content has been read "
+    "or verified. Never assert content consistency, transaction authenticity, fulfillment, "
+    "liability shift, win probability, real-world accuracy, or automatic approval. "
+    "Use evidence_readiness only as an internal registration score. "
+    "When ordinary items are missing, describe a limited analysis and its gaps. "
+    "Every outcome still needs human review; never claim any business action was taken."
 )
 
 
@@ -81,7 +92,12 @@ class ChargebackAssessAgent:
         present_evidence: Iterable[ChargebackEvidenceCode],
     ) -> AssessOutcome:
         # Deterministic kernel decides; the model never overrides it.
-        assessment = self.preview(reason_code, present_evidence).assessment
+        preview = self.preview(reason_code, present_evidence)
+        assessment = preview.assessment
+        if assessment.missing_critical:
+            # Critical gaps permit deterministic gap guidance, not a formal
+            # assessment model call, even for callers outside the supervisor.
+            return preview
         explanation, source = self._explain(assessment)
         return AssessOutcome(
             assessment=assessment,
@@ -121,10 +137,23 @@ class ChargebackAssessAgent:
             return _fallback(assessment), ExplanationSource.FALLBACK
         structured = json_text(text, "operator_summary")
         if structured is not None:
+            if not _supported_assessment_text(structured, assessment):
+                return _fallback(assessment), ExplanationSource.FALLBACK
             return structured, ExplanationSource.MODEL
-        if text.startswith("{"):
+        if text.startswith("{") or not _supported_assessment_text(text, assessment):
             return _fallback(assessment), ExplanationSource.FALLBACK
         return text, ExplanationSource.MODEL
+
+
+def _supported_assessment_text(text: str, assessment: ChargebackAssessment) -> bool:
+    if has_unsupported_material_claim(text):
+        return False
+    return not (
+        assessment.missing_evidence
+        and any(
+            token in text for token in ("齐全", "齐备", "100%", "审核通过", "可提交", "无需补充")
+        )
+    )
 
 
 def _facts(a: ChargebackAssessment) -> str:
@@ -133,10 +162,12 @@ def _facts(a: ChargebackAssessment) -> str:
 
     return (
         f"reason_code={a.reason_code.value}\n"
-        f"win_likelihood={a.win_likelihood}\n"
+        f"evidence_readiness={a.evidence_readiness}\n"
+        f"material_gate={a.material_gate.value}\n"
+        "material_verification=METADATA_ONLY_CONTENT_UNVERIFIED\n"
         f"completeness={a.completeness}\n"
         f"responsible_team={a.responsible_team.value}\n"
-        f"deadline_days={a.default_deadline_days}\n"
+        f"internal_demo_window_days={a.default_deadline_days}\n"
         f"ready_to_submit={a.ready_to_submit}\n"
         f"requires_human={a.requires_human}\n"
         f"present_evidence={codes(a.present_evidence)}\n"
@@ -147,19 +178,21 @@ def _facts(a: ChargebackAssessment) -> str:
 
 
 def _fallback(a: ChargebackAssessment) -> str:
-    percent = int(a.win_likelihood * 100)
+    percent = int(a.evidence_readiness * 100)
     if a.missing_critical:
-        missing = "、".join(c.value for c in a.missing_critical)
-        nxt = f"补齐关键证据：{missing}"
+        missing = "、".join(label_of(c) for c in a.missing_critical)
+        scope = "关键材料登记缺失，正式评估已阻断；当前仅解释缺口"
+        nxt = f"补齐关键材料：{missing}"
     elif not a.ready_to_submit:
-        missing = "、".join(c.value for c in a.missing_evidence)
-        nxt = f"补齐证据：{missing}"
+        missing = "、".join(label_of(c) for c in a.missing_evidence)
+        scope = "普通材料尚缺，当前仅提供有限分析"
+        nxt = f"补齐材料或记录无法补充的原因：{missing}"
     else:
-        nxt = "证据齐备，等待人工确认后打包提交" if a.requires_human else "证据齐备，可进入打包"
-    review = "需人工复核" if a.requires_human else "可自动推进"
+        scope = "内部材料登记清单齐备，等待人工复核"
+        nxt = "人工确认当前版本的材料登记审核，再生成案件复核摘要（合成示例）"
     return (
-        f"合成评估：规则证据就绪度 {percent}%（非胜诉概率），责任域 {a.responsible_team.value}，"
-        f"{review}。下一步：{nxt}。（{a.default_deadline_days} 天举证时限）"
+        f"{scope}。材料就绪度 {percent}%（非胜诉概率），责任域 {a.responsible_team.value}。"
+        f"下一步：{nxt}。{MATERIAL_REGISTRATION_BOUNDARY}"
     )
 
 
@@ -415,7 +448,9 @@ _EVIDENCE_SYSTEM = (
     '"why":"concise Chinese reason",'
     '"accepted_examples":["human-readable example"],'
     '"safety_note":"Chinese reminder not to submit sensitive credentials"}. '
-    "Synthetic data only."
+    "Only synthetic material metadata is registered; document content has not been read "
+    "or verified. Explain why an item is needed for future human checking, without claiming "
+    "that a transaction is genuine, contents are consistent, or liability shifts."
 )
 
 
@@ -466,7 +501,7 @@ class EvidenceAgent:
                 complete=True,
                 next_evidence=None,
                 missing=(),
-                question="证据已齐备，可进入胜诉评估。",
+                question="内部材料登记清单已齐备，可进行材料就绪评估，仍需人工复核。",
                 question_source=ExplanationSource.FALLBACK,
             )
         next_code = (
@@ -516,8 +551,10 @@ class EvidenceAgent:
             return _fallback_question(code, remaining), ExplanationSource.FALLBACK
         structured = json_text(text, "question")
         if structured is not None:
+            if has_unsupported_material_claim(structured):
+                return _fallback_question(code, remaining), ExplanationSource.FALLBACK
             return structured, ExplanationSource.MODEL
-        if text.startswith("{"):
+        if text.startswith("{") or has_unsupported_material_claim(text):
             return _fallback_question(code, remaining), ExplanationSource.FALLBACK
         return text, ExplanationSource.MODEL
 

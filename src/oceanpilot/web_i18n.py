@@ -4,6 +4,8 @@
 
 import json
 
+from oceanpilot.workspace_i18n import TRANSLATIONS as WORKSPACE_TRANSLATIONS
+
 COMMON_TRANSLATIONS = {
     "语言": "Language",
     "中文": "中文",
@@ -364,6 +366,10 @@ _RUNTIME = r"""
   const TABLE=__TABLE__;
   const TITLES={zh:__TITLE_ZH__,en:__TITLE_EN__};
   const TEXT_SOURCE=new WeakMap();
+  const TEXT_RENDERED=new WeakMap();
+  const ATTR_RENDERED=new WeakMap();
+  let observer;
+  const PHRASES=Object.keys(TABLE).filter(key=>/[\u3400-\u9fff]/.test(key)&&key.length>1).sort((a,b)=>b.length-a.length);
   const ATTR_SOURCE=new WeakMap();
   const COOKIE=__COOKIE__;
   let language=readLanguage();
@@ -378,7 +384,30 @@ _RUNTIME = r"""
     document.cookie=COOKIE+"="+encodeURIComponent(value)+";path=/;max-age=31536000;SameSite=Lax";
   }
   function pattern(source){
+    const translate=value=>translateTo(value,'en');
     let m;
+    if((m=source.match(/^内部清单仍缺少 (\d+) 项材料，暂不能形成通过结论。$/)))return `${m[1]} registrations remain missing; approval is not available.`;
+    if((m=source.match(/^读取阶段 (.+)，未修改案件状态$/)))return `Read stage ${m[1]}; case state unchanged`;
+    if((m=source.match(/^本案对应 (.+)「(.+)」的 Synthetic 映射，用于整理待人工复核的材料。(.*)$/)))return `Synthetic mapping for ${m[1]} (${translate(m[2])}), used to organize materials for human review. ${translate(m[3])}`;
+    if((m=source.match(/^(\d+) 条 · (\d+) 条 Demo Mapped · (\d+) 个卡组织 · (\d+) 份来源$/)))return `${m[1]} rules · ${m[2]} demo mapped · ${m[3]} networks · ${m[4]} sources`;
+    if((m=source.match(/^已完成本案版本 (\d+) 的说明。$/)))return `Explanation completed for revision ${m[1]}.`;
+    if((m=source.match(/^已下载冻结版本 (\d+) 的 (HTML|JSON) 摘要。$/)))return `Downloaded ${m[2]} summary for frozen revision ${m[1]}.`;
+    if((m=source.match(/^已选择合成材料文件名：(.+)。不读取或上传正文。$/)))return `Selected synthetic file name: ${m[1]}. No body is read or uploaded.`;
+    if((m=source.match(/^已登记「(.+)」；仍缺 (\d+) 项。正文未读取、内容未核验。$/)))return `Registered “${translate(m[1])}”; ${m[2]} items remain. Body not read; content not verified.`;
+    if((m=source.match(/^(\d+) 天（非官方响应期限）$/)))return `${m[1]} days (not an official response deadline)`;
+    if((m=source.match(/^(\d+) 项$/)))return `${m[1]} items`;
+
+    if((m=source.match(/^(\d+) 件案件 · 更新于 (.+)$/)))return `${m[1]} cases · Updated ${m[2]}`;
+    if((m=source.match(/^材料登记就绪度 (.+) \/ (.+)$/)))return `Registration readiness ${m[1]} / ${m[2]}`;
+    if((m=source.match(/^当前版本 (\d+)$/)))return `Current revision ${m[1]}`;
+    if((m=source.match(/^待处理方：(.+)$/)))return `Action owner: ${translate(m[1])}`;
+    if((m=source.match(/^下一步：(.+)$/)))return `Next step: ${translate(m[1])}`;
+    if((m=source.match(/^为什么需要：(.+)$/)))return `Why needed: ${translate(m[1])}`;
+    if((m=source.match(/^补充后：(.+)$/)))return `After registration: ${translate(m[1])}`;
+    if((m=source.match(/^来源：(.+)$/)))return `Source: ${translate(m[1])}`;
+    if((m=source.match(/^登记版本 (\d+)$/)))return `Registered in revision ${m[1]}`;
+    if((m=source.match(/^合成样例 ([ABC])$/)))return `Synthetic sample ${m[1]}`;
+    if((m=source.match(/^(\d+) 项待处理$/)))return `${m[1]} unresolved`;
     if((m=source.match(/^(\d+) 件有效实体 · 更新于 (.+)$/)))return `${m[1]} persisted records · Updated ${m[2]}`;
     if((m=source.match(/^(\d+) 件$/)))return `${m[1]} cases`;
     if((m=source.match(/^仍缺 (\d+) 项资料$/)))return `${m[1]} evidence items missing`;
@@ -412,7 +441,15 @@ _RUNTIME = r"""
   function translateTo(source,targetLanguage=language){
     source=String(source==null?"":source);
     if(targetLanguage!=="en")return source;
-    return TABLE[source]||pattern(source);
+    if(TABLE[source])return TABLE[source];
+    const formatted=pattern(source);if(formatted!==source)return formatted;
+    // Translate only recognized UI phrases; original records are marked data-no-i18n.
+    let out='',offset=0;
+    while(offset<source.length){
+      const phrase=PHRASES.find(key=>source.startsWith(key,offset));
+      if(phrase){out+=TABLE[phrase];offset+=phrase.length;}else out+=source[offset++];
+    }
+    return out;
   }
   function translate(source){return translateTo(source,language);}
   function preserveWhitespace(source,translated){
@@ -422,18 +459,22 @@ _RUNTIME = r"""
   function translateTextNode(node){
     if(!node.parentElement||node.parentElement.closest("script,style,[data-no-i18n]"))return;
     let source=TEXT_SOURCE.get(node);
-    if(source===undefined){source=node.nodeValue;TEXT_SOURCE.set(node,source);}
+    if(source===undefined||node.nodeValue!==TEXT_RENDERED.get(node)){source=node.nodeValue;TEXT_SOURCE.set(node,source);}
     const trimmed=source.trim();if(!trimmed)return;
     const next=language==="en"?preserveWhitespace(source,translate(trimmed)):source;
     if(node.nodeValue!==next)node.nodeValue=next;
+    TEXT_RENDERED.set(node,next);
   }
   function translateElement(element){
     if(element.matches("[data-no-i18n]")||element.closest("[data-no-i18n]"))return;
     let sources=ATTR_SOURCE.get(element);if(!sources){sources={};ATTR_SOURCE.set(element,sources);}
+    let rendered=ATTR_RENDERED.get(element);if(!rendered){rendered={};ATTR_RENDERED.set(element,rendered);}
     ["placeholder","title","aria-label"].forEach(name=>{
       if(!element.hasAttribute(name))return;
-      if(!(name in sources))sources[name]=element.getAttribute(name);
-      element.setAttribute(name,language==="en"?translate(sources[name]):sources[name]);
+      if(!(name in sources)||element.getAttribute(name)!==rendered[name])sources[name]=element.getAttribute(name);
+      const next=language==="en"?translate(sources[name]):sources[name];
+      if(element.getAttribute(name)!==next)element.setAttribute(name,next);
+      rendered[name]=next;
     });
     if(element.matches("[data-i18n-value]")){
       if(!("value" in sources))sources.value=element.value;
@@ -441,21 +482,22 @@ _RUNTIME = r"""
     }
   }
   function apply(root=document.body){
-    if(!root||applying)return;applying=true;
+    if(!root||applying)return;applying=true;if(observer)observer.disconnect();
     document.documentElement.lang=language==="en"?"en":"zh-CN";document.title=TITLES[language];
     if(root.nodeType===Node.TEXT_NODE)translateTextNode(root);
     else if(root.nodeType===Node.ELEMENT_NODE){translateElement(root);const walker=document.createTreeWalker(root,NodeFilter.SHOW_ELEMENT|NodeFilter.SHOW_TEXT);let node;while((node=walker.nextNode()))node.nodeType===Node.TEXT_NODE?translateTextNode(node):translateElement(node);}
     const selector=document.getElementById("languageSelect");if(selector)selector.value=language;
-    applying=false;
+    applying=false;if(observer)observe();
   }
   function setLanguage(value,save=true){
     const next=value==="en"?"en":"zh";if(next===language){apply();return;}
     const previousLanguage=language;language=next;if(save)persist(language);apply();window.dispatchEvent(new CustomEvent("oceanpilot:languagechange",{detail:{language,previousLanguage}}));
   }
+  function observe(){observer.observe(document.body,{childList:true,characterData:true,attributes:true,attributeFilter:["placeholder","title","aria-label"],subtree:true});}
   function init(){
     const selector=document.getElementById("languageSelect");if(selector)selector.addEventListener("change",event=>setLanguage(event.target.value));
     apply();
-    const observer=new MutationObserver(records=>{for(const record of records){for(const node of record.addedNodes)apply(node);}});observer.observe(document.body,{childList:true,subtree:true});
+    observer=new MutationObserver(()=>apply());observe();
     setInterval(()=>{const cookieLanguage=readLanguage();if(cookieLanguage!==language)setLanguage(cookieLanguage,false);},1000);
   }
   window.oceanI18n={apply,getLanguage:()=>language,setLanguage,translate,translateTo};
@@ -483,11 +525,292 @@ def build_i18n_script(
     )
 
 
+CLIENT_TRANSLATIONS.update(
+    {
+        "争议案件协作": "Dispute case collaboration",
+        "商户材料提交区": "Merchant materials workspace",
+        "企业争议运营区": "Business dispute workspace",
+        "我的争议案件": "My dispute cases",
+        "争议运营工作台": "Dispute operations workspace",
+        "演示操作者": "Demo actor",
+        "演示角色，非生产身份认证。": "Demo roles, not production authentication.",
+        "案件列表": "Case list",
+        "刷新列表": "Refresh list",
+        "演示样例": "Demo samples",
+        "演示样例副本": "Demo sample copies",
+        "规划中": "Planned",
+        "后续能力": "Future capabilities",
+        "客户支持": "Customer support",
+        "企业集成": "Enterprise integration",
+        "经营洞察": "Business insights",
+        "运行维护中心 ↗": "Operations center ↗",
+        "仅限合成演示": "Synthetic demo only",
+        "全部阶段": "All stages",
+        "全部处理方": "All owners",
+        "待材料提交方": "Waiting for merchant",
+        "待企业运营方": "Waiting for business",
+        "材料提交方": "Merchant",
+        "企业运营方": "Business operator",
+        "案件名称 / 编号": "Case name / ID",
+        "原因 / 卡组织": "Reason / network",
+        "当前阶段": "Current stage",
+        "缺失项": "Missing items",
+        "待谁处理": "Action owner",
+        "当前版复核": "Current review",
+        "最近更新": "Last updated",
+        "打开案件": "Open case",
+        "刷新本案": "Refresh case",
+        "案件概况": "Overview",
+        "材料登记": "Material register",
+        "对应规则": "Applicable rule",
+        "待核验事项": "Unverified matters",
+        "复核与结果": "Review and results",
+        "当前为什么停在这里": "What is blocking this case",
+        "正文未读取": "Body not read",
+        "尚缺材料": "Missing materials",
+        "已登记材料": "Registered materials",
+        "查看撤回记录": "View withdrawal history",
+        "本案对应规则": "Rule for this case",
+        "只读来源追溯": "Read-only provenance",
+        "确认变更卡组织": "Confirm network change",
+        "登记疑点或来源问题": "Record a concern or source issue",
+        "事实冲突": "Fact conflict",
+        "来源问题": "Source issue",
+        "规则冲突": "Rule conflict",
+        "确认登记疑点": "Confirm concern",
+        "登记复核决定": "Record review decision",
+        "通过登记复核": "Approve register review",
+        "退回补充资料": "Request more materials",
+        "驳回本次处理": "Reject this handling",
+        "复核意见": "Review notes",
+        "预览本版本复核": "Preview this revision review",
+        "确认写入复核决定": "Confirm review decision",
+        "生成当前版本摘要": "Generate this revision summary",
+        "案件复核摘要（合成示例）": "Case review summary (synthetic example)",
+        "最终发送未开放。": "Final submission is disabled.",
+        "复核历史与处理记录": "Review and processing history",
+        "复核历史": "Review history",
+        "案件处理记录": "Case history",
+        "尚未生成输出": "No output yet",
+        "分析当前版本": "Analyze this revision",
+        "查看本次对话": "View this conversation",
+        "新建合成争议案件": "Create synthetic dispute case",
+        "确认：这是已进入正式争议流程的合成案件": "Confirmed: a synthetic case already in formal dispute",
+        "确认创建案件": "Confirm case creation",
+        "登记合成材料": "Register synthetic material",
+        "确认登记材料": "Confirm material registration",
+        "确认撤回材料登记": "Confirm registration withdrawal",
+        "确认撤回登记": "Confirm withdrawal",
+        "返回原案件": "Return to original case",
+        "实时模型输出": "Live model output",
+        "确定性规则输出": "Deterministic rule output",
+        "模型异常后的降级输出": "Fallback after model failure",
+        "离线确定性输出": "Offline deterministic output",
+    }
+)
+
+CLIENT_TRANSLATIONS.update(
+    {
+        "跳到主要内容": "Skip to main content",
+        "工作区导航": "Workspace navigation",
+        "规则知识": "Rule knowledge",
+        "规划中的能力": "Planned capabilities",
+        "仅处理合成正式争议案件；登记材料不代表读取正文、核验真实性或保证胜诉。": "Synthetic formal disputes only. Registration does not mean body reading, authenticity verification, or a guaranteed outcome.",
+        "移动端导航": "Mobile navigation",
+        "搜索案件": "Search cases",
+        "搜索案件名称、案件号或原因码": "Search case name, ID, or reason code",
+        "筛选案件状态": "Filter case stage",
+        "关键材料阻断": "Critical material missing",
+        "有限分析": "Limited analysis",
+        "疑点待复核": "Concern needs review",
+        "无精确规则": "No exact rule",
+        "待登记复核": "Register review pending",
+        "登记复核通过": "Register review approved",
+        "已退回补证": "Returned for more materials",
+        "复核驳回": "Review rejected",
+        "筛选待处理方": "Filter action owner",
+        "清单完成度仅表示材料登记就绪度；业务复核与材料正文核验分开记录。": "Checklist completion measures registration readiness only. Operational review is separate from document verification.",
+        "正在读取案件": "Loading case",
+        "版本 —": "Revision —",
+        "尚未复核": "Not reviewed",
+        "待处理方：—": "Action owner: —",
+        "本案分区": "Case sections",
+        "正在读取当前状态": "Loading current state",
+        "材料登记就绪度 —": "Registration readiness —",
+        "清单状态来自后端当前版本": "Checklist state comes from the current server revision",
+        "这里只登记合成材料元数据，不上传或读取文件正文，不据此确认交易真实或内容一致。": "Only synthetic material metadata is registered. File bodies are not uploaded or read, and no authenticity or consistency is verified.",
+        "卡组织": "Card network",
+        "本案卡组织": "Case card network",
+        "请选择卡组织": "Select card network",
+        "以下内容由操作人员登记，不是 AI 从文件正文中识别的结果。": "These entries are recorded by the operator, not extracted by AI from document bodies.",
+        "类型": "Type",
+        "涉及字段": "Field concerned",
+        "例如：订单金额、资料来源": "For example: order amount, material source",
+        "原登记值": "Original registered value",
+        "建议值": "Proposed value",
+        "原来源": "Original source",
+        "建议来源": "Proposed source",
+        "疑点说明": "Concern notes",
+        "当前版本": "Current revision",
+        "说明材料登记情况、内部处理条件以及仍需核验的事项": "Describe registered materials, internal criteria, and remaining verification",
+        "审核范围仅包含“材料登记清单”和“内部处理门槛”，不包含正文真实性或内容一致性核验。": "Review covers the material register and internal processing criteria only. It does not verify document authenticity or content consistency.",
+        "企业运营方负责记录复核决定。": "The business operator records review decisions.",
+        "前往企业争议运营区 →": "Open business dispute workspace →",
+        "从同一案件版本生成材料登记与审核摘要；导出不会重新调用模型，也不是官方可提交证据包。": "Generate a registration and review summary from one case revision. Export does not call the model and is not an official submission package.",
+        "当前演示结束于人工登记复核与摘要导出；不执行真实提交。": "This demonstration ends with human register review and summary export. No real submission occurs.",
+        "基于本案当前版本解释与补问": "Explain and clarify this case revision",
+        "等待案件": "Waiting for a case",
+        "案件缺口与下一步已由后端规则展示。可在下方请求进一步说明。": "Server rules show gaps and next steps. Request further explanation below.",
+        "为什么被阻断": "Why is this blocked?",
+        "还缺什么": "What is missing?",
+        "向 Agent 提问": "Ask the Agent",
+        "例如：下一步需要谁确认？": "For example: who must confirm the next step?",
+        "AI 只提出意见；任何案件变更都需操作人员确认，并由后端校验。": "AI provides recommendations. Case changes require operator confirmation and server validation.",
+        "发送给 Agent": "Send to Agent",
+        "本演示假定已进入正式争议流程；普通支付失败或 3DS 挑战失败不等于拒付。": "This demo assumes a formal dispute already exists. A payment or 3DS challenge failure alone is not a chargeback.",
+        "案件名称": "Case name",
+        "例如：合成订单未收到货争议": "For example: synthetic goods-not-received dispute",
+        "案件说明": "Case description",
+        "请只填写合成场景、已知情况及当前材料缺口": "Enter only synthetic facts, known information, and material gaps",
+        "每次通过真实后端新建独立案件；不会清空数据库，也不会在浏览器修改完成度。": "Each copy is a new persisted case created by the backend. The database is not cleared and readiness is not patched in the browser.",
+        "A · 主案例": "A · Main scenario",
+        "预先登记 5/6 项合成材料，保留关键缺口，连续演示补问、补证、登记复核与摘要导出。": "Start with 5/6 synthetic materials and one critical gap. Demonstrate clarification, registration, review, and export.",
+        "新建 A 样例副本": "Create sample A copy",
+        "B · 阻断案例": "B · Blocked scenario",
+        "关键材料缺失": "Critical material missing",
+        "展示关键缺口或材料撤回后的阻断状态；系统不会为了给出答案而继续通过。": "Show the block caused by a critical gap or withdrawal. The system does not approve a blocked case just to provide an answer.",
+        "新建 B 样例副本": "Create sample B copy",
+        "C · 跨场景检查": "C · Cross-scenario check",
+        "检查材料缺口与规则说明随案件变化，用于自测和企业追问。": "Check that gaps and rule explanations change with the case, for rehearsal and follow-up questions.",
+        "新建 C 样例副本": "Create sample C copy",
+        "三个样例都假定已进入正式争议流程，数据及材料全部为合成。主演示建议完整展示 A，再展示 B；C 用于跨场景核对。": "All three samples assume a formal dispute and use synthetic data and materials. Present A end to end, then B; use C for cross-scenario checks.",
+        "浏览本地规则知识库原型中的公开资料整理摘要；案件诊断与材料打包均通过同一 rule_version_id 追溯来源。": "Browse public-source summaries in the local rule prototype. Cases and summaries trace the same rule version.",
+        "正在读取规则库": "Loading rule library",
+        "演示规则摘要；生产使用前须按卡组织、地区、版本和生效日期，以正式 Standards、后台公告及收单机构有效版本复核。": "Demo rule summaries. Before production use, verify network, region, version, and effective date against official standards, bulletins, and applicable acquirer rules.",
+        "规则目录": "Rule catalog",
+        "搜索规则": "Search rules",
+        "搜索原因码、名称或来源": "Search reason code, name, or source",
+        "筛选卡组织或技术来源": "Filter network or technical source",
+        "全部来源": "All sources",
+        "Oceanpayment 技术文档": "Oceanpayment technical documents",
+        "查询": "Search",
+        "规则": "Rule",
+        "卡组织 / 来源": "Network / source",
+        "版本": "Version",
+        "角色": "Role",
+        "校验状态": "Verification status",
+        "正在从规则数据库读取…": "Reading rule database…",
+        "规则详情": "Rule detail",
+        "选择一条规则": "Select a rule",
+        "查看来源文档、版本、断言、证据摘要、内部映射与限制。": "View source documents, version, assertions, evidence summaries, internal mapping, and limitations.",
+        "只登记元数据，不读取或上传文件正文。": "Metadata only. File bodies are not read or uploaded.",
+        "关闭材料登记弹窗": "Close material registration",
+        "案件与版本": "Case and revision",
+        "目标材料": "Target material",
+        "选择文件名（仅元数据）": "Select file name (metadata only)",
+        "使用 Synthetic 演示文件": "Use synthetic demo file",
+        "尚未选择文件": "No file selected",
+        "登记来源": "Registration source",
+        "来源待确认": "Source unconfirmed",
+        "合成演示模板": "Synthetic demo template",
+        "操作人员登记的合成元数据": "Operator-registered synthetic metadata",
+        "选择文件并不上传正文，也不构成内容核验；这里仅保存材料代码、合成文件名、来源与登记人。": "Selecting a file does not upload or verify its body. Only the material code, synthetic file name, source, and registering actor are saved.",
+        "取消": "Cancel",
+        "撤回会留痕，当前版本的复核状态随材料变化失效。": "Withdrawal is recorded. Material changes invalidate the previous revision review.",
+        "关闭撤回弹窗": "Close withdrawal dialog",
+        "查看当前阻断、材料缺口与待办，在同一案件版本完成登记复核与摘要导出。": "See current blocks, material gaps, and actions; review the register and export a summary of the same revision.",
+        "登记合成案件与材料，了解当前缺口、下一步及企业运营方的复核结果。": "Register synthetic cases and materials, then follow gaps, next steps, and business review results.",
+        "商户材料提交区 →": "Merchant materials workspace →",
+        "企业争议运营区 →": "Business dispute workspace →",
+        "清单完成度，不是胜诉率或业务准确率": "Checklist completion, not win rate or business accuracy",
+        "当前版本尚未生成 Agent 输出。缺口与下一步来自后端确定性规则。": "No Agent output exists for this revision. Gaps and next steps come from deterministic server rules.",
+        "材料仅登记元数据；AI 未读取正文，也未核验真实交易或材料内容一致性。": "Only material metadata is registered. AI has not read document bodies or verified transactions or content consistency.",
+        "正文未读取 · 内容未核验": "Body not read · Content not verified",
+        "当前版本尚未完成登记复核": "This revision has not been reviewed",
+        "材料或案件信息已变化，旧版复核不能用于当前版本。": "Materials or case information changed. The previous review does not apply to this revision.",
+        "企业运营方可在核对材料登记清单与内部处理门槛后记录决定。": "A business operator can record a decision after reviewing the register and internal processing criteria.",
+        "尚无已生成摘要。企业运营方可生成当前版本的复核摘要。": "No saved summaries. A business operator can generate a summary for this revision.",
+        "暂无历史复核": "No review history",
+        "未解析到精确匹配规则。": "No exact rule match found.",
+        "当前卡组织与争议原因没有正式可引用的精确映射；不会把默认模板或相似条款当作正式依据。规则适用性需要人工核验。": "No exact reference maps this network and reason. Default templates and similar rules are not formal grounds. Applicability requires human verification.",
+        "查看具体规则版本": "View exact rule version",
+        "打开原始来源 ↗": "Open original source ↗",
+        "登记材料": "Register material",
+        "撤回登记": "Withdraw registration",
+        "本次无法补齐，转人工处理": "Unable to complete; refer for human handling",
+        "暂无撤回记录": "No withdrawals recorded",
+        "当前没有待登记材料；正文与真实性仍未核验。": "No missing registrations. Document bodies and authenticity remain unverified.",
+        "确认争议原因后显示缺失材料清单。": "Confirm the dispute reason to show required materials.",
+        "查询原回执": "Look up original receipt",
+        "使用同一命令重试": "Retry the same command",
+        "关闭本次尝试并修改输入": "Close rejected attempt and edit input",
+        "打开回执案件": "Open receipt case",
+        "关闭提示": "Dismiss notice",
+        "刷新案件": "Refresh case",
+        "正在等待后端处理并保存回执…": "Waiting for the server to process and save a receipt…",
+        "处理结果尚未确认。先查询同一命令的已保存回执，不创建另一条命令。": "Outcome unconfirmed. Check the saved receipt for this command before creating another operation.",
+        "尚无已提交回执；原操作可能仍在处理中。可继续查询，或使用同一命令编号重试。": "No committed receipt yet; the original operation may still be running. Check again or retry the same command ID.",
+        "后端仍在处理此命令，请稍后查询原回执。": "The server is still processing this command. Check its original receipt later.",
+        "案件版本已变化；旧版分析不再作为当前结论。": "The case revision changed. Earlier analysis is no longer current.",
+        "本次输出来源未报告": "Output source not reported",
+        "复核范围：": "Review scope:",
+        "不包含：": "Excluded:",
+        "材料登记清单、内部处理门槛。": "Material register and internal processing criteria.",
+        "材料正文、真实性、一致性或真实交易核验。": "Document body, authenticity, consistency, or real transaction verification.",
+        "返回修改": "Back to editing",
+        "来源未明确时，请先撤回对应材料登记，明确来源后重新登记，再由企业运营方复核此疑点；仅记录“已知悉”不会解除阻断。": "For an unknown source, withdraw the material registration and register it again with its source clarified, then request business review. Acknowledgment alone does not remove the block.",
+    }
+)
+
+CLIENT_TRANSLATIONS.update(
+    {
+        "本版未复核": "This revision not reviewed",
+        "建案说明（创建时登记）": "Case description (recorded at creation)",
+    }
+)
+
+CLIENT_TRANSLATIONS.update(
+    {
+        "窄屏可横向滚动规则目录；查看详情后可返回原案件。": "On narrow screens, scroll the rule catalog horizontally. Return to the case from rule details.",
+        "可横向滚动的规则目录": "Horizontally scrollable rule catalog",
+    }
+)
+
+CLIENT_TRANSLATIONS.update(
+    {
+        "旧复核未覆盖当前规则与材料版本，只作历史记录。": "The previous review does not cover the current rules and material version. It remains a historical record.",
+        "案件版本或规则依据已变化；旧版分析不再作为当前结论。": "The case revision or rule basis changed. Earlier analysis is no longer current.",
+        "案件版本相同，规则以摘要为准": "Same case revision; rules are frozen in the summary",
+        "历史案件版本": "Earlier case revision",
+        "当前复核决定": "Current review decision",
+    }
+)
+
+CLIENT_TRANSLATIONS.update(
+    {
+        "当前服务配置：实时 DeepSeek": "Current service configuration: live DeepSeek",
+        "当前服务配置：离线规则": "Current service configuration: offline rules",
+        "当前服务配置：合成测试模型": "Current service configuration: synthetic test model",
+        "当前服务配置尚未读取，请刷新案件。": "Current service configuration unavailable; refresh this case.",
+        "当前配置与历史回复来源分别记录；每条回复以自身来源标签为准。": "Current configuration and historical response sources are separate. Check each response's own source label.",
+        "历史来源未记录": "Historical source not recorded",
+    }
+)
+
+CLIENT_TRANSLATIONS.update(WORKSPACE_TRANSLATIONS)
+
 CLIENT_I18N_SCRIPT = build_i18n_script(
     CLIENT_TRANSLATIONS,
     title_zh="Oceanpayment · 商户工作台",
     title_en="Oceanpayment · Merchant Workspace",
-    preference_key="oceanpilot_client_language",
+    preference_key="oceanpilot_workspace_language",
+)
+
+BUSINESS_I18N_SCRIPT = build_i18n_script(
+    CLIENT_TRANSLATIONS,
+    title_zh="Oceanpayment · 企业争议运营",
+    title_en="Oceanpayment · Business Dispute Workspace",
+    preference_key="oceanpilot_workspace_language",
 )
 
 ADMIN_I18N_SCRIPT = build_i18n_script(

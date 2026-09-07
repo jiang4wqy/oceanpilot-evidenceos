@@ -1,4 +1,4 @@
-"""Runnable synthetic chargeback demo — the agent cluster end to end.
+"""Runnable synthetic chargeback kernel demonstration (without persistence).
 
 Offline by default: uses the deterministic ScriptedModelProvider, so it runs
 with no API key or network. Pass a real ModelProvider (e.g. ClaudeProvider) to
@@ -7,7 +7,8 @@ reason code -> evidence agent asks for each missing item (the demo answers on
 the merchant's behalf) -> deterministic assessment + explanation.
 
 Synthetic data only; no Oceanpayment/bank connection; no business action is
-executed; human confirmation would only record advice.
+executed; material registration is not file-content verification. Use chargeback_transcript.py
+for the persisted human-review and summary-export workflow.
 
 Run:  python examples/chargeback_demo.py
 """
@@ -28,7 +29,7 @@ from oceanpilot.application.chargeback_supervisor import (
 )
 from oceanpilot.application.model_provider import ModelProvider
 
-_DEFAULT_DESCRIPTION = "客户下单后一直没收到货，现在要求拒付。"
+_DEFAULT_DESCRIPTION = "合成正式争议：假定已收到商品未收到的正式拒付通知，客户下单后一直没收到货。"
 _MAX_ROUNDS = 50
 
 
@@ -55,7 +56,7 @@ class DemoResult:
     reason_code: str
     submitted_evidence: list[str]
     collected: list[str]
-    win_likelihood: str
+    win_likelihood: str  # Legacy compatibility name: internal material readiness only.
     responsible_team: str
     requires_human: bool
     explanation: str
@@ -99,12 +100,13 @@ def run(
     assert step.assessment is not None
     assessment = step.assessment.assessment
     say(
-        f"→ 评估：规则证据就绪度 {int(assessment.win_likelihood * 100)}%（非胜诉概率），"
+        f"→ 评估：材料就绪度 {int(assessment.evidence_readiness * 100)}%（非胜诉概率），"
         f"责任域 {assessment.responsible_team.value}，"
-        f"{'需人工复核' if assessment.requires_human else '可自动推进'}"
+        "需人工复核"
     )
     say(f"→ 说明：{step.assessment.explanation}")
-    say("完成（合成）。人工确认仅记录建议，不执行任何业务动作。")
+    say("仅登记合成材料元数据，未读取或核验真实文件正文；不执行任何业务动作。")
+    say("内核补问演示完成；持久化人审与摘要导出请运行 chargeback_transcript.py。")
 
     return DemoResult(
         reason_code=state.reason_code.value,

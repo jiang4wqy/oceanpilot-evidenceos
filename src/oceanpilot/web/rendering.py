@@ -1,15 +1,17 @@
 """Compose packaged page resources without a build step or additional HTTP routes.
 
 Scripts deliberately share one classic-script scope: the existing inline event
-handlers and independent page-language preferences remain supported. Only the
+handlers remain supported. Workspaces share a language preference; operations
+keeps its own preference. Only the
 source files are modular; deployed pages still contain all their own assets.
 """
 
 import json
-from functools import cache, lru_cache
+from functools import cache
+from html import escape
 from importlib.resources import files
 
-from oceanpilot.web_i18n import ADMIN_I18N_SCRIPT, CLIENT_I18N_SCRIPT
+from oceanpilot.web_i18n import ADMIN_I18N_SCRIPT, BUSINESS_I18N_SCRIPT, CLIENT_I18N_SCRIPT
 
 MERCHANT_SCRIPTS = (
     "shared/request.js",
@@ -21,7 +23,7 @@ MERCHANT_SCRIPTS = (
     "merchant/cases.js",
     "merchant/assessment.js",
     "merchant/rules.js",
-    "merchant/support.js",
+    "merchant/concerns.js",
     "merchant/bootstrap.js",
 )
 OPERATIONS_SCRIPTS = ("shared/request.js", "operations/console.js")
@@ -43,9 +45,40 @@ def _compose(page: str, scripts: tuple[str, ...]) -> str:
     )
 
 
-@lru_cache(maxsize=1)
-def render_merchant_page() -> str:
-    return _compose("merchant", MERCHANT_SCRIPTS).replace("__CLIENT_I18N__", CLIENT_I18N_SCRIPT)
+@cache
+def _render_workspace(role: str, admin_origin: str) -> str:
+    business = role == "BUSINESS"
+    values = {
+        "__WORKSPACE_ROLE__": role,
+        "__WORKSPACE_TITLE__": (
+            "Oceanpayment · 企业争议运营" if business else "Oceanpayment · 商户工作台"
+        ),
+        "__ROLE_LABEL__": "企业争议运营区" if business else "商户材料提交区",
+        "__OTHER_ROLE_LABEL__": "商户材料提交区" if business else "企业争议运营区",
+        "__OTHER_WORKSPACE_PATH__": "/demo" if business else "/business",
+        "__DEMO_ACTOR__": "synthetic-business" if business else "synthetic-merchant",
+        "__LIST_TITLE__": "争议运营工作台" if business else "我的争议案件",
+        "__LIST_DESCRIPTION__": (
+            "查看当前阻断、材料缺口与待办，在同一案件版本完成登记复核与摘要导出。"
+            if business
+            else "登记合成案件与材料，了解当前缺口、下一步及企业运营方的复核结果。"
+        ),
+        "__OPERATIONS_URL__": admin_origin.rstrip("/") + "/admin",
+    }
+    body = _compose("merchant", MERCHANT_SCRIPTS)
+    for marker, value in values.items():
+        body = body.replace(marker, escape(value, quote=True))
+    return body.replace(
+        "__WORKSPACE_CONFIG__", json.dumps({"role": role}, separators=(",", ":"))
+    ).replace("__CLIENT_I18N__", BUSINESS_I18N_SCRIPT if business else CLIENT_I18N_SCRIPT)
+
+
+def render_merchant_page(admin_origin: str = "http://127.0.0.1:8003") -> str:
+    return _render_workspace("MERCHANT", admin_origin)
+
+
+def render_business_page(admin_origin: str = "http://127.0.0.1:8003") -> str:
+    return _render_workspace("BUSINESS", admin_origin)
 
 
 def render_operations_page(client_base_url: str) -> str:

@@ -17,6 +17,9 @@ class AgentTurnRequest(_StrictModel):
     locale: Literal["zh-CN", "en-US"] = "zh-CN"
     case_id: StrictStr | None = Field(default=None, min_length=1, max_length=128)
     card_network: Literal["VISA", "MASTERCARD", "AMEX"] | None = None
+    formal_dispute: StrictBool | None = Field(
+        default=None, description="Formal-dispute premise for a new case only."
+    )
     trigger: Literal[
         "USER_MESSAGE",
         "CASE_OPENED",
@@ -111,6 +114,7 @@ class AgentReviewDecisionDTO(_StrictModel):
 
 
 class AgentTurnResponse(_StrictModel):
+    rule_fingerprint: StrictStr | None = None
     synthetic: Literal[True]
     result: Literal["CREATED", "REPLAYED"] = "CREATED"
     turn_kind: Literal["CASE_CREATED", "CASE_ANALYZED"]
@@ -133,6 +137,8 @@ class AgentTurnResponse(_StrictModel):
     judgment: AgentJudgmentDTO
     recommended_action: AgentRecommendedActionDTO
     agent_trace: tuple[AgentTraceStepDTO, ...]
+    output_source: Literal["MODEL", "DETERMINISTIC", "FALLBACK"] = "DETERMINISTIC"
+    failure_code: StrictStr | None = None
 
 
 class ConfirmAgentReviewRequest(_StrictModel):

@@ -9,7 +9,11 @@ callers.
 """
 
 from collections.abc import Mapping, Sequence
+from contextlib import contextmanager
+from contextvars import ContextVar
 from enum import StrEnum
+from math import isfinite
+from time import monotonic
 from typing import Annotated, Protocol, runtime_checkable
 
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, StrictStr
@@ -72,11 +76,50 @@ class ModelResult(_Frozen):
     model: StrictStr | None = None
 
 
+class ModelFailureCode(StrEnum):
+    TIMEOUT = "TIMEOUT"
+    RATE_LIMITED = "RATE_LIMITED"
+    BUSY = "BUSY"
+    UNAVAILABLE = "UNAVAILABLE"
+    INVALID_RESPONSE = "INVALID_RESPONSE"
+
+
 class ModelProviderError(Exception):
     """Fixed, non-leaking error raised by every provider on failure."""
 
-    def __init__(self) -> None:
+    def __init__(self, code: ModelFailureCode = ModelFailureCode.UNAVAILABLE) -> None:
+        self.code = code if isinstance(code, ModelFailureCode) else ModelFailureCode.UNAVAILABLE
         super().__init__("model provider request failed")
+
+
+_model_deadline: ContextVar[float | None] = ContextVar("model_request_deadline", default=None)
+
+
+@contextmanager
+def model_request_budget(seconds: float = 20.0):
+    """Share one monotonic model deadline across an operation's sequential calls.
+
+    Nesting can shorten, but never extend, the enclosing request budget. The
+    model deadline bounds waiting for model output, not database transactions.
+    """
+    if type(seconds) not in (int, float) or not isfinite(seconds) or seconds <= 0:
+        raise ValueError("model budget must be a finite positive number")
+    existing = _model_deadline.get()
+    deadline = monotonic() + seconds
+    token = _model_deadline.set(min(deadline, existing) if existing is not None else deadline)
+    try:
+        yield
+    finally:
+        _model_deadline.reset(token)
+
+
+def remaining_model_seconds(limit: float) -> float:
+    """Return the remaining per-call and per-operation budget or fail immediately."""
+    deadline = _model_deadline.get()
+    remaining = limit if deadline is None else min(limit, deadline - monotonic())
+    if remaining <= 0:
+        raise ModelProviderError(ModelFailureCode.TIMEOUT)
+    return remaining
 
 
 @runtime_checkable

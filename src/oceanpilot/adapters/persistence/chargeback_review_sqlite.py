@@ -7,7 +7,13 @@ from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
 
-from oceanpilot.adapters.persistence.sqlite import connect_sqlite, immediate_transaction
+from oceanpilot.adapters.persistence.chargeback_unit import (
+    BorrowedConnection,
+)
+from oceanpilot.adapters.persistence.chargeback_unit import (
+    chargeback_transaction as immediate_transaction,
+)
+from oceanpilot.adapters.persistence.sqlite import connect_sqlite
 from oceanpilot.application.case_review import (
     AgentTurnRecord,
     ReviewAuditEvent,
@@ -92,13 +98,23 @@ def _database_call[T](operation: Callable[[], T]) -> T:
 
 
 class SqliteCaseReviewStore:
-    def __init__(self, path: Path, *, clock: Callable[[], datetime] = _now) -> None:
+    def __init__(
+        self,
+        path: Path,
+        *,
+        clock: Callable[[], datetime] = _now,
+        connection: sqlite3.Connection | None = None,
+    ) -> None:
         self._path = Path(path)
         self._clock = clock
+        self._borrowed = BorrowedConnection(connection) if connection is not None else None
+
+    def _connect(self):
+        return self._borrowed if self._borrowed is not None else connect_sqlite(self._path)
 
     def current_revision(self, case_id: str) -> int:
         def operation() -> int:
-            connection = connect_sqlite(self._path)
+            connection = self._connect()
             try:
                 row = connection.execute(
                     "SELECT revision FROM chargeback_cases WHERE case_id = ?",
@@ -118,7 +134,7 @@ class SqliteCaseReviewStore:
             _json_object(turn.proposal_json)
 
         def operation() -> None:
-            connection = connect_sqlite(self._path)
+            connection = self._connect()
             try:
                 with immediate_transaction(connection):
                     row = connection.execute(
@@ -153,7 +169,7 @@ class SqliteCaseReviewStore:
 
     def latest_turn_payload(self, case_id: str, case_revision: int) -> str | None:
         def operation() -> str | None:
-            connection = connect_sqlite(self._path)
+            connection = self._connect()
             try:
                 row = connection.execute(
                     """
@@ -176,7 +192,7 @@ class SqliteCaseReviewStore:
         self, case_id: str, case_revision: int | None = None
     ) -> ReviewDecision | None:
         def operation() -> ReviewDecision | None:
-            connection = connect_sqlite(self._path)
+            connection = self._connect()
             try:
                 row = connection.execute(
                     """
@@ -209,7 +225,7 @@ class SqliteCaseReviewStore:
             raise ValueError("confirmed_by is required")
 
         def operation() -> ReviewConfirmationResult:
-            connection = connect_sqlite(self._path)
+            connection = self._connect()
             try:
                 with immediate_transaction(connection):
                     existing = connection.execute(
@@ -332,7 +348,7 @@ class SqliteCaseReviewStore:
 
     def audit_trail(self, case_id: str) -> tuple[ReviewAuditEvent, ...]:
         def operation() -> tuple[ReviewAuditEvent, ...]:
-            connection = connect_sqlite(self._path)
+            connection = self._connect()
             try:
                 rows = connection.execute(
                     """
