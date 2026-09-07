@@ -1,0 +1,63 @@
+﻿case_template_id,证据级别,中文标题,拒付大类,原因码,卡组织,行业,线上/线下,商品类型,证据状态,截止状态,建议动作,最终结局,Agent 模式,路径类型,来源类型,来源定位
+CB-CASE-001,SOURCE_EXPLICIT,油漆工泼漆——侵权损失不能用拒付追偿,Consumer Dispute,4853/4854,Mastercard,家装服务,线下,服务,完全缺失,未说明,信息不足,未说明,需要人工确认,正常路径,卡组织规则内置示例,P152; P460; P950; P1157
+CB-CASE-002,SOURCE_EXPLICIT,终身会员商户倒闭——服务中断按 18 个月折算拒付,Consumer Dispute,4853,Mastercard,订阅/会员服务,订阅,订阅,充分,未说明,条件性,未说明,需要人工确认,正常路径,卡组织规则内置示例（含明确算式）,P178; P968; P1511
+CB-CASE-003,SOURCE_EXPLICIT,花瓶海运——签署“发货即免责”弃权书后商户免责,Consumer Dispute,4853,Mastercard,跨境电商（实物）,线上,其他,充分,未说明,抗辩,未说明,需要人工确认,正常路径,卡组织规则内置示例,P178; P968; P1511
+CB-CASE-004,SOURCE_EXPLICIT,空箱/砖块——收到无价值物品按“商品未提供”拒付,Consumer Dispute,4853,Mastercard,电商（实物）,线上,实物,不适用,未说明,抗辩,未说明,需要人工确认,正常路径,卡组织规则内置示例,P178; P967; P1511
+CB-CASE-005,SOURCE_EXPLICIT,退款收据被篡改——商户可用“疑似篡改单据”抗辩,Consumer Dispute / Fraud,4853（抗辩码 2001）,Mastercard,通用零售,线上/线下,服务,完全缺失,未说明,抗辩,未说明,需要人工确认,正常路径,卡组织规则内置示例,P162; P184; P335; P694; P957; P1094; P1330
+CB-CASE-006,SOURCE_EXPLICIT,退货欺诈——面霜换酸奶/零件被调换,Consumer Dispute,4853（抗辩码 2004）,Mastercard,零售/电子商品,线上,其他,完全缺失,未说明,抗辩,未说明,需要人工确认,正常路径,卡组织规则内置示例,P163; P279; P958; P1042
+CB-CASE-007,SOURCE_EXPLICIT,部分授权与撤销——USD 100/75/74.99 规则,Authorization,4808,Mastercard,通用（规则）,线上/线下,其他,完全缺失,未说明,抗辩,未说明,需要人工确认,正常路径,卡组织规则内置示例,P64-65; P84; P934
+CB-CASE-008,SOURCE_EXPLICIT,美国自动加油机 USD 1 授权与 500/175 门槛,Authorization,4808,Mastercard,加油/交通,线下（无人终端）,其他,充分,未说明,抗辩,未说明,只读建议,正常路径,卡组织规则内置示例,P61; P885-886
+CB-CASE-009,SOURCE_EXPLICIT,CAT 3 无人终端限额与公交 split clearing,Authorization,4808,Mastercard,交通/无人零售,线下（无人终端）,其他,完全缺失,未说明,抗辩,未说明,只读建议,正常路径,卡组织规则内置示例,P115; P921-922; P56-57
+CB-CASE-010,SOURCE_EXPLICIT,分期 vs 循环扣款三连例,Consumer Dispute,4853/4850,Mastercard,汽车零售/健身/公用事业,订阅/分期,订阅,完全缺失,未说明,条件性,未说明,需要人工确认,正常路径,卡组织规则内置示例,P312; P330; P1064; P1076
+CB-CASE-011,SOURCE_EXPLICIT,Addendum 后续费用：房账餐费与租车停车罚单,Consumer Dispute / Fraud,4853/4837,Mastercard,酒店/租车,线下,其他,完全缺失,未说明,抗辩,未说明,需要人工确认,正常路径,卡组织规则内置示例,P350; P353; P501; P1090; P1093; P1189
+CB-CASE-012,SOURCE_EXPLICIT,酒店 No-show 费：满房改宿错收费与 18:00 取消时限,Consumer Dispute,4853,Mastercard,酒店,预订,其他,完全缺失,未说明,条件性,未说明,需要人工确认,正常路径,卡组织规则内置示例,P368; P371; P381; P1103; P1106; P1112
+CB-CASE-013,SOURCE_EXPLICIT,变更拒付原因：货到了但已损坏,Consumer Dispute,4853（Change of Reason）,Mastercard,电商（实物）,线上,实物,完全缺失,未说明,条件性,未说明,需要人工确认,正常路径,卡组织规则内置示例,P477; P1171
+CB-CASE-014,SOURCE_EXPLICIT,"墨西哥酒店币种错乱——报价 24,000 比索扣了 24,000 欧元",Processing Error,4834（Currency Errors）,Mastercard,酒店/旅游,线上预订,其他,完全缺失,未说明,条件性,未说明,需要人工确认,正常路径,卡组织规则内置示例,P741-742; P1371
+CB-CASE-015,SOURCE_EXPLICIT,丹麦 ATM 选欧元却按克朗扣款,Processing Error,4834（ATM Cash and Currency Errors）,Mastercard,银行/ATM,线下（ATM）,其他,完全缺失,未说明,条件性,未说明,需要人工确认,正常路径,卡组织规则内置示例,P741; P872-873
+CB-CASE-016,SOURCE_EXPLICIT,双重入账与善意催款函流程,Processing Error（流程）,2011（Refund previously issued）,Mastercard,通用（流程）,通用,其他,完全缺失,未说明,抗辩,未说明,需要人工确认,正常路径,卡组织规则内置示例,P38; P68-69; P510-512; P935
+CB-CASE-017,SOURCE_EXPLICIT,第三方旅行重复扣款（Paid by Other Means）,Processing Error,4834（Duplicate / Paid by Other Means）,Mastercard,旅游/OTA,线上,其他,完全缺失,未说明,条件性,未说明,需要人工确认,正常路径,卡组织规则内置示例,P690; P1327-1328
+CB-CASE-018,SOURCE_EXPLICIT,合理金额抗辩：持卡人签字的价目表,Processing Error,4834（Unreasonable Amount）,Mastercard,服务行业（维修等）,线下,服务,完全缺失,未说明,抗辩,未说明,需要人工确认,正常路径,卡组织规则内置示例,P770; P1395
+CB-CASE-019,SOURCE_EXPLICIT,15 分钟内“幽灵交易”欺诈合规案,Fraud,Compliance Case（All Other Rules Violations）,Mastercard,通用线下零售,线下,其他,完全缺失,未说明,信息不足,未说明,需要人工确认,正常路径,卡组织规则内置示例,P1495-1497
+CB-CASE-020,SOURCE_EXPLICIT,网站取消政策“点击接受”披露示例,Consumer Dispute,13.7（Cancelled Merchandise/Services 相关）,Visa,通用电商,线上,其他,完全缺失,未说明,信息不足,未说明,需要人工确认,正常路径,卡组织指南披露示例（图片不在文本层）,P18
+CB-CASE-021,SOURCE_EXPLICIT,质量争议示例：修车与酒店房间,Consumer Dispute,13.3,Visa,汽车维修/酒店,线下,服务,完全缺失,未说明,条件性,未说明,需要人工确认,正常路径,卡组织指南内置示例,P43-44
+CB-CASE-022,SOURCE_EXPLICIT,Visa Secure 三场景：ECI 5/6/7 的保护差异,Fraud,10.4（Fraud 类保护规则）,Visa,电商,线上,其他,充分,未说明,条件性,未说明,只读建议,正常路径,卡组织指南内置规则示例,P14
+CB-CASE-023,SOURCE_EXPLICIT,分时度假 14 个日历日取消须全额退款,Consumer Dispute,13.7,Visa,分时度假/旅游,线下/电话销售,其他,完全缺失,未说明,条件性,未说明,需要人工确认,正常路径,卡组织指南内置规则示例,P17; P49-50
+CB-CASE-024,SOURCE_EXPLICIT,Visa 合规违规四例（无争议权走 Compliance）,Processing Error / Compliance,Compliance（无 Dispute Condition）,Visa,通用,通用,其他,完全缺失,未说明,信息不足,未说明,需要人工确认,正常路径,卡组织指南内置示例,P20
+CB-CASE-025,SOURCE_EXPLICIT,[示例案例] Visa 10.4 CNP 欺诈：SGD 899 未授权,Fraud,10.4,Visa,电子消费品,线上（CNP）,其他,完全缺失,未说明,条件性,未说明,需要人工确认,正常路径,源文件自标注虚构演示案例,§3（第 3 章，约 60-90 行）
+CB-CASE-026,SOURCE_EXPLICIT,"[示例案例] Visa 13.1：USD 1,200 iPhone 未收到",Consumer Dispute,13.1,Visa,电商（3C）,线上,实物,完全缺失,未说明,条件性,未说明,需要人工确认,正常路径,源文件自标注虚构演示案例,§5（第 5 章）
+CB-CASE-027,SOURCE_EXPLICIT,[示例案例] Visa 13.2：取消 SaaS 后仍扣 USD 99,Consumer Dispute,13.2,Visa,SaaS,订阅,订阅,完全缺失,未说明,条件性,未说明,需要人工确认,正常路径,源文件自标注虚构演示案例,§6（第 6 章）
+CB-CASE-028,SOURCE_EXPLICIT,[示例案例] Visa 13.3：全新 MacBook 实际是翻新机,Consumer Dispute,13.3,Visa,电商（3C）,线上,实物,完全缺失,未说明,条件性,未说明,需要人工确认,正常路径,源文件自标注虚构演示案例,§7（第 7 章）
+CB-CASE-029,SOURCE_EXPLICIT,[示例案例] Visa 13.6：承诺退款未到账,Consumer Dispute,13.6,Visa,通用,通用,其他,完全缺失,未说明,条件性,未说明,需要人工确认,正常路径,源文件自标注虚构演示案例,§8（第 8 章）
+CB-CASE-030,SOURCE_EXPLICIT,[示例案例] Visa 12.6：同一金额两笔被扣,Processing Error,12.6.1,Visa,通用,线上,其他,完全缺失,未说明,条件性,未说明,需要人工确认,正常路径,源文件自标注虚构演示案例,§9（第 9 章）
+CB-CASE-031,SOURCE_EXPLICIT,[示例案例] Mastercard 4853：USD 499 课程“无法访问”,Consumer Dispute,4853,Mastercard,在线教育,线上（数字商品）,数字商品,充分,未说明,抗辩,未说明,需要人工确认,正常路径,源文件自标注虚构演示案例,§12（第 12 章）
+CB-CASE-032,SOURCE_EXPLICIT,[示例案例] Amex C04：声称已退货但商户未收到,Consumer Dispute,C04,American Express,零售,线上/线下,实物,完全缺失,未说明,条件性,未说明,需要人工确认,正常路径,源文件自标注虚构演示案例,§15（第 15 章）
+CB-CASE-033,SOURCE_EXPLICIT,[示例案例] Amex C05：取消预订但已过取消期限,Consumer Dispute,C05,American Express,旅游/预订,预订,其他,完全缺失,未说明,抗辩,未说明,需要人工确认,正常路径,源文件自标注虚构演示案例,§16（第 16 章）
+CB-CASE-034,SOURCE_EXPLICIT,[真实案例] Mastercard × Sicredi：账单描述不清引发争议,Fraud（预防）,预防类（对应 4837/4863 场景）,Mastercard（Ethoca）,银行/零售,通用,其他,完全缺失,未说明,信息不足,部分/其他,只读建议,正常路径,卡组织官方营销案例（源标注真实案例）,§20（第 20 章）
+CB-CASE-040,RULE_DERIVED,Visa 10.4 CNP 欺诈：典型证据链场景（规则还原）,Fraud,10.4,Visa,电商,线上,其他,完全缺失,未说明,条件性,未说明,需要人工确认,正常路径,规则还原场景（原文仅给原因码+规则，无完整故事）,SRC-01 P26/P54-58; SRC-03 §3
+CB-CASE-041,RULE_DERIVED,Visa 13.1 商品/服务未收到：典型场景（规则还原）,Consumer Dispute,13.1,Visa,电商/物流,线上,服务,完全缺失,未说明,条件性,未说明,需要人工确认,正常路径,规则还原场景（原文仅给原因码+规则，无完整故事）,SRC-01 P40-41; SRC-03 §5
+CB-CASE-042,RULE_DERIVED,Visa 11.3 无授权/逾期清算：典型场景（规则还原）,Authorization,11.3,Visa,通用,线上/线下,其他,完全缺失,未说明,条件性,未说明,需要人工确认,正常路径,规则还原场景（原文仅给原因码+规则，无完整故事）,SRC-01 P31; SRC-03 §10
+CB-CASE-043,RULE_DERIVED,Visa 12.6 重复处理/已其他方式付款：典型场景（规则还原）,Processing Error,12.6.1/12.6.2,Visa,通用,线上/线下,其他,完全缺失,未说明,条件性,未说明,需要人工确认,正常路径,规则还原场景（原文仅给原因码+规则，无完整故事）,SRC-01 P37-38; SRC-03 §9
+CB-CASE-044,RULE_DERIVED,Visa 13.7 已取消商品/服务：典型场景（规则还原）,Consumer Dispute,13.7,Visa,旅游/服务,预订,其他,完全缺失,未说明,条件性,未说明,需要人工确认,正常路径,规则还原场景（原文仅给原因码+规则，无完整故事）,SRC-01 P49-50
+CB-CASE-045,RULE_DERIVED,Mastercard 4853 货不对板/瑕疵：典型场景（规则还原）,Consumer Dispute,4853,Mastercard,电商/零售,线上,实物,完全缺失,未说明,条件性,未说明,需要人工确认,正常路径,规则还原场景（原文仅给原因码+规则，无完整故事）,SRC-02 P157-177/P953-967; SRC-03 §28
+CB-CASE-046,RULE_DERIVED,Mastercard 4853 商品/服务未提供：典型场景（规则还原）,Consumer Dispute,4853,Mastercard,电商/服务,线上,服务,完全缺失,未说明,条件性,未说明,需要人工确认,正常路径,规则还原场景（原文仅给原因码+规则，无完整故事）,SRC-02 P177-184/P967-983
+CB-CASE-047,RULE_DERIVED,Mastercard 4853 退款未处理：典型场景（规则还原）,Consumer Dispute,4853,Mastercard,通用,通用,其他,完全缺失,未说明,条件性,未说明,需要人工确认,正常路径,规则还原场景（原文仅给原因码+规则，无完整故事）,SRC-02 P273-276/P1036-1051
+CB-CASE-048,RULE_DERIVED,Mastercard 4837 无持卡人授权：典型场景（规则还原）,Fraud,4837,Mastercard,通用,线上/线下,其他,不适用,未说明,条件性,未说明,需要人工确认,正常路径,规则还原场景（原文仅给原因码+规则，无完整故事）,SRC-02 P489-563; SRC-03 §28
+CB-CASE-049,RULE_DERIVED,Mastercard 4808 授权相关拒付：典型场景（规则还原）,Authorization,4808,Mastercard,通用,通用,其他,完全缺失,未说明,条件性,未说明,需要人工确认,正常路径,规则还原场景（原文仅给原因码+规则，无完整故事）,SRC-02 P54-150/P880-947
+CB-CASE-050,RULE_DERIVED,Mastercard 4834 POI 错误（重复扣款等）：典型场景（规则还原）,Processing Error,4834,Mastercard,通用/ATM/零售,通用,其他,完全缺失,未说明,条件性,未说明,需要人工确认,正常路径,规则还原场景（原文仅给原因码+规则，无完整故事）,SRC-02 P685-776/P1324-1407
+CB-CASE-051,RULE_DERIVED,Mastercard 4870/4871 芯片责任转移：典型场景（规则还原）,Fraud,4870/4871,Mastercard,线下零售,线下,其他,完全缺失,未说明,条件性,未说明,需要人工确认,正常路径,规则还原场景（原文仅给原因码+规则，无完整故事）,SRC-02 P578-636/P1241-1288
+CB-CASE-052,RULE_DERIVED,Amex C08/C02：未收到商品与退款未处理（规则映射还原）,Consumer Dispute,C08 / C02,American Express,通用,通用,其他,完全缺失,未说明,信息不足,未说明,需要人工确认,正常路径,规则还原场景（原文仅给原因码+规则，无完整故事）,SRC-03 §28
+CB-CASE-060,SYNTHETIC_DEMO,合成：证据充分的电商拒付抗辩案（13.1 类）,Consumer Dispute,13.1,Visa,3C 电商,线上,实物,充分,正常,抗辩,待定,需要人工确认,正常路径,项目合成演示案例（虚构商户/虚构用户）,合成案例，无原文定位（见 derived_from_rule_ids）
+CB-CASE-061,SYNTHETIC_DEMO,合成：证据严重缺失、系统阻止提交（10.4 欺诈）,Fraud,10.4,Visa,跨境电商,线上,其他,完全缺失,正常,接受,待定,只读建议（阻止提交）,正常路径（阻止提交）,项目合成演示案例（虚构商户/虚构用户）,合成案例，无原文定位（见 derived_from_rule_ids）
+CB-CASE-062,SYNTHETIC_DEMO,合成：更适合接受的拒付（4808 无授权）,Authorization,4808,Mastercard,餐饮,线下,其他,完全缺失,正常,接受,待定,只读建议（接受）,正常路径,项目合成演示案例（虚构商户/虚构用户）,合成案例，无原文定位（见 derived_from_rule_ids）
+CB-CASE-063,SYNTHETIC_DEMO,合成：临近截止触发飞书提醒（13.1 未收到）,Consumer Dispute,13.1,Visa,服装电商,线上,实物,充分,临近,抗辩,待定,需要人工确认,正常路径,项目合成演示案例（虚构商户/虚构用户）,合成案例，无原文定位（见 derived_from_rule_ids）
+CB-CASE-064,SYNTHETIC_DEMO,合成：已过期案件（无法再提交）,Consumer Dispute,4853,Mastercard,旅游,预订,其他,完全缺失,已过期,接受,商户败,只读建议（已过期）,异常路径,项目合成演示案例（虚构商户/虚构用户）,合成案例，无原文定位（见 derived_from_rule_ids）
+CB-CASE-065,SYNTHETIC_DEMO,合成：文件抽取需人工修正（证据 OCR 错误）,Consumer Dispute,13.1,Visa,家居电商,线上,实物,充分,正常,抗辩,待定,需要人工确认,异常路径（人工修正）,项目合成演示案例（虚构商户/虚构用户）,合成案例，无原文定位（见 derived_from_rule_ids）
+CB-CASE-066,SYNTHETIC_DEMO,合成：Agent 生成操作提案、用户确认后执行（4853 课程）,Consumer Dispute,4853,Mastercard,在线教育,线上,数字商品,充分,正常,抗辩,待定,生成提案+用户确认,正常路径,项目合成演示案例（虚构商户/虚构用户）,合成案例，无原文定位（见 derived_from_rule_ids）
+CB-CASE-067,SYNTHETIC_DEMO,合成：提案因 case revision 过期被拒绝,Consumer Dispute,4853,Mastercard,3C 电商,线上,实物,充分,正常,抗辩,待定,生成提案+用户确认,异常路径,项目合成演示案例（虚构商户/虚构用户）,合成案例，无原文定位（见 derived_from_rule_ids）
+CB-CASE-068,SYNTHETIC_DEMO,合成：上游提交超时后幂等重试成功,Consumer Dispute,13.1,Visa,服装电商,线上,实物,充分,正常,抗辩,待定,只读建议,异常路径（自动恢复）,项目合成演示案例（虚构商户/虚构用户）,合成案例，无原文定位（见 derived_from_rule_ids）
+CB-CASE-069,SYNTHETIC_DEMO,合成：跨租户访问必须被阻断（安全测试）,Security,N/A,N/A（产品安全）,通用（安全）,通用,其他,不适用（安全/规则用例）,未说明,信息不足,未说明,安全拦截,安全路径,项目合成演示案例（虚构商户/虚构用户）,合成案例，无原文定位（见 derived_from_rule_ids）
+CB-CASE-070,SYNTHETIC_DEMO,合成：规则版本变化但历史快照不变,Consumer Dispute,4853/4855,Mastercard,电商,线上,其他,充分,正常,条件性,待定,只读建议,正常路径,项目合成演示案例（虚构商户/虚构用户）,合成案例，无原文定位（见 derived_from_rule_ids）
+CB-CASE-071,SYNTHETIC_DEMO,合成：路演开场故事——友好欺诈（账单描述不清）,Fraud,10.4,Visa,原创设计零售,线上,其他,充分,正常,抗辩,商户胜,需要人工确认,正常路径,项目合成演示案例（虚构商户/虚构用户）,合成案例，无原文定位（见 derived_from_rule_ids）
+CB-CASE-072,SYNTHETIC_DEMO,合成：退款未到账（seed 数据）,Consumer Dispute,13.6,Visa,美妆电商,线上,其他,充分,正常,抗辩,待定,需要人工确认,正常路径,项目合成演示案例（虚构商户/虚构用户）,合成案例，无原文定位（见 derived_from_rule_ids）
+CB-CASE-073,SYNTHETIC_DEMO,合成：重复扣款（seed 数据）,Processing Error,4834,Mastercard,运动电商,线上,其他,充分,正常,接受,商户接受,需要人工确认,正常路径,项目合成演示案例（虚构商户/虚构用户）,合成案例，无原文定位（见 derived_from_rule_ids）
+CB-CASE-074,SYNTHETIC_DEMO,合成：货不对板抗辩（seed 数据，4853）,Consumer Dispute,4853,Mastercard,家居电商,线上,其他,充分,正常,抗辩,待定,需要人工确认,正常路径,项目合成演示案例（虚构商户/虚构用户）,合成案例，无原文定位（见 derived_from_rule_ids）
