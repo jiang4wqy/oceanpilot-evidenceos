@@ -1,0 +1,31 @@
+{
+  "checks": [
+    "distinct merchant / OP list pages without auto-selected AI",
+    "new case automatically appears in both open list pages",
+    "dedicated case URLs / merchant excludes operational actions",
+    "OP → merchant auto sync preserves draft and invalidates old confirmation",
+    "merchant evidence registration / send to OP synchronizes without refresh",
+    "risk review feedback appears in merchant tasks automatically",
+    "risk PASS → package → independent supervisor freeze → mock upstream receipt",
+    "upstream result → independent reconciliation → merchant notice → closure",
+    "per-case / per-side conversations and draft restoration through navigation, back and reload",
+    "offline reconnect catches up using durable cursor",
+    "390px merchant page has no horizontal overflow"
+  ],
+  "synchronization_ms": [
+    202,
+    277,
+    326,
+    344,
+    326,
+    400,
+    286,
+    246,
+    184,
+    355,
+    38
+  ],
+  "errors": [],
+  "case_id": "OPV2-f7764c76bce923e2",
+  "completed": true
+}

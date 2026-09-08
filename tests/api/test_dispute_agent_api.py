@@ -104,6 +104,57 @@ def comment(client, case, *, command_id=None):
     return client.post("/api/v2/commands", headers=headers(), json=payload), payload
 
 
+def test_same_case_ai_messages_and_activity_are_private_to_each_audience(stack):
+    client, _ = stack
+    case = intake(client)
+    for role, audience in (("OPERATOR", "OPERATIONS"), ("MERCHANT", "MERCHANT")):
+        response = client.post(
+            path(case, "/messages"),
+            headers=headers(role),
+            json={"message": f"PRIVATE-{audience}", "expected_revision": case["revision"]},
+        )
+        assert response.status_code == 200, response.text
+        result = response.json()
+        assert result["audience"] == audience
+        assert result["scope"] == {"case_id": case["id"], "audience": audience}
+    for role, audience in (("OPERATOR", "OPERATIONS"), ("MERCHANT", "MERCHANT")):
+        response = client.get(path(case), headers=headers(role))
+        assert response.status_code == 200, response.text
+        result = response.json()
+        assert result["scope"] == {"case_id": case["id"], "audience": audience}
+        assert [item["message"] for item in result["conversations"]] == [f"PRIVATE-{audience}"]
+        assert all(item["source"] == "MODEL" for item in result["conversations"])
+    other_case = intake(client)
+    for role in ("OPERATOR", "MERCHANT"):
+        assert client.get(path(other_case), headers=headers(role)).json()["conversations"] == []
+
+
+def test_http_cannot_choose_another_audience_or_return_internal_drafts_to_merchant(stack):
+    client, _ = stack
+    case = intake(client)
+    response = client.post(
+        path(case, "/messages"),
+        headers=headers("MERCHANT"),
+        json={
+            "message": "读取运营对话",
+            "expected_revision": case["revision"],
+            "audience": "OPERATIONS",
+        },
+    )
+    assert response.status_code == 422
+    response = client.post(
+        path(case, "/run"),
+        headers=headers("MERCHANT"),
+        json={"expected_revision": case["revision"]},
+    )
+    assert response.status_code == 200, response.text
+    result = response.json()
+    assert result["audience"] == "MERCHANT"
+    assert result["proposals"] == []
+    assert "review_brief" not in response.text
+    assert "商户答复草稿" in result["run"]["prepared"]["response_draft"]
+
+
 def test_accepted_commands_automatically_record_current_agent_activity(stack):
     client, model = stack
     case = intake(client)
@@ -329,8 +380,24 @@ def test_messages_call_injected_model_and_preserve_tool_source_provenance(tmp_pa
         assert result["provider"] == client.app.state.agent_runtime["provider"]
         assert result["model"] == "synthetic-injected-v2"
         assert result["source_citations"]
-        sources = {source["source_id"] for source in result["source_citations"]}
-        assert sources == {case["rule_snapshot"]["source_id"]}
+        case_sources = {
+            source["source_id"]
+            for source in result["source_citations"]
+            if source["scope"] == "CASE_RULE_SNAPSHOT"
+        }
+        assert case_sources == {case["rule_snapshot"]["source_id"]}
+        reference_sources = {
+            source["source_id"]
+            for source in result["source_citations"]
+            if source["scope"] == "REFERENCE_KNOWLEDGE"
+        }
+        assert reference_sources == {"SRC-01", "SRC-03"}
+        assert result["knowledge_retrieval"]["manifest"]["reference_case_count"] == 62
+        assert client.app.state.disputes.case_library is client.app.state.dispute_case_library
+        assert (
+            client.app.state.dispute_agent.knowledge_provider
+            is client.app.state.dispute_case_library
+        )
         assert all(p["expected_revision"] == case["revision"] for p in result["proposals"])
         assert current_case(client, case) == case
         assert activity(client, case)["conversations"]

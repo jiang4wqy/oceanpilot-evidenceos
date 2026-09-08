@@ -56,3 +56,18 @@ Agent 由案件事件观察、持久化工具运行与提案、可选真实模�
 ## 企业后续确认边界
 
 各渠道 OP 精确角色、真实上游事件 schema、商户授权与无回复处置、正式规则/SLA/延期权利、提交和回执语义、账本费用与核对口径仍待企业确认。比赛代码以明确 Mock 或 NEEDS_CONFIRMATION 表达；不得将演示结果宣称为生产认证、真实提交、真实资金结算或胜诉率改善。
+
+
+## 双端独立案件页与来源案例库
+
+商户与运营分别使用 `/v2/merchant/cases/{id}` 和 `/v2/operations/cases/{id}`；根入口仅显示列表。旧 `?case=` 地址会规范化到独立案件页。OceanPilot 嵌入案件页，按案件与 `MERCHANT/OPERATIONS` 对话范围保存上下文；旧商户对话迁到商户侧，旧自动分析和未知角色默认保留在运营侧。确定性规则观察共享，商户读取时移除运营内部草稿。
+
+`GET /api/v2/updates` 使用 SQLite 已提交的案件审计、Agent 运行及本端对话位置返回增量游标。长轮询不持有数据库事务等待，不调用模型；重启和断线后可以续读。前端应用变化后才推进游标；模型 pending 状态单独短轮询收尾。远端更新保留输入，并使旧版人工确认失效。
+
+当前默认参考数据来自仓库 `docs/chargeback-case-library/03_case_library.json` 和 `06_seed_cases.json`：62 条参考、28 条模板。最高编号 074 不等于实际条数。完整源数据与 SHA 清单打包进 wheel，adapter 返回独立副本并校验资源哈希。来源性质、原核验状态、冲突与页码保留；运行态参考不自动成为生产规则。
+
+运营目录 `/v2/operations/library` 展示实际资料；26 条 Visa/Mastercard 模板可通过 `INTAKE.case_template_id` 创建明确确认的演练交易。Amex 与产品安全模板仅保留预览。来源快照与用户填写的演练交易字段分别保存。模板建案及后续阶段不继承 Golden Demo 的六条 Mock 规则和默认时限，需风控确认当前适用的权利、证据与明确期限。
+
+Agent 按当前卡组织、原因码检索指南参考，把 `REFERENCE_KNOWLEDGE` 与 `CASE_RULE_SNAPSHOT` 引用分开。新工具运行和每次对话保存真实检索记录；历史运行保持不变。现有六条 Mock fixture 继续服务 A–D Golden Demo，不代表参考库仅有六条。
+
+案例库 provider 可通过同一检索接口替换，真实交易接入沿用独立的建案流程；旧案来源与规则快照不随新资料静默变化。现有 FastAPI 架构保留，未迁移到 Sites 的 JavaScript Workers，也未创建独立的 Figma 文件或公开站点。

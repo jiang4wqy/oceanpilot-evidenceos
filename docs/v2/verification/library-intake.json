@@ -1,0 +1,22 @@
+{
+  "completed": true,
+  "case_id": "OPV2-3d8645dc737465ab",
+  "template_id": "CB-CASE-041",
+  "source_status": "NEEDS_CONFIRMATION",
+  "case_rule_status": "NEEDS_CONFIRMATION",
+  "deadline": null,
+  "retrieved_ids": [
+    "CB-CASE-041",
+    "CB-CASE-026",
+    "CB-CASE-060",
+    "CB-CASE-063",
+    "CB-CASE-065"
+  ],
+  "checks": [
+    "empty missing transaction amount/currency require explicit input",
+    "template creates independent case URL with immutable source snapshot",
+    "guideline source does not silently inherit Mock SLA",
+    "Agent actually retrieves corpus and exposes retrieval count"
+  ],
+  "errors": []
+}

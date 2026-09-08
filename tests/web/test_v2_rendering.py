@@ -116,7 +116,7 @@ def test_untrusted_case_content_is_escaped_in_rendered_detail():
 OceanV2.state.current={...sample,merchant_id:'<img src=x onerror=alert(1)>'};
 OceanV2.state.plan={revision:2,summary:'<script>bad()</script>',readiness:{percent:40},
  next_action:{action:'REGISTER_EVIDENCE',reason:'Safe'},blockers:[]};
-OceanV2.renderDetail();
+OceanV2.state.isCasePage=true;OceanV2.renderDetail();
 const output=node('caseDetail').innerHTML;
 assert.match(output,/&lt;img/);assert.match(output,/&lt;script&gt;/);
 assert.equal(output.includes('<img src=x'),false);
@@ -142,6 +142,7 @@ def test_late_case_response_cannot_replace_current_selection():
     run_js("""
 const pending=new Map();
 global.fetch=url=>new Promise(resolve=>pending.set(url,resolve));
+OceanV2.state.isCasePage=true;
 const first=OceanV2.openCase('a',{withAgent:false}),second=OceanV2.openCase('b',{withAgent:false});
 pending.get('/api/v2/cases/b')(ok({...sample,id:'b',revision:8}));
 pending.get('/api/v2/cases/b/plan')(ok({case_id:'b',revision:8}));await second;
@@ -246,7 +247,8 @@ def test_first_agent_render_handles_real_absent_textarea_before_case_selection()
 document.getElementById=id=>id==='agentMessage'?null:node(id);
 OceanV2.state.current=null;
 OceanV2.renderAgentPanel();
-assert.match(node('agentPanel').innerHTML,/选择一个争议案件/);
+assert.equal(node('agentPanel').hidden,true);
+assert.equal(node('agentPanel').innerHTML,'');
 """)
 
 
@@ -267,7 +269,7 @@ assert.match(output,/已完成 1 项工具检查/);
 assert.match(output,/DEEPSEEK · 实时回答/);
 assert.match(output,/actual-model/);
 assert.match(output,/&lt;iframe/);assert.equal(output.includes('<iframe'),false);
-assert.equal(ui.state.agentDrafts['a:OPERATOR'],'尚未发送的商户沟通草稿');
+assert.equal(ui.state.agentDrafts['a:operations:synthetic-merchant-001'],'尚未发送的商户沟通草稿');
 assert.equal(ui.acceptAgentActivity({...activity,summary:'wrong'},'b:2:OPERATOR'),false);
 assert.equal(ui.state.activity.summary,undefined);
 """)
@@ -341,4 +343,114 @@ await pending;
 assert.equal(ui.state.current.id,'b');assert.equal(ui.state.role,'MERCHANT');
 assert.equal(ui.state.activity,null);
 assert.equal(node('agentPanel').innerHTML.includes('A private reply'),false);
+""")
+
+
+def test_list_page_does_not_select_a_case_or_start_an_unrelated_conversation():
+    run_js("""
+const calls=[];
+global.fetch=async url=>{calls.push(url);return ok(url.endsWith('/cases')?
+ {cases:[sample]}:{actions:[]});};
+await OceanV2.refresh();
+assert.equal(OceanV2.state.current,null);
+assert.equal(OceanV2.state.activity,null);
+assert.equal(calls.some(url=>url.includes('/agent')||url.includes('/plan')),false);
+assert.equal(OceanV2.caseHref('a/b'),'/v2/operations/cases/a%2Fb');
+""")
+
+
+def test_remote_update_preserves_input_and_invalidates_old_confirmation():
+    run_js("""
+const ui=OceanV2;ui.state.current=sample;ui.state.caseId='a';ui.state.isCasePage=true;
+ui.state.dialog={case_id:'a',revision:2,action:'COMMENT'};
+node('agentMessage').dataset={case:'a',role:'OPERATOR'};
+node('agentMessage').value='还没有发送的本案问题';
+node('dialogFields').innerHTML='<textarea>未提交的协作说明</textarea>';
+node('confirmCheckbox').checked=true;
+global.fetch=async url=>ok(url.endsWith('/cases')?{cases:[{...sample,revision:3}]}:
+ url.endsWith('/plan')?{revision:3}:url.endsWith('/agent')?
+ {case_revision:3,conversations:[],run:null}:{...sample,revision:3});
+await ui.reconcileUpdates();
+assert.equal(ui.state.current.revision,3);
+assert.equal(ui.state.dialog.stale,true);
+assert.equal(node('confirmCheckbox').checked,false);
+assert.equal(node('submitDialog').disabled,true);
+assert.match(node('dialogFields').innerHTML,/未提交的协作说明/);
+assert.equal(ui.state.agentDrafts['a:operations:synthetic-merchant-001'],'还没有发送的本案问题');
+assert.equal(stored.get('oceanpilot.v2.draft.a:operations:synthetic-merchant-001'),'还没有发送的本案问题');
+""")
+
+
+def test_new_ai_reply_updates_without_changing_case_revision_or_dialog():
+    run_js("""
+const ui=OceanV2;ui.state.current=sample;ui.state.caseId='a';ui.state.isCasePage=true;
+ui.state.dialog={case_id:'a',revision:2,action:'COMMENT'};
+ui.state.plan={revision:2};
+node('caseDetail').innerHTML='existing detail';
+global.fetch=async url=>ok(url.endsWith('/cases')?{cases:[sample]}:
+ url.endsWith('/plan')?{revision:2}:url.endsWith('/agent')?
+ {case_revision:2,conversations:[{answer:'新的本案分析',source:'DETERMINISTIC'}]}:sample);
+await ui.reconcileUpdates();
+assert.equal(ui.state.current.revision,2);
+assert.equal(ui.state.dialog.stale,undefined);
+assert.equal(node('caseDetail').innerHTML,'existing detail');
+assert.match(node('agentPanel').innerHTML,/新的本案分析/);
+""")
+
+
+def test_chat_pending_is_released_when_remote_case_advances_before_model_reply():
+    run_js("""
+const ui=OceanV2;ui.state.current=sample;
+let resolveReply;
+global.fetch=url=>url.endsWith('/messages')?new Promise(resolve=>resolveReply=resolve):
+ Promise.resolve(ok({case_revision:3,conversations:[]}));
+const request=ui.sendAgentMessage('请分析这个案件');
+ui.state.current={...sample,revision:3};
+resolveReply(ok({answer:'过时的答案',case_revision:2}));await request;
+assert.equal(ui.state.agentBusy,false);
+assert.equal(ui.state.agentDrafts['a:operations:synthetic-merchant-001'],'请分析这个案件');
+assert.equal(node('agentPanel').innerHTML.includes('过时的答案'),false);
+""")
+
+
+def test_case_page_never_falls_back_to_another_accessible_case():
+    run_js("""
+const ui=OceanV2;ui.state.caseId='missing';ui.state.isCasePage=true;
+global.fetch=async url=>url.includes('/missing')?
+ {ok:false,status:404,json:async()=>({detail:'Case not found'})}:
+ ok(url.endsWith('/cases')?{cases:[sample]}:{actions:[]});
+await ui.refresh();
+assert.equal(ui.state.current,null);
+assert.equal(ui.state.caseId,'missing');
+assert.match(node('globalNotice').innerHTML,/Case not found/);
+""")
+
+
+def test_old_agent_get_releases_loading_after_remote_revision_changes():
+    run_js("""
+const ui=OceanV2;ui.state.current=sample;
+let finish;global.fetch=()=>new Promise(resolve=>finish=resolve);
+const reading=ui.refreshAgent();
+assert.equal(ui.state.agentLoading,true);
+ui.state.current={...sample,revision:3};
+finish(ok({case_revision:2,run:{case_revision:2},conversations:[]}));await reading;
+assert.equal(ui.state.agentLoading,false);
+assert.equal(ui.state.activity,null);
+""")
+
+
+def test_old_role_message_cannot_release_a_new_message_request():
+    run_js("""
+const ui=OceanV2;ui.state.current=sample;
+const replies=[];global.fetch=url=>url.endsWith('/messages')?
+ new Promise(resolve=>replies.push(resolve)):
+ Promise.resolve(ok({case_revision:2,conversations:[]}));
+const first=ui.sendAgentMessage('运营问题');
+ui.state.role='RISK_OFFICER';ui.state.agentBusy=false;
+const second=ui.sendAgentMessage('风控问题');
+replies[0](ok({answer:'旧运营答案'}));await first;
+assert.equal(ui.state.agentBusy,true);
+assert.equal(ui.state.agentDrafts['a:operations:synthetic-merchant-001'],'风控问题');
+replies[1](ok({answer:'新风控答案'}));await second;
+assert.equal(ui.state.agentBusy,false);
 """)

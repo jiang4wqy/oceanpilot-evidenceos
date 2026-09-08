@@ -50,6 +50,7 @@ from oceanpilot.api.demo import router as demo_router
 from oceanpilot.api.dependencies import RequestContext
 from oceanpilot.api.dispute_feishu import initialize_dispute_feishu
 from oceanpilot.api.dispute_feishu import router as dispute_feishu_router
+from oceanpilot.api.dispute_updates import router as dispute_updates_router
 from oceanpilot.api.disputes import dispute_error_handler
 from oceanpilot.api.disputes import router as disputes_router
 from oceanpilot.api.errors import ProblemDetails, register_exception_handlers
@@ -139,24 +140,33 @@ def create_app(
         initialize_chargeback_schema(chargeback_db_path)
         initialize_workspace_schema(chargeback_db_path)
         initialize_rule_database(rules_db_path)
+        from oceanpilot.adapters.knowledge.dispute_case_library import DisputeCaseLibrary
         from oceanpilot.adapters.persistence.dispute_agent import SQLiteDisputeAgentStore
+        from oceanpilot.adapters.persistence.dispute_updates import SQLiteDisputeUpdateReader
         from oceanpilot.adapters.persistence.disputes import SQLiteDisputeStore
         from oceanpilot.application.dispute_agent import DisputeAgentService
         from oceanpilot.application.dispute_agent_events import DisputeAgentEvents
+        from oceanpilot.application.dispute_updates import DisputeUpdatesService
         from oceanpilot.application.disputes import DisputeService
         from oceanpilot.domain.dispute_rules import case_plan, match_rule
 
+        app.state.dispute_case_library = DisputeCaseLibrary()
         app.state.disputes = DisputeService(
             SQLiteDisputeStore(chargeback_db_path),
             rule_matcher=match_rule,
             planner=case_plan,
             upstream_mode=os.getenv("OCEANPILOT_V2_UPSTREAM_MODE", "mock"),
+            case_library=app.state.dispute_case_library,
         )
         app.state.dispute_agent = DisputeAgentService(
             SQLiteDisputeAgentStore(chargeback_db_path),
             app.state.disputes,
             model=app.state.v2_model_provider,
             model_runtime=app.state.agent_runtime,
+            knowledge_provider=app.state.dispute_case_library,
+        )
+        app.state.dispute_updates = DisputeUpdatesService(
+            SQLiteDisputeUpdateReader(chargeback_db_path)
         )
         app.state.dispute_agent_events = DisputeAgentEvents(
             app.state.dispute_agent,
@@ -316,6 +326,7 @@ def create_app(
     application.include_router(workspace_router)
     application.include_router(disputes_router)
     application.include_router(dispute_feishu_router)
+    application.include_router(dispute_updates_router)
 
     def openapi_schema() -> dict[str, object]:
         if application.openapi_schema is None:

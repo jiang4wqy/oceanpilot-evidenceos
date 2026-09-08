@@ -1,12 +1,12 @@
 # OceanPilot V2
 
-**商户客户端 × OceanPilot 案件智能体 × OceanPayment 争议运营：三方围绕同一个案件协作。**
+**两个操作端、三个参与角色：商户客户端与 OceanPayment 运营端分别嵌入 OceanPilot 案件智能体。**
 
 开发分支：`oceanpilot-v2`，从稳定 `master` 的 `250e7d9` 创建。V2 直接在此分支集成与验收；当前不创建 PR、不合并 master。master 保留原稳定比赛 Demo，后续是否合并单独决定。
 
 上游通知由 OP 受理；OceanPilot 在案件变化后检查规则、材料、期限和相似案件，准备沟通稿与绑定版本的操作提案。商户在客户端确认 Accept / Contest 并提供事实和证据，OceanPayment 完成人工审核、包终审、上游处理与资金核对。两端都能看到智能体做过的工作、待确认事项和持续对话。
 
-> 比赛演示边界：所有案例和规则均为 **SYNTHETIC_DEMO**，上游仅 **Mock / Disabled**。金额核对是合成账本记录，不执行退款、扣款或真实提交。Header 角色用于本地演示，不是生产身份认证。材料仅登记合成元数据，未读取真实文件正文。Feishu 签名 callback seam 已实现，真实租户联调未完成，未发送外部消息。
+> 比赛演示边界：业务演练为合成交易；指南案例库保留原文示例、规则衍生和合成资料的原有分类及来源，不能自动当作生产规则。上游仅 **Mock / Disabled**。金额核对是合成账本记录，不执行退款、扣款或真实提交。Header 角色用于本地演示，不是生产身份认证。材料仅登记合成元数据，未读取真实文件正文。Feishu 签名 callback seam 已实现，真实租户联调未完成，未发送外部消息。
 
 ## 运行
 
@@ -23,12 +23,23 @@ PYTHONPATH=src OCEANPILOT_DB_PATH=work/v2.db \
 | 入口 | 作用 |
 |---|---|
 | `/` → `/v2/operations` | OceanPayment 争议运营：案件队列、Agent 协作、复核、提交、结果、资金 |
-| `/v2/merchant` | OceanPilot 商户客户端：我的待办、案件对话、意愿确认、补证与处理反馈 |
+| `/v2/merchant` | 商户自己的案件列表与待办 |
+| `/v2/merchant/cases/{id}` | 商户独立案件页、补证决定与本端 AI 对话 |
+| `/v2/operations/cases/{id}` | 运营独立案件页、审核提交与内部 AI 对话 |
+| `/v2/operations/library` | 62 条指南参考、28 个模板；26 个适用当前双卡演练建案 |
 | `/v2/governance` | 规则来源、角色权限、集成状态、人工审核知识 |
 | `/docs` | V2 严格命令 HTTP 合同及兼容 V1 API |
 | `/demo`、`/business`、`/admin` | 保留的 V1 历史演示和运维入口 |
 
-工作台中的“新建演示”由 OP 角色生成独立样例，保留旧样例和数据库历史。切换演示角色时，API 会重新检查当前身份、案件所属商户和命令版本。
+工作台中的“演示案例”由 OP 角色生成独立样例，保留旧样例和数据库历史。切换演示角色时，API 会重新检查当前身份、案件所属商户和命令版本。
+
+## 指南案例与双端协作
+
+优先从“Visa / Mastercard 案例库”查阅已上传的提纯资料。文件编号到 074，实际去重后 62 条；每条保留来源、页码、核验状态和冲突。选择可用模板并确认交易字段后，生成有来源快照的独立演练案件。OceanPilot 在新检查及对话中实际检索同卡组织、同原因码的案例依据。
+
+两端通过持久游标自动同步案件与各自的 AI 记录，保留未发送输入。商户对话与运营内部对话分开保存；需要共享的内容通过案件协作消息发送。远端变更会使旧确认失效，不能沿用旧版本执行。
+
+[双端操作指南](docs/v2/dual-workspace-guide.md) · [本轮验收：1840 项通过](docs/v2/dual-surface-acceptance.md) · [来源资料](docs/chargeback-case-library/03_case_library.json)
 
 ## 四个 Golden Demo
 

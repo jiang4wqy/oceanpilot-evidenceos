@@ -1,0 +1,30 @@
+{
+  "environment": "http://127.0.0.1:8012",
+  "mode": "read-only",
+  "results": [
+    {
+      "width": 1440,
+      "pageWidth": 1440,
+      "reference": "CB-CASE-041",
+      "stats": "62\n条案例参考\n按实际目录计数\n28\n个演练模板\n26 个支持当前双卡建案\n34\n条原文示例\n保留出处，仅供阅读",
+      "citations": [
+        "SRC-01 · Dispute Management Guidelines for Visa Merchants June 2024\nSRC-01 P40-41\nmerchants-dispute-management-guidelines.pdf\n标题标注 June 2024；元数据创建 2023-06-03、修改 2024-08-01",
+        "SRC-03 · 卡组织争议处理规则与争议案例资料汇总（修订版）\nSRC-03 §5\n卡组织争议处理规则与案例映射.md\n无版本号/日期；文中含「截至 2026 年 8 月」的 VAMP 描述"
+      ],
+      "errors": [],
+      "writes": []
+    },
+    {
+      "width": 390,
+      "pageWidth": 390,
+      "reference": "CB-CASE-041",
+      "stats": "62\n条案例参考\n按实际目录计数\n28\n个演练模板\n26 个支持当前双卡建案\n34\n条原文示例\n保留出处，仅供阅读",
+      "citations": [
+        "SRC-01 · Dispute Management Guidelines for Visa Merchants June 2024\nSRC-01 P40-41\nmerchants-dispute-management-guidelines.pdf\n标题标注 June 2024；元数据创建 2023-06-03、修改 2024-08-01",
+        "SRC-03 · 卡组织争议处理规则与争议案例资料汇总（修订版）\nSRC-03 §5\n卡组织争议处理规则与案例映射.md\n无版本号/日期；文中含「截至 2026 年 8 月」的 VAMP 描述"
+      ],
+      "errors": [],
+      "writes": []
+    }
+  ]
+}

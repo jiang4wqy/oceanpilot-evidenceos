@@ -26,6 +26,7 @@ dev = [
 where = ["src"]
 
 [tool.setuptools.package-data]
+"oceanpilot.data.chargeback_case_library" = ["*.json"]
 "oceanpilot.web" = [
   "assets/*.data-uri",
   "shared/*.js",

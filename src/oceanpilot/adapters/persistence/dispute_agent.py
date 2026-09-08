@@ -6,7 +6,8 @@ from contextlib import closing
 from pathlib import Path
 from uuid import uuid4
 
-from oceanpilot.domain.dispute import DisputeError
+from oceanpilot.application.dispute_agent_ports import AUDIENCES, conversation_audience
+from oceanpilot.domain.dispute import DisputeError, require
 
 
 class SQLiteDisputeAgentStore:
@@ -34,11 +35,47 @@ class SQLiteDisputeAgentStore:
                     case_id TEXT NOT NULL,
                     case_revision INTEGER NOT NULL,
                     created_at TEXT NOT NULL,
-                    snapshot TEXT NOT NULL
+                    snapshot TEXT NOT NULL,
+                    audience TEXT NOT NULL DEFAULT 'OPERATIONS'
                 );
                 CREATE INDEX IF NOT EXISTS v2_agent_conversation_case
                     ON v2_dispute_agent_conversations(case_id, created_at);
             """)
+            # Existing conversations predate audience isolation. Migrate explicitly
+            # before any reader can query the new column; old AUTO_EVENT is internal.
+            with connection:
+                connection.execute("BEGIN IMMEDIATE")
+                columns = {
+                    row["name"]
+                    for row in connection.execute(
+                        "PRAGMA table_info(v2_dispute_agent_conversations)"
+                    )
+                }
+                if "audience" not in columns:
+                    connection.execute(
+                        "ALTER TABLE v2_dispute_agent_conversations "
+                        "ADD COLUMN audience TEXT NOT NULL DEFAULT 'OPERATIONS'"
+                    )
+                for row in connection.execute(
+                    "SELECT conversation_id, case_id, snapshot, audience "
+                    "FROM v2_dispute_agent_conversations"
+                ).fetchall():
+                    snapshot = json.loads(row["snapshot"])
+                    normalized = self._scoped_conversation(snapshot)
+                    if normalized != snapshot or row["audience"] != normalized["audience"]:
+                        connection.execute(
+                            "UPDATE v2_dispute_agent_conversations SET audience=?, snapshot=? "
+                            "WHERE conversation_id=?",
+                            (
+                                normalized["audience"],
+                                json.dumps(normalized, ensure_ascii=False),
+                                row["conversation_id"],
+                            ),
+                        )
+                connection.execute(
+                    "CREATE INDEX IF NOT EXISTS v2_agent_conversation_audience "
+                    "ON v2_dispute_agent_conversations(case_id, audience, created_at)"
+                )
 
     def _connect(self):
         connection = sqlite3.connect(self.db_path, uri=self._uri, timeout=15)
@@ -101,27 +138,45 @@ class SQLiteDisputeAgentStore:
                         return proposal
         return None
 
-    def list_conversations(self, case_id: str, limit: int = 100) -> list[dict]:
+    def list_conversations(
+        self, case_id: str, limit: int = 100, *, audience: str = "OPERATIONS"
+    ) -> list[dict]:
+        require(audience in AUDIENCES, "INVALID_AUDIENCE", "Unknown conversation audience", 422)
         with closing(self._connect()) as connection:
             rows = connection.execute(
-                "SELECT snapshot FROM v2_dispute_agent_conversations WHERE case_id=? "
+                "SELECT snapshot FROM v2_dispute_agent_conversations "
+                "WHERE case_id=? AND audience=? "
                 "ORDER BY rowid DESC LIMIT ?",
-                (case_id, limit),
+                (case_id, audience, limit),
             )
             return list(reversed([json.loads(row[0]) for row in rows]))
 
+    @staticmethod
+    def _scoped_conversation(conversation: dict) -> dict:
+        audience = conversation_audience(conversation)
+        return {
+            **conversation,
+            "audience": audience,
+            "scope": {"case_id": conversation["case_id"], "audience": audience},
+            "source": conversation.get("source") or "LEGACY",
+        }
+
     def save_conversation(self, conversation: dict) -> dict:
+        conversation = self._scoped_conversation(conversation)
         with closing(self._connect()) as connection:
             try:
                 with connection:
                     connection.execute(
-                        "INSERT INTO v2_dispute_agent_conversations VALUES (?, ?, ?, ?, ?)",
+                        "INSERT INTO v2_dispute_agent_conversations "
+                        "(conversation_id, case_id, case_revision, created_at, snapshot, audience) "
+                        "VALUES (?, ?, ?, ?, ?, ?)",
                         (
                             conversation["id"],
                             conversation["case_id"],
                             conversation["case_revision"],
                             conversation["created_at"],
                             json.dumps(conversation, ensure_ascii=False),
+                            conversation["audience"],
                         ),
                     )
             except sqlite3.Error as exc:

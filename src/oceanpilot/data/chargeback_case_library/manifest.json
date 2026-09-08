@@ -1,0 +1,18 @@
+{
+  "dataset_id": "chargeback-case-library",
+  "schema_version": "1.0",
+  "source_repository": "https://github.com/jiang4wqy/oceanpilot-evidenceos",
+  "source_commit": "250e7d904fce451e6fe72b2192cba393b717c636",
+  "source_directory": "docs/chargeback-case-library",
+  "files": [
+    {
+      "name": "03_case_library.json",
+      "sha256": "bef3c63f67052d83829a0aa27158d53dc69fa34e7c977bd97cf7c37ab247be9d"
+    },
+    {
+      "name": "06_seed_cases.json",
+      "sha256": "4564e454feeab61e92cde28e750546b5fe1f34dae4b619c575c44f2111123521"
+    }
+  ],
+  "boundary": "Byte-identical extracted reference data; no active dispute or production rule import."
+}

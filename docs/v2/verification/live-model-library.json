@@ -1,0 +1,170 @@
+{
+  "checked_at": "2026-09-08T15:36:28.246218+00:00",
+  "scenario": "SYNTHETIC_DEMO_B",
+  "external_collaboration_sent": false,
+  "background_model_events_enabled": false,
+  "case_library_integration": true,
+  "results": [
+    {
+      "audience": "MERCHANT",
+      "http_status": 200,
+      "elapsed_seconds": 7.13,
+      "source": "MODEL",
+      "provider": "DEEPSEEK",
+      "model": "deepseek-v4-flash",
+      "live_model_success": true,
+      "scope_matches": true,
+      "answer_summary": "好的，我理解您的问题。作为本案的**商户**，您的职责是确认事实、提供真实材料，并做出接受（Accept）或抗辩（Contest）的商业决定。\n\n根据案件状态，您**已经选择了“抗辩”（CONTEST）**，因此我们不再需要您确认这个决定，接下来重点是补充证据。\n\n**为什么目前无法提交/送审？**\n\n案件当前处于 **证据收集（EVIDENCE_COLLECTING）** 阶段，状态为 **存在提交阻碍（SUBMISSION_BLOCKERS）**。核心原因是：**抗辩所需",
+      "knowledge_retrieval_status": "COMPLETED",
+      "references": [
+        {
+          "template_id": "CB-CASE-041",
+          "evidence_level": "RULE_DERIVED",
+          "verification_status": "NEEDS_CONFIRMATION",
+          "conflict_ids": [
+            "CONFLICT-012"
+          ]
+        },
+        {
+          "template_id": "CB-CASE-026",
+          "evidence_level": "SOURCE_EXPLICIT",
+          "verification_status": "NEEDS_CONFIRMATION",
+          "conflict_ids": [
+            "CONFLICT-012"
+          ]
+        },
+        {
+          "template_id": "CB-CASE-060",
+          "evidence_level": "SYNTHETIC_DEMO",
+          "verification_status": "NEEDS_CONFIRMATION",
+          "conflict_ids": [
+            "CONFLICT-012"
+          ]
+        },
+        {
+          "template_id": "CB-CASE-063",
+          "evidence_level": "SYNTHETIC_DEMO",
+          "verification_status": "NEEDS_CONFIRMATION",
+          "conflict_ids": [
+            "CONFLICT-012"
+          ]
+        },
+        {
+          "template_id": "CB-CASE-065",
+          "evidence_level": "SYNTHETIC_DEMO",
+          "verification_status": "NEEDS_CONFIRMATION",
+          "conflict_ids": [
+            "CONFLICT-012"
+          ]
+        }
+      ],
+      "reference_source_ids": [
+        "SRC-01",
+        "SRC-03"
+      ],
+      "source_citations_present": true,
+      "answer_mentions_guideline_reference": true,
+      "answer_mentions_evidence": true,
+      "answer_mentions_conflict_or_confirmation": false,
+      "reference_answer_excerpt": "**您可以参考以下案例指引来准备材料（仅供解释参考，不替代本案审核）：**。*   参考案例 **CB-CASE-041**（Visa 13.1 规则还原）和 **CB-CASE-026**（示例案例）均指出，对于“未收到货”争议，商户需以 **物流轨迹 → 签收证明 → 收件人比对 → 签收单（POD）** 的完整证据链进行抗辩"
+    },
+    {
+      "audience": "OPERATIONS",
+      "http_status": 200,
+      "elapsed_seconds": 5.58,
+      "source": "MODEL",
+      "provider": "DEEPSEEK",
+      "model": "deepseek-v4-flash",
+      "live_model_success": true,
+      "scope_matches": true,
+      "answer_summary": "【运营视角案件梳理】\n\n**一、案件基本信息**\n- 卡组织/原因码：VISA / 13.1（商品/服务未收到）\n- 当前阶段：FORMAL_DISPUTE（正式争议）\n- 商户立场：CONTEST（抗辩）\n- 工作状态：EVIDENCE_COLLECTING（证据收集中）\n- 业务结果：UNKNOWN（未出）\n- 终局状态：NOT_FINAL\n- 资金状态：PENDING（待核对）\n- 来源类型：SYNTHETIC_DEMO（合成演示数据）\n\n**二、当前问题——证据缺口*",
+      "knowledge_retrieval_status": "COMPLETED",
+      "references": [
+        {
+          "template_id": "CB-CASE-041",
+          "evidence_level": "RULE_DERIVED",
+          "verification_status": "NEEDS_CONFIRMATION",
+          "conflict_ids": [
+            "CONFLICT-012"
+          ]
+        },
+        {
+          "template_id": "CB-CASE-026",
+          "evidence_level": "SOURCE_EXPLICIT",
+          "verification_status": "NEEDS_CONFIRMATION",
+          "conflict_ids": [
+            "CONFLICT-012"
+          ]
+        },
+        {
+          "template_id": "CB-CASE-060",
+          "evidence_level": "SYNTHETIC_DEMO",
+          "verification_status": "NEEDS_CONFIRMATION",
+          "conflict_ids": [
+            "CONFLICT-012"
+          ]
+        },
+        {
+          "template_id": "CB-CASE-063",
+          "evidence_level": "SYNTHETIC_DEMO",
+          "verification_status": "NEEDS_CONFIRMATION",
+          "conflict_ids": [
+            "CONFLICT-012"
+          ]
+        },
+        {
+          "template_id": "CB-CASE-065",
+          "evidence_level": "SYNTHETIC_DEMO",
+          "verification_status": "NEEDS_CONFIRMATION",
+          "conflict_ids": [
+            "CONFLICT-012"
+          ]
+        }
+      ],
+      "reference_source_ids": [
+        "SRC-01",
+        "SRC-03"
+      ],
+      "source_citations_present": true,
+      "answer_mentions_guideline_reference": true,
+      "answer_mentions_evidence": true,
+      "answer_mentions_conflict_or_confirmation": true,
+      "reference_answer_excerpt": "**六、参考案例说明（供解释依据，非本案已发生事实）**。参考 CB-CASE-041 / CB-CASE-026（Visa 13.1 未收到商品场景）：商户需证明\"争议交易对应的商品确实履约给了该消费者\"，证据链方向为物流轨迹→签收证明→收件人与持卡人一致性"
+    }
+  ],
+  "runtime": {
+    "mode": "DEEPSEEK_LIVE",
+    "provider": "DEEPSEEK",
+    "model": "deepseek-chat"
+  },
+  "case_library": {
+    "reference_case_count": 62,
+    "template_count": 28,
+    "source_count": 3
+  },
+  "seed_http_status": 200,
+  "case_fingerprint": "bcd43ebe9bbea624",
+  "case_revision": 4,
+  "work_status": "EVIDENCE_COLLECTING",
+  "merchant_decision": "CONTEST",
+  "seed_model_calls": 0,
+  "history_isolation": {
+    "MERCHANT": {
+      "http_status": 200,
+      "conversation_count": 1,
+      "own_reply_visible": true,
+      "other_reply_visible": false,
+      "isolated": true
+    },
+    "OPERATIONS": {
+      "http_status": 200,
+      "conversation_count": 1,
+      "own_reply_visible": true,
+      "other_reply_visible": false,
+      "isolated": true
+    }
+  },
+  "model_complete_calls": 2,
+  "business_revision_unchanged_by_chat": true,
+  "passed": true
+}

@@ -181,7 +181,16 @@
     ["CLOSED", "已关闭"],
   ];
   const surface = V2_CONFIG.surface;
+  const routeCase = decodeURIComponent(location.pathname.match(/\/cases\/([^/]+)\/?$/)?.[1] || "");
   const S = {
+    isLibraryPage: location.pathname === "/v2/operations/library",
+    caseId: routeCase,
+    isCasePage: Boolean(routeCase),
+    syncEpoch: 0,
+    syncCursor: "",
+    syncController: null,
+    syncTask: null,
+    reconcileTicket: 0,
     role:
       surface === "merchant"
         ? "MERCHANT"
@@ -194,7 +203,7 @@
     plan: null,
     governance: null,
     capabilities: null,
-    tab: surface === "merchant" ? "tasks" : "overview",
+    tab: "overview",
     queue: "ALL",
     search: "",
     stage: "ALL",
@@ -208,6 +217,7 @@
     agentIndex: {},
     agentLoading: false,
     agentBusy: false,
+    agentMessageTicket: 0,
     agentCollapsed: false,
     agentNotice: "",
     agentDrafts: {},
@@ -342,7 +352,7 @@
   }
   function actionButton(action, title, opts = {}) {
     if (!permitted(action)) return "";
-    return `<button type="button" class="button ${opts.primary ? "primary" : "secondary"} ${opts.small ? "small" : ""}" data-action="${esc(action)}"${opts.data ? ` data-command-data="${esc(JSON.stringify(opts.data))}"` : ""}>${esc(title || label(action))}</button>`;
+    return `<button type="button" class="button ${opts.primary ? "primary" : "secondary"} ${opts.small ? "small" : ""}" data-action="${esc(action)}"${opts.disabled ? " disabled" : ""}${opts.data ? ` data-command-data="${esc(JSON.stringify(opts.data))}"` : ""}>${esc(title || label(action))}</button>`;
   }
   function roleHint(action) {
     const owners = Object.entries(S.governance?.permissions || rolePermissions)
@@ -370,7 +380,10 @@
   }
   async function api(path, options = {}, actor) {
     const controller = new AbortController();
-    const { timeoutMs = 20000, ...requestOptions } = options;
+    const { timeoutMs = 20000, signal, ...requestOptions } = options;
+    const abort = () => controller.abort();
+    signal?.addEventListener("abort", abort, { once: true });
+    if (signal?.aborted) controller.abort();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
       const response = await fetch(`/api/v2${path}`, {
@@ -397,6 +410,7 @@
       throw error;
     } finally {
       clearTimeout(timer);
+      signal?.removeEventListener("abort", abort);
     }
   }
   function matchesQueue(c, queue) {
@@ -469,77 +483,126 @@
       total: required.length,
     };
   }
+  function casePageHref(c) {
+    return `/v2/${surface}/cases/${encodeURIComponent(c.id)}`;
+  }
+  function merchantSituation(c) {
+    if (c.pending_next_stage) return {
+      title: "OceanPayment 正在评估后续处理",
+      description: "当前结果仍需跟进，处理团队正在确认可用的后续阶段与要求；如需你补充材料，会在本案告知。",
+      owner: "OceanPayment", action: "查看后续处理进展", tab: "outcome",
+    };
+    const situations = {
+      MERCHANT_ACTION_REQUIRED: ["请确认如何回应这笔争议", "核对交易事实后，选择接受责任或提出抗辩。", "商户", "确认处理决定", "tasks"],
+      EVIDENCE_COLLECTING: ["请按清单准备抗辩材料", "材料提交给 OceanPayment 后，由处理团队审核并推进。", "商户", "继续准备材料", "evidence"],
+      MERCHANT_REVISION_REQUIRED: ["OceanPayment 需要你补充材料", "查看审核反馈，补齐指定材料后再次提交。", "商户", "查看补证要求", "tasks"],
+      EVIDENCE_SUBMITTED: ["材料已交给 OceanPayment", "处理团队将核对材料；如需补充，会在这里告知你。", "OceanPayment", "查看已提交材料", "evidence"],
+      OP_REVIEW: ["OceanPayment 正在审核", "你可以查看已有材料与消息，等待处理团队反馈。", "OceanPayment", "查看处理进展", "overview"],
+      READY_TO_SUBMIT: ["抗辩材料已通过审核", "OceanPayment 正在准备向上游正式提交。", "OceanPayment", "查看处理进展", "overview"],
+      SUBMISSION_PENDING_CONFIRMATION: ["等待最终提交确认", "OceanPayment 正在核对正式提交的内容。", "OceanPayment", "查看处理进展", "overview"],
+      SUBMITTED: ["OceanPayment 已提交回应", "正在等待上游处理结果，提交回执由处理团队留存。", "上游处理机构", "查看处理结果", "outcome"],
+      WAITING_UPSTREAM: ["正在等待上游结果", "收到新结果后，这个案件会自动更新。", "上游处理机构", "查看处理结果", "outcome"],
+      FINANCIAL_RECONCILIATION: ["正在核对资金影响", "争议结果与实际资金分开核对，完成后会通知你。", "OceanPayment", "查看结果与资金", "outcome"],
+      CLOSED: ["这笔争议已处理完成", "你可以回看处理结果、材料和与团队的往来。", "已完成", "查看处理结果", "outcome"],
+    };
+    const value = situations[c.work_status] || ["OceanPayment 正在准备处理要求", "处理团队正在核对规则与下一步任务，暂时无需你操作。", "OceanPayment", "查看案件", "overview"];
+    return { title: value[0], description: value[1], owner: value[2], action: value[3], tab: value[4] };
+  }
+  function caseFollowupText(c) {
+    if (c.pending_next_stage) return "待确认后续阶段";
+    if (Number(c.stage_number) > 1) return `已进入第 ${Number(c.stage_number)} 轮 · ${label(c.stage)}`;
+    if (c.finality === "FINAL_CONFIRMED") return "已终局";
+    return "等待上游确认";
+  }
+  function merchantReason(c) {
+    const reason = {
+      "10.4": "持卡人对这笔交易的授权提出异议。请核对交易收据、身份验证及授权记录。",
+      "13.1": "持卡人表示没有收到商品或服务。请核对物流、交付凭据及双方沟通记录。",
+      "4853": "这笔交易收到商品或服务相关争议。请结合具体投诉，核对履约事实及相关沟通记录。",
+    }[String(c.reason_code)];
+    return reason || "OceanPayment 收到了这笔交易的争议。请根据已确认的案件要求，核对交易事实并准备回应。";
+  }
+  function latestCaseFeedback(c) {
+    return list(c.collaboration).filter((m) => m.message && (m.role || m.actor_role) !== "MERCHANT").at(-1);
+  }
+  function merchantCanRespond(c) {
+    return ["MERCHANT_ACTION_REQUIRED", "EVIDENCE_COLLECTING", "MERCHANT_REVISION_REQUIRED"].includes(c.work_status);
+  }
+  function renderMerchantOverviewPage(c, p) {
+    const situation = merchantSituation(c);
+    const r = completeness(c);
+    const feedback = latestCaseFeedback(c);
+    const decisionActions = merchantCanRespond(c) && c.merchant_decision === "NONE"
+      ? actionButton("MERCHANT_DECISION", "提出抗辩", { primary: true, data: { decision: "CONTEST" } }) + actionButton("MERCHANT_DECISION", "接受责任", { data: { decision: "ACCEPT" } })
+      : `<button class="button primary" data-tab="${situation.tab}">${esc(situation.action)}</button>`;
+    return `<div class="customer-next"><div class="customer-next-kicker">${situation.owner === "商户" ? "现在需要你处理" : "当前处理进展"}</div><h3>${esc(situation.title)}</h3><p>${esc(situation.description)}</p><div class="action-bar">${decisionActions}</div></div><div class="customer-context-grid"><section><h3>为什么发生争议？</h3><p>${esc(merchantReason(c))}</p><small>${esc(c.scheme)} · 原因码 ${esc(c.reason_code)} · 具体材料要求以已确认规则为准</small></section><section><h3>现在由谁处理？</h3><p class="customer-owner">${esc(situation.owner)}</p><small>OceanPilot 在本案中帮助你理解要求、整理材料和准备回应。</small></section></div><dl class="customer-facts"><div><dt>你的回应期限</dt><dd>${esc(date(p?.deadlines?.merchant || c.deadlines?.merchant))}</dd></div><div><dt>你的处理决定</dt><dd>${esc(label(c.merchant_decision))}</dd></div><div><dt>已登记材料</dt><dd>${r.total ? `${r.present} / ${r.total} 项` : "等待确认材料要求"}</dd></div><div><dt>交易编号</dt><dd>${esc(c.transaction_id || "尚未提供")}</dd></div></dl>${feedback ? `<div class="customer-latest"><div class="section-heading"><h3>OceanPayment 最新消息</h3><span>${esc(date(feedback.at || feedback.created_at))}</span></div><p>${esc(feedback.message)}</p><button class="button secondary small" data-tab="collaboration">查看往来与回复 →</button></div>` : ""}`;
+  }
+  function renderMerchantTaskPage(c, p) {
+    const tasks = list(c.tasks).filter((t) => ["DECISION", "EVIDENCE", "REVISION"].includes(t.type));
+    const review = list(c.reviews).filter((r) => r.decision === "REVISION").at(-1);
+    const situation = merchantSituation(c);
+    return `${section("我的待办", situation.description)}${review && c.work_status === "MERCHANT_REVISION_REQUIRED" ? `<div class="callout"><strong>OceanPayment 的补证要求</strong>${esc(review.reason || "请按任务清单补充材料。")}</div>` : ""}<div class="customer-task-list">${tasks.map((t) => `<div class="task-row"><span class="check-mark ${t.status === "COMPLETED" ? "done" : ""}">${t.status === "COMPLETED" ? "✓" : "○"}</span><div class="row-content"><div class="row-title">${esc(label(t.type))}</div><div class="row-subtitle">${esc(t.message || (t.type === "DECISION" ? "确认你是否继续抗辩。" : "按本案清单准备相关材料。"))}</div></div>${badge(t.status)}</div>`).join("") || empty("当前没有需要你完成的任务。收到新要求后会自动更新。")}</div><div class="customer-task-deadline">你的回应期限 <strong>${esc(date(p?.deadlines?.merchant || c.deadlines?.merchant))}</strong></div><div class="action-bar">${merchantCanRespond(c) ? actionButton("MERCHANT_DECISION", c.merchant_decision === "NONE" ? "确认我的处理决定" : "查看或调整处理决定", { primary: c.merchant_decision === "NONE" }) : ""}${merchantCanRespond(c) && c.merchant_decision === "CONTEST" ? '<button class="button primary" data-tab="evidence">准备并提交材料 →</button>' : ""}${actionButton("COMMENT", "向 OceanPayment 补充说明")}</div><div class="customer-process-note">你负责决定与事实材料；OceanPayment 负责审核和向上游提交。OceanPilot 会根据本案变化更新建议。</div>`;
+  }
+  function renderMerchantEvidencePage(c, p) {
+    const checklist = list(p?.checklist);
+    const evidence = list(c.evidence);
+    const canEdit = merchantCanRespond(c) && c.merchant_decision === "CONTEST";
+    const missing = checklist.filter((i) => (i.required || i.critical) && !i.present);
+    const ready = canEdit && checklist.length && !missing.length;
+    const submit = ready
+      ? actionButton("SUBMIT_EVIDENCE", "提交材料给 OceanPayment", { primary: true })
+      : '<button class="button primary" disabled>提交材料给 OceanPayment</button>';
+    return `${section("准备抗辩材料", "每项材料对应本案的一项要求。登记引用后，OceanPilot 会重新检查清单。", canEdit ? actionButton("REGISTER_EVIDENCE", "＋ 添加材料引用", { small: true }) : "")}<p class="evidence-mode-note">本演示登记材料引用与说明，不上传或解析文件正文。</p>${checklist.map((item) => `<div class="evidence-row"><span class="check-mark ${item.present ? "done" : ""}">${item.present ? "✓" : "○"}</span><div class="row-content"><div class="row-title">${esc(item.label || item.code)} ${item.critical ? '<span class="badge amber">关键材料</span>' : ""}</div><div class="row-subtitle">${esc(item.why || "请提供能说明本案交易事实的相关记录。")}</div></div><div class="row-actions">${item.present ? badge("COMPLETED", "已登记") : badge("OPEN", "待补充")}${!item.present && canEdit ? actionButton("REGISTER_EVIDENCE", "补充", { small: true, data: { code: item.code, title: item.label || item.code } }) : ""}</div></div>`).join("") || empty("OceanPayment 尚未确认本案材料要求，请等待处理团队反馈。")}${canEdit ? `<div class="customer-submit"><div><strong>${missing.length ? `还需补充 ${missing.length} 项必要材料` : checklist.length ? "清单材料已登记，可提交团队审核" : "材料要求尚未确认"}</strong><p>提交后由 OceanPayment 审核；此操作不会向上游正式提交抗辩。</p></div>${submit}</div>` : `<div class="callout">${c.merchant_decision !== "CONTEST" ? "请先在我的待办中确认处理决定。" : "材料已交由 OceanPayment 处理。若收到补证要求，你可以继续补充。"}</div>`}${section("你已登记的材料", `${evidence.filter((e) => e.active !== false).length} 项有效材料；撤回会保留记录`)}${evidence.map((e) => `<div class="evidence-row"><span class="row-icon">▧</span><div class="row-content"><div class="row-title">${esc(e.title || e.code)} ${e.active === false ? badge("INVALIDATED", "已撤回") : ""}</div><div class="row-subtitle">${esc(e.reference)}<br>${esc(date(e.registered_at))}${e.notes ? `<br>${esc(e.notes)}` : ""}</div></div>${canEdit && e.active !== false ? actionButton("WITHDRAW_EVIDENCE", "撤回", { small: true, data: { evidence_id: e.id } }) : ""}</div>`).join("") || empty("还没有登记材料。")}`;
+  }
+  function renderMerchantFeedbackPage(c) {
+    const messages = list(c.collaboration).slice().reverse();
+    return `${section("与 OceanPayment 的往来", "这里的消息随案件同步，处理团队可以看到你的回复。", actionButton("COMMENT", "给处理团队留言", { small: true }))}${messages.map((m) => { const merchant = (m.role || m.actor_role) === "MERCHANT"; return `<div class="message ${merchant ? "from-merchant" : "from-operations"}"><header><strong>${merchant ? "商户" : "OceanPayment"}</strong><time>${esc(date(m.created_at || m.timestamp || m.at))}</time></header><p>${esc(m.message || m.text || label(m.type))}</p>${m.delivery_status ? `<div class="row-subtitle">${esc(label(m.delivery_status))}</div>` : ""}</div>`; }).join("") || empty("尚无往来消息。你可以向处理团队说明案件情况。")}`;
+  }
+  function renderMerchantOutcomePage(c) {
+    const confirmed = c.finality === "FINAL_CONFIRMED";
+    const hasResult = c.business_outcome && c.business_outcome !== "UNKNOWN";
+    const moneyDone = ["RECONCILED", "NOT_APPLICABLE"].includes(c.financial_status);
+    const moneyText = c.financial_status === "DISCREPANCY" ? "资金存在差异，OceanPayment 正在核对" : moneyDone ? label(c.financial_status) : confirmed ? "结果已确认，资金仍在核对" : "待处理结果明确后核对资金影响";
+    return `<div class="customer-result"><span class="customer-next-kicker">处理结果</span><h3>${hasResult ? esc(label(c.business_outcome)) : "尚未收到确定结果"}</h3><p>${confirmed ? "上游已确认终局结果。资金核对情况单独列在下方。" : "当前结果尚非终局，OceanPayment 会继续跟踪后续处理。"}</p>${badge(c.work_status)}</div><dl class="customer-facts"><div><dt>当前进度</dt><dd>${esc(label(c.work_status))}</dd></div><div><dt>处理阶段</dt><dd>${esc(label(c.stage))}</dd></div><div><dt>争议金额</dt><dd>${esc(money(c.amount_minor, c.currency))}</dd></div><div><dt>资金处理</dt><dd>${esc(moneyText)}</dd></div></dl>${section("已收到的处理进展")}${list(c.upstream_events).slice().reverse().map((e) => `<div class="record-row"><span class="row-icon">↙</span><div class="row-content"><div class="row-title">${esc(label(e.outcome || e.type || e.kind || "处理进展"))}</div><div class="row-subtitle">${esc(e.reason || "OceanPayment 已登记该项处理进展。")}<br>${esc(date(e.created_at || e.received_at || e.at))}</div></div></div>`).join("") || empty("收到上游结果后会显示在这里。")}<div class="action-bar">${actionButton("COMMENT", "询问处理进展")}</div>`;
+  }
   function renderMetrics() {
-    const active = S.cases.filter((c) => c.work_status !== "CLOSED").length;
-    const urgent = S.cases.filter((c) => matchesQueue(c, "URGENT")).length;
-    const review = S.cases.filter((c) => matchesQueue(c, "REVIEW")).length;
-    const financial = S.cases.filter((c) =>
-      matchesQueue(c, "FINANCIAL"),
-    ).length;
-    const values =
-      surface === "merchant"
-        ? [
-            ["待处理争议", active, "ALL", "本人所属商户的争议收件箱", "▤"],
-            [
-              "待响应",
-              S.cases.filter((c) => matchesQueue(c, "MERCHANT")).length,
-              "MERCHANT",
-              "Accept / Contest 由商户确认",
-              "◷",
-            ],
-            [
-              "待补充证据",
-              S.cases.filter((c) => matchesQueue(c, "EVIDENCE")).length,
-              "EVIDENCE",
-              "按案件规则快照准备材料",
-              "▧",
-            ],
-            [
-              "已关闭",
-              S.cases.filter((c) => c.work_status === "CLOSED").length,
-              "CLOSED",
-              "结果与资金完成后关闭",
-              "✓",
-            ],
-          ]
-        : [
-            ["处理中案件", active, "ALL", "统一案件 · 完整生命周期", "▤"],
-            ["需要关注", urgent, "URGENT", "时限风险 / 规则待确认", "◷"],
-            ["待 OP 审核", review, "REVIEW", "由授权风控审核员处理", "◇"],
-            [
-              "资金待核对",
-              financial,
-              "FINANCIAL",
-              "终局判断与资金状态独立",
-              "⇄",
-            ],
-          ];
-    $("metrics").innerHTML = values
-      .map(
-        ([title, value, queue, foot, icon]) =>
-          `<${surface === "governance" ? "div" : "button"} class="metric"${surface === "governance" ? "" : ` data-queue="${queue}"`}><div class="metric-label">${title}<span class="metric-icon">${icon}</span></div><div class="metric-value">${value}<small>件</small></div><div class="metric-foot ${queue === "URGENT" && value ? "attention" : ""}">${foot}</div></${surface === "governance" ? "div" : "button"}>`,
-      )
-      .join("");
+    const node = $("metrics");
+    node.hidden = Boolean(S.isCasePage);
+    if (node.hidden) return;
+    const count = (queue) => S.cases.filter((c) => matchesQueue(c, queue)).length;
+    const values = surface === "merchant"
+      ? [["等待我的决定", count("MERCHANT"), "MERCHANT", "确认接受责任或提出抗辩"], ["需要补充材料", count("EVIDENCE"), "EVIDENCE", "按本案要求准备材料"], ["我的全部案件", S.cases.length, "ALL", "查看所有争议与处理进度"], ["已经结束", count("CLOSED"), "CLOSED", "回看结果与处理记录"]]
+      : [["全部争议案件", S.cases.length, "ALL", "接收、抗辩、上游与资金"], ["需要关注", count("URGENT"), "URGENT", "时限风险或规则待确认"], ["等待风控审核", count("REVIEW"), "REVIEW", "材料已提交，待人工审核"], ["资金待核对", count("FINANCIAL"), "FINANCIAL", "终局结果与资金分别确认"]];
+    node.innerHTML = values.map(([title, value, queue, foot]) => `<button class="metric" data-queue="${queue}"><div class="metric-label">${title}<span class="metric-arrow">↗</span></div><div class="metric-value">${value}<small>件</small></div><div class="metric-foot ${queue === "URGENT" && value ? "attention" : ""}">${foot}</div></button>`).join("");
   }
   function renderQueue() {
-    const visible = filteredCases();
-    $("queueTitle").textContent =
-      queueViews.find((v) => v[0] === S.queue)?.[1] || "全部案件";
+    const merchant = surface === "merchant";
+    const views = merchant ? [["ALL", "我的全部案件"], ["MERCHANT", "等待我的决定"], ["EVIDENCE", "需要补充材料"], ["CLOSED", "已经结束"]] : queueViews;
+    const visible = filteredCases().slice().sort((a, b) => {
+      if (!merchant) return 0;
+      const taskOrder = (c) => merchantSituation(c).owner === "商户" ? 0 : c.work_status === "CLOSED" ? 2 : 1;
+      return taskOrder(a) - taskOrder(b) || (new Date(a.deadlines?.merchant || "9999-01-01") - new Date(b.deadlines?.merchant || "9999-01-01"));
+    });
+    $("queueTitle").textContent = views.find((v) => v[0] === S.queue)?.[1] || (merchant ? "我的案件" : "全部案件");
     $("queueCount").textContent = visible.length;
-    $("queueNav").innerHTML = queueViews
-      .map(
-        ([key, title]) =>
-          `<button class="${S.queue === key ? "active" : ""}" data-queue="${key}"><span class="queue-dot"></span>${title}<span class="count">${S.cases.filter((c) => matchesQueue(c, key)).length}</span></button>`,
-      )
-      .join("");
-    $("caseList").innerHTML = visible.length
-      ? visible
-          .map((c) => {
-            const r = completeness(c);
-            return `<button class="case-card ${c.id === S.current?.id ? "selected" : ""}" data-case="${esc(c.id)}" aria-pressed="${c.id === S.current?.id}"><div class="case-card-top"><span class="case-id">${esc(c.id)}</span>${badge(c.work_status)}</div><h3>${esc(c.merchant_id)}</h3><div class="case-card-meta"><span>${esc(c.scheme)} · ${esc(c.reason_code)}</span><span class="case-money">${esc(money(c.amount_minor, c.currency))}</span></div><div class="case-progress"><span>${esc(label(c.stage))}</span><span>${r.total ? `证据 ${r.present}/${r.total}` : "规则待确认"} · v${esc(c.revision)}</span></div></button>`;
-          })
-          .join("")
-      : `<div class="empty-state compact"><div class="empty-symbol">⌕</div>${S.cases.length ? "没有符合条件的案件。调整搜索或案件视图。" : "暂无案件。运营专员可接收上游事件，或加载合成演示案例。"}</div>`;
+    $("queueNav").innerHTML = views.map(([key, title]) => `<button class="${S.queue === key ? "active" : ""}" data-queue="${key}"><span class="queue-dot"></span>${title}<span class="count">${S.cases.filter((c) => matchesQueue(c, key)).length}</span></button>`).join("");
+    $("caseSearch").placeholder = merchant ? "搜索案件或交易编号" : "搜索案件、商户、交易或原因码";
+    if (!visible.length) {
+      $("caseList").innerHTML = `<div class="empty-state list-empty"><div class="empty-symbol">⌕</div><h3>${S.cases.length ? "没有符合条件的案件" : merchant ? "暂时没有需要处理的争议" : "暂无争议案件"}</h3><p>${S.cases.length ? "试试其他筛选条件或搜索内容。" : merchant ? "OceanPayment 发布处理要求后，你会在这里看到自己的案件与待办。" : "接收上游事件或加载合成案例后，案件会进入工作队列。"}</p></div>`;
+      return;
+    }
+    if (merchant) {
+      $("caseList").innerHTML = `<div class="merchant-case-list">${visible.map((c) => {
+        const situation = merchantSituation(c), r = completeness(c), feedback = latestCaseFeedback(c);
+        return `<a class="merchant-case-link" href="${esc(casePageHref(c))}"><div class="merchant-case-main"><div class="merchant-case-top"><span class="case-id">${esc(c.id)}</span>${badge(c.work_status, situation.owner === "商户" ? "待你处理" : label(c.work_status))}</div><h3>${esc(situation.title)}</h3><p>${esc(c.transaction_id || "交易编号待提供")} · ${esc(c.scheme)} ${esc(c.reason_code)}</p><div class="merchant-case-task"><span>${situation.owner === "商户" ? "你的下一步" : "当前进展"}</span><strong>${esc(situation.action)}</strong>${situation.owner === "商户" ? `<span class="merchant-case-deadline">截止 ${esc(date(c.deadlines?.merchant))}</span>` : `<span>由 ${esc(situation.owner)} 处理</span>`}</div>${feedback ? `<div class="merchant-case-feedback">OceanPayment：${esc(feedback.message)}</div>` : ""}</div><div class="merchant-case-aside"><strong>${esc(money(c.amount_minor, c.currency))}</strong><span>${r.total ? `材料 ${r.present} / ${r.total} 项` : "等待材料要求"}</span><span class="case-open-label">进入案件 <b>→</b></span></div></a>`;
+      }).join("")}</div>`;
+      return;
+    }
+    $("caseList").innerHTML = `<div class="operations-table-scroll"><table class="operations-case-table"><thead><tr><th>案件 / 商户</th><th>争议与金额</th><th>阶段 / 状态</th><th>商户决定</th><th>证据 / 审核</th><th>上游 / 后续阶段</th><th>资金</th><th>处理期限</th><th><span class="sr-only">打开案件</span></th></tr></thead><tbody>${visible.map((c) => {
+      const r = completeness(c), review = list(c.reviews).at(-1), submission = list(c.submissions).at(-1);
+      const financial = c.finality === "FINAL_CONFIRMED" || c.work_status === "FINANCIAL_RECONCILIATION" || list(c.financial_events).length ? badge(c.financial_status) : '<span class="table-muted">尚待结果</span>';
+      return `<tr><td><a class="table-case-link" href="${esc(casePageHref(c))}">${esc(c.id)}</a><span class="table-sub">${esc(c.merchant_id)}</span></td><td><strong>${esc(money(c.amount_minor, c.currency))}</strong><span class="table-sub">${esc(c.scheme)} · ${esc(c.reason_code)}</span></td><td>${badge(c.work_status)}<span class="table-sub">${esc(label(c.stage))}</span></td><td>${badge(c.merchant_decision)}</td><td><span>${r.total ? `${r.present} / ${r.total} 项材料` : "规则待确认"}</span><span class="table-sub">${review ? esc(label(review.decision)) : "尚无审核"}</span></td><td><span>${submission ? "已有提交回执" : "尚未正式提交"}</span><span class="table-sub">${c.business_outcome !== "UNKNOWN" ? esc(label(c.business_outcome)) + " · " : ""}${esc(caseFollowupText(c))}</span></td><td>${financial}</td><td><span>${esc(date(c.deadlines?.external || c.deadlines?.merchant))}</span><span class="table-sub">${esc(c.owner || "OceanPayment")} · v${esc(c.revision)}</span></td><td><a class="table-open-link" href="${esc(casePageHref(c))}" aria-label="打开案件 ${esc(c.id)}">→</a></td></tr>`;
+    }).join("")}</tbody></table></div>`;
   }
   function fact(key, value) {
     return `<div class="fact-row"><span>${esc(key)}</span><span>${esc(value)}</span></div>`;
@@ -660,7 +723,7 @@
             `<div class="record-row"><span class="row-icon">◇</span><div class="row-content"><div class="row-title">${esc(label(r.decision))} · ${esc(r.reviewer || r.actor || r.reviewed_by || "")}</div><div class="row-subtitle">${esc(r.reason || "")}<br>${date(r.created_at || r.reviewed_at || r.at)} · v${esc(r.revision || r.case_revision || "—")}</div></div>${badge(r.decision)}</div>`,
         )
         .join("") || empty("尚无人工审核记录。关键证据缺失时不能通过审核。")
-    }${section("证据包与最终审批", "草稿经主管确认 PII 检查后冻结；变更证据将使旧包失效")}<div class="action-bar">${actionButton("APPROVE_PACKAGE", "终审并冻结", { primary: true })}${actionButton("SUBMIT", "Mock 提交")}</div>${
+    }${section("证据包与最终审批", "草稿经主管确认 PII 检查后冻结；变更证据将使旧包失效")}<div class="action-bar">${actionButton("APPROVE_PACKAGE", "终审并冻结", { primary: true })}${actionButton("SUBMIT", "确认向上游提交（Mock）")}</div>${
       list(c.packages)
         .map(
           (pkg) =>
@@ -709,7 +772,9 @@
       ["必要任务全部完成", !openTasks.length],
       ["商户通知已完成", notified],
     ];
-    return `${section("上游结果与阶段", "结果不等于终局；非终局继续后续阶段")}<div class="two-column" style="margin-top:0"><div class="info-card">${fact("业务结果", label(c.business_outcome))}${fact("终局状态", label(c.finality))}</div><div class="info-card">${fact("当前阶段", label(c.stage))}${fact("资金状态", label(c.financial_status))}</div></div><div class="action-bar">${actionButton("RECORD_OUTCOME", "登记上游结果", { primary: true })}${actionButton("NEXT_STAGE", "开始后续阶段")}</div>${list(
+    return `${section("上诉与后续阶段", "根据上游结果核对后续权利，按实际规则确认是否继续")}
+      <div class="callout"><strong>${c.pending_next_stage ? "需要确认是否继续后续阶段" : c.stage_number > 1 ? `已进入第 ${esc(c.stage_number)} 轮 · ${esc(label(c.stage))}` : c.finality === "FINAL_CONFIRMED" ? "上游已确认终局" : "等待上游结果与后续权利确认"}</strong>${c.pending_next_stage ? "当前结果不是终局。请核对上游来源、可用后续阶段和期限，再确认新阶段。" : "后续阶段的建立依赖明确的非终局上游事件；演示不代表已向真实机构申请上诉。"}</div>
+      ${list(c.stage_history).length ? `<details><summary>查看前序阶段与结果（${list(c.stage_history).length} 轮）</summary>${list(c.stage_history).map(h => `<div class="record-row">${esc(label(h.stage))} · ${esc(label(h.business_outcome))} · ${esc(label(h.finality))}</div>`).join("")}</details>` : ""}${section("上游结果与阶段", "结果不等于终局；非终局继续后续阶段")}<div class="two-column" style="margin-top:0"><div class="info-card">${fact("业务结果", label(c.business_outcome))}${fact("终局状态", label(c.finality))}</div><div class="info-card">${fact("当前阶段", label(c.stage))}${fact("资金状态", label(c.financial_status))}</div></div><div class="action-bar">${actionButton("RECORD_OUTCOME", "登记上游结果", { primary: true })}${actionButton("NEXT_STAGE", "确认并进入后续阶段", { disabled: !c.pending_next_stage })}</div>${list(
       c.upstream_events,
     )
       .map(
@@ -733,59 +798,21 @@
     }`;
   }
   function renderDetail() {
-    const c = S.current;
+    const target = $("caseDetail"), c = S.current;
+    target.hidden = !S.isCasePage;
+    if (!S.isCasePage) { target.innerHTML = ""; return; }
     if (!c) {
-      $("caseDetail").innerHTML =
-        `<div class="empty-state"><div class="empty-symbol">◈</div><h2>每一个决定，都有上下文。</h2><p>${surface === "merchant" ? "你的争议任务与准备清单将显示在这里。" : "加载一个合成演示案例，或接收上游事件，开始完整争议流程。"}</p>${permitted("INTAKE") ? '<button class="button primary" data-demo>加载演示案例 →</button>' : ""}</div>`;
+      target.innerHTML = `<div class="empty-state"><div class="empty-symbol">◈</div><h2>正在读取这个案件</h2><p>案件详情与 OceanPilot 会在读取完成后显示。</p><a class="button secondary" href="/v2/${surface}">返回案件列表</a></div>`;
       return;
     }
-    const p = S.plan;
-    const renderers = {
-      overview: () => renderOverview(c, p),
-      tasks: () =>
-        surface === "merchant" ? renderMerchantTasks(c, p) : renderTasks(c),
-      evidence: () => renderEvidence(c, p),
-      agent: () => renderAgent(c, p),
-      collaboration: () => renderCollaboration(c),
-      review: () => renderReview(c),
-      outcome: () => renderOutcome(c),
-      audit: () => renderAudit(c),
-    };
-    const visibleTabs =
-      surface === "merchant"
-        ? [
-            ["tasks", "我的待办"],
-            ["evidence", "准备证据"],
-            ["collaboration", "协作反馈"],
-            ["outcome", "处理结果"],
-          ]
-        : tabs;
-    if (!visibleTabs.some(([key]) => key === S.tab))
-      S.tab = surface === "merchant" ? "tasks" : "overview";
-    const dimensions =
-      surface === "merchant"
-        ? [
-            ["当前进度", c.work_status],
-            ["你的决定", c.merchant_decision],
-            ["处理结果", c.business_outcome],
-          ]
-        : [
-            ["争议阶段", c.stage],
-            ["工作状态", c.work_status],
-            ["商户决定", c.merchant_decision],
-            ["业务结果", c.business_outcome],
-            ["终局状态", c.finality],
-            ["资金状态", c.financial_status],
-          ];
-    $("caseDetail").innerHTML =
-      `<div class="detail-header"><button class="mobile-back" data-back>← 返回案件列表</button><div class="detail-topline"><span class="case-id">${esc(c.id)}</span><span>案件版本 v${esc(c.revision)} · ${esc(c.source_type || "SYNTHETIC_DEMO")}</span></div><div class="detail-title"><h2>${surface === "merchant" ? "我的争议案件" : esc(c.merchant_id)}</h2><div class="detail-amount"><small>${esc(c.currency)}</small>${esc(money(c.amount_minor, c.currency))}</div></div><div class="case-facts"><span>卡组织 <strong>${esc(c.scheme)}</strong></span><span>原因码 <strong>${esc(c.reason_code)}</strong></span>${surface === "merchant" ? `<span>处理团队 <strong>OceanPayment</strong></span>` : `<span>渠道 <strong>${esc(c.channel)}</strong></span><span>案件负责人 <strong>${esc(c.owner || "OceanPayment")}</strong></span>`}</div></div><div class="dimension-strip">${dimensions
-        .map(
-          ([key, value]) =>
-            `<div class="dimension"><label>${key}</label>${badge(value)}</div>`,
-        )
-        .join(
-          "",
-        )}</div><nav class="detail-tabs" aria-label="案件详情">${visibleTabs.map(([key, title]) => `<button class="detail-tab ${S.tab === key ? "active" : ""}" data-tab="${key}" aria-current="${S.tab === key ? "page" : "false"}">${title}</button>`).join("")}</nav><div class="detail-content">${(renderers[S.tab] || renderers.overview)()}</div>`;
+    const p = S.plan, merchant = surface === "merchant";
+    const renderers = merchant
+      ? { overview: () => renderMerchantOverviewPage(c, p), tasks: () => renderMerchantTaskPage(c, p), evidence: () => renderMerchantEvidencePage(c, p), collaboration: () => renderMerchantFeedbackPage(c), outcome: () => renderMerchantOutcomePage(c) }
+      : { overview: () => renderOverview(c, p), tasks: () => renderTasks(c), evidence: () => renderEvidence(c, p), agent: () => renderAgent(c, p), collaboration: () => renderCollaboration(c), review: () => renderReview(c), outcome: () => renderOutcome(c), audit: () => renderAudit(c) };
+    const visibleTabs = merchant ? [["overview", "案件概况"], ["tasks", "我的待办"], ["evidence", "抗辩材料"], ["collaboration", "与运营沟通"], ["outcome", "结果与资金"]] : tabs;
+    const activeTab = visibleTabs.some(([key]) => key === S.tab) ? S.tab : "overview";
+    const dimensions = merchant ? [["当前进度", c.work_status], ["我的决定", c.merchant_decision]] : [["争议阶段", c.stage], ["工作状态", c.work_status], ["商户决定", c.merchant_decision], ["业务结果", c.business_outcome], ["终局状态", c.finality], ["资金状态", c.financial_status]];
+    target.innerHTML = `<div class="detail-header"><div class="detail-topline"><span class="case-id">${esc(c.id)}</span><span>v${esc(c.revision)} · 合成演示</span></div><div class="detail-title"><div><h2>${merchant ? "交易争议" : esc(c.merchant_id)}</h2><p>${merchant ? esc(c.transaction_id || "交易编号待提供") : `${esc(c.scheme)} · 原因码 ${esc(c.reason_code)}`}</p></div><div class="detail-amount">${esc(money(c.amount_minor, c.currency))}</div></div><div class="case-facts">${merchant ? `<span>${esc(c.scheme)} · ${esc(c.reason_code)}</span><span>处理团队 <strong>OceanPayment</strong></span>` : `<span>交易 <strong>${esc(c.transaction_id || "—")}</strong></span><span>渠道 <strong>${esc(c.channel)}</strong></span><span>负责人 <strong>${esc(c.owner || "OceanPayment")}</strong></span>`}</div></div><div class="dimension-strip">${dimensions.map(([key, value]) => `<div class="dimension"><label>${key}</label>${badge(value)}</div>`).join("")}</div><nav class="detail-tabs" aria-label="${merchant ? "我的案件" : "案件详情"}">${visibleTabs.map(([key, title]) => `<button class="detail-tab ${activeTab === key ? "active" : ""}" data-tab="${key}" aria-current="${activeTab === key ? "page" : "false"}">${title}</button>`).join("")}</nav><div class="detail-content">${renderers[activeTab]()}${renderCaseReference(c)}</div>`;
   }
   function renderGovernance() {
     const g = S.governance;
@@ -923,7 +950,7 @@
     return S.current ? `${S.current.id}:${S.current.revision}:${S.role}` : "";
   }
   function agentDraftKey() {
-    return S.current ? `${S.current.id}:${S.role}` : "";
+    return S.current ? `${S.current.id}:${surface}:${S.merchantId}` : "";
   }
   function preserveAgentDraft() {
     const input = $("agentMessage");
@@ -934,6 +961,7 @@
       input.dataset.role === S.role
     ) {
       S.agentDrafts[agentDraftKey()] = input.value;
+      storage.set(`oceanpilot.v2.draft.${agentDraftKey()}`, input.value);
     }
   }
   function proposalsFor(activity, c) {
@@ -947,12 +975,12 @@
     );
   }
   function renderCollaborationRoles() {
-    if (surface === "governance") {
-      $("collaborationRoles").hidden = true;
-      return;
-    }
-    $("collaborationRoles").innerHTML =
-      `<div class="actor-role ${surface === "merchant" ? "active" : ""}"><span class="actor-avatar merchant">M</span><div><strong>商户客户端</strong><span>确认决定 · 提交事实与证据</span></div></div><span class="actor-link">⇄</span><div class="actor-role agent"><span class="actor-avatar pilot">✧</span><div><strong>OceanPilot 智能体</strong><span>解读案件 · 准备下一步 · 持续跟进</span></div></div><span class="actor-link">⇄</span><div class="actor-role ${surface === "operations" ? "active" : ""}"><span class="actor-avatar operations">OP</span><div><strong>OceanPayment 运营端</strong><span>人工审核 · 上游处理 · 资金核对</span></div></div>`;
+    const node = $("collaborationRoles");
+    node.hidden = surface === "governance";
+    if (node.hidden) return;
+    node.innerHTML = S.isCasePage
+      ? `<a class="case-back-link" href="/v2/${surface}">← ${surface === "merchant" ? "返回我的案件" : "返回争议工作队列"}</a><span class="case-collaborators">${surface === "merchant" ? "商户响应" : "OceanPayment 处理"}<span>·</span><a class="case-pilot-link" href="#agentPanel">询问本案 OceanPilot ↘</a></span>`
+      : `<span class="surface-explainer">${surface === "merchant" ? "你的交易争议，由 OceanPayment 处理。进入案件后，OceanPilot 会帮你准备回应。" : "管理商户响应、人工审核、上游提交与资金核对。每个案件都有独立的 OceanPilot 协作空间。"}</span>`;
   }
   function renderAgentInbox() {
     const target = $("agentInbox");
@@ -991,9 +1019,10 @@
   }
   function renderAgentPanel() {
     const panel = $("agentPanel");
-    panel.hidden = surface === "governance";
+    panel.hidden = surface === "governance" || (!S.isCasePage && !S.current);
     if (panel.hidden) return;
     preserveAgentDraft();
+    const previousScroll = panel.querySelector?.(".pilot-body")?.scrollTop || 0;
     const focused = document.activeElement?.id === "agentMessage";
     const selection = focused
       ? [
@@ -1001,6 +1030,8 @@
           document.activeElement.selectionEnd,
         ]
       : null;
+    if (S.current && S.agentDrafts[agentDraftKey()] === undefined)
+      S.agentDrafts[agentDraftKey()] = storage.get(`oceanpilot.v2.draft.${agentDraftKey()}`) || "";
     const c = S.current,
       activity = S.activity,
       run = activity?.run;
@@ -1030,7 +1061,7 @@
             ? `${runtime.provider} 已配置`
             : "读取运行配置";
     panel.classList.toggle("collapsed", S.agentCollapsed);
-    panel.innerHTML = `<header class="pilot-heading"><div class="pilot-identity"><span class="pilot-mark">✧</span><div><h2>OceanPilot</h2><p>案件智能体 · ${surface === "merchant" ? "陪你准备每一次回应" : "让团队接手准备好的下一步"}</p></div></div><button type="button" class="pilot-collapse" data-agent-collapse aria-label="${S.agentCollapsed ? "展开" : "收起"} OceanPilot" aria-expanded="${!S.agentCollapsed}">${S.agentCollapsed ? "＋" : "−"}</button></header><div class="pilot-status"><span class="status-dot"></span><span>${esc(source)}</span><span>${c ? `案件 v${esc(c.revision)}` : "选择案件开始"}</span></div><div class="pilot-body" ${S.agentCollapsed ? "hidden" : ""}>${
+    panel.innerHTML = `<header class="pilot-heading"><div class="pilot-identity"><span class="pilot-mark">✧</span><div><h2>OceanPilot</h2><p>案件智能体 · ${surface === "merchant" ? "本案商户助手 · 对话仅本端可见" : "本案运营助手 · 内部对话"}</p></div></div><button type="button" class="pilot-collapse" data-agent-collapse aria-label="${S.agentCollapsed ? "展开" : "收起"} OceanPilot" aria-expanded="${!S.agentCollapsed}">${S.agentCollapsed ? "＋" : "−"}</button></header><div class="pilot-status"><span class="status-dot"></span><span>${esc(source)}</span><span>${c ? `案件 v${esc(c.revision)}` : "选择案件开始"}</span></div><div class="pilot-body" ${S.agentCollapsed ? "hidden" : ""}>${
       !c
         ? `<div class="pilot-empty"><span>✧</span><h3>你的案件，交给我一起推进。</h3><p>选择一个争议案件。我会读取规则与证据，准备下一步，并把需要你确认的决定放在这里。</p></div>`
         : `<div class="pilot-event"><span>${S.agentLoading ? "正在读取工具运行记录" : runtime.analysis_pending ? "正在分析最新案件事件" : run ? agentTrigger(run.trigger) : "准备开始案件检查"}</span><time>${run ? date(run.completed_at || run.created_at) : ""}</time></div>${stale ? '<div class="pilot-warning">下方运行属于旧版案件，提案已停用。请基于当前版本重新检查。</div>' : ""}${run ? `<div class="pilot-summary"><p>${esc(run.summary || activity.summary || "")}</p><div>${sourceBadge(run)}<span>运行 ${esc(String(run.id).slice(-8))} · v${esc(run.case_revision)}</span></div></div>` : `<div class="pilot-empty compact"><p>尚无已保存的工具检查。启动后会实际读取规则、证据、时限和下一步。</p></div>`}${
@@ -1067,16 +1098,19 @@
                   .join("")}</div>`
               : ""
           }${preparedKeys.length ? `<details class="pilot-prepared" ${surface === "merchant" ? "" : "open"}><summary>✎ 已备好的文案与摘要</summary><div class="pilot-prepared-tabs">${preparedKeys.map((key) => `<button type="button" class="${S.agentPrepared === key ? "active" : ""}" data-agent-prepared="${key}">${preparedLabels[key]}</button>`).join("")}</div><p class="pilot-draft">${esc(text(prepared[S.agentPrepared]))}</p><div class="pilot-draft-note">草稿供人工核对。确认前不会发送或提交。</div></details>` : ""}<div class="pilot-conversation"><div class="pilot-conversation-heading"><h3>${surface === "merchant" ? "和 OceanPilot 一起处理" : "继续与 OceanPilot 协作"}</h3><span>${conversations.length ? `${conversations.length} 条已保存记录` : "基于当前案件"}</span></div>${conversations
-            .slice(-4)
-            .reverse()
+            .slice(-30)
             .map((turn) => {
               const auto = String(turn.trigger || "").startsWith("AUTO_EVENT:");
-              return `<div class="pilot-turn">${!auto && turn.message ? `<div class="pilot-question"><span>${esc(collaborationActor(turn.actor_role))}</span>${esc(turn.message)}</div>` : ""}<div class="pilot-answer"><div class="pilot-answer-head"><span class="mini-pilot">✧</span><strong>OceanPilot</strong>${sourceBadge(turn)}${turn.model ? `<small class="pilot-model">${esc(turn.model)}</small>` : ""}</div>${auto ? `<small class="pilot-auto-trigger">${esc(agentTrigger(turn.trigger))} · 自动跟进</small>` : ""}<p>${agentAnswerText(turn.answer || "")}</p><div class="pilot-answer-foot">${date(turn.created_at)} · 案件 v${esc(turn.case_revision ?? "—")}${turn.model ? ` · ${esc(turn.model)}` : ""}</div>${turn.source_citations?.length ? `<details><summary>查看引用</summary>${citations(turn.source_citations)}</details>` : ""}</div></div>`;
+              return `<div class="pilot-turn">${!auto && turn.message ? `<div class="pilot-question"><span>${esc(collaborationActor(turn.actor_role))}</span>${esc(turn.message)}</div>` : ""}<div class="pilot-answer"><div class="pilot-answer-head"><span class="mini-pilot">✧</span><strong>OceanPilot</strong>${sourceBadge(turn)}${turn.model ? `<small class="pilot-model">${esc(turn.model)}</small>` : ""}</div>${auto ? `<small class="pilot-auto-trigger">${esc(agentTrigger(turn.trigger))} · 自动跟进</small>` : ""}<p>${agentAnswerText(turn.answer || "")}</p><div class="pilot-answer-foot">${date(turn.created_at)} · 案件 v${esc(turn.case_revision ?? "—")}${turn.model ? ` · ${esc(turn.model)}` : ""}</div>${turn.knowledge_retrieval ? `<div class="pilot-reference-count">${turn.knowledge_retrieval.status === "COMPLETED" ? `已检索 ${list(turn.knowledge_retrieval.references).length} 条指南案例参考` : "指南参考读取暂不可用"} · 依据本案卡组织和原因码</div>` : ""}${turn.source_citations?.length ? `<details><summary>查看引用</summary>${citations(turn.source_citations)}</details>` : ""}</div></div>`;
             })
             .join(
               "",
             )}${!conversations.length ? '<div class="pilot-conversation-empty">你可以问我为什么受阻、还缺什么，或让我起草下一条沟通消息。</div>' : ""}</div>${S.agentNotice ? `<div class="pilot-warning" role="status">${esc(S.agentNotice)}</div>` : ""}`
-    }</div>${c && !S.agentCollapsed ? `<div class="pilot-composer"><div class="pilot-prompts">${(surface === "merchant" ? ["我下一步该怎么做", "还缺什么证据", "起草一条回复"] : ["为什么不能提交", "还缺什么证据", "起草补证通知"]).map((q) => `<button type="button" data-agent-prompt="${esc(q)}"${S.agentBusy ? " disabled" : ""}>${esc(q)}</button>`).join("")}</div><form id="agentMessageForm"><label for="agentMessage" class="sr-only">向 OceanPilot 发送案件问题</label><textarea id="agentMessage" name="message" data-case="${esc(c.id)}" data-role="${esc(S.role)}" placeholder="${surface === "merchant" ? "告诉我你的情况，或问我怎么准备证据…" : "问案件问题，或让我准备下一步…"}" maxlength="2000" rows="2"${S.agentBusy ? " disabled" : ""}>${esc(S.agentDrafts[agentDraftKey()] || "")}</textarea><div class="pilot-compose-footer"><span>${S.agentBusy ? "正在请求实际模型回答…" : runtime.analysis_pending ? "最新事件分析中，完成后自动更新" : "回答与操作均保留案件上下文"}</span><button type="submit" class="pilot-send"${S.agentBusy ? " disabled" : ""} aria-label="发送给 OceanPilot">↑</button></div></form><button type="button" class="pilot-rerun" data-agent-run${S.agentBusy || S.agentLoading ? " disabled" : ""}>↻ ${run ? "基于当前版本重新检查" : "启动案件智能体"}</button></div>` : ""}`;
+    }</div>${c && !S.agentCollapsed ? `<div class="pilot-composer"><div class="pilot-prompts">${(surface === "merchant" ? ["为什么被退回", "为什么不能提交", "还缺什么证据"] : ["这个案件有什么问题", "客户进度到哪了", "现在该由谁处理"]).map((q) => `<button type="button" data-agent-prompt="${esc(q)}"${S.agentBusy ? " disabled" : ""}>${esc(q)}</button>`).join("")}</div><form id="agentMessageForm"><label for="agentMessage" class="sr-only">向 OceanPilot 发送案件问题</label><textarea id="agentMessage" name="message" data-case="${esc(c.id)}" data-role="${esc(S.role)}" placeholder="${surface === "merchant" ? "告诉我你的情况，或问我怎么准备证据…" : "问案件问题，或让我准备下一步…"}" maxlength="2000" rows="2"${S.agentBusy ? " disabled" : ""}>${esc(S.agentDrafts[agentDraftKey()] || "")}</textarea><div class="pilot-compose-footer"><span>${S.agentBusy ? "正在请求实际模型回答…" : runtime.analysis_pending ? "最新事件分析中，完成后自动更新" : (surface === "merchant" ? "本案商户对话 · 协作消息请在反馈中发送" : "本案运营内部对话 · 不向商户展示")}</span><button type="submit" class="pilot-send"${S.agentBusy ? " disabled" : ""} aria-label="发送给 OceanPilot">↑</button></div></form><button type="button" class="pilot-rerun" data-agent-run${S.agentBusy || S.agentLoading ? " disabled" : ""}>↻ ${run ? "基于当前版本重新检查" : "启动案件智能体"}</button></div>` : ""}`;
+    const body = panel.querySelector?.(".pilot-body");
+    const conversation = panel.querySelector?.(".pilot-conversation");
+    if (body && conversation) body.prepend(conversation);
+    if (body) body.scrollTop = previousScroll;
     restoreAgentInputFocus(focused, selection);
     fitAgentPanel();
   }
@@ -1103,27 +1137,19 @@
     if (S.current) S.agentIndex[S.current.id] = activity;
     if (previous !== JSON.stringify(activity)) renderAgentPanel();
     renderAgentInbox();
+    scheduleAgentPoll();
     return true;
   }
   function scheduleAgentPoll() {
     if (S.agentPoll) clearTimeout(S.agentPoll);
     S.agentPoll = null;
-    if (!S.current || surface === "governance") return;
-    const quick =
-      S.activity?.runtime?.analysis_pending && S.agentPollCount < 30;
+    if (globalThis.OCEAN_V2_NO_BOOT || !S.current || !S.activity?.runtime?.analysis_pending) return;
     const context = currentAgentContext();
-    S.agentPoll = setTimeout(
-      async () => {
-        if (context !== currentAgentContext()) return;
-        if (document.visibilityState === "hidden") {
-          scheduleAgentPoll();
-          return;
-        }
-        if (quick) S.agentPollCount++;
-        await refreshAgent({ ensure: false, quiet: true });
-      },
-      quick ? 2000 : 15000,
-    );
+    // The model completion is persisted before its worker clears the in-memory pending flag.
+    // Only reconcile that flag while work is pending; durable updates drive all case changes.
+    S.agentPoll = setTimeout(() => {
+      if (context === currentAgentContext()) refreshAgent({ quiet: true });
+    }, 1000);
   }
   async function refreshAgent({ ensure = false, quiet = false } = {}) {
     if (!S.current || surface === "governance") return;
@@ -1139,7 +1165,7 @@
       let result = await api(`/cases/${encodeURIComponent(id)}/agent`);
       if (ticket !== S.activityTicket || context !== currentAgentContext())
         return;
-      if (result.run?.case_revision > revision) {
+      if ((result.case_revision || result.run?.case_revision) > revision) {
         if (S.dialog?.case_id === id) {
           S.dialog.stale = true;
           $("dialogError").textContent =
@@ -1148,7 +1174,7 @@
           $("submitDialog").disabled = true;
         }
         S.agentLoading = false;
-        await refresh(true);
+        await reconcileUpdates();
         return;
       }
       if (ensure && !result.run) {
@@ -1170,10 +1196,16 @@
       S.agentLoading = false;
       S.agentNotice = `Agent 活动暂不可用：${error.message}`;
       renderAgentPanel();
+    } finally {
+      if (ticket === S.activityTicket) {
+        S.agentLoading = false;
+        renderAgentPanel();
+      }
     }
   }
   async function runAgent() {
     if (!S.current || S.agentBusy || S.agentLoading) return;
+    const ticket = ++S.activityTicket;
     const context = currentAgentContext(),
       c = S.current;
     S.agentLoading = true;
@@ -1185,15 +1217,20 @@
         method: "POST",
         body: JSON.stringify({ expected_revision: c.revision }),
       });
-      if (context !== currentAgentContext()) return;
+      if (ticket !== S.activityTicket || context !== currentAgentContext()) return;
       S.agentLoading = false;
       acceptAgentActivity(result, context);
       renderAgentPanel();
       scheduleAgentPoll();
     } catch (error) {
-      if (context === currentAgentContext()) {
+      if (ticket === S.activityTicket && context === currentAgentContext()) {
         S.agentLoading = false;
         S.agentNotice = error.message;
+        renderAgentPanel();
+      }
+    } finally {
+      if (ticket === S.activityTicket && S.current?.id === c.id) {
+        S.agentLoading = false;
         renderAgentPanel();
       }
     }
@@ -1214,10 +1251,12 @@
       renderAgentPanel();
       return;
     }
+    const messageTicket = ++S.agentMessageTicket;
     const context = currentAgentContext(),
       c = S.current,
       key = agentDraftKey();
     S.agentDrafts[key] = value;
+    storage.set(`oceanpilot.v2.draft.${key}`, value);
     const input = $("agentMessage");
     if (input) input.value = value;
     S.agentBusy = true;
@@ -1235,9 +1274,16 @@
           }),
         },
       );
-      if (context !== currentAgentContext()) return;
+      if (messageTicket !== S.agentMessageTicket || key !== agentDraftKey()) return;
       S.agentBusy = false;
+      if (context !== currentAgentContext()) {
+        S.agentNotice = "案件已同步到新版本，问题已保留，请基于最新进展重新发送。";
+        renderAgentPanel();
+        await refreshAgent({ quiet: true });
+        return;
+      }
       S.agentDrafts[key] = "";
+      storage.remove(`oceanpilot.v2.draft.${key}`);
       const input = $("agentMessage");
       if (input) input.value = "";
       if (result.answer) {
@@ -1259,7 +1305,7 @@
       }
       await refreshAgent({ quiet: true });
     } catch (error) {
-      if (context !== currentAgentContext()) return;
+      if (messageTicket !== S.agentMessageTicket || key !== agentDraftKey()) return;
       S.agentBusy = false;
       S.agentNotice = `未取得确认回答：${error.message}。问题已保留，可重新发送。`;
       renderAgentPanel();
@@ -1319,16 +1365,127 @@
     $("dialogContext").innerHTML =
       `<strong>OceanPilot 已准备 · 由 ${esc(label(S.role))} 确认</strong><br>${esc(proposal.reason || "")}<br>${esc(proposal.case_id)} · 绑定版本 v${esc(proposal.expected_revision)}<br>逐项核对下方内容。编辑后将以修改后的内容创建案件命令。<details><summary>查看已保存提案及引用</summary><pre class="code-block">${esc(JSON.stringify(proposal.data || {}, null, 2))}</pre>${citations(proposal.basis_citations)}</details>`;
   }
+  function caseHref(id, targetSurface = surface) {
+    return `/v2/${targetSurface}/cases/${encodeURIComponent(id)}`;
+  }
   function writeNavigation() {
-    const url = new URL(location.href);
-    if (S.current) url.searchParams.set("case", S.current.id);
-    url.searchParams.set("tab", S.tab);
-    history.replaceState(null, "", url);
+    if (S.current && S.isCasePage) {
+      const url = new URL(location.href);
+      url.pathname = caseHref(S.current.id);
+      url.searchParams.delete("case");
+      url.searchParams.set("tab", S.tab);
+      history.replaceState(null, "", url);
+      document.title = `${S.current.id} · ${surface === "merchant" ? "我的案件" : "OceanPayment 争议运营"}`;
+    }
     document.querySelectorAll("[data-surface]").forEach((link) => {
-      const target = new URL(link.href, location.origin);
-      if (S.current) target.searchParams.set("case", S.current.id);
-      link.href = target.pathname + target.search;
+      const destination = link.dataset.surface;
+      link.href = S.current && S.isCasePage && destination !== "governance"
+        ? caseHref(S.current.id, destination) : `/v2/${destination}`;
     });
+  }
+  function syncStatus(message, failed = false) {
+    const node = $("syncStatus");
+    if (!node) return;
+    node.textContent = message;
+    node.classList.toggle("reconnecting", failed);
+  }
+  function invalidateConfirmation(c) {
+    if (!S.dialog || S.dialog.case_id !== c.id || S.dialog.revision === c.revision) return;
+    S.dialog.stale = true;
+    $("dialogError").textContent = "另一端已更新此案件。你填写的内容已保留，但旧版本确认已失效；请重新核对最新进度后发起操作。";
+    $("dialogError").hidden = false;
+    $("confirmCheckbox").checked = false;
+    $("submitDialog").disabled = true;
+  }
+  async function reconcileUpdates() {
+    const ticket = ++S.reconcileTicket;
+    const actorRole = S.role;
+    const id = S.caseId || S.current?.id;
+    const cases = await api("/cases");
+    if (ticket !== S.reconcileTicket || actorRole !== S.role) return;
+    S.cases = list(cases.cases);
+    renderMetrics();
+    renderQueue();
+    if (!id || surface === "governance") return;
+    const results = await Promise.allSettled([
+      api(`/cases/${encodeURIComponent(id)}`),
+      api(`/cases/${encodeURIComponent(id)}/plan`),
+      api(`/cases/${encodeURIComponent(id)}/agent`),
+    ]);
+    if (ticket !== S.reconcileTicket || actorRole !== S.role || id !== (S.caseId || S.current?.id)) return;
+    if (results[0].status === "rejected") {
+      if (results[0].reason.status === 404) {
+        S.current = null; S.plan = null; S.activity = null;
+        renderDetail(); renderAgentPanel();
+      }
+      throw results[0].reason;
+    }
+    const c = results[0].value.case || results[0].value;
+    if (S.current?.id === id && c.revision < S.current.revision) return;
+    const changed = S.current?.id !== id || c.revision !== S.current?.revision
+      || (results[1].status === "fulfilled" && JSON.stringify(results[1].value) !== JSON.stringify(S.plan));
+    preserveAgentDraft();
+    invalidateConfirmation(c);
+    S.current = c;
+    const plan = results[1].status === "fulfilled" ? results[1].value : null;
+    S.plan = plan?.revision === c.revision ? plan : null;
+    if (changed) {
+      const detail = $("caseDetail");
+      const openDetails = [...(detail.querySelectorAll?.("details") || [])].map((d) => d.open);
+      renderDetail();
+      [...(detail.querySelectorAll?.("details") || [])].forEach((d, i) => { if (openDetails[i]) d.open = true; });
+      writeNavigation();
+    }
+    if (results[2].status === "fulfilled") {
+      acceptAgentActivity(results[2].value, currentAgentContext());
+      if (changed) renderAgentPanel();
+    } else {
+      S.activity = null;
+      S.agentNotice = "案件进度已更新，智能体记录暂不可用，恢复连接后自动重试。";
+      renderAgentPanel();
+      throw results[2].reason;
+    }
+    if (results[1].status === "rejected") throw results[1].reason;
+    // Separate GETs may straddle a concurrent write. Never display a mismatched plan as current.
+    if (S.plan === null || (S.activity.case_revision || c.revision) !== c.revision) {
+      throw new Error("案件正在变化，正在重新读取一致版本");
+    }
+  }
+  function stopUpdates() {
+    S.syncEpoch++;
+    S.syncController?.abort();
+    S.syncController = null;
+    S.syncTask = null;
+  }
+  function startUpdates() {
+    if (globalThis.OCEAN_V2_NO_BOOT || surface === "governance" || S.isLibraryPage || S.syncTask) return;
+    const epoch = ++S.syncEpoch;
+    S.syncTask = (async () => {
+      let failures = 0;
+      while (epoch === S.syncEpoch) {
+        const controller = new AbortController();
+        S.syncController = controller;
+        const params = new URLSearchParams({ timeout: "20" });
+        if (S.syncCursor) params.set("cursor", S.syncCursor);
+        if (S.caseId) params.set("case_id", S.caseId);
+        try {
+          syncStatus(failures ? "正在恢复同步…" : "自动同步中");
+          const update = await api(`/updates?${params}`, { timeoutMs: 26000, signal: controller.signal });
+          if (epoch !== S.syncEpoch) break;
+          if (update.reset || update.changed_case_ids?.length) await reconcileUpdates();
+          if (epoch !== S.syncEpoch) break;
+          // Advance only after applying the change: failed reads are replayed on reconnect.
+          S.syncCursor = update.cursor;
+          failures = 0;
+          syncStatus("已自动同步");
+        } catch (error) {
+          if (epoch !== S.syncEpoch) break;
+          failures++;
+          syncStatus("连接中断 · 自动重连", true);
+          await new Promise((resolve) => setTimeout(resolve, Math.min(1000 * failures, 5000)));
+        }
+      }
+    })();
   }
   async function openCase(id, { withAgent = true } = {}) {
     const ticket = ++S.selection;
@@ -1338,6 +1495,7 @@
     S.agentPollCount = 0;
     S.activity = null;
     S.agentBusy = false;
+    S.agentMessageTicket++;
     S.agentNotice = "";
     S.plan = null;
     S.current = null;
@@ -1386,9 +1544,7 @@
     try {
       const results = await Promise.allSettled([
         api("/cases"),
-        ["ADMIN", "SUPERVISOR"].includes(S.role)
-          ? api("/governance")
-          : Promise.resolve(null),
+        ["ADMIN", "SUPERVISOR"].includes(S.role) ? api("/governance") : Promise.resolve(null),
         api("/capabilities"),
       ]);
       if (ticket !== S.refreshEpoch) return;
@@ -1396,28 +1552,20 @@
       S.cases = list(results[0].value.cases);
       if (results[2].status === "fulfilled") S.capabilities = results[2].value;
       if (results[1].status === "fulfilled") S.governance = results[1].value;
-      else if (surface === "governance")
-        setNotice(results[1].reason.message, true);
-      renderMetrics();
-      renderQueue();
-      renderAgentInbox();
+      renderMetrics(); renderQueue();
+      if (S.isLibraryPage) { $("metrics").hidden = true; $("workspaceGrid").hidden = true; }
       if (surface === "governance") renderGovernance();
-      else {
-        const preferred =
-          S.current?.id || new URL(location.href).searchParams.get("case");
-        const next =
-          S.cases.find((c) => c.id === preferred)?.id || S.cases[0]?.id;
-        if (next) await openCase(next);
-        else {
-          S.current = null;
-          S.plan = null;
-          renderDetail();
-          renderAgentPanel();
-        }
-        if (!globalThis.OCEAN_V2_NO_BOOT) await loadAgentInbox();
+      else if (S.isCasePage && S.caseId) {
+        if (S.current?.id === S.caseId) await reconcileUpdates();
+        else await openCase(S.caseId);
+      } else {
+        S.current = null; S.plan = null; S.activity = null;
+        renderAgentPanel();
       }
+      startUpdates();
     } catch (error) {
       setNotice(`读取失败：${error.message}`, true);
+      startUpdates();
     } finally {
       if (ticket === S.refreshEpoch) {
         S.loading = false;
@@ -1471,23 +1619,24 @@
     switch (action) {
       case "INTAKE":
         return (
+          (data.case_template_id ? `<input type="hidden" name="case_template_id" value="${esc(data.case_template_id)}">` : "") +
           field("merchant_id", "商户 ID", S.merchantId) +
           field(
             "transaction_id",
             "交易关联 ID",
             `synthetic-txn-${Date.now()}`,
           ) +
-          field("scheme", "卡组织", "VISA", "select", {
+          field("scheme", "卡组织", data.scheme || "VISA", "select", {
             choices: ["VISA", "MASTERCARD"],
           }) +
           field("channel", "上游渠道", "MOCK") +
-          field("reason_code", "原因码", "13.1") +
-          field("amount_minor", "争议金额（最小货币单位）", 129900, "number", {
+          (data.reason_codes?.length > 1 ? field("reason_code", "本次演练适用的原因码", data.reason_code, "select", { choices: data.reason_codes }) : field("reason_code", "原因码", data.reason_code || "13.1")) +
+          field("amount_minor", data.case_template_id ? "本次演练金额（最小货币单位）" : "争议金额（最小货币单位）", data.case_template_id ? "" : 129900, "number", {
             min: 1,
-            hint: "例如 USD 129900 最小单位表示 USD 1,299.00。",
+            hint: data.case_template_id ? "原模板缺失值不会自动补成交易事实。请明确本次演练金额；USD 12800 表示128美元。" : "例如 USD 129900 最小单位表示 USD 1,299.00。",
           }) +
-          field("currency", "币种", "USD", "select", {
-            choices: ["USD", "EUR", "GBP", "CNY"],
+          field("currency", "币种", data.case_template_id ? "" : "USD", "select", {
+            choices: data.case_template_id ? [["", "选择演练币种"], "USD", "EUR", "GBP", "CNY"] : ["USD", "EUR", "GBP", "CNY"],
           }) +
           event()
         );
@@ -1799,6 +1948,30 @@
         return "";
     }
   }
+  async function openLibraryTemplate(templateId) {
+    if (!permitted("INTAKE")) { setNotice("请由 OP 运营专员选择模板并确认演练建案。", true); return; }
+    try {
+      const result = await api(`/case-library/${encodeURIComponent(templateId)}`);
+      if (!result.template) throw new Error("该条目仅作来源参考，没有可执行演练模板。");
+      const reference = result.reference;
+      const original = result.template.template || {};
+      const scheme = String(original.scheme || reference.scheme).toUpperCase();
+      if (!["VISA", "MASTERCARD", "MC"].includes(scheme))
+        throw new Error("此模板保留为参考或专项测试，当前 Visa / Mastercard 双卡流程不创建该类型案件。");
+      const reasons = String(original.reason_code || reference.reason_code).split(/\s*\/\s*/).filter(Boolean);
+      openDialog("INTAKE", { case_template_id: templateId, scheme: scheme === "MC" ? "MASTERCARD" : scheme, reason_code: reasons[0], reason_codes: reasons });
+      if (S.dialog?.action !== "INTAKE") return;
+      $("dialogTitle").textContent = "从指南模板创建演练案件";
+      $("dialogContext").innerHTML = `<strong>${esc(templateId)} · ${esc(reference.title)}</strong><br>原始来源、核验状态与缺失字段保留为参考。下方交易编号和事件编号为本次演练新生成，请填写演练金额、币种并核对卡组织和原因码。创建后先由风控确认适用权利、证据要求与期限，不自动继承 Mock 期限。`;
+      $("submitDialog").textContent = "确认创建演练案件";
+    } catch (error) { setNotice(error.message, true); }
+  }
+  function renderCaseReference(c) {
+    const r = c?.library_reference;
+    if (!r) return "";
+    const grade = { SOURCE_EXPLICIT: "指南原文示例", RULE_DERIVED: "依据规则还原", SYNTHETIC_DEMO: "合成演练" }[r.evidence_level] || r.evidence_level;
+    return `<details class="case-source-reference"><summary>案例来源 · ${esc(r.template_id)} · ${esc(grade)}</summary><strong>${esc(r.title)}</strong><p>${esc(r.summary || "")}</p><p>来源核验：${esc(label(r.verification_status))} · ${list(r.conflict_ids).length} 项来源冲突。交易字段为本次演练确认输入。</p>${citations(r.citations)}${surface === "operations" ? `<a href="/v2/operations/library?reference=${encodeURIComponent(r.template_id)}">查看完整案例来源 →</a>` : ""}</details>`;
+  }
   function openDialog(action, data = {}) {
     if (S.busy) return;
     if (S.pending) {
@@ -1901,8 +2074,8 @@
   }
   function savePending() {
     if (S.pending)
-      storage.set("oceanpilot.v2.pending", JSON.stringify(S.pending));
-    else storage.remove("oceanpilot.v2.pending");
+      storage.set(`oceanpilot.v2.pending.${surface}.${S.merchantId}`, JSON.stringify(S.pending));
+    else storage.remove(`oceanpilot.v2.pending.${surface}.${S.merchantId}`);
   }
   async function executePending() {
     if (!S.pending || S.busy) return;
@@ -1936,13 +2109,10 @@
       setNotice(
         `${result.replayed ? "已确认原命令回执" : "操作已完成"}：${label(pending.payload.action)} · ${c?.id || pending.payload.case_id || ""} · v${c?.revision || "—"}${result.receipt?.command_id ? ` · 回执 ${result.receipt.command_id}` : ""}`,
       );
-      if (
-        c &&
-        (!S.current ||
-          S.current.id === pending.payload.case_id ||
-          pending.payload.action === "INTAKE")
-      )
-        S.current = c;
+      if (c && pending.payload.action === "INTAKE" && !globalThis.OCEAN_V2_NO_BOOT) {
+        location.assign(caseHref(c.id));
+        return;
+      }
       await refresh();
     } catch (error) {
       if (error.uncertain) {
@@ -2008,6 +2178,10 @@
         });
         $("actionDialog").close();
         S.dialog = null;
+        if (result.case && !globalThis.OCEAN_V2_NO_BOOT) {
+          location.assign(caseHref(result.case.id));
+          return;
+        }
         if (result.case) S.current = result.case;
         setNotice(`已加载演示 ${scenario}：所有记录均为 SYNTHETIC_DEMO。`);
         await refresh();
@@ -2064,6 +2238,10 @@
       $("roleSelect").value = S.role;
       return;
     }
+    preserveAgentDraft();
+    stopUpdates();
+    S.syncCursor = "";
+    S.reconcileTicket++;
     S.role = $("roleSelect").value;
     storage.set(`oceanpilot.v2.role.${surface}`, S.role);
     S.current = null;
@@ -2073,14 +2251,15 @@
     S.agentIndex = {};
     S.activity = null;
     S.agentBusy = false;
+    S.agentMessageTicket++;
     S.agentInboxTicket++;
     S.activityTicket++;
     S.selection++;
     if ($("actionDialog").open) closeDialog();
     $("avatar").textContent =
       S.role === "MERCHANT" ? "M" : S.role === "AGENT" ? "AI" : "OP";
-    $("intakeButton").hidden = surface !== "operations" || !permitted("INTAKE");
-    $("demoButton").hidden = surface === "merchant" || S.role !== "OPERATOR";
+    $("intakeButton").hidden = surface !== "operations" || S.isLibraryPage || !permitted("INTAKE");
+    $("demoButton").hidden = S.isLibraryPage || surface === "merchant" || S.role !== "OPERATOR";
     setNotice(`已切换为 ${label(S.role)}。操作权限由服务端重新校验。`);
     await refresh(true);
   }
@@ -2119,10 +2298,14 @@
         return;
       }
       if (button.dataset.case) {
-        await openCase(button.dataset.case);
+        location.assign(caseHref(button.dataset.case));
         return;
       }
       if (button.dataset.queue) {
+        if (S.isCasePage) {
+          location.assign(`/v2/${surface}?queue=${encodeURIComponent(button.dataset.queue)}`);
+          return;
+        }
         S.queue = button.dataset.queue;
         renderQueue();
         $("workspaceGrid").classList.add("show-queue");
@@ -2147,7 +2330,7 @@
         return;
       }
       if (button.hasAttribute("data-back")) {
-        $("workspaceGrid").classList.add("show-queue");
+        location.assign(`/v2/${surface}`);
         return;
       }
       if (button.hasAttribute("data-retry")) {
@@ -2181,7 +2364,8 @@
         sendAgentMessage();
       }
     });
-    $("refreshButton").addEventListener("click", () => refresh());
+    $("refreshButton").addEventListener("click", () => S.isLibraryPage
+      ? globalThis.OceanV2Library.mount({ api, openTemplate: openLibraryTemplate }) : refresh());
     $("demoButton").addEventListener("click", () => openDialog("DEMO"));
     $("intakeButton").addEventListener("click", () => openDialog("INTAKE"));
     $("caseSearch").addEventListener("input", (event) => {
@@ -2202,6 +2386,27 @@
     });
   }
   function initialize() {
+    const initialURL = new URL(location.href);
+    const legacyCase = initialURL.searchParams.get("case");
+    if (!routeCase && legacyCase && surface !== "governance") {
+      initialURL.pathname = caseHref(legacyCase);
+      initialURL.searchParams.delete("case");
+      location.replace(initialURL);
+      return;
+    }
+    S.queue = queueViews.some(([key]) => key === initialURL.searchParams.get("queue"))
+      ? initialURL.searchParams.get("queue") : "ALL";
+    document.body.classList.add(S.isCasePage ? "case-page" : "list-page");
+    document.body.dataset.surface = surface;
+    $("caseDetail").hidden = !S.isCasePage;
+    document.querySelector(".case-queue").hidden = S.isCasePage;
+    $("metrics").hidden = S.isCasePage;
+    $("agentInbox").hidden = true;
+    const status = document.createElement("span");
+    status.id = "syncStatus"; status.className = "sync-status";
+    status.setAttribute("role", "status"); status.textContent = S.isLibraryPage ? "来源资料" : "正在连接自动同步…";
+    $("refreshButton").before(status);
+    $("refreshButton").textContent = S.isLibraryPage ? "重新载入资料" : "重新同步";
     const allowed =
       surface === "merchant"
         ? ["MERCHANT"]
@@ -2226,8 +2431,8 @@
         ? [
             "OceanPilot 商户客户端",
             "MERCHANT × OCEANPILOT",
-            "OceanPilot 商户客户端",
-            "和案件智能体一起准备回应，与你的 OceanPayment 团队协同处理。",
+            S.isCasePage ? "我的案件" : "我的争议案件",
+            S.isCasePage ? "查看处理进度、补齐证据，并与 OceanPayment 协作。" : "查看待办与最新反馈，选择一笔案件继续处理。",
           ]
         : surface === "governance"
           ? [
@@ -2239,43 +2444,49 @@
           : [
               "OceanPayment 争议运营",
               "OCEANPAYMENT × OCEANPILOT",
-              "OceanPayment 争议运营",
-              "OceanPilot 读取事件、检查依据并准备下一步，授权人员确认关键决定。",
+              S.isCasePage ? "案件处理" : "争议案件",
+              S.isCasePage ? "从商户响应到审核、上游结果与资金核对。" : "掌握全部案件的处理进度，找到需要团队接手的下一步。",
             ];
+    if (S.isLibraryPage) {
+      details[0] = "Visa / Mastercard 案例库";
+      details[2] = "指南案例与演练模板";
+      details[3] = "使用已上传的提纯资料，查看原文依据、规则还原与合成演练。";
+    }
     $("surfaceBreadcrumb").textContent = details[0];
     $("eyebrow").textContent = details[1];
     $("pageTitle").textContent = details[2];
     $("pageDescription").textContent = details[3];
     document.title = `OceanPilot V2 · ${details[0]}`;
+    $("avatar").textContent = S.role === "MERCHANT" ? "M" : S.role === "AGENT" ? "AI" : "OP";
     $("identityNote").textContent =
       surface === "merchant"
         ? `演示商户：${S.merchantId} · 仅访问本商户案件 · 非生产身份认证`
         : "角色切换用于 Synthetic 权限演示，非生产身份认证。";
-    $("intakeButton").hidden = surface !== "operations" || !permitted("INTAKE");
-    $("demoButton").hidden = surface === "merchant" || S.role !== "OPERATOR";
+    $("intakeButton").hidden = surface !== "operations" || S.isLibraryPage || !permitted("INTAKE");
+    $("demoButton").hidden = S.isLibraryPage || surface === "merchant" || S.role !== "OPERATOR";
     $("workspaceGrid").hidden = surface === "governance";
     $("workspaceGrid").classList.toggle(
       "merchant-layout",
       surface === "merchant",
     );
-    $("agentPanel").hidden = surface === "governance";
+    $("agentPanel").hidden = surface === "governance" || !S.isCasePage;
     renderCollaborationRoles();
     $("governanceView").hidden = surface !== "governance";
-    $("queueNav").hidden = surface === "governance";
-    $("queueNavLabel").hidden = surface === "governance";
+    $("queueNav").hidden = surface === "governance" || S.isLibraryPage;
+    $("queueNavLabel").hidden = surface === "governance" || S.isLibraryPage;
     const requestedTab = new URL(location.href).searchParams.get("tab");
     if (
       tabs.some(([key]) => key === requestedTab) &&
       !(
         surface === "merchant" &&
-        !["tasks", "evidence", "collaboration", "outcome"].includes(
+        !["overview", "tasks", "evidence", "collaboration", "outcome"].includes(
           requestedTab,
         )
       )
     )
       S.tab = requestedTab;
     try {
-      S.pending = JSON.parse(storage.get("oceanpilot.v2.pending") || "null");
+      S.pending = JSON.parse(storage.get(`oceanpilot.v2.pending.${surface}.${S.merchantId}`) || "null");
       if (S.pending?.payload?.command_id)
         setNotice(
           "有一条结果未确认的命令。请使用原命令 ID 恢复，避免重复操作。",
@@ -2286,13 +2497,40 @@
     } catch {
       S.pending = null;
     }
+    if (surface === "operations") {
+      const link = document.createElement("a");
+      link.className = "button secondary"; link.id = "caseLibraryLink";
+      link.href = "/v2/operations/library"; link.textContent = "Visa / Mastercard 案例库";
+      $("intakeButton").before(link);
+    }
+    if (S.isLibraryPage) {
+      document.body.classList.add("library-page");
+      document.querySelector(".page-heading > div:first-child").hidden = true;
+      $("caseLibraryLink").hidden = true;
+      const host = document.createElement("section"); host.id = "libraryView";
+      $("workspaceGrid").before(host);
+      $("workspaceGrid").hidden = true; $("metrics").hidden = true;
+      $("collaborationRoles").hidden = true;
+      globalThis.OceanV2Library.mount({ api, openTemplate: openLibraryTemplate });
+    }
     bindEvents();
     window.addEventListener("scroll", fitAgentPanel, { passive: true });
     window.addEventListener("resize", fitAgentPanel, { passive: true });
+    window.addEventListener("pagehide", () => { preserveAgentDraft(); stopUpdates(); });
+    window.addEventListener("pageshow", () => startUpdates());
+    window.addEventListener("online", () => { stopUpdates(); startUpdates(); });
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") { stopUpdates(); startUpdates(); }
+    });
     refresh();
   }
   globalThis.OceanV2 = {
     state: S,
+    reconcileUpdates,
+    refresh,
+    caseHref,
+    startUpdates,
+    stopUpdates,
     esc,
     money,
     label,

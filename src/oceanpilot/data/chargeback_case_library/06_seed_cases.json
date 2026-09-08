@@ -1,0 +1,2304 @@
+{
+  "schema_version": "1.0",
+  "generated_at": "2026-09-08T03:36:19Z",
+  "usage_note": "仅含可用于 Sandbox 的合成案例与规则模板。所有商户/用户/金额/编号均为虚构 Sandbox 数据；SOURCE_EXPLICIT 原例不含个人信息，未直接写入 seed。",
+  "seed_cases": [
+    {
+      "case_template_id": "CB-CASE-040",
+      "source_type": "rule_template",
+      "evidence_level": "RULE_DERIVED",
+      "title_cn": "Visa 10.4 CNP 欺诈：典型证据链场景（规则还原）",
+      "scheme": "Visa",
+      "reason_code": "10.4",
+      "parties": {
+        "cardholder": "持卡人",
+        "issuer": "发卡行",
+        "acquirer": "收单行",
+        "merchant": "电商商户",
+        "psp": "NOT_STATED",
+        "platform": "电商网站"
+      },
+      "transaction_facts": {
+        "transaction_id": "NOT_STATED",
+        "order_id": "NOT_STATED",
+        "transaction_time": "NOT_STATED",
+        "amount": "NOT_STATED",
+        "currency": "NOT_STATED",
+        "product_or_service": "NOT_STATED",
+        "payment_channel": "CNP",
+        "authentication_method": "可选 3DS",
+        "delivery_or_service_status": "NOT_STATED",
+        "refund_status": "NOT_STATED",
+        "customer_contact_status": "NOT_STATED"
+      },
+      "dispute_facts": {
+        "dispute_trigger": "持卡人不认可交易",
+        "cardholder_claim": "我没有做这笔交易",
+        "issuer_notice": "10.4",
+        "reason_code": "10.4",
+        "dispute_received_at": "NOT_STATED",
+        "response_deadline": "NOT_STATED（Visa 未给天数）",
+        "merchant_position": "NOT_STATED",
+        "initial_case_status": "OPEN",
+        "should_accept_or_contest": "CONDITIONAL",
+        "recommendation_basis": "CE3.0/Compelling Evidence 满足则可抗辩，否则建议接受"
+      },
+      "evidence_required": [
+        {
+          "evidence_type": "AUTH",
+          "evidence_name_cn": "3DS/认证记录",
+          "required_or_optional": "optional",
+          "why_needed": "认证成功可获保护",
+          "rule_reference": "SRC-01 P14/P26",
+          "expected_fields": "ECI、认证时间",
+          "acceptable_format": "报文",
+          "available_in_case": "视案件而定",
+          "validation_method": "规则引擎读取",
+          "human_confirmation_required": false,
+          "missing_consequence": "转向 CE 证据",
+          "expected_source": "SYSTEM_OF_RECORD"
+        },
+        {
+          "evidence_type": "HISTORY",
+          "evidence_name_cn": "2 笔同设备/同IP历史未争议交易",
+          "required_or_optional": "required",
+          "why_needed": "CE 抗辩核心",
+          "rule_reference": "SRC-01 P26",
+          "expected_fields": "设备ID/指纹、IP、时间（120–365 天窗口）",
+          "acceptable_format": "交易记录",
+          "available_in_case": "视案件而定",
+          "validation_method": "匹配校验",
+          "human_confirmation_required": false,
+          "missing_consequence": "CE 不成立",
+          "expected_source": "SYSTEM_OF_RECORD"
+        }
+      ],
+      "should_accept_or_contest": "CONDITIONAL",
+      "expected_result": "NOT_STATED",
+      "derived_from_rule_ids": [],
+      "source_ids": [
+        "SRC-01",
+        "SRC-03"
+      ],
+      "provenance": {
+        "verification_status": "CONFLICTING_SOURCES",
+        "conflict_ids": [
+          "CONFLICT-003",
+          "CONFLICT-012"
+        ],
+        "production_eligible": false,
+        "rule_version": [
+          "June 2024（Dispute Management Guidelines for Visa Merchants）",
+          "无版本号（内部整理稿）"
+        ],
+        "effective_date": "2024-10-19 起（CE3.0 相关变更，SRC-01 P26）"
+      },
+      "sandbox_flag": true
+    },
+    {
+      "case_template_id": "CB-CASE-041",
+      "source_type": "rule_template",
+      "evidence_level": "RULE_DERIVED",
+      "title_cn": "Visa 13.1 商品/服务未收到：典型场景（规则还原）",
+      "scheme": "Visa",
+      "reason_code": "13.1",
+      "parties": {
+        "cardholder": "持卡人",
+        "issuer": "发卡行",
+        "acquirer": "收单行",
+        "merchant": "商户",
+        "psp": "NOT_STATED",
+        "platform": "物流商"
+      },
+      "transaction_facts": {
+        "transaction_id": "NOT_STATED",
+        "order_id": "NOT_STATED",
+        "transaction_time": "NOT_STATED",
+        "amount": "NOT_STATED",
+        "currency": "NOT_STATED",
+        "product_or_service": "NOT_STATED",
+        "payment_channel": "NOT_STATED",
+        "authentication_method": "NOT_STATED",
+        "delivery_or_service_status": "争议中",
+        "refund_status": "NOT_STATED",
+        "customer_contact_status": "NOT_STATED"
+      },
+      "dispute_facts": {
+        "dispute_trigger": "未收到商品/服务",
+        "cardholder_claim": "没收到",
+        "issuer_notice": "13.1",
+        "reason_code": "13.1",
+        "dispute_received_at": "NOT_STATED",
+        "response_deadline": "NOT_STATED",
+        "merchant_position": "NOT_STATED",
+        "initial_case_status": "OPEN",
+        "should_accept_or_contest": "CONDITIONAL",
+        "recommendation_basis": "证据链（Tracking→Delivery→Recipient→POD）完整则抗辩"
+      },
+      "evidence_required": [
+        {
+          "evidence_type": "TRACKING",
+          "evidence_name_cn": "物流轨迹/航班起飞证明",
+          "required_or_optional": "required",
+          "why_needed": "证明运输",
+          "rule_reference": "SRC-01 P40-41",
+          "expected_fields": "运单/航段",
+          "acceptable_format": "系统记录",
+          "available_in_case": "视案件而定",
+          "validation_method": "系统核对",
+          "human_confirmation_required": false,
+          "missing_consequence": "无法证明发货",
+          "expected_source": "CONDITIONAL"
+        },
+        {
+          "evidence_type": "POD",
+          "evidence_name_cn": "签收证明/自提记录/服务使用日志",
+          "required_or_optional": "required",
+          "why_needed": "证明交付给对应消费者",
+          "rule_reference": "SRC-01 P40-41",
+          "expected_fields": "收件人、签名、日期",
+          "acceptable_format": "POD/日志",
+          "available_in_case": "视案件而定",
+          "validation_method": "收件人比对",
+          "human_confirmation_required": true,
+          "missing_consequence": "证据链断裂",
+          "expected_source": "OCR_THEN_REVIEW"
+        }
+      ],
+      "should_accept_or_contest": "CONDITIONAL",
+      "expected_result": "NOT_STATED",
+      "derived_from_rule_ids": [],
+      "source_ids": [
+        "SRC-01",
+        "SRC-03"
+      ],
+      "provenance": {
+        "verification_status": "NEEDS_CONFIRMATION",
+        "conflict_ids": [
+          "CONFLICT-012"
+        ],
+        "production_eligible": false,
+        "rule_version": [
+          "June 2024（Dispute Management Guidelines for Visa Merchants）",
+          "无版本号（内部整理稿）"
+        ],
+        "effective_date": "NOT_STATED"
+      },
+      "sandbox_flag": true
+    },
+    {
+      "case_template_id": "CB-CASE-042",
+      "source_type": "rule_template",
+      "evidence_level": "RULE_DERIVED",
+      "title_cn": "Visa 11.3 无授权/逾期清算：典型场景（规则还原）",
+      "scheme": "Visa",
+      "reason_code": "11.3",
+      "parties": {
+        "cardholder": "持卡人",
+        "issuer": "发卡行",
+        "acquirer": "收单行",
+        "merchant": "商户",
+        "psp": "NOT_STATED",
+        "platform": "无"
+      },
+      "transaction_facts": {
+        "transaction_id": "NOT_STATED",
+        "order_id": "NOT_STATED",
+        "transaction_time": "NOT_STATED",
+        "amount": "NOT_STATED",
+        "currency": "NOT_STATED",
+        "product_or_service": "NOT_STATED",
+        "payment_channel": "NOT_STATED",
+        "authentication_method": "授权",
+        "delivery_or_service_status": "NOT_STATED",
+        "refund_status": "NOT_STATED",
+        "customer_contact_status": "NOT_STATED"
+      },
+      "dispute_facts": {
+        "dispute_trigger": "授权缺失/逾期清算",
+        "cardholder_claim": "N/A（发卡行主张）",
+        "issuer_notice": "11.3",
+        "reason_code": "11.3",
+        "dispute_received_at": "NOT_STATED",
+        "response_deadline": "NOT_STATED",
+        "merchant_position": "授权存在且按时清算",
+        "initial_case_status": "OPEN",
+        "should_accept_or_contest": "CONDITIONAL",
+        "recommendation_basis": "自动比对授权响应/授权码/金额/清算日期决定接受或抗辩"
+      },
+      "evidence_required": [
+        {
+          "evidence_type": "AUTH_LOG",
+          "evidence_name_cn": "授权响应/授权码/金额/清算日期",
+          "required_or_optional": "required",
+          "why_needed": "证明授权有效且按时清算",
+          "rule_reference": "SRC-03 §10；SRC-01 P31",
+          "expected_fields": "授权码、金额、交易日、清算日",
+          "acceptable_format": "报文",
+          "available_in_case": "视案件而定",
+          "validation_method": "规则引擎自动比对",
+          "human_confirmation_required": false,
+          "missing_consequence": "建议接受",
+          "expected_source": "SYSTEM_OF_RECORD"
+        }
+      ],
+      "should_accept_or_contest": "CONDITIONAL",
+      "expected_result": "NOT_STATED",
+      "derived_from_rule_ids": [],
+      "source_ids": [
+        "SRC-01",
+        "SRC-03"
+      ],
+      "provenance": {
+        "verification_status": "NEEDS_CONFIRMATION",
+        "conflict_ids": [
+          "CONFLICT-001",
+          "CONFLICT-012"
+        ],
+        "production_eligible": false,
+        "rule_version": [
+          "June 2024（Dispute Management Guidelines for Visa Merchants）",
+          "无版本号（内部整理稿）"
+        ],
+        "effective_date": "2024-04-13 起（11.3 生效，SRC-01 P2/P31）"
+      },
+      "sandbox_flag": true
+    },
+    {
+      "case_template_id": "CB-CASE-043",
+      "source_type": "rule_template",
+      "evidence_level": "RULE_DERIVED",
+      "title_cn": "Visa 12.6 重复处理/已其他方式付款：典型场景（规则还原）",
+      "scheme": "Visa",
+      "reason_code": "12.6.1/12.6.2",
+      "parties": {
+        "cardholder": "持卡人",
+        "issuer": "发卡行",
+        "acquirer": "收单行",
+        "merchant": "商户",
+        "psp": "NOT_STATED",
+        "platform": "无"
+      },
+      "transaction_facts": {
+        "transaction_id": "NOT_STATED",
+        "order_id": "NOT_STATED",
+        "transaction_time": "NOT_STATED",
+        "amount": "NOT_STATED",
+        "currency": "NOT_STATED",
+        "product_or_service": "NOT_STATED",
+        "payment_channel": "NOT_STATED",
+        "authentication_method": "NOT_STATED",
+        "delivery_or_service_status": "NOT_STATED",
+        "refund_status": "NOT_STATED",
+        "customer_contact_status": "NOT_STATED"
+      },
+      "dispute_facts": {
+        "dispute_trigger": "重复扣款",
+        "cardholder_claim": "被扣两次/已其他方式付款",
+        "issuer_notice": "12.6",
+        "reason_code": "12.6",
+        "dispute_received_at": "NOT_STATED",
+        "response_deadline": "NOT_STATED",
+        "merchant_position": "两笔独立",
+        "initial_case_status": "OPEN",
+        "should_accept_or_contest": "CONDITIONAL",
+        "recommendation_basis": "比对 Order ID/SKU/Authorization/Capture/Invoice 判定"
+      },
+      "evidence_required": [
+        {
+          "evidence_type": "ORDER_MATCH",
+          "evidence_name_cn": "订单/授权/清算多字段比对",
+          "required_or_optional": "required",
+          "why_needed": "判定是否重复",
+          "rule_reference": "SRC-03 §9",
+          "expected_fields": "Order ID、授权、清算",
+          "acceptable_format": "记录",
+          "available_in_case": "视案件而定",
+          "validation_method": "规则引擎",
+          "human_confirmation_required": true,
+          "missing_consequence": "无法判定",
+          "expected_source": "CONDITIONAL"
+        }
+      ],
+      "should_accept_or_contest": "CONDITIONAL",
+      "expected_result": "NOT_STATED",
+      "derived_from_rule_ids": [],
+      "source_ids": [
+        "SRC-01",
+        "SRC-03"
+      ],
+      "provenance": {
+        "verification_status": "NEEDS_CONFIRMATION",
+        "conflict_ids": [
+          "CONFLICT-002",
+          "CONFLICT-012"
+        ],
+        "production_eligible": false,
+        "rule_version": [
+          "June 2024（Dispute Management Guidelines for Visa Merchants）",
+          "无版本号（内部整理稿）"
+        ],
+        "effective_date": "NOT_STATED"
+      },
+      "sandbox_flag": true
+    },
+    {
+      "case_template_id": "CB-CASE-044",
+      "source_type": "rule_template",
+      "evidence_level": "RULE_DERIVED",
+      "title_cn": "Visa 13.7 已取消商品/服务：典型场景（规则还原）",
+      "scheme": "Visa",
+      "reason_code": "13.7",
+      "parties": {
+        "cardholder": "持卡人",
+        "issuer": "发卡行",
+        "acquirer": "收单行",
+        "merchant": "商户",
+        "psp": "NOT_STATED",
+        "platform": "无"
+      },
+      "transaction_facts": {
+        "transaction_id": "NOT_STATED",
+        "order_id": "NOT_STATED",
+        "transaction_time": "NOT_STATED",
+        "amount": "NOT_STATED",
+        "currency": "NOT_STATED",
+        "product_or_service": "预订/商品",
+        "payment_channel": "卡支付",
+        "authentication_method": "NOT_STATED",
+        "delivery_or_service_status": "已取消",
+        "refund_status": "未退款",
+        "customer_contact_status": "已取消"
+      },
+      "dispute_facts": {
+        "dispute_trigger": "取消未退款",
+        "cardholder_claim": "已取消",
+        "issuer_notice": "13.7",
+        "reason_code": "13.7",
+        "dispute_received_at": "NOT_STATED",
+        "response_deadline": "NOT_STATED",
+        "merchant_position": "取消超期/不合规",
+        "initial_case_status": "OPEN",
+        "should_accept_or_contest": "CONDITIONAL",
+        "recommendation_basis": "政策披露+取消时间判定"
+      },
+      "evidence_required": [
+        {
+          "evidence_type": "POLICY",
+          "evidence_name_cn": "取消/退款政策披露证明",
+          "required_or_optional": "required",
+          "why_needed": "证明政策已告知",
+          "rule_reference": "SRC-01 P17/P49-50",
+          "expected_fields": "披露记录",
+          "acceptable_format": "截图/小票",
+          "available_in_case": "视案件而定",
+          "validation_method": "人工核对",
+          "human_confirmation_required": true,
+          "missing_consequence": "须退款",
+          "expected_source": "MERCHANT_UPLOAD"
+        },
+        {
+          "evidence_type": "TIMESTAMP",
+          "evidence_name_cn": "取消时间/未按政策取消证明",
+          "required_or_optional": "required",
+          "why_needed": "证明取消不符合约定",
+          "rule_reference": "SRC-01 P49-50",
+          "expected_fields": "取消时间",
+          "acceptable_format": "记录",
+          "available_in_case": "视案件而定",
+          "validation_method": "时间比对",
+          "human_confirmation_required": true,
+          "missing_consequence": "抗辩无据",
+          "expected_source": "OCR_THEN_REVIEW"
+        }
+      ],
+      "should_accept_or_contest": "CONDITIONAL",
+      "expected_result": "NOT_STATED",
+      "derived_from_rule_ids": [],
+      "source_ids": [
+        "SRC-01"
+      ],
+      "provenance": {
+        "verification_status": "NEEDS_CONFIRMATION",
+        "conflict_ids": [
+          "CONFLICT-012"
+        ],
+        "production_eligible": false,
+        "rule_version": [
+          "June 2024（Dispute Management Guidelines for Visa Merchants）"
+        ],
+        "effective_date": "NOT_STATED"
+      },
+      "sandbox_flag": true
+    },
+    {
+      "case_template_id": "CB-CASE-045",
+      "source_type": "rule_template",
+      "evidence_level": "RULE_DERIVED",
+      "title_cn": "Mastercard 4853 货不对板/瑕疵：典型场景（规则还原）",
+      "scheme": "Mastercard",
+      "reason_code": "4853",
+      "parties": {
+        "cardholder": "持卡人",
+        "issuer": "发卡行",
+        "acquirer": "收单行",
+        "merchant": "商户",
+        "psp": "NOT_STATED",
+        "platform": "无"
+      },
+      "transaction_facts": {
+        "transaction_id": "NOT_STATED",
+        "order_id": "NOT_STATED",
+        "transaction_time": "NOT_STATED",
+        "amount": "NOT_STATED",
+        "currency": "NOT_STATED",
+        "product_or_service": "NOT_STATED",
+        "payment_channel": "NOT_STATED",
+        "authentication_method": "NOT_STATED",
+        "delivery_or_service_status": "已收货但争议",
+        "refund_status": "NOT_STATED",
+        "customer_contact_status": "已联系商户"
+      },
+      "dispute_facts": {
+        "dispute_trigger": "货不对板",
+        "cardholder_claim": "与描述不符/有缺陷",
+        "issuer_notice": "4853",
+        "reason_code": "4853",
+        "dispute_received_at": "NOT_STATED",
+        "response_deadline": "120 天（SP 30/45 天地区而异）",
+        "merchant_position": "已按约交付",
+        "initial_case_status": "OPEN",
+        "should_accept_or_contest": "CONDITIONAL",
+        "recommendation_basis": "按 2700/2001/2004/2011/无效清单选择抗辩路径"
+      },
+      "evidence_required": [
+        {
+          "evidence_type": "MERCHANT_NARRATIVE",
+          "evidence_name_cn": "已修/已换/按约交付说明",
+          "required_or_optional": "required",
+          "why_needed": "2700 抗辩",
+          "rule_reference": "SRC-02 P160-170",
+          "expected_fields": "修复/更换记录、签收",
+          "acceptable_format": "文档",
+          "available_in_case": "视案件而定",
+          "validation_method": "人工核对",
+          "human_confirmation_required": true,
+          "missing_consequence": "转向其他抗辩",
+          "expected_source": "MERCHANT_UPLOAD"
+        },
+        {
+          "evidence_type": "INSPECTION",
+          "evidence_name_cn": "专家/检验意见",
+          "required_or_optional": "optional",
+          "why_needed": "强化质量/真实性证明",
+          "rule_reference": "SRC-02 P158-159",
+          "expected_fields": "意见",
+          "acceptable_format": "报告",
+          "available_in_case": "视案件而定",
+          "validation_method": "人工审查",
+          "human_confirmation_required": true,
+          "missing_consequence": "主观争议难反驳",
+          "expected_source": "MERCHANT_UPLOAD"
+        }
+      ],
+      "should_accept_or_contest": "CONDITIONAL",
+      "expected_result": "NOT_STATED",
+      "derived_from_rule_ids": [],
+      "source_ids": [
+        "SRC-02",
+        "SRC-03"
+      ],
+      "provenance": {
+        "verification_status": "CONFLICTING_SOURCES",
+        "conflict_ids": [
+          "CONFLICT-006"
+        ],
+        "production_eligible": false,
+        "rule_version": [
+          "2026-05-19（Chargeback Guide Merchant Edition）",
+          "无版本号（内部整理稿）"
+        ],
+        "effective_date": "NOT_STATED"
+      },
+      "sandbox_flag": true
+    },
+    {
+      "case_template_id": "CB-CASE-046",
+      "source_type": "rule_template",
+      "evidence_level": "RULE_DERIVED",
+      "title_cn": "Mastercard 4853 商品/服务未提供：典型场景（规则还原）",
+      "scheme": "Mastercard",
+      "reason_code": "4853",
+      "parties": {
+        "cardholder": "持卡人",
+        "issuer": "发卡行",
+        "acquirer": "收单行",
+        "merchant": "商户",
+        "psp": "NOT_STATED",
+        "platform": "物流"
+      },
+      "transaction_facts": {
+        "transaction_id": "NOT_STATED",
+        "order_id": "NOT_STATED",
+        "transaction_time": "NOT_STATED",
+        "amount": "NOT_STATED",
+        "currency": "NOT_STATED",
+        "product_or_service": "NOT_STATED",
+        "payment_channel": "NOT_STATED",
+        "authentication_method": "NOT_STATED",
+        "delivery_or_service_status": "未收到",
+        "refund_status": "NOT_STATED",
+        "customer_contact_status": "NOT_STATED"
+      },
+      "dispute_facts": {
+        "dispute_trigger": "未收到",
+        "cardholder_claim": "没收到商品/服务",
+        "issuer_notice": "4853",
+        "reason_code": "4853",
+        "dispute_received_at": "NOT_STATED",
+        "response_deadline": "120 天（大陆 90 天；停业礼品卡 540 天）",
+        "merchant_position": "已提供",
+        "initial_case_status": "OPEN",
+        "should_accept_or_contest": "CONDITIONAL",
+        "recommendation_basis": "交付照片/签收/QR 使用记录/机票已用等证据则抗辩"
+      },
+      "evidence_required": [
+        {
+          "evidence_type": "DELIVERY",
+          "evidence_name_cn": "交付证明（签收/QR/PIN 使用/航班已发生）",
+          "required_or_optional": "required",
+          "why_needed": "证明已提供",
+          "rule_reference": "SRC-02 P183/P972",
+          "expected_fields": "交付记录",
+          "acceptable_format": "文档/日志",
+          "available_in_case": "视案件而定",
+          "validation_method": "核对",
+          "human_confirmation_required": true,
+          "missing_consequence": "抗辩无据",
+          "expected_source": "CONDITIONAL"
+        }
+      ],
+      "should_accept_or_contest": "CONDITIONAL",
+      "expected_result": "NOT_STATED",
+      "derived_from_rule_ids": [],
+      "source_ids": [
+        "SRC-02"
+      ],
+      "provenance": {
+        "verification_status": "CONFLICTING_SOURCES",
+        "conflict_ids": [
+          "CONFLICT-006"
+        ],
+        "production_eligible": false,
+        "rule_version": [
+          "2026-05-19（Chargeback Guide Merchant Edition）"
+        ],
+        "effective_date": "NOT_STATED"
+      },
+      "sandbox_flag": true
+    },
+    {
+      "case_template_id": "CB-CASE-047",
+      "source_type": "rule_template",
+      "evidence_level": "RULE_DERIVED",
+      "title_cn": "Mastercard 4853 退款未处理：典型场景（规则还原）",
+      "scheme": "Mastercard",
+      "reason_code": "4853",
+      "parties": {
+        "cardholder": "持卡人",
+        "issuer": "发卡行",
+        "acquirer": "收单行",
+        "merchant": "商户",
+        "psp": "NOT_STATED",
+        "platform": "无"
+      },
+      "transaction_facts": {
+        "transaction_id": "NOT_STATED",
+        "order_id": "NOT_STATED",
+        "transaction_time": "NOT_STATED",
+        "amount": "NOT_STATED",
+        "currency": "NOT_STATED",
+        "product_or_service": "NOT_STATED",
+        "payment_channel": "NOT_STATED",
+        "authentication_method": "NOT_STATED",
+        "delivery_or_service_status": "NOT_STATED",
+        "refund_status": "未处理",
+        "customer_contact_status": "NOT_STATED"
+      },
+      "dispute_facts": {
+        "dispute_trigger": "退款未处理",
+        "cardholder_claim": "应退未退",
+        "issuer_notice": "4853",
+        "reason_code": "4853",
+        "dispute_received_at": "NOT_STATED",
+        "response_deadline": "15–120 天（VAT 120 天）",
+        "merchant_position": "退款不欠/已退",
+        "initial_case_status": "OPEN",
+        "should_accept_or_contest": "CONDITIONAL",
+        "recommendation_basis": "已退款则 2011 并在 SP 记录；不欠则 2700"
+      },
+      "evidence_required": [
+        {
+          "evidence_type": "REFUND_RECORD",
+          "evidence_name_cn": "退款记录",
+          "required_or_optional": "required",
+          "why_needed": "证明已退或不该退",
+          "rule_reference": "SRC-02 P273-276",
+          "expected_fields": "退款日期、金额、ARD",
+          "acceptable_format": "记录",
+          "available_in_case": "视案件而定",
+          "validation_method": "核对",
+          "human_confirmation_required": false,
+          "missing_consequence": "建议退款",
+          "expected_source": "SYSTEM_OF_RECORD"
+        }
+      ],
+      "should_accept_or_contest": "CONDITIONAL",
+      "expected_result": "NOT_STATED",
+      "derived_from_rule_ids": [],
+      "source_ids": [
+        "SRC-02"
+      ],
+      "provenance": {
+        "verification_status": "CONFLICTING_SOURCES",
+        "conflict_ids": [
+          "CONFLICT-006"
+        ],
+        "production_eligible": false,
+        "rule_version": [
+          "2026-05-19（Chargeback Guide Merchant Edition）"
+        ],
+        "effective_date": "NOT_STATED"
+      },
+      "sandbox_flag": true
+    },
+    {
+      "case_template_id": "CB-CASE-048",
+      "source_type": "rule_template",
+      "evidence_level": "RULE_DERIVED",
+      "title_cn": "Mastercard 4837 无持卡人授权：典型场景（规则还原）",
+      "scheme": "Mastercard",
+      "reason_code": "4837",
+      "parties": {
+        "cardholder": "持卡人",
+        "issuer": "发卡行",
+        "acquirer": "收单行",
+        "merchant": "商户",
+        "psp": "NOT_STATED",
+        "platform": "无"
+      },
+      "transaction_facts": {
+        "transaction_id": "NOT_STATED",
+        "order_id": "NOT_STATED",
+        "transaction_time": "NOT_STATED",
+        "amount": "NOT_STATED",
+        "currency": "NOT_STATED",
+        "product_or_service": "NOT_STATED",
+        "payment_channel": "NOT_STATED",
+        "authentication_method": "可选 3DS/AVS",
+        "delivery_or_service_status": "NOT_STATED",
+        "refund_status": "NOT_STATED",
+        "customer_contact_status": "NOT_STATED"
+      },
+      "dispute_facts": {
+        "dispute_trigger": "未授权",
+        "cardholder_claim": "我没授权",
+        "issuer_notice": "4837",
+        "reason_code": "4837",
+        "dispute_received_at": "NOT_STATED",
+        "response_deadline": "120 天（大陆 5–90 天）",
+        "merchant_position": "持卡人参与了交易",
+        "initial_case_status": "OPEN",
+        "should_accept_or_contest": "CONDITIONAL",
+        "recommendation_basis": "认证/CE/AVS/历史交易满足则可抗辩；guest checkout 无 CE"
+      },
+      "evidence_required": [
+        {
+          "evidence_type": "AUTH",
+          "evidence_name_cn": "3DS 认证（ECI 211/212/217/242）",
+          "required_or_optional": "optional",
+          "why_needed": "认证抗辩",
+          "rule_reference": "SRC-02 P503",
+          "expected_fields": "ECI",
+          "acceptable_format": "报文",
+          "available_in_case": "视案件而定",
+          "validation_method": "规则引擎",
+          "human_confirmation_required": false,
+          "missing_consequence": "转向 CE",
+          "expected_source": "SYSTEM_OF_RECORD"
+        },
+        {
+          "evidence_type": "COMP_EVID",
+          "evidence_name_cn": "Compelling Evidence（注册/历史交易等）",
+          "required_or_optional": "optional",
+          "why_needed": "证明持卡人参与",
+          "rule_reference": "SRC-02 P505-509",
+          "expected_fields": "注册记录、设备、历史交易",
+          "acceptable_format": "记录",
+          "available_in_case": "视案件而定",
+          "validation_method": "匹配",
+          "human_confirmation_required": false,
+          "missing_consequence": "无 CE 则建议接受",
+          "expected_source": "CONDITIONAL"
+        }
+      ],
+      "should_accept_or_contest": "CONDITIONAL",
+      "expected_result": "NOT_STATED",
+      "derived_from_rule_ids": [],
+      "source_ids": [
+        "SRC-02",
+        "SRC-03"
+      ],
+      "provenance": {
+        "verification_status": "CONFLICTING_SOURCES",
+        "conflict_ids": [
+          "CONFLICT-006"
+        ],
+        "production_eligible": false,
+        "rule_version": [
+          "2026-05-19（Chargeback Guide Merchant Edition）",
+          "无版本号（内部整理稿）"
+        ],
+        "effective_date": "NOT_STATED"
+      },
+      "sandbox_flag": true
+    },
+    {
+      "case_template_id": "CB-CASE-049",
+      "source_type": "rule_template",
+      "evidence_level": "RULE_DERIVED",
+      "title_cn": "Mastercard 4808 授权相关拒付：典型场景（规则还原）",
+      "scheme": "Mastercard",
+      "reason_code": "4808",
+      "parties": {
+        "cardholder": "持卡人",
+        "issuer": "发卡行",
+        "acquirer": "收单行",
+        "merchant": "商户",
+        "psp": "NOT_STATED",
+        "platform": "无"
+      },
+      "transaction_facts": {
+        "transaction_id": "NOT_STATED",
+        "order_id": "NOT_STATED",
+        "transaction_time": "NOT_STATED",
+        "amount": "NOT_STATED",
+        "currency": "NOT_STATED",
+        "product_or_service": "NOT_STATED",
+        "payment_channel": "NOT_STATED",
+        "authentication_method": "授权",
+        "delivery_or_service_status": "NOT_STATED",
+        "refund_status": "NOT_STATED",
+        "customer_contact_status": "NOT_STATED"
+      },
+      "dispute_facts": {
+        "dispute_trigger": "授权类拒付",
+        "cardholder_claim": "N/A",
+        "issuer_notice": "4808",
+        "reason_code": "4808",
+        "dispute_received_at": "NOT_STATED",
+        "response_deadline": "90 天（SP 30/45 天）",
+        "merchant_position": "授权正确取得",
+        "initial_case_status": "OPEN",
+        "should_accept_or_contest": "CONDITIONAL",
+        "recommendation_basis": "2008 授权已取得/2713 一次授权多笔清算/2011 已退款"
+      },
+      "evidence_required": [
+        {
+          "evidence_type": "AUTH_LOG",
+          "evidence_name_cn": "授权记录",
+          "required_or_optional": "required",
+          "why_needed": "2008/2713 抗辩",
+          "rule_reference": "SRC-02 P64-73/P889-890",
+          "expected_fields": "授权码、日期、金额",
+          "acceptable_format": "报文",
+          "available_in_case": "视案件而定",
+          "validation_method": "规则引擎",
+          "human_confirmation_required": false,
+          "missing_consequence": "建议接受",
+          "expected_source": "SYSTEM_OF_RECORD"
+        }
+      ],
+      "should_accept_or_contest": "CONDITIONAL",
+      "expected_result": "NOT_STATED",
+      "derived_from_rule_ids": [],
+      "source_ids": [
+        "SRC-02"
+      ],
+      "provenance": {
+        "verification_status": "CONFLICTING_SOURCES",
+        "conflict_ids": [
+          "CONFLICT-006"
+        ],
+        "production_eligible": false,
+        "rule_version": [
+          "2026-05-19（Chargeback Guide Merchant Edition）"
+        ],
+        "effective_date": "NOT_STATED"
+      },
+      "sandbox_flag": true
+    },
+    {
+      "case_template_id": "CB-CASE-050",
+      "source_type": "rule_template",
+      "evidence_level": "RULE_DERIVED",
+      "title_cn": "Mastercard 4834 POI 错误（重复扣款等）：典型场景（规则还原）",
+      "scheme": "Mastercard",
+      "reason_code": "4834",
+      "parties": {
+        "cardholder": "持卡人",
+        "issuer": "发卡行",
+        "acquirer": "收单行",
+        "merchant": "商户/ATM",
+        "psp": "NOT_STATED",
+        "platform": "无"
+      },
+      "transaction_facts": {
+        "transaction_id": "NOT_STATED",
+        "order_id": "NOT_STATED",
+        "transaction_time": "NOT_STATED",
+        "amount": "NOT_STATED",
+        "currency": "NOT_STATED",
+        "product_or_service": "NOT_STATED",
+        "payment_channel": "NOT_STATED",
+        "authentication_method": "NOT_STATED",
+        "delivery_or_service_status": "NOT_STATED",
+        "refund_status": "NOT_STATED",
+        "customer_contact_status": "NOT_STATED"
+      },
+      "dispute_facts": {
+        "dispute_trigger": "POI 错误",
+        "cardholder_claim": "扣款有误",
+        "issuer_notice": "4834",
+        "reason_code": "4834",
+        "dispute_received_at": "NOT_STATED",
+        "response_deadline": "90/120 天（子类而异）",
+        "merchant_position": "处理正确",
+        "initial_case_status": "OPEN",
+        "should_accept_or_contest": "CONDITIONAL",
+        "recommendation_basis": "2700 对应纠正证据；差额类只退差额"
+      },
+      "evidence_required": [
+        {
+          "evidence_type": "TX_RECORD",
+          "evidence_name_cn": "终端/交易记录（按子类）",
+          "required_or_optional": "required",
+          "why_needed": "证明处理正确",
+          "rule_reference": "SRC-02 P685-776",
+          "expected_fields": "按子类：ATM 日志/收据/终端数据",
+          "acceptable_format": "记录",
+          "available_in_case": "视案件而定",
+          "validation_method": "规则引擎/人工",
+          "human_confirmation_required": true,
+          "missing_consequence": "建议接受",
+          "expected_source": "SYSTEM_OF_RECORD"
+        }
+      ],
+      "should_accept_or_contest": "CONDITIONAL",
+      "expected_result": "NOT_STATED",
+      "derived_from_rule_ids": [],
+      "source_ids": [
+        "SRC-02"
+      ],
+      "provenance": {
+        "verification_status": "CONFLICTING_SOURCES",
+        "conflict_ids": [
+          "CONFLICT-004",
+          "CONFLICT-006"
+        ],
+        "production_eligible": false,
+        "rule_version": [
+          "2026-05-19（Chargeback Guide Merchant Edition）"
+        ],
+        "effective_date": "NOT_STATED"
+      },
+      "sandbox_flag": true
+    },
+    {
+      "case_template_id": "CB-CASE-051",
+      "source_type": "rule_template",
+      "evidence_level": "RULE_DERIVED",
+      "title_cn": "Mastercard 4870/4871 芯片责任转移：典型场景（规则还原）",
+      "scheme": "Mastercard",
+      "reason_code": "4870/4871",
+      "parties": {
+        "cardholder": "持卡人",
+        "issuer": "发卡行",
+        "acquirer": "收单行",
+        "merchant": "线下商户",
+        "psp": "NOT_STATED",
+        "platform": "无"
+      },
+      "transaction_facts": {
+        "transaction_id": "NOT_STATED",
+        "order_id": "NOT_STATED",
+        "transaction_time": "NOT_STATED",
+        "amount": "NOT_STATED",
+        "currency": "NOT_STATED",
+        "product_or_service": "NOT_STATED",
+        "payment_channel": "芯片卡/磁条",
+        "authentication_method": "EMV/PIN",
+        "delivery_or_service_status": "NOT_STATED",
+        "refund_status": "NOT_STATED",
+        "customer_contact_status": "NOT_STATED"
+      },
+      "dispute_facts": {
+        "dispute_trigger": "芯片责任转移拒付",
+        "cardholder_claim": "未授权",
+        "issuer_notice": "4870/4871",
+        "reason_code": "4870/4871",
+        "dispute_received_at": "NOT_STATED",
+        "response_deadline": "120 天",
+        "merchant_position": "芯片数据已提交",
+        "initial_case_status": "OPEN",
+        "should_accept_or_contest": "CONDITIONAL",
+        "recommendation_basis": "DE 55 已提供或非责任转移交易则抗辩"
+      },
+      "evidence_required": [
+        {
+          "evidence_type": "EMV_DATA",
+          "evidence_name_cn": "DE 55/芯片数据/终端能力",
+          "required_or_optional": "required",
+          "why_needed": "责任判定",
+          "rule_reference": "SRC-02 P588-589",
+          "expected_fields": "DE 55、fallback 标识、CVM",
+          "acceptable_format": "报文",
+          "available_in_case": "视案件而定",
+          "validation_method": "规则引擎",
+          "human_confirmation_required": false,
+          "missing_consequence": "责任转移",
+          "expected_source": "SYSTEM_OF_RECORD"
+        }
+      ],
+      "should_accept_or_contest": "CONDITIONAL",
+      "expected_result": "NOT_STATED",
+      "derived_from_rule_ids": [],
+      "source_ids": [
+        "SRC-02"
+      ],
+      "provenance": {
+        "verification_status": "CONFLICTING_SOURCES",
+        "conflict_ids": [
+          "CONFLICT-009"
+        ],
+        "production_eligible": false,
+        "rule_version": [
+          "2026-05-19（Chargeback Guide Merchant Edition）"
+        ],
+        "effective_date": "NOT_STATED"
+      },
+      "sandbox_flag": true
+    },
+    {
+      "case_template_id": "CB-CASE-052",
+      "source_type": "rule_template",
+      "evidence_level": "RULE_DERIVED",
+      "title_cn": "Amex C08/C02：未收到商品与退款未处理（规则映射还原）",
+      "scheme": "American Express",
+      "reason_code": "C08 / C02",
+      "parties": {
+        "cardholder": "持卡人",
+        "issuer": "Amex",
+        "acquirer": "收单方",
+        "merchant": "商户",
+        "psp": "NOT_STATED",
+        "platform": "无"
+      },
+      "transaction_facts": {
+        "transaction_id": "NOT_STATED",
+        "order_id": "NOT_STATED",
+        "transaction_time": "NOT_STATED",
+        "amount": "NOT_STATED",
+        "currency": "NOT_STATED",
+        "product_or_service": "NOT_STATED",
+        "payment_channel": "NOT_STATED",
+        "authentication_method": "NOT_STATED",
+        "delivery_or_service_status": "NOT_STATED",
+        "refund_status": "NOT_STATED",
+        "customer_contact_status": "NOT_STATED"
+      },
+      "dispute_facts": {
+        "dispute_trigger": "未收到/退款未处理",
+        "cardholder_claim": "NOT_STATED",
+        "issuer_notice": "C08/C02",
+        "reason_code": "C08/C02",
+        "dispute_received_at": "NOT_STATED",
+        "response_deadline": "NOT_STATED（原文缺失）",
+        "merchant_position": "NOT_STATED",
+        "initial_case_status": "OPEN",
+        "should_accept_or_contest": "INSUFFICIENT_INFORMATION",
+        "recommendation_basis": "Amex 原文缺失，按同类场景逻辑暂列证据清单，需业务确认"
+      },
+      "evidence_required": [
+        {
+          "evidence_type": "DELIVERY",
+          "evidence_name_cn": "交付/退款证明（类比）",
+          "required_or_optional": "required",
+          "why_needed": "证明履约或退款",
+          "rule_reference": "SRC-03 §28（映射，非 Amex 原文）",
+          "expected_fields": "交付/退款记录",
+          "acceptable_format": "记录",
+          "available_in_case": "视案件而定",
+          "validation_method": "人工",
+          "human_confirmation_required": true,
+          "missing_consequence": "建议接受",
+          "expected_source": "CONDITIONAL"
+        }
+      ],
+      "should_accept_or_contest": "INSUFFICIENT_INFORMATION",
+      "expected_result": "NOT_STATED",
+      "derived_from_rule_ids": [],
+      "source_ids": [
+        "SRC-03"
+      ],
+      "provenance": {
+        "verification_status": "NEEDS_CONFIRMATION",
+        "conflict_ids": [
+          "CONFLICT-014"
+        ],
+        "production_eligible": false,
+        "rule_version": [
+          "无版本号（内部整理稿）"
+        ],
+        "effective_date": "NOT_STATED"
+      },
+      "sandbox_flag": true
+    },
+    {
+      "case_template_id": "CB-CASE-060",
+      "source_type": "synthetic",
+      "evidence_level": "SYNTHETIC_DEMO",
+      "title_cn": "合成：证据充分的电商拒付抗辩案（13.1 类）",
+      "scheme": "Visa",
+      "reason_code": "13.1",
+      "parties": {
+        "cardholder": "Sandbox 用户 sandbox-user-001",
+        "issuer": "发卡行（模拟）",
+        "acquirer": "收单机构（模拟）",
+        "merchant": "云岚数码 sandbox-mer-001",
+        "psp": "OceanPilot",
+        "platform": "物流 sandbox-courier-001"
+      },
+      "transaction_facts": {
+        "transaction_id": "sandbox-txn-060-0001",
+        "order_id": "sandbox-ord-060-0001",
+        "transaction_time": "2026-08-01T10:30:00Z",
+        "amount": "USD 299",
+        "currency": "USD",
+        "product_or_service": "无线降噪耳机",
+        "payment_channel": "电商 CNP",
+        "authentication_method": "3DS 未强制（ECI 7）",
+        "delivery_or_service_status": "已签收（POD 收件人=持卡人）",
+        "refund_status": "未退款",
+        "customer_contact_status": "无投诉前沟通"
+      },
+      "dispute_facts": {
+        "dispute_trigger": "持卡人声称未收到商品",
+        "cardholder_claim": "我没有收到耳机",
+        "issuer_notice": "13.1 拒付通知（模拟报文）",
+        "reason_code": "13.1",
+        "dispute_received_at": "2026-08-25T02:00:00Z",
+        "response_deadline": "2026-09-04T23:59:59Z（演示设定，Visa 天数需收单确认）",
+        "merchant_position": "已妥投且签收人一致",
+        "initial_case_status": "OPEN",
+        "should_accept_or_contest": "CONTEST",
+        "recommendation_basis": "证据链完整：Tracking→POD→收件人一致→地址匹配（依据 CB-CASE-026/041）"
+      },
+      "evidence_required": [
+        {
+          "evidence_type": "TRACKING",
+          "evidence_name_cn": "物流轨迹",
+          "required_or_optional": "required",
+          "why_needed": "证明运输",
+          "rule_reference": "SRC-01 P40-41",
+          "expected_fields": "运单号、轨迹",
+          "acceptable_format": "PDF/系统记录",
+          "available_in_case": "是",
+          "validation_method": "物流系统核对",
+          "human_confirmation_required": false,
+          "missing_consequence": "证据链断裂",
+          "expected_source": "CONDITIONAL"
+        },
+        {
+          "evidence_type": "POD",
+          "evidence_name_cn": "签收证明",
+          "required_or_optional": "required",
+          "why_needed": "证明交付给本人",
+          "rule_reference": "SRC-03 §5",
+          "expected_fields": "签名、收件人、日期",
+          "acceptable_format": "PDF",
+          "available_in_case": "是",
+          "validation_method": "收件人比对",
+          "human_confirmation_required": true,
+          "missing_consequence": "无法抗辩",
+          "expected_source": "OCR_THEN_REVIEW"
+        }
+      ],
+      "should_accept_or_contest": "CONTEST",
+      "expected_result": "PENDING",
+      "derived_from_rule_ids": [
+        "CB-CASE-026",
+        "CB-CASE-041"
+      ],
+      "source_ids": [
+        "SRC-01",
+        "SRC-03"
+      ],
+      "provenance": {
+        "verification_status": "NEEDS_CONFIRMATION",
+        "conflict_ids": [
+          "CONFLICT-012"
+        ],
+        "production_eligible": false,
+        "rule_version": [
+          "June 2024（Dispute Management Guidelines for Visa Merchants）",
+          "无版本号（内部整理稿）"
+        ],
+        "effective_date": "NOT_STATED"
+      },
+      "sandbox_flag": true
+    },
+    {
+      "case_template_id": "CB-CASE-061",
+      "source_type": "synthetic",
+      "evidence_level": "SYNTHETIC_DEMO",
+      "title_cn": "合成：证据严重缺失、系统阻止提交（10.4 欺诈）",
+      "scheme": "Visa",
+      "reason_code": "10.4",
+      "parties": {
+        "cardholder": "Sandbox 用户 sandbox-user-002",
+        "issuer": "发卡行（模拟）",
+        "acquirer": "收单机构（模拟）",
+        "merchant": "环球优选 sandbox-mer-002",
+        "psp": "OceanPilot",
+        "platform": "独立站"
+      },
+      "transaction_facts": {
+        "transaction_id": "sandbox-txn-061-0001",
+        "order_id": "sandbox-ord-061-0001",
+        "transaction_time": "2026-08-10T18:00:00Z",
+        "amount": "EUR 459",
+        "currency": "EUR",
+        "product_or_service": "智能手表",
+        "payment_channel": "独立站 CNP",
+        "authentication_method": "无 3DS（guest checkout）",
+        "delivery_or_service_status": "已发货（无签收）",
+        "refund_status": "未退款",
+        "customer_contact_status": "无"
+      },
+      "dispute_facts": {
+        "dispute_trigger": "持卡人否认交易",
+        "cardholder_claim": "我没有买过",
+        "issuer_notice": "10.4",
+        "reason_code": "10.4",
+        "dispute_received_at": "2026-08-28T01:00:00Z",
+        "response_deadline": "2026-09-07T23:59:59Z（演示设定）",
+        "merchant_position": "无法举证持卡人参与",
+        "initial_case_status": "OPEN",
+        "should_accept_or_contest": "ACCEPT",
+        "recommendation_basis": "CE3.0 要素全缺（无认证/无设备/无历史交易），抗辩成功率依据规则极低"
+      },
+      "evidence_required": [
+        {
+          "evidence_type": "AUTH",
+          "evidence_name_cn": "3DS 认证记录",
+          "required_or_optional": "required",
+          "why_needed": "认证保护",
+          "rule_reference": "SRC-01 P14/P26",
+          "expected_fields": "ECI",
+          "acceptable_format": "报文",
+          "available_in_case": "否",
+          "validation_method": "N/A",
+          "human_confirmation_required": false,
+          "missing_consequence": "转向 CE",
+          "expected_source": "SYSTEM_OF_RECORD"
+        },
+        {
+          "evidence_type": "HISTORY",
+          "evidence_name_cn": "同设备历史未争议交易",
+          "required_or_optional": "required",
+          "why_needed": "CE 核心",
+          "rule_reference": "SRC-01 P26",
+          "expected_fields": "设备/IP/时间",
+          "acceptable_format": "记录",
+          "available_in_case": "否",
+          "validation_method": "N/A",
+          "human_confirmation_required": false,
+          "missing_consequence": "无法抗辩",
+          "expected_source": "SYSTEM_OF_RECORD"
+        }
+      ],
+      "should_accept_or_contest": "ACCEPT",
+      "expected_result": "PENDING",
+      "derived_from_rule_ids": [
+        "CB-CASE-025",
+        "CB-CASE-040"
+      ],
+      "source_ids": [
+        "SRC-01",
+        "SRC-03"
+      ],
+      "provenance": {
+        "verification_status": "CONFLICTING_SOURCES",
+        "conflict_ids": [
+          "CONFLICT-003",
+          "CONFLICT-012"
+        ],
+        "production_eligible": false,
+        "rule_version": [
+          "June 2024（Dispute Management Guidelines for Visa Merchants）",
+          "无版本号（内部整理稿）"
+        ],
+        "effective_date": "2024-10-19 起（CE3.0 相关变更）"
+      },
+      "sandbox_flag": true
+    },
+    {
+      "case_template_id": "CB-CASE-062",
+      "source_type": "synthetic",
+      "evidence_level": "SYNTHETIC_DEMO",
+      "title_cn": "合成：更适合接受的拒付（4808 无授权）",
+      "scheme": "Mastercard",
+      "reason_code": "4808",
+      "parties": {
+        "cardholder": "Sandbox 用户 sandbox-user-003",
+        "issuer": "发卡行（模拟）",
+        "acquirer": "收单机构（模拟）",
+        "merchant": "南巷小馆 sandbox-mer-003",
+        "psp": "OceanPilot",
+        "platform": "无"
+      },
+      "transaction_facts": {
+        "transaction_id": "sandbox-txn-062-0001",
+        "order_id": "sandbox-ord-062-0001",
+        "transaction_time": "2026-08-15T12:10:00Z",
+        "amount": "USD 68",
+        "currency": "USD",
+        "product_or_service": "堂食消费",
+        "payment_channel": "POS",
+        "authentication_method": "无授权批准（拒绝后无 Stand-in）",
+        "delivery_or_service_status": "已提供",
+        "refund_status": "未退款",
+        "customer_contact_status": "无"
+      },
+      "dispute_facts": {
+        "dispute_trigger": "授权缺失",
+        "cardholder_claim": "N/A（发卡行主张）",
+        "issuer_notice": "4808",
+        "reason_code": "4808",
+        "dispute_received_at": "2026-08-30T03:00:00Z",
+        "response_deadline": "2026-09-12T23:59:59Z（演示设定）",
+        "merchant_position": "无授权记录",
+        "initial_case_status": "OPEN",
+        "should_accept_or_contest": "ACCEPT",
+        "recommendation_basis": "授权数据结构化比对直接命中 4808，无可抗辩空间"
+      },
+      "evidence_required": [
+        {
+          "evidence_type": "AUTH_LOG",
+          "evidence_name_cn": "授权记录",
+          "required_or_optional": "required",
+          "why_needed": "2008 抗辩前提",
+          "rule_reference": "SRC-02 P64-73",
+          "expected_fields": "授权码",
+          "acceptable_format": "报文",
+          "available_in_case": "否",
+          "validation_method": "规则引擎",
+          "human_confirmation_required": false,
+          "missing_consequence": "建议接受",
+          "expected_source": "SYSTEM_OF_RECORD"
+        }
+      ],
+      "should_accept_or_contest": "ACCEPT",
+      "expected_result": "PENDING",
+      "derived_from_rule_ids": [
+        "CB-CASE-049",
+        "CB-CASE-007"
+      ],
+      "source_ids": [
+        "SRC-02"
+      ],
+      "provenance": {
+        "verification_status": "CONFLICTING_SOURCES",
+        "conflict_ids": [
+          "CONFLICT-006"
+        ],
+        "production_eligible": false,
+        "rule_version": [
+          "2026-05-19（Chargeback Guide Merchant Edition）"
+        ],
+        "effective_date": "NOT_STATED"
+      },
+      "sandbox_flag": true
+    },
+    {
+      "case_template_id": "CB-CASE-063",
+      "source_type": "synthetic",
+      "evidence_level": "SYNTHETIC_DEMO",
+      "title_cn": "合成：临近截止触发飞书提醒（13.1 未收到）",
+      "scheme": "Visa",
+      "reason_code": "13.1",
+      "parties": {
+        "cardholder": "Sandbox 用户 sandbox-user-004",
+        "issuer": "发卡行（模拟）",
+        "acquirer": "收单机构（模拟）",
+        "merchant": "织语服饰 sandbox-mer-004",
+        "psp": "OceanPilot",
+        "platform": "物流 sandbox-courier-002"
+      },
+      "transaction_facts": {
+        "transaction_id": "sandbox-txn-063-0001",
+        "order_id": "sandbox-ord-063-0001",
+        "transaction_time": "2026-08-05T09:00:00Z",
+        "amount": "USD 89",
+        "currency": "USD",
+        "product_or_service": "针织衫",
+        "payment_channel": "电商",
+        "authentication_method": "无",
+        "delivery_or_service_status": "已签收",
+        "refund_status": "未退款",
+        "customer_contact_status": "无"
+      },
+      "dispute_facts": {
+        "dispute_trigger": "未收到",
+        "cardholder_claim": "没收到",
+        "issuer_notice": "13.1",
+        "reason_code": "13.1",
+        "dispute_received_at": "2026-08-26T02:00:00Z",
+        "response_deadline": "2026-09-05T23:59:59Z（演示设定）",
+        "merchant_position": "证据已齐未提交",
+        "initial_case_status": "OPEN",
+        "should_accept_or_contest": "CONTEST",
+        "recommendation_basis": "证据齐全，但必须赶在截止前提交"
+      },
+      "evidence_required": [
+        {
+          "evidence_type": "POD",
+          "evidence_name_cn": "签收证明",
+          "required_or_optional": "required",
+          "why_needed": "履约证明",
+          "rule_reference": "SRC-03 §5",
+          "expected_fields": "收件人",
+          "acceptable_format": "PDF",
+          "available_in_case": "是",
+          "validation_method": "比对",
+          "human_confirmation_required": true,
+          "missing_consequence": "无法抗辩",
+          "expected_source": "OCR_THEN_REVIEW"
+        }
+      ],
+      "should_accept_or_contest": "CONTEST",
+      "expected_result": "PENDING",
+      "derived_from_rule_ids": [
+        "CB-CASE-026",
+        "CB-CASE-041"
+      ],
+      "source_ids": [
+        "SRC-01",
+        "SRC-03"
+      ],
+      "provenance": {
+        "verification_status": "NEEDS_CONFIRMATION",
+        "conflict_ids": [
+          "CONFLICT-012"
+        ],
+        "production_eligible": false,
+        "rule_version": [
+          "June 2024（Dispute Management Guidelines for Visa Merchants）",
+          "无版本号（内部整理稿）"
+        ],
+        "effective_date": "NOT_STATED"
+      },
+      "sandbox_flag": true
+    },
+    {
+      "case_template_id": "CB-CASE-064",
+      "source_type": "synthetic",
+      "evidence_level": "SYNTHETIC_DEMO",
+      "title_cn": "合成：已过期案件（无法再提交）",
+      "scheme": "Mastercard",
+      "reason_code": "4853",
+      "parties": {
+        "cardholder": "Sandbox 用户 sandbox-user-005",
+        "issuer": "发卡行（模拟）",
+        "acquirer": "收单机构（模拟）",
+        "merchant": "远方假期 sandbox-mer-005",
+        "psp": "OceanPilot",
+        "platform": "无"
+      },
+      "transaction_facts": {
+        "transaction_id": "sandbox-txn-064-0001",
+        "order_id": "sandbox-ord-064-0001",
+        "transaction_time": "2026-06-20T10:00:00Z",
+        "amount": "USD 420",
+        "currency": "USD",
+        "product_or_service": "度假套餐订金",
+        "payment_channel": "卡支付",
+        "authentication_method": "无",
+        "delivery_or_service_status": "已取消",
+        "refund_status": "未退款",
+        "customer_contact_status": "有沟通"
+      },
+      "dispute_facts": {
+        "dispute_trigger": "退款未处理",
+        "cardholder_claim": "应退款",
+        "issuer_notice": "4853",
+        "reason_code": "4853",
+        "dispute_received_at": "2026-07-30T02:00:00Z",
+        "response_deadline": "2026-08-28T23:59:59Z（演示设定，已过 6 天）",
+        "merchant_position": "未及时响应",
+        "initial_case_status": "EXPIRED",
+        "should_accept_or_contest": "ACCEPT",
+        "recommendation_basis": "已过截止，系统锁定并默认接受"
+      },
+      "evidence_required": [
+        {
+          "evidence_type": "REFUND_RECORD",
+          "evidence_name_cn": "退款记录",
+          "required_or_optional": "required",
+          "why_needed": "本可抗辩",
+          "rule_reference": "SRC-02 P273-276",
+          "expected_fields": "退款",
+          "acceptable_format": "记录",
+          "available_in_case": "否",
+          "validation_method": "N/A",
+          "human_confirmation_required": false,
+          "missing_consequence": "已过期，不再收集",
+          "expected_source": "SYSTEM_OF_RECORD"
+        }
+      ],
+      "should_accept_or_contest": "ACCEPT",
+      "expected_result": "MERCHANT_LOST",
+      "derived_from_rule_ids": [
+        "CB-CASE-045",
+        "CB-CASE-047"
+      ],
+      "source_ids": [
+        "SRC-02"
+      ],
+      "provenance": {
+        "verification_status": "NEEDS_CONFIRMATION",
+        "conflict_ids": [],
+        "production_eligible": false,
+        "rule_version": [
+          "2026-05-19（Chargeback Guide Merchant Edition）"
+        ],
+        "effective_date": "NOT_STATED"
+      },
+      "sandbox_flag": true
+    },
+    {
+      "case_template_id": "CB-CASE-065",
+      "source_type": "synthetic",
+      "evidence_level": "SYNTHETIC_DEMO",
+      "title_cn": "合成：文件抽取需人工修正（证据 OCR 错误）",
+      "scheme": "Visa",
+      "reason_code": "13.1",
+      "parties": {
+        "cardholder": "张杉 sandbox-user-006",
+        "issuer": "发卡行（模拟）",
+        "acquirer": "收单机构（模拟）",
+        "merchant": "素居生活 sandbox-mer-006",
+        "psp": "OceanPilot",
+        "platform": "物流 sandbox-courier-003"
+      },
+      "transaction_facts": {
+        "transaction_id": "sandbox-txn-065-0001",
+        "order_id": "sandbox-ord-065-0001",
+        "transaction_time": "2026-08-08T14:00:00Z",
+        "amount": "USD 156",
+        "currency": "USD",
+        "product_or_service": "台灯",
+        "payment_channel": "电商",
+        "authentication_method": "无",
+        "delivery_or_service_status": "已签收",
+        "refund_status": "未退款",
+        "customer_contact_status": "无"
+      },
+      "dispute_facts": {
+        "dispute_trigger": "未收到",
+        "cardholder_claim": "没收到",
+        "issuer_notice": "13.1",
+        "reason_code": "13.1",
+        "dispute_received_at": "2026-08-29T02:00:00Z",
+        "response_deadline": "2026-09-08T23:59:59Z（演示设定）",
+        "merchant_position": "已签收",
+        "initial_case_status": "OPEN",
+        "should_accept_or_contest": "CONTEST",
+        "recommendation_basis": "收件人修正后与持卡人一致，证据链成立"
+      },
+      "evidence_required": [
+        {
+          "evidence_type": "POD",
+          "evidence_name_cn": "签收证明",
+          "required_or_optional": "required",
+          "why_needed": "收件人比对",
+          "rule_reference": "SRC-03 §5",
+          "expected_fields": "收件人姓名",
+          "acceptable_format": "PDF",
+          "available_in_case": "是（OCR 有误）",
+          "validation_method": "人工比对原件",
+          "human_confirmation_required": true,
+          "missing_consequence": "比对失败则无法抗辩",
+          "expected_source": "OCR_THEN_REVIEW"
+        }
+      ],
+      "should_accept_or_contest": "CONTEST",
+      "expected_result": "PENDING",
+      "derived_from_rule_ids": [
+        "CB-CASE-026",
+        "CB-CASE-041"
+      ],
+      "source_ids": [
+        "SRC-01",
+        "SRC-03"
+      ],
+      "provenance": {
+        "verification_status": "NEEDS_CONFIRMATION",
+        "conflict_ids": [
+          "CONFLICT-012"
+        ],
+        "production_eligible": false,
+        "rule_version": [
+          "June 2024（Dispute Management Guidelines for Visa Merchants）",
+          "无版本号（内部整理稿）"
+        ],
+        "effective_date": "NOT_STATED"
+      },
+      "sandbox_flag": true
+    },
+    {
+      "case_template_id": "CB-CASE-066",
+      "source_type": "synthetic",
+      "evidence_level": "SYNTHETIC_DEMO",
+      "title_cn": "合成：Agent 生成操作提案、用户确认后执行（4853 课程）",
+      "scheme": "Mastercard",
+      "reason_code": "4853",
+      "parties": {
+        "cardholder": "Sandbox 用户 sandbox-user-007",
+        "issuer": "发卡行（模拟）",
+        "acquirer": "收单机构（模拟）",
+        "merchant": "启明学堂 sandbox-mer-007",
+        "psp": "OceanPilot",
+        "platform": "课程平台"
+      },
+      "transaction_facts": {
+        "transaction_id": "sandbox-txn-066-0001",
+        "order_id": "sandbox-ord-066-0001",
+        "transaction_time": "2026-08-02T11:00:00Z",
+        "amount": "USD 499",
+        "currency": "USD",
+        "product_or_service": "在线课程",
+        "payment_channel": "电商",
+        "authentication_method": "账号",
+        "delivery_or_service_status": "登录 17 次",
+        "refund_status": "未退款",
+        "customer_contact_status": "无"
+      },
+      "dispute_facts": {
+        "dispute_trigger": "服务不可用",
+        "cardholder_claim": "课程打不开",
+        "issuer_notice": "4853",
+        "reason_code": "4853",
+        "dispute_received_at": "2026-08-27T02:00:00Z",
+        "response_deadline": "2026-09-06T23:59:59Z（演示设定）",
+        "merchant_position": "已被使用",
+        "initial_case_status": "OPEN",
+        "should_accept_or_contest": "CONTEST",
+        "recommendation_basis": "消费日志构成证据链"
+      },
+      "evidence_required": [
+        {
+          "evidence_type": "USAGE_LOG",
+          "evidence_name_cn": "登录/访问记录",
+          "required_or_optional": "required",
+          "why_needed": "证明使用",
+          "rule_reference": "SRC-03 §12",
+          "expected_fields": "账号、登录次数、时间",
+          "acceptable_format": "日志",
+          "available_in_case": "是",
+          "validation_method": "日志核对",
+          "human_confirmation_required": false,
+          "missing_consequence": "无法抗辩",
+          "expected_source": "CONDITIONAL"
+        }
+      ],
+      "should_accept_or_contest": "CONTEST",
+      "expected_result": "PENDING",
+      "derived_from_rule_ids": [
+        "CB-CASE-031",
+        "CB-CASE-046"
+      ],
+      "source_ids": [
+        "SRC-02",
+        "SRC-03"
+      ],
+      "provenance": {
+        "verification_status": "NEEDS_CONFIRMATION",
+        "conflict_ids": [],
+        "production_eligible": false,
+        "rule_version": [
+          "2026-05-19（Chargeback Guide Merchant Edition）",
+          "无版本号（内部整理稿）"
+        ],
+        "effective_date": "NOT_STATED"
+      },
+      "sandbox_flag": true
+    },
+    {
+      "case_template_id": "CB-CASE-067",
+      "source_type": "synthetic",
+      "evidence_level": "SYNTHETIC_DEMO",
+      "title_cn": "合成：提案因 case revision 过期被拒绝",
+      "scheme": "Mastercard",
+      "reason_code": "4853",
+      "parties": {
+        "cardholder": "Sandbox 用户 sandbox-user-008",
+        "issuer": "发卡行（模拟）",
+        "acquirer": "收单机构（模拟）",
+        "merchant": "极光数码 sandbox-mer-008",
+        "psp": "OceanPilot",
+        "platform": "无"
+      },
+      "transaction_facts": {
+        "transaction_id": "sandbox-txn-067-0001",
+        "order_id": "sandbox-ord-067-0001",
+        "transaction_time": "2026-08-11T15:00:00Z",
+        "amount": "USD 88",
+        "currency": "USD",
+        "product_or_service": "键盘",
+        "payment_channel": "电商",
+        "authentication_method": "无",
+        "delivery_or_service_status": "已收货",
+        "refund_status": "未退款",
+        "customer_contact_status": "有沟通"
+      },
+      "dispute_facts": {
+        "dispute_trigger": "货不对板",
+        "cardholder_claim": "描述不符",
+        "issuer_notice": "4853",
+        "reason_code": "4853",
+        "dispute_received_at": "2026-08-31T02:00:00Z",
+        "response_deadline": "2026-09-10T23:59:59Z（演示设定）",
+        "merchant_position": "已按约交付",
+        "initial_case_status": "OPEN",
+        "should_accept_or_contest": "CONTEST",
+        "recommendation_basis": "基于最新版本证据重新提案"
+      },
+      "evidence_required": [
+        {
+          "evidence_type": "MERCHANT_NARRATIVE",
+          "evidence_name_cn": "按约交付说明",
+          "required_or_optional": "required",
+          "why_needed": "2700 抗辩",
+          "rule_reference": "SRC-02 P160-170",
+          "expected_fields": "说明",
+          "acceptable_format": "文档",
+          "available_in_case": "是",
+          "validation_method": "人工",
+          "human_confirmation_required": true,
+          "missing_consequence": "抗辩不成立",
+          "expected_source": "MERCHANT_UPLOAD"
+        }
+      ],
+      "should_accept_or_contest": "CONTEST",
+      "expected_result": "PENDING",
+      "derived_from_rule_ids": [
+        "CB-CASE-045"
+      ],
+      "source_ids": [
+        "SRC-02"
+      ],
+      "provenance": {
+        "verification_status": "NEEDS_CONFIRMATION",
+        "conflict_ids": [],
+        "production_eligible": false,
+        "rule_version": [
+          "2026-05-19（Chargeback Guide Merchant Edition）"
+        ],
+        "effective_date": "NOT_STATED"
+      },
+      "sandbox_flag": true
+    },
+    {
+      "case_template_id": "CB-CASE-068",
+      "source_type": "synthetic",
+      "evidence_level": "SYNTHETIC_DEMO",
+      "title_cn": "合成：上游提交超时后幂等重试成功",
+      "scheme": "Visa",
+      "reason_code": "13.1",
+      "parties": {
+        "cardholder": "Sandbox 用户 sandbox-user-009",
+        "issuer": "发卡行（模拟）",
+        "acquirer": "上游收单（模拟）",
+        "merchant": "栖木服饰 sandbox-mer-009",
+        "psp": "OceanPilot",
+        "platform": "无"
+      },
+      "transaction_facts": {
+        "transaction_id": "sandbox-txn-068-0001",
+        "order_id": "sandbox-ord-068-0001",
+        "transaction_time": "2026-08-12T16:00:00Z",
+        "amount": "USD 132",
+        "currency": "USD",
+        "product_or_service": "风衣",
+        "payment_channel": "电商",
+        "authentication_method": "无",
+        "delivery_or_service_status": "已签收",
+        "refund_status": "未退款",
+        "customer_contact_status": "无"
+      },
+      "dispute_facts": {
+        "dispute_trigger": "未收到",
+        "cardholder_claim": "没收到",
+        "issuer_notice": "13.1",
+        "reason_code": "13.1",
+        "dispute_received_at": "2026-08-30T02:00:00Z",
+        "response_deadline": "2026-09-09T23:59:59Z（演示设定）",
+        "merchant_position": "已签收",
+        "initial_case_status": "OPEN",
+        "should_accept_or_contest": "CONTEST",
+        "recommendation_basis": "证据链成立，重试机制保证提交成功"
+      },
+      "evidence_required": [
+        {
+          "evidence_type": "POD",
+          "evidence_name_cn": "签收证明",
+          "required_or_optional": "required",
+          "why_needed": "履约证明",
+          "rule_reference": "SRC-03 §5",
+          "expected_fields": "收件人",
+          "acceptable_format": "PDF",
+          "available_in_case": "是",
+          "validation_method": "比对",
+          "human_confirmation_required": true,
+          "missing_consequence": "无法抗辩",
+          "expected_source": "OCR_THEN_REVIEW"
+        }
+      ],
+      "should_accept_or_contest": "CONTEST",
+      "expected_result": "PENDING",
+      "derived_from_rule_ids": [
+        "CB-CASE-026",
+        "CB-CASE-041"
+      ],
+      "source_ids": [
+        "SRC-01",
+        "SRC-03"
+      ],
+      "provenance": {
+        "verification_status": "NEEDS_CONFIRMATION",
+        "conflict_ids": [
+          "CONFLICT-012"
+        ],
+        "production_eligible": false,
+        "rule_version": [
+          "June 2024（Dispute Management Guidelines for Visa Merchants）",
+          "无版本号（内部整理稿）"
+        ],
+        "effective_date": "NOT_STATED"
+      },
+      "sandbox_flag": true
+    },
+    {
+      "case_template_id": "CB-CASE-069",
+      "source_type": "synthetic",
+      "evidence_level": "SYNTHETIC_DEMO",
+      "title_cn": "合成：跨租户访问必须被阻断（安全测试）",
+      "scheme": "N/A（产品安全）",
+      "reason_code": "N/A",
+      "parties": {
+        "cardholder": "N/A",
+        "issuer": "N/A",
+        "acquirer": "N/A",
+        "merchant": "租户 A=云岚数码 sandbox-mer-001；租户 B=环球优选 sandbox-mer-002",
+        "psp": "OceanPilot",
+        "platform": "N/A"
+      },
+      "transaction_facts": {
+        "transaction_id": "N/A",
+        "order_id": "N/A",
+        "transaction_time": "N/A",
+        "amount": "N/A",
+        "currency": "N/A",
+        "product_or_service": "N/A",
+        "payment_channel": "N/A",
+        "authentication_method": "租户鉴权",
+        "delivery_or_service_status": "N/A",
+        "refund_status": "N/A",
+        "customer_contact_status": "N/A"
+      },
+      "dispute_facts": {
+        "dispute_trigger": "N/A",
+        "cardholder_claim": "N/A",
+        "issuer_notice": "N/A",
+        "reason_code": "N/A",
+        "dispute_received_at": "N/A",
+        "response_deadline": "N/A",
+        "merchant_position": "N/A",
+        "initial_case_status": "N/A",
+        "should_accept_or_contest": "INSUFFICIENT_INFORMATION",
+        "recommendation_basis": "N/A（安全测试）"
+      },
+      "evidence_required": [],
+      "should_accept_or_contest": "INSUFFICIENT_INFORMATION",
+      "expected_result": "NOT_STATED",
+      "derived_from_rule_ids": [
+        "CB-CASE-060"
+      ],
+      "source_ids": [
+        "SRC-01",
+        "SRC-02"
+      ],
+      "provenance": {
+        "verification_status": "NEEDS_CONFIRMATION",
+        "conflict_ids": [],
+        "production_eligible": false,
+        "rule_version": [
+          "June 2024（Dispute Management Guidelines for Visa Merchants）",
+          "2026-05-19（Chargeback Guide Merchant Edition）"
+        ],
+        "effective_date": "NOT_STATED"
+      },
+      "sandbox_flag": true
+    },
+    {
+      "case_template_id": "CB-CASE-070",
+      "source_type": "synthetic",
+      "evidence_level": "SYNTHETIC_DEMO",
+      "title_cn": "合成：规则版本变化但历史快照不变",
+      "scheme": "Mastercard",
+      "reason_code": "4853/4855",
+      "parties": {
+        "cardholder": "Sandbox 用户 sandbox-user-010",
+        "issuer": "发卡行（模拟）",
+        "acquirer": "收单机构（模拟）",
+        "merchant": "森屿杂货 sandbox-mer-010",
+        "psp": "OceanPilot",
+        "platform": "无"
+      },
+      "transaction_facts": {
+        "transaction_id": "sandbox-txn-070-0001",
+        "order_id": "sandbox-ord-070-0001",
+        "transaction_time": "2026-08-13T10:00:00Z",
+        "amount": "USD 45",
+        "currency": "USD",
+        "product_or_service": "家居用品",
+        "payment_channel": "电商",
+        "authentication_method": "无",
+        "delivery_or_service_status": "已发货",
+        "refund_status": "未退款",
+        "customer_contact_status": "无"
+      },
+      "dispute_facts": {
+        "dispute_trigger": "未收到",
+        "cardholder_claim": "没收到",
+        "issuer_notice": "4855（旧码，将并入 4853）",
+        "reason_code": "4855→4853",
+        "dispute_received_at": "2026-08-29T02:00:00Z",
+        "response_deadline": "2026-09-08T23:59:59Z（演示设定）",
+        "merchant_position": "已发货",
+        "initial_case_status": "OPEN",
+        "should_accept_or_contest": "CONDITIONAL",
+        "recommendation_basis": "按受理版本规则展示证据要求，不受后续版本影响"
+      },
+      "evidence_required": [
+        {
+          "evidence_type": "DELIVERY",
+          "evidence_name_cn": "交付证明",
+          "required_or_optional": "required",
+          "why_needed": "履约",
+          "rule_reference": "SRC-02 P182-184",
+          "expected_fields": "交付记录",
+          "acceptable_format": "文档",
+          "available_in_case": "是",
+          "validation_method": "核对",
+          "human_confirmation_required": true,
+          "missing_consequence": "抗辩无据",
+          "expected_source": "CONDITIONAL"
+        }
+      ],
+      "should_accept_or_contest": "CONDITIONAL",
+      "expected_result": "PENDING",
+      "derived_from_rule_ids": [
+        "CB-CASE-046"
+      ],
+      "source_ids": [
+        "SRC-02",
+        "SRC-03"
+      ],
+      "provenance": {
+        "verification_status": "NEEDS_CONFIRMATION",
+        "conflict_ids": [
+          "CONFLICT-005"
+        ],
+        "production_eligible": false,
+        "rule_version": [
+          "2026-05-19（Chargeback Guide Merchant Edition）",
+          "无版本号（内部整理稿）"
+        ],
+        "effective_date": "淘汰码并入生效日待卡组织公告（CONFLICT-005）"
+      },
+      "sandbox_flag": true
+    },
+    {
+      "case_template_id": "CB-CASE-071",
+      "source_type": "synthetic",
+      "evidence_level": "SYNTHETIC_DEMO",
+      "title_cn": "合成：路演开场故事——友好欺诈（账单描述不清）",
+      "scheme": "Visa",
+      "reason_code": "10.4",
+      "parties": {
+        "cardholder": "Sandbox 用户 sandbox-user-011",
+        "issuer": "发卡行（模拟）",
+        "acquirer": "收单机构（模拟）",
+        "merchant": "拾光设计 sandbox-mer-011",
+        "psp": "OceanPilot",
+        "platform": "独立站"
+      },
+      "transaction_facts": {
+        "transaction_id": "sandbox-txn-071-0001",
+        "order_id": "sandbox-ord-071-0001",
+        "transaction_time": "2026-08-06T20:00:00Z",
+        "amount": "USD 310",
+        "currency": "USD",
+        "product_or_service": "手工皮包",
+        "payment_channel": "独立站 CNP",
+        "authentication_method": "3DS（ECI 5）",
+        "delivery_or_service_status": "已签收",
+        "refund_status": "未退款",
+        "customer_contact_status": "无"
+      },
+      "dispute_facts": {
+        "dispute_trigger": "持卡人不认识交易",
+        "cardholder_claim": "这笔交易不是我做的",
+        "issuer_notice": "10.4",
+        "reason_code": "10.4",
+        "dispute_received_at": "2026-08-26T02:00:00Z",
+        "response_deadline": "2026-09-05T23:59:59Z（演示设定）",
+        "merchant_position": "3DS 认证+历史交易可证",
+        "initial_case_status": "OPEN",
+        "should_accept_or_contest": "CONTEST",
+        "recommendation_basis": "ECI 5 认证+同设备历史交易+签收，构成抗辩链"
+      },
+      "evidence_required": [
+        {
+          "evidence_type": "AUTH",
+          "evidence_name_cn": "3DS 认证（ECI 5）",
+          "required_or_optional": "required",
+          "why_needed": "认证保护",
+          "rule_reference": "SRC-01 P14",
+          "expected_fields": "ECI",
+          "acceptable_format": "报文",
+          "available_in_case": "是",
+          "validation_method": "规则引擎",
+          "human_confirmation_required": false,
+          "missing_consequence": "保护缺失",
+          "expected_source": "SYSTEM_OF_RECORD"
+        },
+        {
+          "evidence_type": "HISTORY",
+          "evidence_name_cn": "同设备历史交易",
+          "required_or_optional": "optional",
+          "why_needed": "佐证本人交易",
+          "rule_reference": "SRC-01 P26",
+          "expected_fields": "设备/IP",
+          "acceptable_format": "记录",
+          "available_in_case": "是",
+          "validation_method": "匹配",
+          "human_confirmation_required": false,
+          "missing_consequence": "佐证减弱",
+          "expected_source": "SYSTEM_OF_RECORD"
+        },
+        {
+          "evidence_type": "POD",
+          "evidence_name_cn": "签收证明",
+          "required_or_optional": "optional",
+          "why_needed": "佐证收货",
+          "rule_reference": "SRC-01 P54",
+          "expected_fields": "收件人",
+          "acceptable_format": "PDF",
+          "available_in_case": "是",
+          "validation_method": "比对",
+          "human_confirmation_required": true,
+          "missing_consequence": "佐证减弱",
+          "expected_source": "OCR_THEN_REVIEW"
+        }
+      ],
+      "should_accept_or_contest": "CONTEST",
+      "expected_result": "MERCHANT_WON",
+      "derived_from_rule_ids": [
+        "CB-CASE-025",
+        "CB-CASE-034",
+        "CB-CASE-040"
+      ],
+      "source_ids": [
+        "SRC-01",
+        "SRC-03"
+      ],
+      "provenance": {
+        "verification_status": "CONFLICTING_SOURCES",
+        "conflict_ids": [
+          "CONFLICT-003",
+          "CONFLICT-012"
+        ],
+        "production_eligible": false,
+        "rule_version": [
+          "June 2024（Dispute Management Guidelines for Visa Merchants）",
+          "无版本号（内部整理稿）"
+        ],
+        "effective_date": "2024-10-19 起（CE3.0 相关变更）"
+      },
+      "sandbox_flag": true
+    },
+    {
+      "case_template_id": "CB-CASE-072",
+      "source_type": "synthetic",
+      "evidence_level": "SYNTHETIC_DEMO",
+      "title_cn": "合成：退款未到账（seed 数据）",
+      "scheme": "Visa",
+      "reason_code": "13.6",
+      "parties": {
+        "cardholder": "Sandbox 用户 sandbox-user-012",
+        "issuer": "发卡行（模拟）",
+        "acquirer": "收单机构（模拟）",
+        "merchant": "澄心美妆 sandbox-mer-012",
+        "psp": "OceanPilot",
+        "platform": "无"
+      },
+      "transaction_facts": {
+        "transaction_id": "sandbox-txn-072-0001",
+        "order_id": "sandbox-ord-072-0001",
+        "transaction_time": "2026-08-18T09:00:00Z",
+        "amount": "USD 120",
+        "currency": "USD",
+        "product_or_service": "护肤品套装",
+        "payment_channel": "电商",
+        "authentication_method": "无",
+        "delivery_or_service_status": "已退货",
+        "refund_status": "已发起退款（ARN sandbox-arn-072）",
+        "customer_contact_status": "有客服记录"
+      },
+      "dispute_facts": {
+        "dispute_trigger": "退款未到账",
+        "cardholder_claim": "退款没收到",
+        "issuer_notice": "13.6",
+        "reason_code": "13.6",
+        "dispute_received_at": "2026-08-30T02:00:00Z",
+        "response_deadline": "2026-09-09T23:59:59Z（演示设定）",
+        "merchant_position": "退款已结算",
+        "initial_case_status": "OPEN",
+        "should_accept_or_contest": "CONTEST",
+        "recommendation_basis": "ARN+退款交易记录是核心证据"
+      },
+      "evidence_required": [
+        {
+          "evidence_type": "REFUND_TX",
+          "evidence_name_cn": "退款 ARN/日期/金额/结算状态",
+          "required_or_optional": "required",
+          "why_needed": "证明退款",
+          "rule_reference": "SRC-03 §8",
+          "expected_fields": "ARN、金额、结算状态",
+          "acceptable_format": "记录",
+          "available_in_case": "是",
+          "validation_method": "关联校验",
+          "human_confirmation_required": false,
+          "missing_consequence": "建议接受",
+          "expected_source": "SYSTEM_OF_RECORD"
+        }
+      ],
+      "should_accept_or_contest": "CONTEST",
+      "expected_result": "PENDING",
+      "derived_from_rule_ids": [
+        "CB-CASE-029",
+        "CB-CASE-047"
+      ],
+      "source_ids": [
+        "SRC-01",
+        "SRC-03"
+      ],
+      "provenance": {
+        "verification_status": "NEEDS_CONFIRMATION",
+        "conflict_ids": [],
+        "production_eligible": false,
+        "rule_version": [
+          "June 2024（Dispute Management Guidelines for Visa Merchants）",
+          "无版本号（内部整理稿）"
+        ],
+        "effective_date": "NOT_STATED"
+      },
+      "sandbox_flag": true
+    },
+    {
+      "case_template_id": "CB-CASE-073",
+      "source_type": "synthetic",
+      "evidence_level": "SYNTHETIC_DEMO",
+      "title_cn": "合成：重复扣款（seed 数据）",
+      "scheme": "Mastercard",
+      "reason_code": "4834",
+      "parties": {
+        "cardholder": "Sandbox 用户 sandbox-user-013",
+        "issuer": "发卡行（模拟）",
+        "acquirer": "收单机构（模拟）",
+        "merchant": "锐动体育 sandbox-mer-013",
+        "psp": "OceanPilot",
+        "platform": "无"
+      },
+      "transaction_facts": {
+        "transaction_id": "sandbox-txn-073-0001 / -0002",
+        "order_id": "sandbox-ord-073-0001（两笔同单）",
+        "transaction_time": "2026-08-14T10:01:00Z / 10:02:00Z",
+        "amount": "USD 66 × 2",
+        "currency": "USD",
+        "product_or_service": "跑鞋",
+        "payment_channel": "电商",
+        "authentication_method": "无",
+        "delivery_or_service_status": "已发货（一笔）",
+        "refund_status": "未退款",
+        "customer_contact_status": "无"
+      },
+      "dispute_facts": {
+        "dispute_trigger": "重复扣款",
+        "cardholder_claim": "被扣两次",
+        "issuer_notice": "4834",
+        "reason_code": "4834",
+        "dispute_received_at": "2026-08-31T02:00:00Z",
+        "response_deadline": "2026-09-10T23:59:59Z（演示设定）",
+        "merchant_position": "确认为系统重复扣款",
+        "initial_case_status": "OPEN",
+        "should_accept_or_contest": "ACCEPT",
+        "recommendation_basis": "两笔指向同一订单，判定重复，应退款并接受"
+      },
+      "evidence_required": [
+        {
+          "evidence_type": "ORDER_MATCH",
+          "evidence_name_cn": "订单/授权/清算比对",
+          "required_or_optional": "required",
+          "why_needed": "重复判定",
+          "rule_reference": "SRC-03 §9",
+          "expected_fields": "订单号、授权、清算",
+          "acceptable_format": "记录",
+          "available_in_case": "是",
+          "validation_method": "规则引擎",
+          "human_confirmation_required": true,
+          "missing_consequence": "无法判定",
+          "expected_source": "CONDITIONAL"
+        }
+      ],
+      "should_accept_or_contest": "ACCEPT",
+      "expected_result": "ACCEPTED_BY_MERCHANT",
+      "derived_from_rule_ids": [
+        "CB-CASE-030",
+        "CB-CASE-043",
+        "CB-CASE-050"
+      ],
+      "source_ids": [
+        "SRC-02",
+        "SRC-03"
+      ],
+      "provenance": {
+        "verification_status": "NEEDS_CONFIRMATION",
+        "conflict_ids": [],
+        "production_eligible": false,
+        "rule_version": [
+          "2026-05-19（Chargeback Guide Merchant Edition）",
+          "无版本号（内部整理稿）"
+        ],
+        "effective_date": "NOT_STATED"
+      },
+      "sandbox_flag": true
+    },
+    {
+      "case_template_id": "CB-CASE-074",
+      "source_type": "synthetic",
+      "evidence_level": "SYNTHETIC_DEMO",
+      "title_cn": "合成：货不对板抗辩（seed 数据，4853）",
+      "scheme": "Mastercard",
+      "reason_code": "4853",
+      "parties": {
+        "cardholder": "Sandbox 用户 sandbox-user-014",
+        "issuer": "发卡行（模拟）",
+        "acquirer": "收单机构（模拟）",
+        "merchant": "简居家居 sandbox-mer-014",
+        "psp": "OceanPilot",
+        "platform": "无"
+      },
+      "transaction_facts": {
+        "transaction_id": "sandbox-txn-074-0001",
+        "order_id": "sandbox-ord-074-0001",
+        "transaction_time": "2026-08-16T13:00:00Z",
+        "amount": "USD 98",
+        "currency": "USD",
+        "product_or_service": "台灯（新款）",
+        "payment_channel": "电商",
+        "authentication_method": "无",
+        "delivery_or_service_status": "已收货",
+        "refund_status": "未退款",
+        "customer_contact_status": "有沟通"
+      },
+      "dispute_facts": {
+        "dispute_trigger": "货不对板",
+        "cardholder_claim": "收到旧款",
+        "issuer_notice": "4853",
+        "reason_code": "4853",
+        "dispute_received_at": "2026-08-30T02:00:00Z",
+        "response_deadline": "2026-09-09T23:59:59Z（演示设定）",
+        "merchant_position": "SKU 与序列号一致",
+        "initial_case_status": "OPEN",
+        "should_accept_or_contest": "CONTEST",
+        "recommendation_basis": "SKU+序列号+页面快照构成一致性证明"
+      },
+      "evidence_required": [
+        {
+          "evidence_type": "PRODUCT_DESC",
+          "evidence_name_cn": "SKU/商品页快照",
+          "required_or_optional": "required",
+          "why_needed": "一致性证明",
+          "rule_reference": "SRC-03 §7",
+          "expected_fields": "SKU、描述",
+          "acceptable_format": "截图",
+          "available_in_case": "是",
+          "validation_method": "比对",
+          "human_confirmation_required": true,
+          "missing_consequence": "抗辩无据",
+          "expected_source": "MERCHANT_UPLOAD"
+        },
+        {
+          "evidence_type": "DELIVERY_RECORD",
+          "evidence_name_cn": "发货序列号记录",
+          "required_or_optional": "required",
+          "why_needed": "证明所发商品",
+          "rule_reference": "SRC-03 §7",
+          "expected_fields": "序列号",
+          "acceptable_format": "记录",
+          "available_in_case": "是",
+          "validation_method": "序列号核对",
+          "human_confirmation_required": true,
+          "missing_consequence": "抗辩无据",
+          "expected_source": "OCR_THEN_REVIEW"
+        }
+      ],
+      "should_accept_or_contest": "CONTEST",
+      "expected_result": "PENDING",
+      "derived_from_rule_ids": [
+        "CB-CASE-028",
+        "CB-CASE-045"
+      ],
+      "source_ids": [
+        "SRC-02",
+        "SRC-03"
+      ],
+      "provenance": {
+        "verification_status": "NEEDS_CONFIRMATION",
+        "conflict_ids": [],
+        "production_eligible": false,
+        "rule_version": [
+          "2026-05-19（Chargeback Guide Merchant Edition）",
+          "无版本号（内部整理稿）"
+        ],
+        "effective_date": "NOT_STATED"
+      },
+      "sandbox_flag": true
+    }
+  ]
+}

@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="light" />
-    <title>OceanPilot V2 · 争议运营工作台</title>
+    <title>OceanPilot · 争议协作</title>
     <style>
       __V2_STYLES__
     </style>
@@ -15,15 +15,15 @@
         <a
           class="brand"
           href="/v2/operations"
-          aria-label="OceanPilot 运营工作台"
+          aria-label="OceanPilot 争议协作"
           ><img src="__V2_LOGO__" alt="OceanPayment" /><span
-            >OceanPilot<small>YOUR DISPUTE AGENT</small></span
+            >OceanPilot<small>争议处理 · 案件智能体</small></span
           ><b>V2</b></a
         >
-        <div class="workspace-label">工作空间</div>
+        <div class="workspace-label">操作端</div>
         <nav class="workspace-nav" aria-label="工作空间">
           <a href="/v2/operations" data-surface="operations"
-            ><span class="nav-icon">▦</span>OceanPayment 运营<span
+            ><span class="nav-icon">▦</span>运营工作台<span
               class="nav-shortcut"
               >OP</span
             ></a
@@ -45,7 +45,7 @@
           <div class="environment">
             <span class="status-dot"></span>合成数据演示环境
           </div>
-          <p>上游提交为 Mock。<br />案件、操作与回执均可追溯。</p>
+          <p>商户回应 · OceanPayment 处理<br />OceanPilot 在每个案件中协作</p>
           <a href="/business" class="legacy-link">打开 V1 工作台 ↗</a>
         </div>
       </aside>
@@ -72,9 +72,9 @@
         <div class="page-heading">
           <div>
             <div class="eyebrow" id="eyebrow">OPERATIONS WORKSPACE</div>
-            <h1 id="pageTitle">让每一笔争议，有据可循。</h1>
+            <h1 id="pageTitle">争议案件</h1>
             <p id="pageDescription">
-              从上游接收到资金核对，在一个案件中协同推进。
+              找到需要处理的案件，继续下一步。
             </p>
           </div>
           <div class="heading-actions">
@@ -106,6 +106,7 @@
         ></section>
         <section class="workspace-grid" id="workspaceGrid">
           <aside class="case-queue" aria-label="案件列表">
+            <div class="queue-toolbar">
             <div class="queue-heading">
               <h2 id="queueTitle">全部案件</h2>
               <span id="queueCount" class="count">0</span>
@@ -129,18 +130,19 @@
                 <option value="OTHER">其他</option>
               </select>
             </div>
+            </div>
             <div id="caseList" class="case-list">
               <div class="empty-state">正在读取案件…</div>
             </div>
             <div class="queue-footer">
-              案件由 OceanPayment 运营 · 统一版本记录
+              点击案件查看详情、处理任务与本案 OceanPilot
             </div>
           </aside>
           <article class="case-detail" id="caseDetail" aria-label="案件详情">
             <div class="empty-state">
               <div class="empty-symbol">◈</div>
-              <h2>选择一个案件，开始协同</h2>
-              <p>案件计划、证据与审核记录会显示在这里。</p>
+              <h2>正在读取案件</h2>
+              <p>案件详情与 OceanPilot 将在读取完成后显示。</p>
             </div>
           </article>
           <aside
@@ -151,8 +153,8 @@
         </section>
         <section id="governanceView" hidden aria-label="平台治理"></section>
         <footer class="page-footer">
-          <span>OceanPilot V2</span> One case. Every decision connected.<span
-            >OceanPilot 准备与推进 · OceanPayment 决策 · 商户响应</span
+          <span>OceanPilot V2</span><span
+            >合成数据 · 上游提交为 Mock · 每次操作均保留案件记录</span
           >
         </footer>
       </main>

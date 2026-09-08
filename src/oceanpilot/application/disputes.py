@@ -45,6 +45,7 @@ class DisputeService:
         clock=None,
         upstream_mode: str = "mock",
         on_change=None,
+        case_library=None,
     ) -> None:
         require(
             upstream_mode in {"mock", "disabled"},
@@ -58,6 +59,7 @@ class DisputeService:
         self.clock = clock or (lambda: datetime.now(UTC))
         self.upstream_mode = upstream_mode
         self.on_change = on_change
+        self.case_library = case_library
 
     @staticmethod
     def _identity(identity: dict) -> dict:
@@ -277,6 +279,70 @@ class DisputeService:
         rule = self.rule_matcher(scheme, channel, reason, "FORMAL_DISPUTE", received_at)
         transaction_id = text_field(data, "transaction_id", limit=200)
         currency = currency_code(data.get("currency"))
+        library_reference = None
+        if data.get("case_template_id") is not None:
+            template_id = text_field(data, "case_template_id", limit=100)
+            require(
+                self.case_library is not None,
+                "LIBRARY_UNAVAILABLE",
+                "Case library unavailable",
+                503,
+            )
+            preview = self.case_library.get_template(template_id)
+            require(preview is not None, "TEMPLATE_NOT_FOUND", "Sandbox template not found", 404)
+            require(
+                channel == "MOCK", "INVALID_TEMPLATE_CHANNEL", "Templates use the Mock channel", 422
+            )
+            require(
+                scheme in {"VISA", "MASTERCARD"},
+                "UNSUPPORTED_TEMPLATE_SCHEME",
+                "This rehearsal flow supports Visa and Mastercard templates",
+                422,
+            )
+            matches = self.case_library.search(scheme=scheme, reason_code=reason, limit=100)
+            require(
+                any(item["template_id"] == template_id for item in matches),
+                "TEMPLATE_SCOPE_MISMATCH",
+                "Scheme and reason must match the chosen template",
+                422,
+            )
+            library_reference = deepcopy(preview["reference"])
+            library_reference["sandbox_inputs"] = {
+                "transaction_id": transaction_id,
+                "amount_minor": amount,
+                "currency": currency,
+                "received_at": received_at,
+                "origin": "HUMAN_CONFIRMED_REHEARSAL_INPUT",
+            }
+            # Guideline scenarios do not contain a verified transaction-specific deadline.
+            # A source-backed rehearsal must not silently inherit the six Mock fixtures' SLA.
+            rule = self.rule_matcher(
+                scheme, "CURATED_REFERENCE", reason, "FORMAL_DISPUTE", received_at
+            )
+            rule.update(
+                {
+                    "channel": channel,
+                    "source_id": "CASE-LIBRARY:" + template_id,
+                    "source_locator": str(library_reference.get("source_locators", []))[:500],
+                    "rule_version": str(library_reference.get("rule_versions", []))[:100],
+                    "source_type": "CURATED_CASE_LIBRARY",
+                    "production_eligible": False,
+                    "conflict_status": "NEEDS_CONFIRMATION",
+                    "allowed_actions": [],
+                    "required_evidence": [],
+                    "critical_evidence": [],
+                    "deadlines": {
+                        "merchant": None,
+                        "internal": None,
+                        "external": None,
+                        "status": "NEEDS_CONFIRMATION",
+                        "source": "CASE-LIBRARY:" + template_id,
+                    },
+                    "limitation": (
+                        "源案例用于参考；请人工确认本次演练的适用权利、证据要求及明确期限。"
+                    ),
+                }
+            )
         if existing is not None:
             expected = {
                 "merchant_id": merchant_id,
@@ -291,6 +357,13 @@ class DisputeService:
                 all(existing[key] == value for key, value in expected.items()),
                 "UPSTREAM_CASE_CONFLICT",
                 "Upstream case notification conflicts with its existing transaction or merchant",
+            )
+            require(
+                (existing.get("library_reference") or {}).get("template_id")
+                == (library_reference or {}).get("template_id"),
+                "UPSTREAM_CASE_CONFLICT",
+                "Case template cannot change on duplicate intake",
+                409,
             )
             existing["upstream_events"].append(
                 {
@@ -352,6 +425,8 @@ class DisputeService:
             "updated_at": now,
             "received_at": received_at,
         }
+        if library_reference is not None:
+            case["library_reference"] = library_reference
         if rule.get("conflict_status") == "VERIFIED":
             case["work_status"] = "TRIAGED"
         return case
@@ -1060,7 +1135,7 @@ class DisputeService:
         case["pending_next_stage"] = False
         case["rule_snapshot"] = self.rule_matcher(
             case["scheme"],
-            case["channel"],
+            "CURATED_REFERENCE" if case.get("library_reference") else case["channel"],
             case["reason_code"],
             stage,
             now,

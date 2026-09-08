@@ -37,6 +37,7 @@ class IntakeData(StrictDTO):
     amount_minor: StrictInt = Field(gt=0, le=10**12)
     currency: StrictStr = Field(pattern=r"^[A-Z]{3}$")
     event_id: StrictStr = Field(min_length=1, max_length=100)
+    case_template_id: StrictStr | None = Field(default=None, min_length=1, max_length=100)
     upstream_case_id: StrictStr | None = Field(default=None, max_length=100)
     received_at: StrictStr | None = Field(default=None, max_length=60)
 
@@ -428,7 +429,27 @@ def demo(payload: DemoData, request: Request, identity: Identity) -> dict:
     return create_demo(request.app.state.disputes, payload.scenario, identity, str(uuid4()))
 
 
+@router.get("/api/v2/case-library")
+def case_library(request: Request, identity: Identity) -> dict:
+    library = request.app.state.dispute_case_library
+    return {
+        "manifest": library.manifest(),
+        "references": library.list_references(limit=100),
+        "templates": library.list_templates(),
+    }
+
+
+@router.get("/api/v2/case-library/{template_id}")
+def case_library_reference(template_id: str, request: Request, identity: Identity) -> dict:
+    library = request.app.state.dispute_case_library
+    reference = library.get_reference(template_id)
+    require(reference is not None, "NOT_FOUND", "Case reference not found", 404)
+    return {"reference": reference, "template": library.get_template(template_id)}
+
+
 @router.get("/v2/operations", response_class=HTMLResponse, include_in_schema=False)
+@router.get("/v2/operations/library", response_class=HTMLResponse, include_in_schema=False)
+@router.get("/v2/operations/cases/{case_id}", response_class=HTMLResponse, include_in_schema=False)
 def operations_page() -> HTMLResponse:
     from oceanpilot.web.v2.rendering import render_v2_page
 
@@ -436,6 +457,7 @@ def operations_page() -> HTMLResponse:
 
 
 @router.get("/v2/merchant", response_class=HTMLResponse, include_in_schema=False)
+@router.get("/v2/merchant/cases/{case_id}", response_class=HTMLResponse, include_in_schema=False)
 def merchant_page() -> HTMLResponse:
     from oceanpilot.web.v2.rendering import render_v2_page
 

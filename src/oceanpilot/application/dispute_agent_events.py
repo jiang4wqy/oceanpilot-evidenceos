@@ -8,6 +8,16 @@ from oceanpilot.domain.dispute import DisputeError
 
 _LOG = logging.getLogger(__name__)
 _IDENTITY = {"role": "AGENT", "actor_id": "oceanpilot-event-agent"}
+_AUDIENCE_MESSAGES = {
+    "OPERATIONS": (
+        "请向 OceanPayment 处理团队说明本案最新变化、商户响应和材料进度、审核阻断、"
+        "上下游下一步及资金核对事项，并指出各项责任人。"
+    ),
+    "MERCHANT": (
+        "请向本案商户解释最新进度、已有审核退回的具体原因、能否送审、缺少的材料，"
+        "以及商户当前应做什么或等待谁处理。已作出的接受或抗辩选择不要重复要求确认。"
+    ),
+}
 _CRITICAL = {
     "INTAKE",
     "CONFIRM_RULE",
@@ -85,21 +95,22 @@ class DisputeAgentEvents:
                     continue
                 # Completed analyses survive process restart. Explicit user runs
                 # may retry a failed model attempt, ordinary events do not repeat it.
-                prior = self.agent.store.list_conversations(case_id)
-                if trigger != "USER_RUN" and any(
-                    item["case_revision"] == revision
-                    and item.get("trigger", "").startswith("AUTO_EVENT:")
-                    for item in prior
-                ):
-                    continue
-                self.agent.converse(
-                    case_id,
-                    _IDENTITY,
-                    "请根据案件最新变化解释当前进展、材料缺口和下一步，"
-                    "分别说明商户、OceanPilot 与 OceanPayment 的分工。",
-                    expected_revision=revision,
-                    trigger=f"AUTO_EVENT:{trigger}",
-                )
+                for audience, message in _AUDIENCE_MESSAGES.items():
+                    prior = self.agent.store.list_conversations(case_id, audience=audience)
+                    if trigger != "USER_RUN" and any(
+                        item["case_revision"] == revision
+                        and item.get("trigger", "").startswith("AUTO_EVENT:")
+                        for item in prior
+                    ):
+                        continue
+                    self.agent.converse(
+                        case_id,
+                        _IDENTITY,
+                        message,
+                        expected_revision=revision,
+                        trigger=f"AUTO_EVENT:{trigger}",
+                        audience=audience,
+                    )
             except DisputeError as error:
                 if error.code != "REVISION_CONFLICT":
                     _LOG.warning("V2 background agent analysis unavailable")

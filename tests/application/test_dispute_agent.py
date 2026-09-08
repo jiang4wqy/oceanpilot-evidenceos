@@ -524,3 +524,247 @@ def test_long_evidence_draft_fits_http_contract_and_package_retains_every_item(s
     assert {item["code"] for item in case["packages"][-1]["evidence_index"]} == set(codes)
     approval = agent.observe(case, "BUILD_PACKAGE")["proposals"][0]
     ApprovalData.model_validate({**approval["data"], "pii_checked": True})
+
+
+def test_case_and_audience_isolate_conversations_in_both_directions_after_restart(stack):
+    disputes, agent = stack
+    first, second = intake(disputes), intake(disputes)
+    for case, marker in ((first, "FIRST"), (second, "SECOND")):
+        for identity, audience in ((MERCHANT, "MERCHANT"), (OP, "OPERATIONS")):
+            result = agent.converse(case["id"], identity, f"{marker}-{audience}-PRIVATE", 1)
+            assert result["scope"] == {"case_id": case["id"], "audience": audience}
+    restarted = DisputeAgentService(SQLiteDisputeAgentStore(agent.store.db_path), disputes)
+    for case, marker in ((first, "FIRST"), (second, "SECOND")):
+        for identity, audience in ((MERCHANT, "MERCHANT"), (OP, "OPERATIONS")):
+            activity = restarted.get_activity(case["id"], identity)
+            assert activity["audience"] == audience
+            assert len(activity["conversations"]) == 1
+            item = activity["conversations"][0]
+            assert item["message"] == f"{marker}-{audience}-PRIVATE"
+            assert item["scope"] == activity["scope"]
+            assert item["source"] == "DETERMINISTIC"
+    risk = {"role": "RISK_OFFICER", "actor_id": "risk-user"}
+    assert restarted.get_activity(first["id"], risk)["conversations"][0]["actor_role"] == "OPERATOR"
+
+
+def test_model_history_contains_only_this_case_and_reader_and_remains_minimized(stack):
+    disputes, agent = stack
+    first, second = intake(disputes), intake(disputes)
+    agent.model = RecordingModel(text="PRIVATE-OP-ANSWER")
+    agent.converse(first["id"], OP, "PRIVATE-OP-QUESTION", 1)
+    agent.model.text = "OTHER-CASE-ANSWER"
+    agent.converse(second["id"], MERCHANT, "OTHER-CASE-QUESTION", 1)
+    agent.model.text = "MERCHANT-OWN-ANSWER"
+    agent.converse(first["id"], MERCHANT, "我的材料 https://private.example/document 怎么补？", 1)
+    agent.converse(first["id"], MERCHANT, "接着上个问题说明", 1)
+    context = json.loads(agent.model.calls[-1][1][0].content)
+    assert context["audience"] == "MERCHANT"
+    assert context["requester_role"] == "MERCHANT"
+    assert len(context["conversation_history"]) == 1
+    assert context["conversation_history"][0]["answer"] == "MERCHANT-OWN-ANSWER"
+    assert "PRIVATE-OP" not in json.dumps(context)
+    assert "OTHER-CASE" not in json.dumps(context)
+    assert "private.example" not in json.dumps(context)
+    assert "review_brief" not in context["prepared_draft"]
+    assert "internal" not in context["deadlines"]
+    assert "operations" not in context
+    agent.converse(first["id"], OP, "继续内部问题", 1)
+    context = json.loads(agent.model.calls[-1][1][0].content)
+    assert context["audience"] == "OPERATIONS"
+    assert len(context["conversation_history"]) == 1
+    assert context["conversation_history"][0]["answer"] == "PRIVATE-OP-ANSWER"
+    assert "MERCHANT-OWN" not in json.dumps(context)
+    assert "review_brief" in context["prepared_draft"]
+    assert "operations" in context
+
+
+@pytest.mark.parametrize("audience,reader", [("MERCHANT", "MERCHANT"), ("OPERATIONS", "OPERATOR")])
+def test_automatic_analysis_addresses_its_reader_instead_of_agent_identity(stack, audience, reader):
+    disputes, agent = stack
+    case = intake(disputes)
+    agent.model = RecordingModel()
+    result = agent.converse(
+        case["id"],
+        {"role": "AGENT", "actor_id": "automatic-agent"},
+        "解释最新进度",
+        1,
+        trigger="AUTO_EVENT:INTAKE",
+        audience=audience,
+    )
+    context = json.loads(agent.model.calls[-1][1][0].content)
+    assert context["requester_role"] == reader
+    assert context["initiator_role"] == "AGENT"
+    assert context["audience"] == audience
+    assert result["audience"] == audience
+    opposite = OP if audience == "MERCHANT" else MERCHANT
+    assert agent.get_activity(case["id"], opposite)["conversations"] == []
+
+
+@pytest.mark.parametrize(
+    "identity,audience,trigger",
+    [
+        (MERCHANT, "OPERATIONS", "USER_MESSAGE"),
+        (OP, "MERCHANT", "AUTO_EVENT:INTAKE"),
+        ({"role": "AGENT", "actor_id": "agent-user"}, "MERCHANT", "USER_MESSAGE"),
+    ],
+)
+def test_caller_cannot_choose_another_private_audience(stack, identity, audience, trigger):
+    disputes, agent = stack
+    case = intake(disputes)
+    agent.model = RecordingModel()
+    with pytest.raises(DisputeError) as error:
+        agent.converse(case["id"], identity, "越界读取", 1, audience=audience, trigger=trigger)
+    assert error.value.code == "AUDIENCE_FORBIDDEN"
+    assert agent.model.calls == []
+    assert agent.store.list_runs(case["id"]) == []
+
+
+def test_merchant_projection_omits_internal_drafts_and_operator_proposals_without_changing_run(
+    stack,
+):
+    disputes, agent = stack
+    case = intake(disputes)
+    run = agent.observe(case, "INTAKE")
+    merchant = agent.get_activity(case["id"], MERCHANT)
+    operations = agent.get_activity(case["id"], OP)
+    assert merchant["run"]["id"] == operations["run"]["id"]
+    assert merchant["proposals"] == []
+    assert operations["proposals"][0]["action"] == "PUBLISH_TASK"
+    assert "review_brief" not in json.dumps(merchant)
+    assert "本草稿仅组织已登记事实" not in json.dumps(merchant)
+    assert "商户答复草稿" in merchant["run"]["prepared"]["response_draft"]
+    assert agent.store.get_run(case["id"], 1) == run
+    changed = execute(disputes, case, "PUBLISH_TASK")
+    agent.observe(changed, "PUBLISH_TASK")
+    assert {
+        p["data"]["decision"] for p in agent.get_activity(case["id"], MERCHANT)["proposals"]
+    } == {
+        "ACCEPT",
+        "CONTEST",
+    }
+
+
+def test_legacy_conversation_migration_uses_actor_role_and_keeps_old_auto_event_internal(tmp_path):
+    path = tmp_path / "legacy.db"
+    legacy = [
+        {"id": "merchant", "actor_role": "MERCHANT", "trigger": "USER_MESSAGE"},
+        {"id": "operator", "actor_role": "OPERATOR", "trigger": "USER_MESSAGE"},
+        {"id": "auto", "actor_role": "AGENT", "trigger": "AUTO_EVENT:INTAKE"},
+        {"id": "merchant-auto", "actor_role": "MERCHANT", "trigger": "AUTO_EVENT:INTAKE"},
+        {"id": "unknown", "trigger": "USER_MESSAGE"},
+    ]
+    with sqlite3.connect(path) as connection:
+        connection.execute(
+            "CREATE TABLE v2_dispute_agent_conversations (conversation_id TEXT PRIMARY KEY, "
+            "case_id TEXT NOT NULL, case_revision INTEGER NOT NULL, created_at TEXT NOT NULL, "
+            "snapshot TEXT NOT NULL)"
+        )
+        for item in legacy:
+            snapshot = {
+                **item,
+                "case_id": "legacy-case",
+                "case_revision": 1,
+                "created_at": NOW.isoformat(),
+                "message": f"private-{item['id']}",
+                "answer": "legacy answer",
+            }
+            connection.execute(
+                "INSERT INTO v2_dispute_agent_conversations VALUES (?, ?, ?, ?, ?)",
+                (item["id"], "legacy-case", 1, NOW.isoformat(), json.dumps(snapshot)),
+            )
+    store = SQLiteDisputeAgentStore(path)
+    merchant = store.list_conversations("legacy-case", audience="MERCHANT")
+    internal = store.list_conversations("legacy-case", audience="OPERATIONS")
+    assert [item["id"] for item in merchant] == ["merchant"]
+    assert {item["id"] for item in internal} == {"operator", "auto", "merchant-auto", "unknown"}
+    assert all(item["source"] == "LEGACY" for item in merchant + internal)
+    assert merchant[0]["scope"] == {"case_id": "legacy-case", "audience": "MERCHANT"}
+    with sqlite3.connect(path) as connection:
+        rows = dict(
+            connection.execute(
+                "SELECT conversation_id, audience FROM v2_dispute_agent_conversations"
+            )
+        )
+    assert rows["merchant"] == "MERCHANT"
+    assert rows["merchant-auto"] == "OPERATIONS"
+    restarted = SQLiteDisputeAgentStore(path)
+    assert restarted.list_conversations("legacy-case", audience="MERCHANT") == merchant
+    assert restarted.list_conversations("legacy-case") == internal
+
+
+def test_conversation_limit_is_applied_after_audience_filtering(stack):
+    disputes, agent = stack
+    case = intake(disputes)
+    agent.converse(case["id"], MERCHANT, "早期商户问题", 1)
+    for index in range(105):
+        agent.store.save_conversation(
+            {
+                "id": uuid4().hex,
+                "case_id": case["id"],
+                "case_revision": 1,
+                "created_at": NOW.isoformat(),
+                "actor_role": "OPERATOR",
+                "message": f"internal-{index}",
+                "answer": "private",
+            }
+        )
+    assert len(agent.get_activity(case["id"], OP)["conversations"]) == 100
+    merchant = agent.get_activity(case["id"], MERCHANT)["conversations"]
+    assert len(merchant) == 1
+    assert merchant[0]["message"] == "早期商户问题"
+
+
+def test_merchant_review_feedback_uses_actual_review_and_submission_explains_missing_material(
+    stack,
+):
+    disputes, agent = stack
+    case = execute(disputes, intake(disputes), "PUBLISH_TASK")
+    case = execute(
+        disputes,
+        case,
+        "MERCHANT_DECISION",
+        {"decision": "CONTEST", "reason": "我确认抗辩"},
+        MERCHANT,
+    )
+    missing = agent.converse(case["id"], MERCHANT, "为什么不能提交", case["revision"])
+    assert missing["intent"] == "SUBMISSION_BLOCKERS"
+    assert "尚缺" in missing["answer"]
+    for code in case["rule_snapshot"]["required_evidence"]:
+        case = execute(
+            disputes,
+            case,
+            "REGISTER_EVIDENCE",
+            {"code": code, "title": "真实登记材料", "reference": "synthetic-evidence"},
+            MERCHANT,
+        )
+    ready = agent.converse(case["id"], MERCHANT, "为什么无法送审", case["revision"])
+    assert "提交给 OceanPayment" in ready["answer"]
+    case = execute(disputes, case, "SUBMIT_EVIDENCE", identity=MERCHANT)
+    case = execute(
+        disputes,
+        case,
+        "REVIEW",
+        {"decision": "REVISION", "reason": "签收凭证无法对应本案订单，请补充订单与签收对应关系"},
+        {"role": "RISK_OFFICER", "actor_id": "risk-user"},
+    )
+    feedback = agent.converse(case["id"], MERCHANT, "我为什么被退回", case["revision"])
+    assert feedback["intent"] == "REVIEW_FEEDBACK"
+    assert "签收凭证无法对应本案订单" in feedback["answer"]
+    agent.model = RecordingModel()
+    agent.converse(case["id"], MERCHANT, "怎么补充？", case["revision"])
+    context = json.loads(agent.model.calls[0][1][0].content)
+    assert context["latest_review_feedback"]["decision"] == "REVISION"
+    assert "对应本案订单" in context["latest_review_feedback"]["reason"]
+
+
+def test_no_model_feedback_and_finance_answers_are_reader_specific_without_inventing_results(stack):
+    disputes, agent = stack
+    case = intake(disputes)
+    rejected = agent.converse(case["id"], MERCHANT, "为什么拒绝？", 1)
+    assert "尚无人工材料审核结论" in rejected["answer"]
+    merchant = agent.converse(case["id"], MERCHANT, "资金核对了吗", 1)
+    operations = agent.converse(case["id"], OP, "资金核对了吗", 1)
+    assert "PENDING" in merchant["answer"]
+    assert "资金由 OceanPayment 人工核对" in merchant["answer"]
+    assert "运营人员核对来源并登记事件" in operations["answer"]
+    assert "UNKNOWN" in operations["answer"]

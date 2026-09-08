@@ -19,8 +19,18 @@ def render_v2_page(role: str = "operations") -> str:
     return (
         resources.joinpath("v2/shell.html")
         .read_text(encoding="utf-8")
-        .replace("__V2_STYLES__", resources.joinpath("v2/styles.css").read_text("utf-8"))
-        .replace("__V2_SCRIPT__", resources.joinpath("v2/app.js").read_text("utf-8"))
+        .replace(
+            "__V2_STYLES__",
+            resources.joinpath("v2/styles.css").read_text("utf-8")
+            + "\n"
+            + resources.joinpath("v2/library.css").read_text("utf-8"),
+        )
+        .replace(
+            "__V2_SCRIPT__",
+            resources.joinpath("v2/library.js").read_text("utf-8")
+            + "\n"
+            + resources.joinpath("v2/app.js").read_text("utf-8"),
+        )
         .replace("__V2_CONFIG__", json.dumps({"surface": surface}))
         .replace("__V2_LOGO__", resources.joinpath("assets/logo.data-uri").read_text("utf-8"))
     )
