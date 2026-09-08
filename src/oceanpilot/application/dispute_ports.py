@@ -9,6 +9,8 @@ class DisputeStore(Protocol):
 
     def get_case(self, case_id: str) -> dict | None: ...
 
+    def get_command_fingerprint(self, command_id: str) -> str | None: ...
+
     def execute_atomic(
         self,
         *,

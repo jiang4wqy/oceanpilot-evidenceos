@@ -34,6 +34,18 @@ def binding_key(kind: str, tenant_key: str, external_id: str) -> str:
     return hashlib.sha256(raw.encode()).hexdigest()
 
 
+def _event_command_id(event_ref: str) -> str:
+    """Format new derived IDs without card-number-like digit runs.
+
+    Receipt indexes keep the original digest. Remembered commands and their
+    authorization references are immutable and are replayed in their old format;
+    this helper does not migrate previously rejected callback commands.
+    """
+    return "feishu:" + "g".join(
+        event_ref[index : index + 8] for index in range(0, len(event_ref), 8)
+    )
+
+
 def _text(value: object, *, limit: int = 512) -> str:
     if not isinstance(value, str) or not value or len(value) > limit:
         raise FeishuV2Error("INVALID_CALLBACK")
@@ -404,7 +416,7 @@ class FeishuV2Adapter:
                 raise FeishuV2Error("CASE_BINDING_MISMATCH", 403)
             self._case(card["case_id"], identity)
             return {
-                "command_id": f"feishu:{event_ref}",
+                "command_id": _event_command_id(event_ref),
                 "case_id": card["case_id"],
                 "action": "MERCHANT_DECISION",
                 "expected_revision": card["revision"],
@@ -413,7 +425,7 @@ class FeishuV2Adapter:
                     **metadata,
                     "decision": value["decision"],
                     "reason": "Merchant confirmed this decision in the Feishu case card.",
-                    "authorization_reference": f"feishu:{event_ref}",
+                    "authorization_reference": _event_command_id(event_ref),
                 },
             }
         message = _mapping(event.get("message"))
@@ -434,7 +446,7 @@ class FeishuV2Adapter:
             return None
         case = self._case(match[1], identity)
         return {
-            "command_id": f"feishu:{event_ref}",
+            "command_id": _event_command_id(event_ref),
             "case_id": _case_id(case),
             "action": "COMMENT",
             "expected_revision": case["revision"],

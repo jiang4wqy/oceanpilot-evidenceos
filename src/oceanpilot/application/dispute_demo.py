@@ -136,7 +136,7 @@ def create_demo(service, scenario: str, identity: dict, event_id: str) -> dict:
             "confirmed": True,
             "data": {
                 "merchant_id": identity["merchant_id"],
-                "transaction_id": f"synthetic-{event_id}",
+                "transaction_id": str(uuid4()),
                 "scheme": "VISA",
                 "channel": "MOCK",
                 "reason_code": "13.1" if scenario == "B" else "10.4",

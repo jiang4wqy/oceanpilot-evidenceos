@@ -1,6 +1,7 @@
 import copy
 import hashlib
 import json
+import re
 from datetime import UTC, datetime
 
 import pytest
@@ -19,6 +20,8 @@ from oceanpilot.adapters.persistence.disputes import SQLiteDisputeStore
 from oceanpilot.api.dispute_feishu import initialize_dispute_feishu, router
 from oceanpilot.application.disputes import DisputeService
 from oceanpilot.domain.dispute_rules import case_plan
+from oceanpilot.domain.errors import SensitiveDataRejected
+from oceanpilot.domain.security import assert_no_sensitive_data
 
 NOW = 1809860400
 ENCRYPT_KEY = "synthetic-feishu-v2-encrypt-key"
@@ -564,3 +567,106 @@ def test_configured_initializer_runs_with_real_service_without_outbound_client(t
     )
     assert isinstance(app.state.dispute_feishu, FeishuV2Adapter)
     assert not hasattr(app.state, "feishu_client")
+
+
+@pytest.mark.parametrize("mode", ["card", "event"])
+def test_new_callback_derived_ids_do_not_trigger_sensitive_data_guard(stack, tmp_path, mode):
+    client, adapter = stack
+    adapter.service = real_service(tmp_path)
+    adapter.plan = case_plan
+    tenant, event_id = "synthetic-review-tenant", "synthetic-review-event-46"
+    event_ref = binding_key("event", tenant, event_id)
+    with pytest.raises(SensitiveDataRejected):
+        assert_no_sensitive_data("feishu:" + event_ref)
+    adapter.bindings = TrustedBindings(
+        {binding_key("actor", tenant, "ou-merchant"): IDENTITY},
+        {binding_key("chat", tenant, "oc-merchant"): "merchant-1"},
+    )
+    if mode == "card":
+        card = adapter.render_case_card(
+            "case-1", IDENTITY, tenant_key=tenant, chat_id="oc-merchant"
+        )
+        payload = card_payload(card["elements"][-1]["actions"][0]["value"], event_id)
+        path = CARD_PATH
+    else:
+        payload = message_payload(event_id=event_id)
+        path = EVENTS_PATH
+    payload["header"]["tenant_key"] = tenant
+    before = adapter.service.get_case("case-1", IDENTITY)
+    response = post(client, path, payload)
+    assert response.status_code == 200, response.text
+    digest = hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()
+    remembered = adapter.store.receipt(event_ref, digest)
+    command = remembered["command"]
+    assert command["command_id"] != "feishu:" + event_ref
+    assert command["command_id"].startswith("feishu:")
+    assert all(len(m.group()) < 13 for m in re.finditer(r"[\d\s-]+", command["command_id"]))
+    assert_no_sensitive_data(command["command_id"])
+    assert command["data"]["external_event_id"] == event_ref
+    assert command["data"]["thread_id"] == binding_key("chat", tenant, "oc-merchant")
+    if mode == "card":
+        assert command["data"]["authorization_reference"] == command["command_id"]
+        assert_no_sensitive_data(command["data"]["authorization_reference"])
+    case = adapter.service.get_case("case-1", IDENTITY)
+    assert case["revision"] == before["revision"] + 1
+    assert post(client, path, payload).json() == response.json()
+    assert adapter.service.get_case("case-1", IDENTITY) == case
+
+
+@pytest.mark.parametrize("mode", ["card", "event"])
+@pytest.mark.parametrize("prior_state", ["remembered", "committed", "completed"])
+def test_valid_legacy_commands_keep_original_identifiers_and_authorization_on_replay(
+    stack, tmp_path, monkeypatch, mode, prior_state
+):
+    client, adapter = stack
+    adapter.service = real_service(tmp_path)
+    adapter.plan = case_plan
+    payload = card_payload(action_value(adapter)) if mode == "card" else message_payload()
+    event_ref = binding_key("event", "tenant-1", payload["header"]["event_id"])
+    digest = hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()
+    command = adapter._command(
+        payload["event"], mode, IDENTITY, binding_key("chat", "tenant-1", "oc-merchant"), event_ref
+    )
+    # Pre-upgrade remembered commands are used verbatim, including proof of
+    # authorization. Their successful execution must remain replayable after a crash.
+    command["command_id"] = "feishu:" + event_ref
+    assert_no_sensitive_data(command["command_id"])
+    if mode == "card":
+        command["data"]["authorization_reference"] = "feishu:" + event_ref
+    adapter.store.remember(event_ref, digest, command)
+    before = adapter.service.get_case("case-1", IDENTITY)
+    if prior_state == "committed":
+        adapter.service.execute(command, IDENTITY)
+    elif prior_state == "completed":
+        adapter.handle(payload, mode=mode)
+
+    restarted = make_adapter(tmp_path, adapter.service)
+    restarted.plan = case_plan
+    client.app.state.dispute_feishu = restarted
+
+    def must_not_regenerate(*_args):
+        raise AssertionError("A remembered callback command must remain immutable")
+
+    monkeypatch.setattr(restarted, "_command", must_not_regenerate)
+    path = CARD_PATH if mode == "card" else EVENTS_PATH
+    response = post(client, path, payload)
+    assert response.status_code == 200, response.text
+    assert restarted.store.receipt(event_ref, digest)["command"] == command
+    case = restarted.service.get_case("case-1", IDENTITY)
+    assert case["revision"] == before["revision"] + 1
+    assert case["audit"][-1]["command_id"] == command["command_id"]
+    if mode == "card":
+        assert case["merchant_authorization"]["reference"] == "feishu:" + event_ref
+    assert post(client, path, payload).json() == response.json()
+    assert restarted.service.get_case("case-1", IDENTITY) == case
+
+    changed = copy.deepcopy(payload)
+    if mode == "card":
+        decision = changed["event"]["action"]["value"]["decision"]
+        changed["event"]["action"]["value"]["decision"] = (
+            "CONTEST" if decision == "ACCEPT" else "ACCEPT"
+        )
+    else:
+        changed["event"]["message"]["content"] = json.dumps({"text": "@OceanPilot case-1 changed"})
+    assert post(client, path, changed).status_code == 409
+    assert restarted.service.get_case("case-1", IDENTITY) == case

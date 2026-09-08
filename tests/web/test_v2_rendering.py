@@ -454,3 +454,35 @@ assert.equal(ui.state.agentDrafts['a:operations:synthetic-merchant-001'],'风控
 replies[1](ok({answer:'新风控答案'}));await second;
 assert.equal(ui.state.agentBusy,false);
 """)
+
+
+def test_intake_generates_exact_uuid_identifiers_for_value_screening():
+    run_js("""
+const identifier='00000000-0000-4000-8000-000000000000';
+Object.defineProperty(globalThis,'crypto',{value:{randomUUID:()=>identifier},configurable:true});
+OceanV2.openDialog('INTAKE');
+const markup=node('dialogFields').innerHTML;
+for(const field of ['transaction_id','event_id']) {
+ const pattern=new RegExp('name="'+field+'"[^>]*value="([^"]+)"');
+ assert.equal(markup.match(pattern)[1],identifier);
+}
+""")
+
+
+@pytest.mark.parametrize("random_bytes_available", [True, False])
+def test_intake_uuid_fallback_preserves_the_identifier_format(random_bytes_available):
+    run_js(
+        """
+Object.defineProperty(globalThis,'crypto',{value:CRYPTO,configurable:true});
+OceanV2.openDialog('INTAKE');
+const markup=node('dialogFields').innerHTML;
+for(const field of ['transaction_id','event_id']) {
+ const pattern=new RegExp('name="'+field+'"[^>]*value="([^"]+)"');
+ const identifier=markup.match(pattern)[1];
+ assert.match(identifier,/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+}
+""".replace(
+            "CRYPTO",
+            "{getRandomValues:bytes=>bytes.fill(255)}" if random_bytes_available else "undefined",
+        )
+    )

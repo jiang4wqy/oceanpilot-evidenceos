@@ -247,10 +247,18 @@
     },
   };
   function uuid() {
-    return (
-      globalThis.crypto?.randomUUID?.() ||
-      `v2-${Date.now()}-${Math.random().toString(16).slice(2)}`
-    );
+    if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
+    const bytes = new Uint8Array(16);
+    if (globalThis.crypto?.getRandomValues) {
+      globalThis.crypto.getRandomValues(bytes);
+    } else {
+      for (let i = 0; i < bytes.length; i++)
+        bytes[i] = Math.floor(Math.random() * 256);
+    }
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
   }
   function money(amount, currency = "USD") {
     try {
@@ -1613,7 +1621,7 @@
     const reason = (value = "") =>
       field("reason", "决策依据 / 说明", data.reason || value, "textarea");
     const event = () =>
-      field("event_id", "上游事件 ID", `synthetic-${uuid()}`, "text", {
+      field("event_id", "上游事件 ID", uuid(), "text", {
         hint: "同一上游事件应复用相同 ID，以保证去重。",
       });
     switch (action) {
@@ -1621,11 +1629,7 @@
         return (
           (data.case_template_id ? `<input type="hidden" name="case_template_id" value="${esc(data.case_template_id)}">` : "") +
           field("merchant_id", "商户 ID", S.merchantId) +
-          field(
-            "transaction_id",
-            "交易关联 ID",
-            `synthetic-txn-${Date.now()}`,
-          ) +
+          field("transaction_id", "交易关联 ID", uuid()) +
           field("scheme", "卡组织", data.scheme || "VISA", "select", {
             choices: ["VISA", "MASTERCARD"],
           }) +

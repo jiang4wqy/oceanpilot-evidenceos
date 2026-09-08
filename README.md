@@ -35,11 +35,11 @@ PYTHONPATH=src OCEANPILOT_DB_PATH=work/v2.db \
 
 ## 指南案例与双端协作
 
-优先从“Visa / Mastercard 案例库”查阅已上传的提纯资料。文件编号到 074，实际去重后 62 条；每条保留来源、页码、核验状态和冲突。选择可用模板并确认交易字段后，生成有来源快照的独立演练案件。OceanPilot 在新检查及对话中实际检索同卡组织、同原因码的案例依据。
+优先从“Visa / Mastercard 案例库”查阅已上传的提纯资料。文件编号到 074，编号并不连续，实际收录 62 条；每条保留来源、页码、核验状态和冲突。选择可用模板并确认交易字段后，生成有来源快照的独立演练案件。OceanPilot 在新检查及对话中实际检索同卡组织、同原因码的案例依据。
 
 两端通过持久游标自动同步案件与各自的 AI 记录，保留未发送输入。商户对话与运营内部对话分开保存；需要共享的内容通过案件协作消息发送。远端变更会使旧确认失效，不能沿用旧版本执行。
 
-[双端操作指南](docs/v2/dual-workspace-guide.md) · [本轮验收：1840 项通过](docs/v2/dual-surface-acceptance.md) · [来源资料](docs/chargeback-case-library/03_case_library.json)
+[双端操作指南](docs/v2/dual-workspace-guide.md) · [本轮验收：1865 项通过](docs/v2/dual-surface-acceptance.md) · [来源资料](docs/chargeback-case-library/03_case_library.json)
 
 ## 四个 Golden Demo
 

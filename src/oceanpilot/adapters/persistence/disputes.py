@@ -88,6 +88,15 @@ class SQLiteDisputeStore:
             ).fetchone()
             return json.loads(row["snapshot"]) if row else None
 
+    def get_command_fingerprint(self, command_id: str) -> str | None:
+        """Read canonical command metadata; replay authority stays in execute_atomic."""
+        with closing(self._connect()) as connection:
+            row = connection.execute(
+                "SELECT fingerprint FROM v2_dispute_commands WHERE command_id = ?",
+                (command_id,),
+            ).fetchone()
+            return row["fingerprint"] if row else None
+
     def execute_atomic(
         self,
         *,

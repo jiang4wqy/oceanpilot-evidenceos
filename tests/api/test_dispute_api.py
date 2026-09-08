@@ -1,5 +1,5 @@
 from pathlib import Path
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 from fastapi.testclient import TestClient
@@ -70,6 +70,19 @@ def test_four_golden_cases_are_persisted_by_real_commands(client, scenario, stat
         assert case["business_outcome"] == "WON"
         assert case["financial_status"] == "DISCREPANCY"
         assert case["submissions"][0]["mode"] == "MOCK"
+
+
+@pytest.mark.parametrize("scenario", ["A", "B", "C", "D"])
+def test_golden_demo_keeps_cardlike_uuid_identifiers_in_canonical_form(
+    client, monkeypatch, scenario
+):
+    event_id = UUID("00000000-0000-4000-808a-aaaaaaaaaaaa")
+    monkeypatch.setattr("oceanpilot.api.disputes.uuid4", lambda: event_id)
+    case = seed(client, scenario)
+    transaction_id = case["transaction_id"]
+    assert UUID(transaction_id).version == 4
+    assert str(UUID(transaction_id)) == transaction_id
+    assert transaction_id != str(event_id)
 
 
 def test_merchant_sees_only_own_cases_and_cannot_seed_or_approve(client):

@@ -125,7 +125,19 @@ class DisputeService:
         )
         command["data"] = command.get("data", {})
         if action == "INTAKE":
-            command["case_id"] = command.get("case_id") or f"OPV2-{fingerprint(command_id)[:16]}"
+            if not command.get("case_id"):
+                digest = fingerprint(command_id)[:16]
+                legacy_id = f"OPV2-{digest}"
+                # Duplicate notices can have a receipt without their own case row.
+                # Reuse the old derivation only for an exact saved command; the
+                # atomic store still verifies actor identity and the fingerprint.
+                legacy_digest = fingerprint(command | {"case_id": legacy_id})
+                command["case_id"] = (
+                    legacy_id
+                    if self.store.get_command_fingerprint(command_id) == legacy_digest
+                    # New derived hashes cannot contain card-number digit runs.
+                    else f"OPV2-{digest[:8]}g{digest[8:]}"
+                )
         else:
             require(
                 type(command.get("expected_revision")) is int and command["expected_revision"] >= 1,

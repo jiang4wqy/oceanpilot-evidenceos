@@ -47,7 +47,7 @@ def intake_payload(template_id="CB-CASE-041", **data_changes):
         "data": {
             "case_template_id": template_id,
             "event_id": str(uuid4()),
-            "upstream_case_id": "library-upstream-" + str(uuid4()),
+            "upstream_case_id": str(uuid4()),
             "merchant_id": MERCHANT,
             "transaction_id": "sandbox-library-transaction",
             "scheme": "VISA",
