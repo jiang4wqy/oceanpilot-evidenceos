@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light" />
+    <title>OceanPilot V2 · 争议运营工作台</title>
+    <style>
+      __V2_STYLES__
+    </style>
+  </head>
+  <body>
+    <div class="app-shell" id="appShell">
+      <aside class="sidebar">
+        <a
+          class="brand"
+          href="/v2/operations"
+          aria-label="OceanPilot 运营工作台"
+          ><img src="__V2_LOGO__" alt="OceanPayment" /><span
+            >OceanPilot<small>DISPUTE OPERATIONS</small></span
+          ><b>V2</b></a
+        >
+        <div class="workspace-label">工作空间</div>
+        <nav class="workspace-nav" aria-label="工作空间">
+          <a href="/v2/operations" data-surface="operations"
+            ><span class="nav-icon">▦</span>争议运营<span class="nav-shortcut"
+              >OP</span
+            ></a
+          >
+          <a href="/v2/merchant" data-surface="merchant"
+            ><span class="nav-icon">▤</span>商户协作<span class="nav-shortcut"
+              >M</span
+            ></a
+          >
+          <a href="/v2/governance" data-surface="governance"
+            ><span class="nav-icon">◇</span>平台治理<span class="nav-shortcut"
+              >G</span
+            ></a
+          >
+        </nav>
+        <div class="workspace-label" id="queueNavLabel">案件视图</div>
+        <nav id="queueNav" class="queue-nav" aria-label="案件队列"></nav>
+        <div class="sidebar-bottom">
+          <div class="environment">
+            <span class="status-dot"></span>合成数据演示环境
+          </div>
+          <p>上游提交为 Mock。<br />案件、操作与回执均可追溯。</p>
+          <a href="/business" class="legacy-link">打开 V1 工作台 ↗</a>
+        </div>
+      </aside>
+      <main class="main">
+        <header class="topbar">
+          <div class="breadcrumb">
+            OceanPayment <span>/</span>
+            <strong id="surfaceBreadcrumb">争议运营</strong>
+          </div>
+          <div class="identity">
+            <span class="demo-pill">SYNTHETIC DEMO</span
+            ><label for="roleSelect" class="sr-only"
+              >演示角色（非生产认证）</label
+            ><select
+              id="roleSelect"
+              aria-label="演示角色（非生产认证）"
+            ></select
+            ><span class="avatar" id="avatar">OP</span>
+          </div>
+        </header>
+        <div class="identity-note" id="identityNote">
+          角色切换用于 Synthetic 权限演示，非生产身份认证。
+        </div>
+        <div class="page-heading">
+          <div>
+            <div class="eyebrow" id="eyebrow">OPERATIONS WORKSPACE</div>
+            <h1 id="pageTitle">让每一笔争议，有据可循。</h1>
+            <p id="pageDescription">
+              从上游接收到资金核对，在一个案件中协同推进。
+            </p>
+          </div>
+          <div class="heading-actions">
+            <button class="button secondary" id="refreshButton">↻ 刷新</button
+            ><button class="button secondary" id="demoButton">演示案例</button
+            ><button class="button primary" id="intakeButton">
+              ＋ 接收上游事件
+            </button>
+          </div>
+        </div>
+        <div
+          id="globalNotice"
+          class="notice"
+          role="status"
+          aria-live="polite"
+          hidden
+        ></div>
+        <section id="metrics" class="metrics" aria-label="案件指标"></section>
+        <section class="workspace-grid" id="workspaceGrid">
+          <aside class="case-queue" aria-label="案件列表">
+            <div class="queue-heading">
+              <h2 id="queueTitle">全部案件</h2>
+              <span id="queueCount" class="count">0</span>
+            </div>
+            <label class="search-box"
+              ><span>⌕</span
+              ><input
+                id="caseSearch"
+                type="search"
+                placeholder="搜索案件、商户或原因码"
+                aria-label="搜索案件"
+            /></label>
+            <div class="queue-filter">
+              <label for="stageFilter">阶段</label
+              ><select id="stageFilter">
+                <option value="ALL">全部阶段</option>
+                <option value="FORMAL_DISPUTE">正式争议</option>
+                <option value="REPRESENTMENT">再请款</option>
+                <option value="PRE_ARBITRATION">预仲裁</option>
+                <option value="ARBITRATION">仲裁</option>
+                <option value="OTHER">其他</option>
+              </select>
+            </div>
+            <div id="caseList" class="case-list">
+              <div class="empty-state">正在读取案件…</div>
+            </div>
+            <div class="queue-footer">
+              案件由 OceanPayment 运营 · 统一版本记录
+            </div>
+          </aside>
+          <article class="case-detail" id="caseDetail" aria-label="案件详情">
+            <div class="empty-state">
+              <div class="empty-symbol">◈</div>
+              <h2>选择一个案件，开始协同</h2>
+              <p>案件计划、证据与审核记录会显示在这里。</p>
+            </div>
+          </article>
+        </section>
+        <section id="governanceView" hidden aria-label="平台治理"></section>
+        <footer class="page-footer">
+          <span>OceanPilot V2</span> One case. Every decision connected.<span
+            >确定性 Agent · 人工决策 · 审计闭环</span
+          >
+        </footer>
+      </main>
+    </div>
+    <dialog id="actionDialog" aria-labelledby="dialogTitle">
+      <form id="actionForm">
+        <div class="dialog-heading">
+          <div>
+            <div class="eyebrow" id="dialogEyebrow">CASE COMMAND</div>
+            <h2 id="dialogTitle">确认案件操作</h2>
+          </div>
+          <button
+            class="icon-button"
+            type="button"
+            id="closeDialog"
+            aria-label="关闭"
+          >
+            ×
+          </button>
+        </div>
+        <div id="dialogContext" class="dialog-context"></div>
+        <div id="dialogFields" class="dialog-fields"></div>
+        <div id="dialogError" class="notice error" role="alert" hidden></div>
+        <div id="dialogConfirmation" class="confirmation">
+          <label
+            ><input
+              type="checkbox"
+              id="confirmCheckbox"
+              required
+            />我已核对本次操作内容、案件版本及权限，确认执行。</label
+          >
+          <p>确认后由案件引擎校验并记录审计；版本变化时必须重新审核。</p>
+        </div>
+        <div class="dialog-footer">
+          <button type="button" class="button secondary" id="cancelDialog">
+            取消</button
+          ><button type="submit" class="button primary" id="submitDialog">
+            确认并执行
+          </button>
+        </div>
+      </form>
+    </dialog>
+    <script>
+      const V2_CONFIG = __V2_CONFIG__;
+      __V2_SCRIPT__;
+    </script>
+  </body>
+</html>

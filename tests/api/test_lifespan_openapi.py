@@ -23,6 +23,16 @@ def test_openapi_freezes_paths_replay_and_problem_contract(tmp_path):
 
     assert set(document["paths"]) == {
         "/health",
+        "/api/v2/cases",
+        "/api/v2/cases/{case_id}",
+        "/api/v2/cases/{case_id}/plan",
+        "/api/v2/commands",
+        "/api/v2/rules",
+        "/api/v2/governance",
+        "/api/v2/capabilities",
+        "/api/v2/demo",
+        "/api/v2/integrations/feishu/events",
+        "/api/v2/integrations/feishu/card",
         "/api/v1/admin/overview",
         "/api/v1/agent/turns",
         "/api/v1/agent/cases/{case_id}/review-decisions",

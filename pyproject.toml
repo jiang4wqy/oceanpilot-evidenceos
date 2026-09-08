@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "oceanpilot-evidenceos"
-version = "0.3.0"
+version = "2.0.0.dev0"
 description = "Synthetic competition prototype for evidence-driven cross-border chargeback collaboration"
 requires-python = ">=3.12,<3.13"
 dependencies = [
@@ -35,6 +35,9 @@ where = ["src"]
   "operations/*.html",
   "operations/*.css",
   "operations/*.js",
+  "v2/*.html",
+  "v2/*.css",
+  "v2/*.js",
 ]
 
 [tool.pytest.ini_options]

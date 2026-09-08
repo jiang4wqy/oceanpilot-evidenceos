@@ -310,6 +310,16 @@ def test_openapi_has_exact_foundation_paths(app: FastAPI):
     paths = app.openapi()["paths"]
     assert set(paths) == {
         "/health",
+        "/api/v2/cases",
+        "/api/v2/cases/{case_id}",
+        "/api/v2/cases/{case_id}/plan",
+        "/api/v2/commands",
+        "/api/v2/rules",
+        "/api/v2/governance",
+        "/api/v2/capabilities",
+        "/api/v2/demo",
+        "/api/v2/integrations/feishu/events",
+        "/api/v2/integrations/feishu/card",
         "/api/v1/cases",
         "/api/v1/cases/{case_id}",
         "/api/v1/cases/{case_id}/evidence",
@@ -345,6 +355,16 @@ def test_openapi_has_exact_foundation_paths(app: FastAPI):
     }
     assert {path: set(item) for path, item in paths.items()} == {
         "/health": {"get"},
+        "/api/v2/cases": {"get"},
+        "/api/v2/cases/{case_id}": {"get"},
+        "/api/v2/cases/{case_id}/plan": {"get"},
+        "/api/v2/commands": {"post"},
+        "/api/v2/rules": {"get"},
+        "/api/v2/governance": {"get"},
+        "/api/v2/capabilities": {"get"},
+        "/api/v2/demo": {"post"},
+        "/api/v2/integrations/feishu/events": {"post"},
+        "/api/v2/integrations/feishu/card": {"post"},
         "/api/v1/cases": {"post"},
         "/api/v1/cases/{case_id}": {"get"},
         "/api/v1/cases/{case_id}/evidence": {"post"},

@@ -45,6 +45,7 @@ jobs:
           python examples/chargeback_demo.py
           python examples/chargeback_transcript.py
           python scripts/eval_chargeback.py
+          python scripts/eval_dispute_v2.py
 
       - name: Build demo image
         run: docker build --tag oceanpilot-evidenceos:ci .
@@ -95,6 +96,10 @@ jobs:
             http://127.0.0.1:8000/business \
             --output "${RUNNER_TEMP}/oceanpilot-business.html"
 
+          curl --fail --silent --show-error \
+            http://127.0.0.1:8000/v2/operations \
+            --output "${RUNNER_TEMP}/oceanpilot-v2.html"
+
           python - <<'PY'
           import json
           import os
@@ -104,6 +109,7 @@ jobs:
           health = json.loads((runner_temp / "oceanpilot-health.json").read_text())
           demo = (runner_temp / "oceanpilot-demo.html").read_text()
           business = (runner_temp / "oceanpilot-business.html").read_text()
+          v2 = (runner_temp / "oceanpilot-v2.html").read_text()
 
           assert health == {"status": "ok"}
           assert "Oceanpayment · 商户工作台" in demo
@@ -119,4 +125,7 @@ jobs:
           assert '"role":"BUSINESS"' in business
           assert "企业争议运营区" in business
           assert "预览本版本复核" in business
+          assert "/api/v2" in v2
+          assert "OceanPilot" in v2
+          assert "__V2_" not in v2
           PY

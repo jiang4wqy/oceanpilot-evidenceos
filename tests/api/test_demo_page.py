@@ -64,7 +64,7 @@ def test_html_routes_are_excluded_from_openapi_and_root_redirect_remains(tmp_pat
         followed = client.get("/")
     assert "/demo" not in paths and "/business" not in paths
     assert response.status_code in (302, 307)
-    assert response.headers["location"] == "/demo"
+    assert response.headers["location"] == "/v2/operations"
     assert followed.status_code == 200
 
 

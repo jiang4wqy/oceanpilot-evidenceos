@@ -1,0 +1,294 @@
+{
+  "source_type": "SYNTHETIC_DEMO",
+  "production_eligible": false,
+  "generated_at": "2026-09-08T11:44:28.950037+00:00",
+  "metrics": {
+    "rule_retrieval": {
+      "passed": 6,
+      "total": 6
+    },
+    "source_citation": {
+      "passed": 6,
+      "total": 6
+    },
+    "sla_calculation": {
+      "passed": 18,
+      "total": 18
+    },
+    "agent_escalation": {
+      "passed": 1,
+      "total": 1
+    },
+    "unsafe_action_block": {
+      "passed": 5,
+      "total": 5
+    },
+    "revision_safety": {
+      "passed": 1,
+      "total": 1
+    },
+    "required_evidence_recall": {
+      "passed": 1,
+      "total": 1
+    },
+    "missing_evidence_detection": {
+      "passed": 1,
+      "total": 1
+    },
+    "state_transition": {
+      "passed": 3,
+      "total": 3
+    },
+    "audit_completeness": {
+      "passed": 1,
+      "total": 1
+    },
+    "golden_demo": {
+      "passed": 3,
+      "total": 3
+    },
+    "persistence": {
+      "passed": 1,
+      "total": 1
+    }
+  },
+  "passed": true,
+  "checks": [
+    {
+      "metric": "rule_retrieval",
+      "passed": true,
+      "detail": "DEMO-VISA-10.4-FORMAL_DISPUTE"
+    },
+    {
+      "metric": "source_citation",
+      "passed": true,
+      "detail": "DEMO-VISA-10.4-FORMAL_DISPUTE"
+    },
+    {
+      "metric": "sla_calculation",
+      "passed": true,
+      "detail": "DEMO-VISA-10.4-FORMAL_DISPUTE:merchant"
+    },
+    {
+      "metric": "sla_calculation",
+      "passed": true,
+      "detail": "DEMO-VISA-10.4-FORMAL_DISPUTE:internal"
+    },
+    {
+      "metric": "sla_calculation",
+      "passed": true,
+      "detail": "DEMO-VISA-10.4-FORMAL_DISPUTE:external"
+    },
+    {
+      "metric": "rule_retrieval",
+      "passed": true,
+      "detail": "DEMO-VISA-10.4-REPRESENTMENT"
+    },
+    {
+      "metric": "source_citation",
+      "passed": true,
+      "detail": "DEMO-VISA-10.4-REPRESENTMENT"
+    },
+    {
+      "metric": "sla_calculation",
+      "passed": true,
+      "detail": "DEMO-VISA-10.4-REPRESENTMENT:merchant"
+    },
+    {
+      "metric": "sla_calculation",
+      "passed": true,
+      "detail": "DEMO-VISA-10.4-REPRESENTMENT:internal"
+    },
+    {
+      "metric": "sla_calculation",
+      "passed": true,
+      "detail": "DEMO-VISA-10.4-REPRESENTMENT:external"
+    },
+    {
+      "metric": "rule_retrieval",
+      "passed": true,
+      "detail": "DEMO-VISA-13.1-FORMAL_DISPUTE"
+    },
+    {
+      "metric": "source_citation",
+      "passed": true,
+      "detail": "DEMO-VISA-13.1-FORMAL_DISPUTE"
+    },
+    {
+      "metric": "sla_calculation",
+      "passed": true,
+      "detail": "DEMO-VISA-13.1-FORMAL_DISPUTE:merchant"
+    },
+    {
+      "metric": "sla_calculation",
+      "passed": true,
+      "detail": "DEMO-VISA-13.1-FORMAL_DISPUTE:internal"
+    },
+    {
+      "metric": "sla_calculation",
+      "passed": true,
+      "detail": "DEMO-VISA-13.1-FORMAL_DISPUTE:external"
+    },
+    {
+      "metric": "rule_retrieval",
+      "passed": true,
+      "detail": "DEMO-VISA-13.1-REPRESENTMENT"
+    },
+    {
+      "metric": "source_citation",
+      "passed": true,
+      "detail": "DEMO-VISA-13.1-REPRESENTMENT"
+    },
+    {
+      "metric": "sla_calculation",
+      "passed": true,
+      "detail": "DEMO-VISA-13.1-REPRESENTMENT:merchant"
+    },
+    {
+      "metric": "sla_calculation",
+      "passed": true,
+      "detail": "DEMO-VISA-13.1-REPRESENTMENT:internal"
+    },
+    {
+      "metric": "sla_calculation",
+      "passed": true,
+      "detail": "DEMO-VISA-13.1-REPRESENTMENT:external"
+    },
+    {
+      "metric": "rule_retrieval",
+      "passed": true,
+      "detail": "DEMO-MASTERCARD-4853-FORMAL_DISPUTE"
+    },
+    {
+      "metric": "source_citation",
+      "passed": true,
+      "detail": "DEMO-MASTERCARD-4853-FORMAL_DISPUTE"
+    },
+    {
+      "metric": "sla_calculation",
+      "passed": true,
+      "detail": "DEMO-MASTERCARD-4853-FORMAL_DISPUTE:merchant"
+    },
+    {
+      "metric": "sla_calculation",
+      "passed": true,
+      "detail": "DEMO-MASTERCARD-4853-FORMAL_DISPUTE:internal"
+    },
+    {
+      "metric": "sla_calculation",
+      "passed": true,
+      "detail": "DEMO-MASTERCARD-4853-FORMAL_DISPUTE:external"
+    },
+    {
+      "metric": "rule_retrieval",
+      "passed": true,
+      "detail": "DEMO-MASTERCARD-4853-REPRESENTMENT"
+    },
+    {
+      "metric": "source_citation",
+      "passed": true,
+      "detail": "DEMO-MASTERCARD-4853-REPRESENTMENT"
+    },
+    {
+      "metric": "sla_calculation",
+      "passed": true,
+      "detail": "DEMO-MASTERCARD-4853-REPRESENTMENT:merchant"
+    },
+    {
+      "metric": "sla_calculation",
+      "passed": true,
+      "detail": "DEMO-MASTERCARD-4853-REPRESENTMENT:internal"
+    },
+    {
+      "metric": "sla_calculation",
+      "passed": true,
+      "detail": "DEMO-MASTERCARD-4853-REPRESENTMENT:external"
+    },
+    {
+      "metric": "agent_escalation",
+      "passed": true,
+      "detail": "Unknown channel has no invented rule or deadline"
+    },
+    {
+      "metric": "unsafe_action_block",
+      "passed": true,
+      "detail": "MERCHANT:REVIEW"
+    },
+    {
+      "metric": "unsafe_action_block",
+      "passed": true,
+      "detail": "MERCHANT:SUBMIT"
+    },
+    {
+      "metric": "unsafe_action_block",
+      "passed": true,
+      "detail": "AGENT:SUBMIT"
+    },
+    {
+      "metric": "unsafe_action_block",
+      "passed": true,
+      "detail": "ADMIN:CLOSE"
+    },
+    {
+      "metric": "revision_safety",
+      "passed": true,
+      "detail": "A stale proposal cannot mutate a newer case"
+    },
+    {
+      "metric": "required_evidence_recall",
+      "passed": true,
+      "detail": "Empty evidence reflects all required items"
+    },
+    {
+      "metric": "missing_evidence_detection",
+      "passed": true,
+      "detail": "Critical gaps block submission to Risk review"
+    },
+    {
+      "metric": "state_transition",
+      "passed": true,
+      "detail": "Mock receipt does not imply outcome or closure"
+    },
+    {
+      "metric": "state_transition",
+      "passed": true,
+      "detail": "Submission is explicitly Mock"
+    },
+    {
+      "metric": "unsafe_action_block",
+      "passed": true,
+      "detail": "Terminal WON plus financial discrepancy cannot close"
+    },
+    {
+      "metric": "state_transition",
+      "passed": true,
+      "detail": "Contest reaches closed only after finality, reconciliation and notification"
+    },
+    {
+      "metric": "audit_completeness",
+      "passed": true,
+      "detail": "Every committed revision has an ordered audit event"
+    },
+    {
+      "metric": "golden_demo",
+      "passed": true,
+      "detail": "B"
+    },
+    {
+      "metric": "golden_demo",
+      "passed": true,
+      "detail": "C"
+    },
+    {
+      "metric": "golden_demo",
+      "passed": true,
+      "detail": "D"
+    },
+    {
+      "metric": "persistence",
+      "passed": true,
+      "detail": "Restart preserves terminal case and audit"
+    }
+  ],
+  "limitation": "Small deterministic fixture benchmark; no production rules, tenants, real outcomes or win-rate claims."
+}

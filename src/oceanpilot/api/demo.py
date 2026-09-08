@@ -10,7 +10,7 @@ router = APIRouter()
 
 @router.get("/", include_in_schema=False)
 def root() -> RedirectResponse:
-    return RedirectResponse(url="/demo")
+    return RedirectResponse(url="/v2/operations")
 
 
 @router.get("/demo", include_in_schema=False, response_class=HTMLResponse)

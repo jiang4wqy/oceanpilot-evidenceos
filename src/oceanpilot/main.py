@@ -10,6 +10,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
 
+from oceanpilot import __version__
 from oceanpilot.adapters.channels.feishu.channel import FeishuChannel
 from oceanpilot.adapters.clock import SystemClock
 from oceanpilot.adapters.diagnosis.rules import RuleDiagnosisEngine
@@ -47,6 +48,10 @@ from oceanpilot.api.cases import router as cases_router
 from oceanpilot.api.chargeback import router as chargeback_router
 from oceanpilot.api.demo import router as demo_router
 from oceanpilot.api.dependencies import RequestContext
+from oceanpilot.api.dispute_feishu import initialize_dispute_feishu
+from oceanpilot.api.dispute_feishu import router as dispute_feishu_router
+from oceanpilot.api.disputes import dispute_error_handler
+from oceanpilot.api.disputes import router as disputes_router
 from oceanpilot.api.errors import ProblemDetails, register_exception_handlers
 from oceanpilot.api.feishu import router as feishu_router
 from oceanpilot.api.health import router as health_router
@@ -72,6 +77,7 @@ from oceanpilot.application.monitoring import RequestMonitor
 from oceanpilot.application.workspace import WorkspaceService
 from oceanpilot.application.workspace_ports import WorkspaceError
 from oceanpilot.config import FeishuSettings, Settings
+from oceanpilot.domain.dispute import DisputeError
 
 _request_logger = logging.getLogger("oceanpilot.request")
 
@@ -133,11 +139,26 @@ def create_app(
         initialize_chargeback_schema(chargeback_db_path)
         initialize_workspace_schema(chargeback_db_path)
         initialize_rule_database(rules_db_path)
+        from oceanpilot.adapters.persistence.disputes import SQLiteDisputeStore
+        from oceanpilot.application.disputes import DisputeService
+        from oceanpilot.domain.dispute_rules import case_plan, match_rule
+
+        app.state.disputes = DisputeService(
+            SQLiteDisputeStore(chargeback_db_path),
+            rule_matcher=match_rule,
+            planner=case_plan,
+            upstream_mode=os.getenv("OCEANPILOT_V2_UPSTREAM_MODE", "mock"),
+        )
+        initialize_dispute_feishu(
+            app,
+            chargeback_db_path,
+            os.getenv("OCEANPILOT_V2_BASE_URL", "http://127.0.0.1:8002"),
+        )
         if resolved.feishu is not None:
             app.state.feishu_store_factory = FeishuCallbackStoreFactory(resolved.feishu.db_path)
         yield
 
-    application = FastAPI(lifespan=lifespan)
+    application = FastAPI(title="OceanPilot V2", version=__version__, lifespan=lifespan)
     application.add_middleware(
         CORSMiddleware,
         allow_origins=[resolved.admin_origin],
@@ -264,6 +285,7 @@ def create_app(
 
     register_exception_handlers(application)
     application.add_exception_handler(WorkspaceError, workspace_error_handler)
+    application.add_exception_handler(DisputeError, dispute_error_handler)
     application.include_router(health_router)
     application.include_router(cases_router)
     application.include_router(feishu_router)
@@ -272,6 +294,8 @@ def create_app(
     application.include_router(admin_router)
     application.include_router(demo_router)
     application.include_router(workspace_router)
+    application.include_router(disputes_router)
+    application.include_router(dispute_feishu_router)
 
     def openapi_schema() -> dict[str, object]:
         if application.openapi_schema is None:
