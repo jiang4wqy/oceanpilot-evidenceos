@@ -12,6 +12,29 @@ from data_synth import S
 OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 CASES = E + R + S
 
+# ---------- 证据默认来源（expected_source）----------
+# 回答“商户继续申诉时哪些材料系统默认有、哪些靠商户提供”：
+#   SYSTEM_OF_RECORD：接入 PSP/收单/3DS 后系统自动可得，无需商户上传
+#   CONDITIONAL：    接入对应渠道（物流/订阅/电商平台）即自动可得，否则商户上传
+#   OCR_THEN_REVIEW：商户上传文档后系统抽取字段+低置信人工核对
+#   MERCHANT_UPLOAD：仅存于商户内部，必须商户提供
+EVIDENCE_SOURCE_MAP = {
+    "AUTH": "SYSTEM_OF_RECORD", "AUTH_LOG": "SYSTEM_OF_RECORD", "AUTH_RESULT": "SYSTEM_OF_RECORD",
+    "REFUND_TX": "SYSTEM_OF_RECORD", "REFUND_RECORD": "SYSTEM_OF_RECORD",
+    "HISTORY": "SYSTEM_OF_RECORD", "TX_RECORD": "SYSTEM_OF_RECORD",
+    "TERMINAL_DATA": "SYSTEM_OF_RECORD", "EMV_DATA": "SYSTEM_OF_RECORD",
+    "CALCULATION_RULE": "SYSTEM_OF_RECORD", "RULE": "SYSTEM_OF_RECORD",
+    "TRACKING": "CONDITIONAL", "USAGE_LOG": "CONDITIONAL", "ORDER_MATCH": "CONDITIONAL",
+    "CANCELLATION_TIME": "CONDITIONAL", "DELIVERY": "CONDITIONAL", "COMP_EVID": "CONDITIONAL",
+    "POD": "OCR_THEN_REVIEW", "RECEIPT": "OCR_THEN_REVIEW", "INVOICE": "OCR_THEN_REVIEW",
+    "PRICE_LIST": "OCR_THEN_REVIEW", "DISCLOSURE": "OCR_THEN_REVIEW", "WAIVER": "OCR_THEN_REVIEW",
+    "CANCELLATION_NOTICE": "OCR_THEN_REVIEW", "TIMESTAMP": "OCR_THEN_REVIEW",
+    "DELIVERY_RECORD": "OCR_THEN_REVIEW",
+}
+for _c in CASES:
+    for _e in _c["evidence_required"]:
+        _e["expected_source"] = EVIDENCE_SOURCE_MAP.get(_e["evidence_type"], "MERCHANT_UPLOAD")
+
 # ---------- 校验 ----------
 errors = []
 ids = [c["case_template_id"] for c in CASES]
@@ -179,6 +202,7 @@ def build_provenance(c):
         "conflict_status": conflict_status_of(c) or "NONE",
         "verification_status": verification_status_of(c),
         "required_evidence": [e["evidence_name_cn"] for e in c["evidence_required"]],
+    "evidence_sources": {e["evidence_name_cn"]: e.get("expected_source", "MERCHANT_UPLOAD") for e in c["evidence_required"]},
         "deadline_policy": deadline_policy_of(c),
         "intended_use": intended_use_of(c),
         "production_eligible": production_eligible_of(c),
@@ -219,7 +243,13 @@ library = {
     "provenance_taxonomy": {
         "evidence_level": ["SOURCE_EXPLICIT", "RULE_DERIVED", "SYNTHETIC_DEMO"],
         "verification_status": ["VERIFIED_EXTRACTED", "NEEDS_CONFIRMATION", "CONFLICTING_SOURCES"],
-        "note": "两套分类维度不同，绝对不混用：evidence_level 表示内容性质，verification_status 表示来源核验状态；production_eligible=false 的内容不得直接进入生产规则。"
+        "note": "两套分类维度不同，绝对不混用：evidence_level 表示内容性质，verification_status 表示来源核验状态；production_eligible=false 的内容不得直接进入生产规则。",
+        "evidence_expected_source": {
+            "SYSTEM_OF_RECORD": "接入 PSP/收单/3DS 后系统自动可得，无需商户上传",
+            "CONDITIONAL": "接入对应渠道（物流/订阅/电商平台）即自动可得，否则商户上传",
+            "OCR_THEN_REVIEW": "商户上传文档后系统抽取字段，低置信时人工核对",
+            "MERCHANT_UPLOAD": "仅存于商户内部（合同/质检/客服记录等），必须商户提供",
+        }
     },
     "sources": SOURCES,
     "cases": CASES,
@@ -533,7 +563,9 @@ for c in CASES:
     if c["evidence_required"]:
         lines.append("- **所需证据**：")
         for e in c["evidence_required"]:
-            lines.append(f"  - {e['evidence_name_cn']}（{e['evidence_type']}，{'必填' if e['required_or_optional']=='required' else ('条件性' if e['required_or_optional']=='conditional' else '可选')}）——为何需要：{e['why_needed']}；规则依据：{e['rule_reference']}；本案可得性：{e['available_in_case']}；缺失后果：{e['missing_consequence']}")
+            req = "必填" if e["required_or_optional"] == "required" else ("条件性" if e["required_or_optional"] == "conditional" else "可选")
+            src = e.get("expected_source", "MERCHANT_UPLOAD")
+            lines.append(f"  - {e['evidence_name_cn']}（{e['evidence_type']}，{req}，默认来源：{src}）——为何需要：{e['why_needed']}；规则依据：{e['rule_reference']}；本案可得性：{e['available_in_case']}；缺失后果：{e['missing_consequence']}")
     else:
         lines.append("- **所需证据**：无（不适用）")
     pf = c["process_flow"]

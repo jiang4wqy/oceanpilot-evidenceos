@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "generated_at": "2026-09-07T15:34:14Z",
+  "generated_at": "2026-09-08T03:36:19Z",
   "usage_note": "仅含可用于 Sandbox 的合成案例与规则模板。所有商户/用户/金额/编号均为虚构 Sandbox 数据；SOURCE_EXPLICIT 原例不含个人信息，未直接写入 seed。",
   "seed_cases": [
     {
@@ -55,7 +55,8 @@
           "available_in_case": "视案件而定",
           "validation_method": "规则引擎读取",
           "human_confirmation_required": false,
-          "missing_consequence": "转向 CE 证据"
+          "missing_consequence": "转向 CE 证据",
+          "expected_source": "SYSTEM_OF_RECORD"
         },
         {
           "evidence_type": "HISTORY",
@@ -68,7 +69,8 @@
           "available_in_case": "视案件而定",
           "validation_method": "匹配校验",
           "human_confirmation_required": false,
-          "missing_consequence": "CE 不成立"
+          "missing_consequence": "CE 不成立",
+          "expected_source": "SYSTEM_OF_RECORD"
         }
       ],
       "should_accept_or_contest": "CONDITIONAL",
@@ -145,7 +147,8 @@
           "available_in_case": "视案件而定",
           "validation_method": "系统核对",
           "human_confirmation_required": false,
-          "missing_consequence": "无法证明发货"
+          "missing_consequence": "无法证明发货",
+          "expected_source": "CONDITIONAL"
         },
         {
           "evidence_type": "POD",
@@ -158,7 +161,8 @@
           "available_in_case": "视案件而定",
           "validation_method": "收件人比对",
           "human_confirmation_required": true,
-          "missing_consequence": "证据链断裂"
+          "missing_consequence": "证据链断裂",
+          "expected_source": "OCR_THEN_REVIEW"
         }
       ],
       "should_accept_or_contest": "CONDITIONAL",
@@ -234,7 +238,8 @@
           "available_in_case": "视案件而定",
           "validation_method": "规则引擎自动比对",
           "human_confirmation_required": false,
-          "missing_consequence": "建议接受"
+          "missing_consequence": "建议接受",
+          "expected_source": "SYSTEM_OF_RECORD"
         }
       ],
       "should_accept_or_contest": "CONDITIONAL",
@@ -311,7 +316,8 @@
           "available_in_case": "视案件而定",
           "validation_method": "规则引擎",
           "human_confirmation_required": true,
-          "missing_consequence": "无法判定"
+          "missing_consequence": "无法判定",
+          "expected_source": "CONDITIONAL"
         }
       ],
       "should_accept_or_contest": "CONDITIONAL",
@@ -388,7 +394,8 @@
           "available_in_case": "视案件而定",
           "validation_method": "人工核对",
           "human_confirmation_required": true,
-          "missing_consequence": "须退款"
+          "missing_consequence": "须退款",
+          "expected_source": "MERCHANT_UPLOAD"
         },
         {
           "evidence_type": "TIMESTAMP",
@@ -401,7 +408,8 @@
           "available_in_case": "视案件而定",
           "validation_method": "时间比对",
           "human_confirmation_required": true,
-          "missing_consequence": "抗辩无据"
+          "missing_consequence": "抗辩无据",
+          "expected_source": "OCR_THEN_REVIEW"
         }
       ],
       "should_accept_or_contest": "CONDITIONAL",
@@ -475,7 +483,8 @@
           "available_in_case": "视案件而定",
           "validation_method": "人工核对",
           "human_confirmation_required": true,
-          "missing_consequence": "转向其他抗辩"
+          "missing_consequence": "转向其他抗辩",
+          "expected_source": "MERCHANT_UPLOAD"
         },
         {
           "evidence_type": "INSPECTION",
@@ -488,7 +497,8 @@
           "available_in_case": "视案件而定",
           "validation_method": "人工审查",
           "human_confirmation_required": true,
-          "missing_consequence": "主观争议难反驳"
+          "missing_consequence": "主观争议难反驳",
+          "expected_source": "MERCHANT_UPLOAD"
         }
       ],
       "should_accept_or_contest": "CONDITIONAL",
@@ -564,7 +574,8 @@
           "available_in_case": "视案件而定",
           "validation_method": "核对",
           "human_confirmation_required": true,
-          "missing_consequence": "抗辩无据"
+          "missing_consequence": "抗辩无据",
+          "expected_source": "CONDITIONAL"
         }
       ],
       "should_accept_or_contest": "CONDITIONAL",
@@ -638,7 +649,8 @@
           "available_in_case": "视案件而定",
           "validation_method": "核对",
           "human_confirmation_required": false,
-          "missing_consequence": "建议退款"
+          "missing_consequence": "建议退款",
+          "expected_source": "SYSTEM_OF_RECORD"
         }
       ],
       "should_accept_or_contest": "CONDITIONAL",
@@ -712,7 +724,8 @@
           "available_in_case": "视案件而定",
           "validation_method": "规则引擎",
           "human_confirmation_required": false,
-          "missing_consequence": "转向 CE"
+          "missing_consequence": "转向 CE",
+          "expected_source": "SYSTEM_OF_RECORD"
         },
         {
           "evidence_type": "COMP_EVID",
@@ -725,7 +738,8 @@
           "available_in_case": "视案件而定",
           "validation_method": "匹配",
           "human_confirmation_required": false,
-          "missing_consequence": "无 CE 则建议接受"
+          "missing_consequence": "无 CE 则建议接受",
+          "expected_source": "CONDITIONAL"
         }
       ],
       "should_accept_or_contest": "CONDITIONAL",
@@ -801,7 +815,8 @@
           "available_in_case": "视案件而定",
           "validation_method": "规则引擎",
           "human_confirmation_required": false,
-          "missing_consequence": "建议接受"
+          "missing_consequence": "建议接受",
+          "expected_source": "SYSTEM_OF_RECORD"
         }
       ],
       "should_accept_or_contest": "CONDITIONAL",
@@ -875,7 +890,8 @@
           "available_in_case": "视案件而定",
           "validation_method": "规则引擎/人工",
           "human_confirmation_required": true,
-          "missing_consequence": "建议接受"
+          "missing_consequence": "建议接受",
+          "expected_source": "SYSTEM_OF_RECORD"
         }
       ],
       "should_accept_or_contest": "CONDITIONAL",
@@ -950,7 +966,8 @@
           "available_in_case": "视案件而定",
           "validation_method": "规则引擎",
           "human_confirmation_required": false,
-          "missing_consequence": "责任转移"
+          "missing_consequence": "责任转移",
+          "expected_source": "SYSTEM_OF_RECORD"
         }
       ],
       "should_accept_or_contest": "CONDITIONAL",
@@ -1024,7 +1041,8 @@
           "available_in_case": "视案件而定",
           "validation_method": "人工",
           "human_confirmation_required": true,
-          "missing_consequence": "建议接受"
+          "missing_consequence": "建议接受",
+          "expected_source": "CONDITIONAL"
         }
       ],
       "should_accept_or_contest": "INSUFFICIENT_INFORMATION",
@@ -1098,7 +1116,8 @@
           "available_in_case": "是",
           "validation_method": "物流系统核对",
           "human_confirmation_required": false,
-          "missing_consequence": "证据链断裂"
+          "missing_consequence": "证据链断裂",
+          "expected_source": "CONDITIONAL"
         },
         {
           "evidence_type": "POD",
@@ -1111,7 +1130,8 @@
           "available_in_case": "是",
           "validation_method": "收件人比对",
           "human_confirmation_required": true,
-          "missing_consequence": "无法抗辩"
+          "missing_consequence": "无法抗辩",
+          "expected_source": "OCR_THEN_REVIEW"
         }
       ],
       "should_accept_or_contest": "CONTEST",
@@ -1190,7 +1210,8 @@
           "available_in_case": "否",
           "validation_method": "N/A",
           "human_confirmation_required": false,
-          "missing_consequence": "转向 CE"
+          "missing_consequence": "转向 CE",
+          "expected_source": "SYSTEM_OF_RECORD"
         },
         {
           "evidence_type": "HISTORY",
@@ -1203,7 +1224,8 @@
           "available_in_case": "否",
           "validation_method": "N/A",
           "human_confirmation_required": false,
-          "missing_consequence": "无法抗辩"
+          "missing_consequence": "无法抗辩",
+          "expected_source": "SYSTEM_OF_RECORD"
         }
       ],
       "should_accept_or_contest": "ACCEPT",
@@ -1283,7 +1305,8 @@
           "available_in_case": "否",
           "validation_method": "规则引擎",
           "human_confirmation_required": false,
-          "missing_consequence": "建议接受"
+          "missing_consequence": "建议接受",
+          "expected_source": "SYSTEM_OF_RECORD"
         }
       ],
       "should_accept_or_contest": "ACCEPT",
@@ -1360,7 +1383,8 @@
           "available_in_case": "是",
           "validation_method": "比对",
           "human_confirmation_required": true,
-          "missing_consequence": "无法抗辩"
+          "missing_consequence": "无法抗辩",
+          "expected_source": "OCR_THEN_REVIEW"
         }
       ],
       "should_accept_or_contest": "CONTEST",
@@ -1439,7 +1463,8 @@
           "available_in_case": "否",
           "validation_method": "N/A",
           "human_confirmation_required": false,
-          "missing_consequence": "已过期，不再收集"
+          "missing_consequence": "已过期，不再收集",
+          "expected_source": "SYSTEM_OF_RECORD"
         }
       ],
       "should_accept_or_contest": "ACCEPT",
@@ -1514,7 +1539,8 @@
           "available_in_case": "是（OCR 有误）",
           "validation_method": "人工比对原件",
           "human_confirmation_required": true,
-          "missing_consequence": "比对失败则无法抗辩"
+          "missing_consequence": "比对失败则无法抗辩",
+          "expected_source": "OCR_THEN_REVIEW"
         }
       ],
       "should_accept_or_contest": "CONTEST",
@@ -1593,7 +1619,8 @@
           "available_in_case": "是",
           "validation_method": "日志核对",
           "human_confirmation_required": false,
-          "missing_consequence": "无法抗辩"
+          "missing_consequence": "无法抗辩",
+          "expected_source": "CONDITIONAL"
         }
       ],
       "should_accept_or_contest": "CONTEST",
@@ -1670,7 +1697,8 @@
           "available_in_case": "是",
           "validation_method": "人工",
           "human_confirmation_required": true,
-          "missing_consequence": "抗辩不成立"
+          "missing_consequence": "抗辩不成立",
+          "expected_source": "MERCHANT_UPLOAD"
         }
       ],
       "should_accept_or_contest": "CONTEST",
@@ -1744,7 +1772,8 @@
           "available_in_case": "是",
           "validation_method": "比对",
           "human_confirmation_required": true,
-          "missing_consequence": "无法抗辩"
+          "missing_consequence": "无法抗辩",
+          "expected_source": "OCR_THEN_REVIEW"
         }
       ],
       "should_accept_or_contest": "CONTEST",
@@ -1885,7 +1914,8 @@
           "available_in_case": "是",
           "validation_method": "核对",
           "human_confirmation_required": true,
-          "missing_consequence": "抗辩无据"
+          "missing_consequence": "抗辩无据",
+          "expected_source": "CONDITIONAL"
         }
       ],
       "should_accept_or_contest": "CONDITIONAL",
@@ -1963,7 +1993,8 @@
           "available_in_case": "是",
           "validation_method": "规则引擎",
           "human_confirmation_required": false,
-          "missing_consequence": "保护缺失"
+          "missing_consequence": "保护缺失",
+          "expected_source": "SYSTEM_OF_RECORD"
         },
         {
           "evidence_type": "HISTORY",
@@ -1976,7 +2007,8 @@
           "available_in_case": "是",
           "validation_method": "匹配",
           "human_confirmation_required": false,
-          "missing_consequence": "佐证减弱"
+          "missing_consequence": "佐证减弱",
+          "expected_source": "SYSTEM_OF_RECORD"
         },
         {
           "evidence_type": "POD",
@@ -1989,7 +2021,8 @@
           "available_in_case": "是",
           "validation_method": "比对",
           "human_confirmation_required": true,
-          "missing_consequence": "佐证减弱"
+          "missing_consequence": "佐证减弱",
+          "expected_source": "OCR_THEN_REVIEW"
         }
       ],
       "should_accept_or_contest": "CONTEST",
@@ -2070,7 +2103,8 @@
           "available_in_case": "是",
           "validation_method": "关联校验",
           "human_confirmation_required": false,
-          "missing_consequence": "建议接受"
+          "missing_consequence": "建议接受",
+          "expected_source": "SYSTEM_OF_RECORD"
         }
       ],
       "should_accept_or_contest": "CONTEST",
@@ -2147,7 +2181,8 @@
           "available_in_case": "是",
           "validation_method": "规则引擎",
           "human_confirmation_required": true,
-          "missing_consequence": "无法判定"
+          "missing_consequence": "无法判定",
+          "expected_source": "CONDITIONAL"
         }
       ],
       "should_accept_or_contest": "ACCEPT",
@@ -2225,7 +2260,8 @@
           "available_in_case": "是",
           "validation_method": "比对",
           "human_confirmation_required": true,
-          "missing_consequence": "抗辩无据"
+          "missing_consequence": "抗辩无据",
+          "expected_source": "MERCHANT_UPLOAD"
         },
         {
           "evidence_type": "DELIVERY_RECORD",
@@ -2238,7 +2274,8 @@
           "available_in_case": "是",
           "validation_method": "序列号核对",
           "human_confirmation_required": true,
-          "missing_consequence": "抗辩无据"
+          "missing_consequence": "抗辩无据",
+          "expected_source": "OCR_THEN_REVIEW"
         }
       ],
       "should_accept_or_contest": "CONTEST",
