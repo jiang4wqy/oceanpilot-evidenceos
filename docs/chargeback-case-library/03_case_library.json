@@ -1,6 +1,6 @@
 {
   "schema_version": "1.1",
-  "generated_at": "2026-09-07T15:34:14Z",
+  "generated_at": "2026-09-08T03:36:19Z",
   "provenance_taxonomy": {
     "evidence_level": [
       "SOURCE_EXPLICIT",
@@ -12,7 +12,13 @@
       "NEEDS_CONFIRMATION",
       "CONFLICTING_SOURCES"
     ],
-    "note": "两套分类维度不同，绝对不混用：evidence_level 表示内容性质，verification_status 表示来源核验状态；production_eligible=false 的内容不得直接进入生产规则。"
+    "note": "两套分类维度不同，绝对不混用：evidence_level 表示内容性质，verification_status 表示来源核验状态；production_eligible=false 的内容不得直接进入生产规则。",
+    "evidence_expected_source": {
+      "SYSTEM_OF_RECORD": "接入 PSP/收单/3DS 后系统自动可得，无需商户上传",
+      "CONDITIONAL": "接入对应渠道（物流/订阅/电商平台）即自动可得，否则商户上传",
+      "OCR_THEN_REVIEW": "商户上传文档后系统抽取字段，低置信时人工核对",
+      "MERCHANT_UPLOAD": "仅存于商户内部（合同/质检/客服记录等），必须商户提供"
+    }
   },
   "sources": [
     {
@@ -144,7 +150,8 @@
           "available_in_case": "不适用",
           "validation_method": "规则引擎硬编码排除",
           "human_confirmation_required": true,
-          "missing_consequence": "误拒付会导致收单方用 2713/Invalid Chargeback 抗辩"
+          "missing_consequence": "误拒付会导致收单方用 2713/Invalid Chargeback 抗辩",
+          "expected_source": "SYSTEM_OF_RECORD"
         }
       ],
       "process_flow": {
@@ -226,6 +233,9 @@
         "required_evidence": [
           "规则界定"
         ],
+        "evidence_sources": {
+          "规则界定": "SYSTEM_OF_RECORD"
+        },
         "deadline_policy": "未说明（需收单机构确认）",
         "intended_use": [
           "网站/比赛演示",
@@ -311,7 +321,8 @@
           "available_in_case": "是（原文自带算式）",
           "validation_method": "规则引擎按公式计算",
           "human_confirmation_required": true,
-          "missing_consequence": "金额算错会被 2713/2702 抗辩"
+          "missing_consequence": "金额算错会被 2713/2702 抗辩",
+          "expected_source": "SYSTEM_OF_RECORD"
         }
       ],
       "process_flow": {
@@ -392,6 +403,9 @@
         "required_evidence": [
           "18 个月折算规则"
         ],
+        "evidence_sources": {
+          "18 个月折算规则": "SYSTEM_OF_RECORD"
+        },
         "deadline_policy": "明确",
         "intended_use": [
           "网站/比赛演示",
@@ -479,7 +493,8 @@
           "available_in_case": "是",
           "validation_method": "人工比对签名与条款",
           "human_confirmation_required": true,
-          "missing_consequence": "无弃权书则无法免除运输责任"
+          "missing_consequence": "无弃权书则无法免除运输责任",
+          "expected_source": "OCR_THEN_REVIEW"
         },
         {
           "evidence_type": "SHIPPING",
@@ -492,7 +507,8 @@
           "available_in_case": "是",
           "validation_method": "与承运系统核对",
           "human_confirmation_required": false,
-          "missing_consequence": "无法构成抗辩"
+          "missing_consequence": "无法构成抗辩",
+          "expected_source": "MERCHANT_UPLOAD"
         }
       ],
       "process_flow": {
@@ -575,6 +591,10 @@
           "持卡人签署的免责弃权书",
           "发货凭证"
         ],
+        "evidence_sources": {
+          "持卡人签署的免责弃权书": "OCR_THEN_REVIEW",
+          "发货凭证": "MERCHANT_UPLOAD"
+        },
         "deadline_policy": "明确",
         "intended_use": [
           "网站/比赛演示",
@@ -662,7 +682,8 @@
           "available_in_case": "视案件而定",
           "validation_method": "与物流系统核对",
           "human_confirmation_required": false,
-          "missing_consequence": "降低抗辩可信度"
+          "missing_consequence": "降低抗辩可信度",
+          "expected_source": "CONDITIONAL"
         },
         {
           "evidence_type": "LOGISTICS",
@@ -675,7 +696,8 @@
           "available_in_case": "视案件而定",
           "validation_method": "重量比对",
           "human_confirmation_required": true,
-          "missing_consequence": "难以反驳“空箱”主张"
+          "missing_consequence": "难以反驳“空箱”主张",
+          "expected_source": "MERCHANT_UPLOAD"
         }
       ],
       "process_flow": {
@@ -758,6 +780,10 @@
           "签收证明",
           "称重/监控/打包记录"
         ],
+        "evidence_sources": {
+          "签收证明": "CONDITIONAL",
+          "称重/监控/打包记录": "MERCHANT_UPLOAD"
+        },
         "deadline_policy": "明确",
         "intended_use": [
           "网站/比赛演示",
@@ -847,7 +873,8 @@
           "available_in_case": "视案件而定",
           "validation_method": "与商户底账比对",
           "human_confirmation_required": true,
-          "missing_consequence": "抗辩不成立"
+          "missing_consequence": "抗辩不成立",
+          "expected_source": "MERCHANT_UPLOAD"
         }
       ],
       "process_flow": {
@@ -932,6 +959,9 @@
         "required_evidence": [
           "商户对篡改的合理具体说明"
         ],
+        "evidence_sources": {
+          "商户对篡改的合理具体说明": "MERCHANT_UPLOAD"
+        },
         "deadline_policy": "存在版本差异（见冲突清单）",
         "intended_use": [
           "网站/比赛演示",
@@ -1018,7 +1048,8 @@
           "available_in_case": "视案件而定",
           "validation_method": "人工查看比对",
           "human_confirmation_required": true,
-          "missing_consequence": "无法证明退货欺诈"
+          "missing_consequence": "无法证明退货欺诈",
+          "expected_source": "MERCHANT_UPLOAD"
         }
       ],
       "process_flow": {
@@ -1098,6 +1129,9 @@
         "required_evidence": [
           "退货开箱检验记录"
         ],
+        "evidence_sources": {
+          "退货开箱检验记录": "MERCHANT_UPLOAD"
+        },
         "deadline_policy": "存在版本差异（见冲突清单）",
         "intended_use": [
           "网站/比赛演示",
@@ -1182,7 +1216,8 @@
           "available_in_case": "视案件而定",
           "validation_method": "系统自动比对",
           "human_confirmation_required": false,
-          "missing_consequence": "无法抗辩"
+          "missing_consequence": "无法抗辩",
+          "expected_source": "MERCHANT_UPLOAD"
         }
       ],
       "process_flow": {
@@ -1263,6 +1298,9 @@
         "required_evidence": [
           "授权与撤销报文记录"
         ],
+        "evidence_sources": {
+          "授权与撤销报文记录": "MERCHANT_UPLOAD"
+        },
         "deadline_policy": "明确",
         "intended_use": [
           "网站/比赛演示",
@@ -1347,7 +1385,8 @@
           "available_in_case": "是",
           "validation_method": "规则引擎比对",
           "human_confirmation_required": false,
-          "missing_consequence": "无法自动判定"
+          "missing_consequence": "无法自动判定",
+          "expected_source": "SYSTEM_OF_RECORD"
         }
       ],
       "process_flow": {
@@ -1419,6 +1458,9 @@
         "required_evidence": [
           "交易记录（MCC/金额/授权）"
         ],
+        "evidence_sources": {
+          "交易记录（MCC/金额/授权）": "SYSTEM_OF_RECORD"
+        },
         "deadline_policy": "明确",
         "intended_use": [
           "规则引擎测试",
@@ -1502,7 +1544,8 @@
           "available_in_case": "视案件而定",
           "validation_method": "规则引擎",
           "human_confirmation_required": false,
-          "missing_consequence": "无法抗辩"
+          "missing_consequence": "无法抗辩",
+          "expected_source": "SYSTEM_OF_RECORD"
         }
       ],
       "process_flow": {
@@ -1575,6 +1618,9 @@
         "required_evidence": [
           "终端标识与交易要素"
         ],
+        "evidence_sources": {
+          "终端标识与交易要素": "SYSTEM_OF_RECORD"
+        },
         "deadline_policy": "明确",
         "intended_use": [
           "规则引擎测试",
@@ -1659,7 +1705,8 @@
           "available_in_case": "视案件而定",
           "validation_method": "人工审查",
           "human_confirmation_required": true,
-          "missing_consequence": "无法正确定性"
+          "missing_consequence": "无法正确定性",
+          "expected_source": "MERCHANT_UPLOAD"
         }
       ],
       "process_flow": {
@@ -1742,6 +1789,9 @@
         "required_evidence": [
           "合同/扣款协议"
         ],
+        "evidence_sources": {
+          "合同/扣款协议": "MERCHANT_UPLOAD"
+        },
         "deadline_policy": "明确",
         "intended_use": [
           "网站/比赛演示",
@@ -1831,7 +1881,8 @@
           "available_in_case": "视案件而定",
           "validation_method": "人工审查",
           "human_confirmation_required": true,
-          "missing_consequence": "无法证明 addendum 关系"
+          "missing_consequence": "无法证明 addendum 关系",
+          "expected_source": "MERCHANT_UPLOAD"
         },
         {
           "evidence_type": "VIOLATION_RECORD",
@@ -1844,7 +1895,8 @@
           "available_in_case": "视案件而定",
           "validation_method": "时间比对",
           "human_confirmation_required": true,
-          "missing_consequence": "抗辩失败"
+          "missing_consequence": "抗辩失败",
+          "expected_source": "MERCHANT_UPLOAD"
         }
       ],
       "process_flow": {
@@ -1927,6 +1979,10 @@
           "原交易合同/租赁协议",
           "违章记录（30 日内提交）"
         ],
+        "evidence_sources": {
+          "原交易合同/租赁协议": "MERCHANT_UPLOAD",
+          "违章记录（30 日内提交）": "MERCHANT_UPLOAD"
+        },
         "deadline_policy": "明确",
         "intended_use": [
           "网站/比赛演示",
@@ -2016,7 +2072,8 @@
           "available_in_case": "视案件而定",
           "validation_method": "时间比对",
           "human_confirmation_required": true,
-          "missing_consequence": "无法收取 no-show 费"
+          "missing_consequence": "无法收取 no-show 费",
+          "expected_source": "OCR_THEN_REVIEW"
         },
         {
           "evidence_type": "PHONE_BILL",
@@ -2029,7 +2086,8 @@
           "available_in_case": "视案件而定",
           "validation_method": "人工核对",
           "human_confirmation_required": true,
-          "missing_consequence": "取消主张不成立"
+          "missing_consequence": "取消主张不成立",
+          "expected_source": "MERCHANT_UPLOAD"
         }
       ],
       "process_flow": {
@@ -2116,6 +2174,10 @@
           "预订前政策告知证明",
           "电话账单（取消时限内联系证明）"
         ],
+        "evidence_sources": {
+          "预订前政策告知证明": "OCR_THEN_REVIEW",
+          "电话账单（取消时限内联系证明）": "MERCHANT_UPLOAD"
+        },
         "deadline_policy": "明确",
         "intended_use": [
           "网站/比赛演示",
@@ -2201,7 +2263,8 @@
           "available_in_case": "视案件而定",
           "validation_method": "人工审查",
           "human_confirmation_required": true,
-          "missing_consequence": "新原因下败诉"
+          "missing_consequence": "新原因下败诉",
+          "expected_source": "MERCHANT_UPLOAD"
         }
       ],
       "process_flow": {
@@ -2281,6 +2344,9 @@
         "required_evidence": [
           "新原因所需支持文档"
         ],
+        "evidence_sources": {
+          "新原因所需支持文档": "MERCHANT_UPLOAD"
+        },
         "deadline_policy": "明确",
         "intended_use": [
           "网站/比赛演示",
@@ -2364,7 +2430,8 @@
           "available_in_case": "视案件而定",
           "validation_method": "币种比对",
           "human_confirmation_required": true,
-          "missing_consequence": "无法判定差额"
+          "missing_consequence": "无法判定差额",
+          "expected_source": "OCR_THEN_REVIEW"
         }
       ],
       "process_flow": {
@@ -2444,6 +2511,9 @@
         "required_evidence": [
           "显示金额与币种的收据"
         ],
+        "evidence_sources": {
+          "显示金额与币种的收据": "OCR_THEN_REVIEW"
+        },
         "deadline_policy": "明确",
         "intended_use": [
           "网站/比赛演示",
@@ -2528,7 +2598,8 @@
           "available_in_case": "视案件而定",
           "validation_method": "日志比对",
           "human_confirmation_required": false,
-          "missing_consequence": "无法判定"
+          "missing_consequence": "无法判定",
+          "expected_source": "MERCHANT_UPLOAD"
         }
       ],
       "process_flow": {
@@ -2602,6 +2673,9 @@
         "required_evidence": [
           "ATM 日志与币种选择记录"
         ],
+        "evidence_sources": {
+          "ATM 日志与币种选择记录": "MERCHANT_UPLOAD"
+        },
         "deadline_policy": "明确",
         "intended_use": [
           "规则引擎测试",
@@ -2686,7 +2760,8 @@
           "available_in_case": "视案件而定",
           "validation_method": "与清算记录核对",
           "human_confirmation_required": false,
-          "missing_consequence": "Mastercard 可能判发卡行承担退款额、收单行承担罚费"
+          "missing_consequence": "Mastercard 可能判发卡行承担退款额、收单行承担罚费",
+          "expected_source": "SYSTEM_OF_RECORD"
         }
       ],
       "process_flow": {
@@ -2768,6 +2843,9 @@
         "required_evidence": [
           "退款记录（CRED MMDDYY ARD）"
         ],
+        "evidence_sources": {
+          "退款记录（CRED MMDDYY ARD）": "SYSTEM_OF_RECORD"
+        },
         "deadline_policy": "存在版本差异（见冲突清单）",
         "intended_use": [
           "网站/比赛演示",
@@ -2852,7 +2930,8 @@
           "available_in_case": "视案件而定",
           "validation_method": "人工核对",
           "human_confirmation_required": true,
-          "missing_consequence": "抗辩失败"
+          "missing_consequence": "抗辩失败",
+          "expected_source": "MERCHANT_UPLOAD"
         }
       ],
       "process_flow": {
@@ -2927,6 +3006,9 @@
         "required_evidence": [
           "第三方支付凭证与卡扣款说明"
         ],
+        "evidence_sources": {
+          "第三方支付凭证与卡扣款说明": "MERCHANT_UPLOAD"
+        },
         "deadline_policy": "明确",
         "intended_use": [
           "规则引擎测试",
@@ -3009,7 +3091,8 @@
           "available_in_case": "视案件而定",
           "validation_method": "签名核对",
           "human_confirmation_required": true,
-          "missing_consequence": "无法证明金额合理"
+          "missing_consequence": "无法证明金额合理",
+          "expected_source": "OCR_THEN_REVIEW"
         },
         {
           "evidence_type": "RECEIPT",
@@ -3022,7 +3105,8 @@
           "available_in_case": "视案件而定",
           "validation_method": "逐项比对",
           "human_confirmation_required": true,
-          "missing_consequence": "抗辩不完整"
+          "missing_consequence": "抗辩不完整",
+          "expected_source": "OCR_THEN_REVIEW"
         }
       ],
       "process_flow": {
@@ -3095,6 +3179,10 @@
           "持卡人签字的逐项价目表",
           "按价目表计算的收据"
         ],
+        "evidence_sources": {
+          "持卡人签字的逐项价目表": "OCR_THEN_REVIEW",
+          "按价目表计算的收据": "OCR_THEN_REVIEW"
+        },
         "deadline_policy": "明确",
         "intended_use": [
           "规则引擎测试",
@@ -3176,7 +3264,8 @@
           "available_in_case": "视案件而定",
           "validation_method": "时间比对",
           "human_confirmation_required": false,
-          "missing_consequence": "无法立案"
+          "missing_consequence": "无法立案",
+          "expected_source": "OCR_THEN_REVIEW"
         },
         {
           "evidence_type": "CARDHOLDER_STATEMENT",
@@ -3189,7 +3278,8 @@
           "available_in_case": "视案件而定",
           "validation_method": "人工审查",
           "human_confirmation_required": true,
-          "missing_consequence": "无法立案"
+          "missing_consequence": "无法立案",
+          "expected_source": "MERCHANT_UPLOAD"
         }
       ],
       "process_flow": {
@@ -3261,6 +3351,10 @@
           "原交易时间戳收据/授权日志",
           "持卡人函件或 Form 0412"
         ],
+        "evidence_sources": {
+          "原交易时间戳收据/授权日志": "OCR_THEN_REVIEW",
+          "持卡人函件或 Form 0412": "MERCHANT_UPLOAD"
+        },
         "deadline_policy": "明确",
         "intended_use": [
           "规则引擎测试",
@@ -3342,7 +3436,8 @@
           "available_in_case": "视案件而定",
           "validation_method": "截图核对",
           "human_confirmation_required": true,
-          "missing_consequence": "13.7 类争议难以抗辩"
+          "missing_consequence": "13.7 类争议难以抗辩",
+          "expected_source": "OCR_THEN_REVIEW"
         }
       ],
       "process_flow": {
@@ -3422,6 +3517,9 @@
         "required_evidence": [
           "结账页政策披露截图"
         ],
+        "evidence_sources": {
+          "结账页政策披露截图": "OCR_THEN_REVIEW"
+        },
         "deadline_policy": "未说明（需收单机构确认）",
         "intended_use": [
           "网站/比赛演示",
@@ -3505,7 +3603,8 @@
           "available_in_case": "视案件而定",
           "validation_method": "人工比对",
           "human_confirmation_required": true,
-          "missing_consequence": "抗辩乏力"
+          "missing_consequence": "抗辩乏力",
+          "expected_source": "OCR_THEN_REVIEW"
         },
         {
           "evidence_type": "THIRD_PARTY_OPINION",
@@ -3518,7 +3617,8 @@
           "available_in_case": "视案件而定",
           "validation_method": "人工审查",
           "human_confirmation_required": true,
-          "missing_consequence": "主观争议难以反驳"
+          "missing_consequence": "主观争议难以反驳",
+          "expected_source": "MERCHANT_UPLOAD"
         }
       ],
       "process_flow": {
@@ -3600,6 +3700,10 @@
           "发票/合同",
           "中立第三方意见"
         ],
+        "evidence_sources": {
+          "发票/合同": "OCR_THEN_REVIEW",
+          "中立第三方意见": "MERCHANT_UPLOAD"
+        },
         "deadline_policy": "未说明（需收单机构确认）",
         "intended_use": [
           "网站/比赛演示",
@@ -3684,7 +3788,8 @@
           "available_in_case": "是",
           "validation_method": "规则引擎读取",
           "human_confirmation_required": false,
-          "missing_consequence": "无法判定保护状态"
+          "missing_consequence": "无法判定保护状态",
+          "expected_source": "SYSTEM_OF_RECORD"
         }
       ],
       "process_flow": {
@@ -3764,6 +3869,9 @@
         "required_evidence": [
           "认证结果（ECI 值）"
         ],
+        "evidence_sources": {
+          "认证结果（ECI 值）": "SYSTEM_OF_RECORD"
+        },
         "deadline_policy": "未说明（需收单机构确认）",
         "intended_use": [
           "网站/比赛演示",
@@ -3849,7 +3957,8 @@
           "available_in_case": "视案件而定",
           "validation_method": "日期比对",
           "human_confirmation_required": true,
-          "missing_consequence": "无法判定"
+          "missing_consequence": "无法判定",
+          "expected_source": "CONDITIONAL"
         }
       ],
       "process_flow": {
@@ -3930,6 +4039,9 @@
         "required_evidence": [
           "取消时间证明"
         ],
+        "evidence_sources": {
+          "取消时间证明": "CONDITIONAL"
+        },
         "deadline_policy": "未说明（需收单机构确认）",
         "intended_use": [
           "网站/比赛演示",
@@ -4013,7 +4125,8 @@
           "available_in_case": "视案件而定",
           "validation_method": "人工审查",
           "human_confirmation_required": true,
-          "missing_consequence": "合规案不成立"
+          "missing_consequence": "合规案不成立",
+          "expected_source": "MERCHANT_UPLOAD"
         }
       ],
       "process_flow": {
@@ -4086,6 +4199,9 @@
         "required_evidence": [
           "违规事实证据"
         ],
+        "evidence_sources": {
+          "违规事实证据": "MERCHANT_UPLOAD"
+        },
         "deadline_policy": "未说明（需收单机构确认）",
         "intended_use": [
           "规则引擎测试",
@@ -4167,7 +4283,8 @@
           "available_in_case": "视案件而定",
           "validation_method": "匹配校验",
           "human_confirmation_required": false,
-          "missing_consequence": "无法进入 CE3.0"
+          "missing_consequence": "无法进入 CE3.0",
+          "expected_source": "MERCHANT_UPLOAD"
         },
         {
           "evidence_type": "HISTORY",
@@ -4180,7 +4297,8 @@
           "available_in_case": "视案件而定",
           "validation_method": "匹配校验",
           "human_confirmation_required": false,
-          "missing_consequence": "CE3.0 不成立"
+          "missing_consequence": "CE3.0 不成立",
+          "expected_source": "SYSTEM_OF_RECORD"
         }
       ],
       "process_flow": {
@@ -4267,6 +4385,10 @@
           "3DS/Device ID/IP/账号/邮箱/电话/账单地址/收货地址",
           "历史未争议交易"
         ],
+        "evidence_sources": {
+          "3DS/Device ID/IP/账号/邮箱/电话/账单地址/收货地址": "MERCHANT_UPLOAD",
+          "历史未争议交易": "SYSTEM_OF_RECORD"
+        },
         "deadline_policy": "未说明（需收单机构确认）",
         "intended_use": [
           "网站/比赛演示",
@@ -4352,7 +4474,8 @@
           "available_in_case": "视案件而定",
           "validation_method": "系统对接核对",
           "human_confirmation_required": false,
-          "missing_consequence": "无法证明发货"
+          "missing_consequence": "无法证明发货",
+          "expected_source": "CONDITIONAL"
         },
         {
           "evidence_type": "POD",
@@ -4365,7 +4488,8 @@
           "available_in_case": "视案件而定",
           "validation_method": "收件人比对",
           "human_confirmation_required": true,
-          "missing_consequence": "证据链断裂"
+          "missing_consequence": "证据链断裂",
+          "expected_source": "OCR_THEN_REVIEW"
         }
       ],
       "process_flow": {
@@ -4450,6 +4574,10 @@
           "物流轨迹",
           "签收证明（含收件人）"
         ],
+        "evidence_sources": {
+          "物流轨迹": "CONDITIONAL",
+          "签收证明（含收件人）": "OCR_THEN_REVIEW"
+        },
         "deadline_policy": "未说明（需收单机构确认）",
         "intended_use": [
           "网站/比赛演示",
@@ -4535,7 +4663,8 @@
           "available_in_case": "视案件而定",
           "validation_method": "时间比对",
           "human_confirmation_required": true,
-          "missing_consequence": "无法判定"
+          "missing_consequence": "无法判定",
+          "expected_source": "MERCHANT_UPLOAD"
         },
         {
           "evidence_type": "RECURRING_AUTH",
@@ -4548,7 +4677,8 @@
           "available_in_case": "视案件而定",
           "validation_method": "报文核对",
           "human_confirmation_required": false,
-          "missing_consequence": "抗辩无据"
+          "missing_consequence": "抗辩无据",
+          "expected_source": "MERCHANT_UPLOAD"
         }
       ],
       "process_flow": {
@@ -4631,6 +4761,10 @@
           "取消时间戳与确认",
           "循环扣款协议/MIT 标识"
         ],
+        "evidence_sources": {
+          "取消时间戳与确认": "MERCHANT_UPLOAD",
+          "循环扣款协议/MIT 标识": "MERCHANT_UPLOAD"
+        },
         "deadline_policy": "未说明（需收单机构确认）",
         "intended_use": [
           "网站/比赛演示",
@@ -4716,7 +4850,8 @@
           "available_in_case": "视案件而定",
           "validation_method": "与发货比对",
           "human_confirmation_required": true,
-          "missing_consequence": "无法证明一致性"
+          "missing_consequence": "无法证明一致性",
+          "expected_source": "MERCHANT_UPLOAD"
         },
         {
           "evidence_type": "DELIVERY_RECORD",
@@ -4729,7 +4864,8 @@
           "available_in_case": "视案件而定",
           "validation_method": "序列号核对",
           "human_confirmation_required": true,
-          "missing_consequence": "抗辩无据"
+          "missing_consequence": "抗辩无据",
+          "expected_source": "OCR_THEN_REVIEW"
         },
         {
           "evidence_type": "INSPECTION",
@@ -4742,7 +4878,8 @@
           "available_in_case": "视案件而定",
           "validation_method": "人工审查",
           "human_confirmation_required": true,
-          "missing_consequence": "主观争议难反驳"
+          "missing_consequence": "主观争议难反驳",
+          "expected_source": "MERCHANT_UPLOAD"
         }
       ],
       "process_flow": {
@@ -4825,6 +4962,11 @@
           "发货/收货记录",
           "检验报告"
         ],
+        "evidence_sources": {
+          "商品页/SKU/描述": "MERCHANT_UPLOAD",
+          "发货/收货记录": "OCR_THEN_REVIEW",
+          "检验报告": "MERCHANT_UPLOAD"
+        },
         "deadline_policy": "未说明（需收单机构确认）",
         "intended_use": [
           "网站/比赛演示",
@@ -4909,7 +5051,8 @@
           "available_in_case": "视案件而定",
           "validation_method": "与交易关联校验",
           "human_confirmation_required": false,
-          "missing_consequence": "无法证明退款"
+          "missing_consequence": "无法证明退款",
+          "expected_source": "SYSTEM_OF_RECORD"
         }
       ],
       "process_flow": {
@@ -4990,6 +5133,9 @@
         "required_evidence": [
           "退款交易（ARN/日期/金额/卡号/结算状态）"
         ],
+        "evidence_sources": {
+          "退款交易（ARN/日期/金额/卡号/结算状态）": "SYSTEM_OF_RECORD"
+        },
         "deadline_policy": "未说明（需收单机构确认）",
         "intended_use": [
           "网站/比赛演示",
@@ -5074,7 +5220,8 @@
           "available_in_case": "视案件而定",
           "validation_method": "多字段比对",
           "human_confirmation_required": true,
-          "missing_consequence": "无法判定重复"
+          "missing_consequence": "无法判定重复",
+          "expected_source": "CONDITIONAL"
         }
       ],
       "process_flow": {
@@ -5156,6 +5303,9 @@
         "required_evidence": [
           "订单/发票/服务对应关系"
         ],
+        "evidence_sources": {
+          "订单/发票/服务对应关系": "CONDITIONAL"
+        },
         "deadline_policy": "未说明（需收单机构确认）",
         "intended_use": [
           "网站/比赛演示",
@@ -5240,7 +5390,8 @@
           "available_in_case": "是（Login Count 17）",
           "validation_method": "日志核对",
           "human_confirmation_required": false,
-          "missing_consequence": "无法反驳不可访问"
+          "missing_consequence": "无法反驳不可访问",
+          "expected_source": "CONDITIONAL"
         }
       ],
       "process_flow": {
@@ -5320,6 +5471,9 @@
         "required_evidence": [
           "登录/访问/消费记录"
         ],
+        "evidence_sources": {
+          "登录/访问/消费记录": "CONDITIONAL"
+        },
         "deadline_policy": "明确",
         "intended_use": [
           "网站/比赛演示",
@@ -5405,7 +5559,8 @@
           "available_in_case": "视案件而定",
           "validation_method": "人工核对",
           "human_confirmation_required": true,
-          "missing_consequence": "无政策则难抗辩"
+          "missing_consequence": "无政策则难抗辩",
+          "expected_source": "MERCHANT_UPLOAD"
         },
         {
           "evidence_type": "RETURN_PROOF",
@@ -5418,7 +5573,8 @@
           "available_in_case": "视案件而定",
           "validation_method": "物流核查",
           "human_confirmation_required": true,
-          "missing_consequence": "无法反驳"
+          "missing_consequence": "无法反驳",
+          "expected_source": "MERCHANT_UPLOAD"
         }
       ],
       "process_flow": {
@@ -5500,6 +5656,10 @@
           "退货政策及披露",
           "商品未实际退回的证据"
         ],
+        "evidence_sources": {
+          "退货政策及披露": "MERCHANT_UPLOAD",
+          "商品未实际退回的证据": "MERCHANT_UPLOAD"
+        },
         "deadline_policy": "未说明（需收单机构确认）",
         "intended_use": [
           "网站/比赛演示",
@@ -5583,7 +5743,8 @@
           "available_in_case": "视案件而定",
           "validation_method": "时间比对",
           "human_confirmation_required": true,
-          "missing_consequence": "无法收取消违约金"
+          "missing_consequence": "无法收取消违约金",
+          "expected_source": "MERCHANT_UPLOAD"
         },
         {
           "evidence_type": "CANCELLATION_TIME",
@@ -5596,7 +5757,8 @@
           "available_in_case": "视案件而定",
           "validation_method": "时间比对",
           "human_confirmation_required": true,
-          "missing_consequence": "抗辩无据"
+          "missing_consequence": "抗辩无据",
+          "expected_source": "CONDITIONAL"
         }
       ],
       "process_flow": {
@@ -5679,6 +5841,10 @@
           "取消政策及披露",
           "取消时间戳"
         ],
+        "evidence_sources": {
+          "取消政策及披露": "MERCHANT_UPLOAD",
+          "取消时间戳": "CONDITIONAL"
+        },
         "deadline_policy": "未说明（需收单机构确认）",
         "intended_use": [
           "网站/比赛演示",
@@ -5762,7 +5928,8 @@
           "available_in_case": "视案件而定",
           "validation_method": "数据展示",
           "human_confirmation_required": false,
-          "missing_consequence": "争议风险升高"
+          "missing_consequence": "争议风险升高",
+          "expected_source": "MERCHANT_UPLOAD"
         }
       ],
       "process_flow": {
@@ -5842,6 +6009,9 @@
         "required_evidence": [
           "清晰账单描述与交易详情"
         ],
+        "evidence_sources": {
+          "清晰账单描述与交易详情": "MERCHANT_UPLOAD"
+        },
         "deadline_policy": "未说明（需收单机构确认）",
         "intended_use": [
           "网站/比赛演示",
@@ -5928,7 +6098,8 @@
           "available_in_case": "视案件而定",
           "validation_method": "规则引擎读取",
           "human_confirmation_required": false,
-          "missing_consequence": "转向 CE 证据"
+          "missing_consequence": "转向 CE 证据",
+          "expected_source": "SYSTEM_OF_RECORD"
         },
         {
           "evidence_type": "HISTORY",
@@ -5941,7 +6112,8 @@
           "available_in_case": "视案件而定",
           "validation_method": "匹配校验",
           "human_confirmation_required": false,
-          "missing_consequence": "CE 不成立"
+          "missing_consequence": "CE 不成立",
+          "expected_source": "SYSTEM_OF_RECORD"
         }
       ],
       "process_flow": {
@@ -6032,6 +6204,10 @@
           "3DS/认证记录",
           "2 笔同设备/同IP历史未争议交易"
         ],
+        "evidence_sources": {
+          "3DS/认证记录": "SYSTEM_OF_RECORD",
+          "2 笔同设备/同IP历史未争议交易": "SYSTEM_OF_RECORD"
+        },
         "deadline_policy": "未说明（需收单机构确认）",
         "intended_use": [
           "网站/比赛演示",
@@ -6119,7 +6295,8 @@
           "available_in_case": "视案件而定",
           "validation_method": "系统核对",
           "human_confirmation_required": false,
-          "missing_consequence": "无法证明发货"
+          "missing_consequence": "无法证明发货",
+          "expected_source": "CONDITIONAL"
         },
         {
           "evidence_type": "POD",
@@ -6132,7 +6309,8 @@
           "available_in_case": "视案件而定",
           "validation_method": "收件人比对",
           "human_confirmation_required": true,
-          "missing_consequence": "证据链断裂"
+          "missing_consequence": "证据链断裂",
+          "expected_source": "OCR_THEN_REVIEW"
         }
       ],
       "process_flow": {
@@ -6219,6 +6397,10 @@
           "物流轨迹/航班起飞证明",
           "签收证明/自提记录/服务使用日志"
         ],
+        "evidence_sources": {
+          "物流轨迹/航班起飞证明": "CONDITIONAL",
+          "签收证明/自提记录/服务使用日志": "OCR_THEN_REVIEW"
+        },
         "deadline_policy": "未说明（需收单机构确认）",
         "intended_use": [
           "网站/比赛演示",
@@ -6305,7 +6487,8 @@
           "available_in_case": "视案件而定",
           "validation_method": "规则引擎自动比对",
           "human_confirmation_required": false,
-          "missing_consequence": "建议接受"
+          "missing_consequence": "建议接受",
+          "expected_source": "SYSTEM_OF_RECORD"
         }
       ],
       "process_flow": {
@@ -6388,6 +6571,9 @@
         "required_evidence": [
           "授权响应/授权码/金额/清算日期"
         ],
+        "evidence_sources": {
+          "授权响应/授权码/金额/清算日期": "SYSTEM_OF_RECORD"
+        },
         "deadline_policy": "未说明（需收单机构确认）",
         "intended_use": [
           "网站/比赛演示",
@@ -6473,7 +6659,8 @@
           "available_in_case": "视案件而定",
           "validation_method": "规则引擎",
           "human_confirmation_required": true,
-          "missing_consequence": "无法判定"
+          "missing_consequence": "无法判定",
+          "expected_source": "CONDITIONAL"
         }
       ],
       "process_flow": {
@@ -6559,6 +6746,9 @@
         "required_evidence": [
           "订单/授权/清算多字段比对"
         ],
+        "evidence_sources": {
+          "订单/授权/清算多字段比对": "CONDITIONAL"
+        },
         "deadline_policy": "未说明（需收单机构确认）",
         "intended_use": [
           "网站/比赛演示",
@@ -6642,7 +6832,8 @@
           "available_in_case": "视案件而定",
           "validation_method": "人工核对",
           "human_confirmation_required": true,
-          "missing_consequence": "须退款"
+          "missing_consequence": "须退款",
+          "expected_source": "MERCHANT_UPLOAD"
         },
         {
           "evidence_type": "TIMESTAMP",
@@ -6655,7 +6846,8 @@
           "available_in_case": "视案件而定",
           "validation_method": "时间比对",
           "human_confirmation_required": true,
-          "missing_consequence": "抗辩无据"
+          "missing_consequence": "抗辩无据",
+          "expected_source": "OCR_THEN_REVIEW"
         }
       ],
       "process_flow": {
@@ -6738,6 +6930,10 @@
           "取消/退款政策披露证明",
           "取消时间/未按政策取消证明"
         ],
+        "evidence_sources": {
+          "取消/退款政策披露证明": "MERCHANT_UPLOAD",
+          "取消时间/未按政策取消证明": "OCR_THEN_REVIEW"
+        },
         "deadline_policy": "未说明（需收单机构确认）",
         "intended_use": [
           "网站/比赛演示",
@@ -6823,7 +7019,8 @@
           "available_in_case": "视案件而定",
           "validation_method": "人工核对",
           "human_confirmation_required": true,
-          "missing_consequence": "转向其他抗辩"
+          "missing_consequence": "转向其他抗辩",
+          "expected_source": "MERCHANT_UPLOAD"
         },
         {
           "evidence_type": "INSPECTION",
@@ -6836,7 +7033,8 @@
           "available_in_case": "视案件而定",
           "validation_method": "人工审查",
           "human_confirmation_required": true,
-          "missing_consequence": "主观争议难反驳"
+          "missing_consequence": "主观争议难反驳",
+          "expected_source": "MERCHANT_UPLOAD"
         }
       ],
       "process_flow": {
@@ -6922,6 +7120,10 @@
           "已修/已换/按约交付说明",
           "专家/检验意见"
         ],
+        "evidence_sources": {
+          "已修/已换/按约交付说明": "MERCHANT_UPLOAD",
+          "专家/检验意见": "MERCHANT_UPLOAD"
+        },
         "deadline_policy": "存在版本差异（见冲突清单）",
         "intended_use": [
           "网站/比赛演示",
@@ -7006,7 +7208,8 @@
           "available_in_case": "视案件而定",
           "validation_method": "核对",
           "human_confirmation_required": true,
-          "missing_consequence": "抗辩无据"
+          "missing_consequence": "抗辩无据",
+          "expected_source": "CONDITIONAL"
         }
       ],
       "process_flow": {
@@ -7088,6 +7291,9 @@
         "required_evidence": [
           "交付证明（签收/QR/PIN 使用/航班已发生）"
         ],
+        "evidence_sources": {
+          "交付证明（签收/QR/PIN 使用/航班已发生）": "CONDITIONAL"
+        },
         "deadline_policy": "明确",
         "intended_use": [
           "网站/比赛演示",
@@ -7171,7 +7377,8 @@
           "available_in_case": "视案件而定",
           "validation_method": "核对",
           "human_confirmation_required": false,
-          "missing_consequence": "建议退款"
+          "missing_consequence": "建议退款",
+          "expected_source": "SYSTEM_OF_RECORD"
         }
       ],
       "process_flow": {
@@ -7253,6 +7460,9 @@
         "required_evidence": [
           "退款记录"
         ],
+        "evidence_sources": {
+          "退款记录": "SYSTEM_OF_RECORD"
+        },
         "deadline_policy": "明确",
         "intended_use": [
           "网站/比赛演示",
@@ -7338,7 +7548,8 @@
           "available_in_case": "视案件而定",
           "validation_method": "规则引擎",
           "human_confirmation_required": false,
-          "missing_consequence": "转向 CE"
+          "missing_consequence": "转向 CE",
+          "expected_source": "SYSTEM_OF_RECORD"
         },
         {
           "evidence_type": "COMP_EVID",
@@ -7351,7 +7562,8 @@
           "available_in_case": "视案件而定",
           "validation_method": "匹配",
           "human_confirmation_required": false,
-          "missing_consequence": "无 CE 则建议接受"
+          "missing_consequence": "无 CE 则建议接受",
+          "expected_source": "CONDITIONAL"
         }
       ],
       "process_flow": {
@@ -7439,6 +7651,10 @@
           "3DS 认证（ECI 211/212/217/242）",
           "Compelling Evidence（注册/历史交易等）"
         ],
+        "evidence_sources": {
+          "3DS 认证（ECI 211/212/217/242）": "SYSTEM_OF_RECORD",
+          "Compelling Evidence（注册/历史交易等）": "CONDITIONAL"
+        },
         "deadline_policy": "明确",
         "intended_use": [
           "网站/比赛演示",
@@ -7524,7 +7740,8 @@
           "available_in_case": "视案件而定",
           "validation_method": "规则引擎",
           "human_confirmation_required": false,
-          "missing_consequence": "建议接受"
+          "missing_consequence": "建议接受",
+          "expected_source": "SYSTEM_OF_RECORD"
         }
       ],
       "process_flow": {
@@ -7606,6 +7823,9 @@
         "required_evidence": [
           "授权记录"
         ],
+        "evidence_sources": {
+          "授权记录": "SYSTEM_OF_RECORD"
+        },
         "deadline_policy": "存在版本差异（见冲突清单）",
         "intended_use": [
           "网站/比赛演示",
@@ -7689,7 +7909,8 @@
           "available_in_case": "视案件而定",
           "validation_method": "规则引擎/人工",
           "human_confirmation_required": true,
-          "missing_consequence": "建议接受"
+          "missing_consequence": "建议接受",
+          "expected_source": "SYSTEM_OF_RECORD"
         }
       ],
       "process_flow": {
@@ -7773,6 +7994,9 @@
         "required_evidence": [
           "终端/交易记录（按子类）"
         ],
+        "evidence_sources": {
+          "终端/交易记录（按子类）": "SYSTEM_OF_RECORD"
+        },
         "deadline_policy": "明确",
         "intended_use": [
           "网站/比赛演示",
@@ -7856,7 +8080,8 @@
           "available_in_case": "视案件而定",
           "validation_method": "规则引擎",
           "human_confirmation_required": false,
-          "missing_consequence": "责任转移"
+          "missing_consequence": "责任转移",
+          "expected_source": "SYSTEM_OF_RECORD"
         }
       ],
       "process_flow": {
@@ -7930,6 +8155,9 @@
         "required_evidence": [
           "DE 55/芯片数据/终端能力"
         ],
+        "evidence_sources": {
+          "DE 55/芯片数据/终端能力": "SYSTEM_OF_RECORD"
+        },
         "deadline_policy": "明确",
         "intended_use": [
           "Sandbox seed",
@@ -8012,7 +8240,8 @@
           "available_in_case": "视案件而定",
           "validation_method": "人工",
           "human_confirmation_required": true,
-          "missing_consequence": "建议接受"
+          "missing_consequence": "建议接受",
+          "expected_source": "CONDITIONAL"
         }
       ],
       "process_flow": {
@@ -8091,6 +8320,9 @@
         "required_evidence": [
           "交付/退款证明（类比）"
         ],
+        "evidence_sources": {
+          "交付/退款证明（类比）": "CONDITIONAL"
+        },
         "deadline_policy": "未说明（需收单机构确认）",
         "intended_use": [
           "规则引擎测试",
@@ -8173,7 +8405,8 @@
           "available_in_case": "是",
           "validation_method": "物流系统核对",
           "human_confirmation_required": false,
-          "missing_consequence": "证据链断裂"
+          "missing_consequence": "证据链断裂",
+          "expected_source": "CONDITIONAL"
         },
         {
           "evidence_type": "POD",
@@ -8186,7 +8419,8 @@
           "available_in_case": "是",
           "validation_method": "收件人比对",
           "human_confirmation_required": true,
-          "missing_consequence": "无法抗辩"
+          "missing_consequence": "无法抗辩",
+          "expected_source": "OCR_THEN_REVIEW"
         }
       ],
       "process_flow": {
@@ -8299,6 +8533,10 @@
           "物流轨迹",
           "签收证明"
         ],
+        "evidence_sources": {
+          "物流轨迹": "CONDITIONAL",
+          "签收证明": "OCR_THEN_REVIEW"
+        },
         "deadline_policy": "未说明（Visa 需收单机构确认 / 演示设定）",
         "intended_use": [
           "网站/比赛演示",
@@ -8385,7 +8623,8 @@
           "available_in_case": "否",
           "validation_method": "N/A",
           "human_confirmation_required": false,
-          "missing_consequence": "转向 CE"
+          "missing_consequence": "转向 CE",
+          "expected_source": "SYSTEM_OF_RECORD"
         },
         {
           "evidence_type": "HISTORY",
@@ -8398,7 +8637,8 @@
           "available_in_case": "否",
           "validation_method": "N/A",
           "human_confirmation_required": false,
-          "missing_consequence": "无法抗辩"
+          "missing_consequence": "无法抗辩",
+          "expected_source": "SYSTEM_OF_RECORD"
         }
       ],
       "process_flow": {
@@ -8508,6 +8748,10 @@
           "3DS 认证记录",
           "同设备历史未争议交易"
         ],
+        "evidence_sources": {
+          "3DS 认证记录": "SYSTEM_OF_RECORD",
+          "同设备历史未争议交易": "SYSTEM_OF_RECORD"
+        },
         "deadline_policy": "未说明（Visa 需收单机构确认 / 演示设定）",
         "intended_use": [
           "网站/比赛演示",
@@ -8594,7 +8838,8 @@
           "available_in_case": "否",
           "validation_method": "规则引擎",
           "human_confirmation_required": false,
-          "missing_consequence": "建议接受"
+          "missing_consequence": "建议接受",
+          "expected_source": "SYSTEM_OF_RECORD"
         }
       ],
       "process_flow": {
@@ -8692,6 +8937,9 @@
         "required_evidence": [
           "授权记录"
         ],
+        "evidence_sources": {
+          "授权记录": "SYSTEM_OF_RECORD"
+        },
         "deadline_policy": "未说明（Visa 需收单机构确认 / 演示设定）",
         "intended_use": [
           "网站/比赛演示",
@@ -8777,7 +9025,8 @@
           "available_in_case": "是",
           "validation_method": "比对",
           "human_confirmation_required": true,
-          "missing_consequence": "无法抗辩"
+          "missing_consequence": "无法抗辩",
+          "expected_source": "OCR_THEN_REVIEW"
         }
       ],
       "process_flow": {
@@ -8878,6 +9127,9 @@
         "required_evidence": [
           "签收证明"
         ],
+        "evidence_sources": {
+          "签收证明": "OCR_THEN_REVIEW"
+        },
         "deadline_policy": "未说明（Visa 需收单机构确认 / 演示设定）",
         "intended_use": [
           "网站/比赛演示",
@@ -8964,7 +9216,8 @@
           "available_in_case": "否",
           "validation_method": "N/A",
           "human_confirmation_required": false,
-          "missing_consequence": "已过期，不再收集"
+          "missing_consequence": "已过期，不再收集",
+          "expected_source": "SYSTEM_OF_RECORD"
         }
       ],
       "process_flow": {
@@ -9062,6 +9315,9 @@
         "required_evidence": [
           "退款记录"
         ],
+        "evidence_sources": {
+          "退款记录": "SYSTEM_OF_RECORD"
+        },
         "deadline_policy": "未说明（Visa 需收单机构确认 / 演示设定）",
         "intended_use": [
           "网站/比赛演示",
@@ -9149,7 +9405,8 @@
           "available_in_case": "是（OCR 有误）",
           "validation_method": "人工比对原件",
           "human_confirmation_required": true,
-          "missing_consequence": "比对失败则无法抗辩"
+          "missing_consequence": "比对失败则无法抗辩",
+          "expected_source": "OCR_THEN_REVIEW"
         }
       ],
       "process_flow": {
@@ -9249,6 +9506,9 @@
         "required_evidence": [
           "签收证明"
         ],
+        "evidence_sources": {
+          "签收证明": "OCR_THEN_REVIEW"
+        },
         "deadline_policy": "未说明（Visa 需收单机构确认 / 演示设定）",
         "intended_use": [
           "网站/比赛演示",
@@ -9334,7 +9594,8 @@
           "available_in_case": "是",
           "validation_method": "日志核对",
           "human_confirmation_required": false,
-          "missing_consequence": "无法抗辩"
+          "missing_consequence": "无法抗辩",
+          "expected_source": "CONDITIONAL"
         }
       ],
       "process_flow": {
@@ -9436,6 +9697,9 @@
         "required_evidence": [
           "登录/访问记录"
         ],
+        "evidence_sources": {
+          "登录/访问记录": "CONDITIONAL"
+        },
         "deadline_policy": "未说明（Visa 需收单机构确认 / 演示设定）",
         "intended_use": [
           "网站/比赛演示",
@@ -9521,7 +9785,8 @@
           "available_in_case": "是",
           "validation_method": "人工",
           "human_confirmation_required": true,
-          "missing_consequence": "抗辩不成立"
+          "missing_consequence": "抗辩不成立",
+          "expected_source": "MERCHANT_UPLOAD"
         }
       ],
       "process_flow": {
@@ -9617,6 +9882,9 @@
         "required_evidence": [
           "按约交付说明"
         ],
+        "evidence_sources": {
+          "按约交付说明": "MERCHANT_UPLOAD"
+        },
         "deadline_policy": "未说明（Visa 需收单机构确认 / 演示设定）",
         "intended_use": [
           "网站/比赛演示",
@@ -9702,7 +9970,8 @@
           "available_in_case": "是",
           "validation_method": "比对",
           "human_confirmation_required": true,
-          "missing_consequence": "无法抗辩"
+          "missing_consequence": "无法抗辩",
+          "expected_source": "OCR_THEN_REVIEW"
         }
       ],
       "process_flow": {
@@ -9803,6 +10072,9 @@
         "required_evidence": [
           "签收证明"
         ],
+        "evidence_sources": {
+          "签收证明": "OCR_THEN_REVIEW"
+        },
         "deadline_policy": "未说明（Visa 需收单机构确认 / 演示设定）",
         "intended_use": [
           "网站/比赛演示",
@@ -9968,6 +10240,7 @@
         "conflict_status": "NONE",
         "verification_status": "NEEDS_CONFIRMATION",
         "required_evidence": [],
+        "evidence_sources": {},
         "deadline_policy": "明确",
         "intended_use": [
           "网站/比赛演示",
@@ -10052,7 +10325,8 @@
           "available_in_case": "是",
           "validation_method": "核对",
           "human_confirmation_required": true,
-          "missing_consequence": "抗辩无据"
+          "missing_consequence": "抗辩无据",
+          "expected_source": "CONDITIONAL"
         }
       ],
       "process_flow": {
@@ -10150,6 +10424,9 @@
         "required_evidence": [
           "交付证明"
         ],
+        "evidence_sources": {
+          "交付证明": "CONDITIONAL"
+        },
         "deadline_policy": "未说明（Visa 需收单机构确认 / 演示设定）",
         "intended_use": [
           "网站/比赛演示",
@@ -10235,7 +10512,8 @@
           "available_in_case": "是",
           "validation_method": "规则引擎",
           "human_confirmation_required": false,
-          "missing_consequence": "保护缺失"
+          "missing_consequence": "保护缺失",
+          "expected_source": "SYSTEM_OF_RECORD"
         },
         {
           "evidence_type": "HISTORY",
@@ -10248,7 +10526,8 @@
           "available_in_case": "是",
           "validation_method": "匹配",
           "human_confirmation_required": false,
-          "missing_consequence": "佐证减弱"
+          "missing_consequence": "佐证减弱",
+          "expected_source": "SYSTEM_OF_RECORD"
         },
         {
           "evidence_type": "POD",
@@ -10261,7 +10540,8 @@
           "available_in_case": "是",
           "validation_method": "比对",
           "human_confirmation_required": true,
-          "missing_consequence": "佐证减弱"
+          "missing_consequence": "佐证减弱",
+          "expected_source": "OCR_THEN_REVIEW"
         }
       ],
       "process_flow": {
@@ -10369,6 +10649,11 @@
           "同设备历史交易",
           "签收证明"
         ],
+        "evidence_sources": {
+          "3DS 认证（ECI 5）": "SYSTEM_OF_RECORD",
+          "同设备历史交易": "SYSTEM_OF_RECORD",
+          "签收证明": "OCR_THEN_REVIEW"
+        },
         "deadline_policy": "未说明（Visa 需收单机构确认 / 演示设定）",
         "intended_use": [
           "网站/比赛演示",
@@ -10456,7 +10741,8 @@
           "available_in_case": "是",
           "validation_method": "关联校验",
           "human_confirmation_required": false,
-          "missing_consequence": "建议接受"
+          "missing_consequence": "建议接受",
+          "expected_source": "SYSTEM_OF_RECORD"
         }
       ],
       "process_flow": {
@@ -10554,6 +10840,9 @@
         "required_evidence": [
           "退款 ARN/日期/金额/结算状态"
         ],
+        "evidence_sources": {
+          "退款 ARN/日期/金额/结算状态": "SYSTEM_OF_RECORD"
+        },
         "deadline_policy": "未说明（Visa 需收单机构确认 / 演示设定）",
         "intended_use": [
           "网站/比赛演示",
@@ -10639,7 +10928,8 @@
           "available_in_case": "是",
           "validation_method": "规则引擎",
           "human_confirmation_required": true,
-          "missing_consequence": "无法判定"
+          "missing_consequence": "无法判定",
+          "expected_source": "CONDITIONAL"
         }
       ],
       "process_flow": {
@@ -10739,6 +11029,9 @@
         "required_evidence": [
           "订单/授权/清算比对"
         ],
+        "evidence_sources": {
+          "订单/授权/清算比对": "CONDITIONAL"
+        },
         "deadline_policy": "未说明（Visa 需收单机构确认 / 演示设定）",
         "intended_use": [
           "网站/比赛演示",
@@ -10824,7 +11117,8 @@
           "available_in_case": "是",
           "validation_method": "比对",
           "human_confirmation_required": true,
-          "missing_consequence": "抗辩无据"
+          "missing_consequence": "抗辩无据",
+          "expected_source": "MERCHANT_UPLOAD"
         },
         {
           "evidence_type": "DELIVERY_RECORD",
@@ -10837,7 +11131,8 @@
           "available_in_case": "是",
           "validation_method": "序列号核对",
           "human_confirmation_required": true,
-          "missing_consequence": "抗辩无据"
+          "missing_consequence": "抗辩无据",
+          "expected_source": "OCR_THEN_REVIEW"
         }
       ],
       "process_flow": {
@@ -10935,6 +11230,10 @@
           "SKU/商品页快照",
           "发货序列号记录"
         ],
+        "evidence_sources": {
+          "SKU/商品页快照": "MERCHANT_UPLOAD",
+          "发货序列号记录": "OCR_THEN_REVIEW"
+        },
         "deadline_policy": "未说明（Visa 需收单机构确认 / 演示设定）",
         "intended_use": [
           "网站/比赛演示",

@@ -1,6 +1,6 @@
 # 规则测试映射（08_rule_test_mapping.md）
 
-> 生成时间：2026-09-07T15:34:14Z。将案例映射到原因码、规则版本、证据要求、预期判断、阻塞条件、边界条件与测试断言。
+> 生成时间：2026-09-08T03:36:19Z。将案例映射到原因码、规则版本、证据要求、预期判断、阻塞条件、边界条件与测试断言。
 > 警告：表中时限存在地区差异与版本差异（见 10_conflicts_and_data_gaps.md），生产规则须以卡组织正式 Standards 为准。
 
 ## American Express｜C04｜Goods/Services Returned or Refused
