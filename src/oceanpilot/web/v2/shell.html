@@ -17,18 +17,19 @@
           href="/v2/operations"
           aria-label="OceanPilot 运营工作台"
           ><img src="__V2_LOGO__" alt="OceanPayment" /><span
-            >OceanPilot<small>DISPUTE OPERATIONS</small></span
+            >OceanPilot<small>YOUR DISPUTE AGENT</small></span
           ><b>V2</b></a
         >
         <div class="workspace-label">工作空间</div>
         <nav class="workspace-nav" aria-label="工作空间">
           <a href="/v2/operations" data-surface="operations"
-            ><span class="nav-icon">▦</span>争议运营<span class="nav-shortcut"
+            ><span class="nav-icon">▦</span>OceanPayment 运营<span
+              class="nav-shortcut"
               >OP</span
             ></a
           >
           <a href="/v2/merchant" data-surface="merchant"
-            ><span class="nav-icon">▤</span>商户协作<span class="nav-shortcut"
+            ><span class="nav-icon">▤</span>商户客户端<span class="nav-shortcut"
               >M</span
             ></a
           >
@@ -91,7 +92,18 @@
           aria-live="polite"
           hidden
         ></div>
+        <section
+          id="collaborationRoles"
+          class="collaboration-roles"
+          aria-label="三方协作责任"
+        ></section>
         <section id="metrics" class="metrics" aria-label="案件指标"></section>
+        <section
+          id="agentInbox"
+          class="agent-inbox"
+          aria-label="OceanPilot 待确认事项"
+          hidden
+        ></section>
         <section class="workspace-grid" id="workspaceGrid">
           <aside class="case-queue" aria-label="案件列表">
             <div class="queue-heading">
@@ -131,11 +143,16 @@
               <p>案件计划、证据与审核记录会显示在这里。</p>
             </div>
           </article>
+          <aside
+            id="agentPanel"
+            class="agent-panel"
+            aria-label="OceanPilot 案件智能体"
+          ></aside>
         </section>
         <section id="governanceView" hidden aria-label="平台治理"></section>
         <footer class="page-footer">
           <span>OceanPilot V2</span> One case. Every decision connected.<span
-            >确定性 Agent · 人工决策 · 审计闭环</span
+            >OceanPilot 准备与推进 · OceanPayment 决策 · 商户响应</span
           >
         </footer>
       </main>

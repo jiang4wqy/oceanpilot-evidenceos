@@ -164,7 +164,7 @@
     ["overview", "概览"],
     ["tasks", "商户任务"],
     ["evidence", "证据"],
-    ["agent", "Agent 建议"],
+    ["agent", "规则与计划"],
     ["collaboration", "协作"],
     ["review", "审核与提交"],
     ["outcome", "结果与资金"],
@@ -194,7 +194,7 @@
     plan: null,
     governance: null,
     capabilities: null,
-    tab: "overview",
+    tab: surface === "merchant" ? "tasks" : "overview",
     queue: "ALL",
     search: "",
     stage: "ALL",
@@ -204,6 +204,18 @@
     dialog: null,
     pending: null,
     busy: false,
+    activity: null,
+    agentIndex: {},
+    agentLoading: false,
+    agentBusy: false,
+    agentCollapsed: false,
+    agentNotice: "",
+    agentDrafts: {},
+    agentPrepared: "merchant_message",
+    agentPoll: null,
+    agentPollCount: 0,
+    activityTicket: 0,
+    agentInboxTicket: 0,
   };
   const storage = {
     get(key) {
@@ -358,10 +370,11 @@
   }
   async function api(path, options = {}, actor) {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 20000);
+    const { timeoutMs = 20000, ...requestOptions } = options;
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
       const response = await fetch(`/api/v2${path}`, {
-        ...options,
+        ...requestOptions,
         headers: headers(actor),
         signal: controller.signal,
       });
@@ -596,6 +609,30 @@
         .join("") || empty("尚未发布商户任务。")
     }<div class="action-bar">${actionButton("MERCHANT_DECISION", "确认 Accept / Contest", { primary: true })}${actionButton("SUBMIT_EVIDENCE")}${actionButton("MONITOR_SLA")}</div>${surface !== "merchant" ? `<p class="section-note">商户的响应由商户门户完成。主管处理未响应或授权放弃时，必须记录依据。</p>` : ""}`;
   }
+  function renderMerchantTasks(c, p) {
+    const explanation =
+      {
+        10.4: "持卡人对这笔交易的授权提出异议。你可以核对交易收据、身份验证与授权相关记录。",
+        13.1: "持卡人表示没有收到商品或服务。你可以准备物流、交付凭据和双方沟通记录。",
+        4853: "持卡人对商品或服务与约定是否一致提出异议。你可以核对商品描述、履约记录和退款政策。",
+      }[c.reason_code] ||
+      "OceanPayment 收到了这笔交易的争议，需要你提供事实与处理决定。";
+    const tasks = list(c.tasks).filter((t) =>
+      ["DECISION", "EVIDENCE", "REVISION"].includes(t.type),
+    );
+    const review = list(c.reviews)
+      .filter((r) => r.type === "EVIDENCE")
+      .at(-1);
+    const feedback = list(c.collaboration)
+      .filter((m) => m.role !== "MERCHANT" && m.message)
+      .slice(-2);
+    const canRespond = [
+      "MERCHANT_ACTION_REQUIRED",
+      "EVIDENCE_COLLECTING",
+      "MERCHANT_REVISION_REQUIRED",
+    ].includes(c.work_status);
+    return `<div class="merchant-brief"><span class="merchant-brief-icon">↙</span><div><h3>这笔争议为什么需要你回应</h3><p>${esc(explanation)}</p><small>OceanPayment 负责案件处理，OceanPilot 帮你理解要求与准备回应。</small></div></div><div class="merchant-deadline">你的目标回应时间 <strong>${esc(date(p?.deadlines?.merchant || c.deadlines?.merchant))}</strong></div>${section("我的待办", c.merchant_decision === "NONE" ? "先确认接受责任还是继续抗辩，再按清单回应。" : `你已选择：${label(c.merchant_decision)}。`)}${tasks.map((t) => `<div class="task-row"><span class="check-mark ${t.status === "COMPLETED" ? "done" : ""}">${t.status === "COMPLETED" ? "✓" : "○"}</span><div class="row-content"><div class="row-title">${esc(label(t.type))}</div><div class="row-subtitle">${esc(t.message || "")}</div></div>${badge(t.status)}</div>`).join("") || empty("暂时没有需要你处理的新任务。你仍可向 OceanPilot 提问或补充协作消息。")}<div class="action-bar">${canRespond ? actionButton("MERCHANT_DECISION", "确认我的处理决定", { primary: c.merchant_decision === "NONE" }) : ""}${canRespond && c.merchant_decision === "CONTEST" ? actionButton("REGISTER_EVIDENCE", "补充证据", { primary: true }) + actionButton("SUBMIT_EVIDENCE", "提交给 OceanPayment") : ""}${actionButton("COMMENT", "补充说明")}</div>${c.merchant_decision === "CONTEST" ? `<div class="merchant-evidence-progress"><span>证据准备</span><strong>${esc(p?.readiness?.submitted ?? 0)} / ${esc(p?.readiness?.required ?? 0)} 项</strong><button type="button" data-tab="evidence">查看准备清单 →</button></div>` : ""}${section("OceanPayment 的反馈", "你和处理团队的最新往来，共享同一个案件。")}${review ? `<div class="merchant-feedback"><span class="actor-avatar operations">OP</span><div><strong>OceanPayment 审核反馈 · ${esc(label(review.decision))}</strong><p>${esc(review.reason)}</p><small>${date(review.at || review.created_at)}</small></div></div>` : ""}${feedback.map((m) => `<div class="merchant-feedback"><span class="actor-avatar operations">OP</span><div><strong>${m.type === "TASK_PUBLISHED" ? "处理团队向你发布任务" : "OceanPayment 案件消息"}</strong><p>${esc(m.message)}</p><small>${date(m.at || m.created_at)}</small></div></div>`).join("") || (!review ? empty("后续审核意见与处理进展会显示在这里。") : "")}<button class="button secondary small" data-tab="collaboration">查看全部往来 / 回复团队 →</button>`;
+  }
   function renderEvidence(c, p) {
     const checklist = list(p?.checklist);
     const evidence = list(c.evidence);
@@ -705,7 +742,8 @@
     const p = S.plan;
     const renderers = {
       overview: () => renderOverview(c, p),
-      tasks: () => renderTasks(c),
+      tasks: () =>
+        surface === "merchant" ? renderMerchantTasks(c, p) : renderTasks(c),
       evidence: () => renderEvidence(c, p),
       agent: () => renderAgent(c, p),
       collaboration: () => renderCollaboration(c),
@@ -714,16 +752,33 @@
       audit: () => renderAudit(c),
     };
     const visibleTabs =
-      surface === "merchant" ? tabs.filter(([key]) => key !== "review") : tabs;
+      surface === "merchant"
+        ? [
+            ["tasks", "我的待办"],
+            ["evidence", "准备证据"],
+            ["collaboration", "协作反馈"],
+            ["outcome", "处理结果"],
+          ]
+        : tabs;
+    if (!visibleTabs.some(([key]) => key === S.tab))
+      S.tab = surface === "merchant" ? "tasks" : "overview";
+    const dimensions =
+      surface === "merchant"
+        ? [
+            ["当前进度", c.work_status],
+            ["你的决定", c.merchant_decision],
+            ["处理结果", c.business_outcome],
+          ]
+        : [
+            ["争议阶段", c.stage],
+            ["工作状态", c.work_status],
+            ["商户决定", c.merchant_decision],
+            ["业务结果", c.business_outcome],
+            ["终局状态", c.finality],
+            ["资金状态", c.financial_status],
+          ];
     $("caseDetail").innerHTML =
-      `<div class="detail-header"><button class="mobile-back" data-back>← 返回案件列表</button><div class="detail-topline"><span class="case-id">${esc(c.id)}</span><span>案件版本 v${esc(c.revision)} · ${esc(c.source_type || "SYNTHETIC_DEMO")}</span></div><div class="detail-title"><h2>${esc(c.merchant_id)}</h2><div class="detail-amount"><small>${esc(c.currency)}</small>${esc(money(c.amount_minor, c.currency))}</div></div><div class="case-facts"><span>卡组织 <strong>${esc(c.scheme)}</strong></span><span>原因码 <strong>${esc(c.reason_code)}</strong></span><span>渠道 <strong>${esc(c.channel)}</strong></span><span>案件负责人 <strong>${esc(c.owner || "OceanPayment")}</strong></span></div></div><div class="dimension-strip">${[
-        ["争议阶段", c.stage],
-        ["工作状态", c.work_status],
-        ["商户决定", c.merchant_decision],
-        ["业务结果", c.business_outcome],
-        ["终局状态", c.finality],
-        ["资金状态", c.financial_status],
-      ]
+      `<div class="detail-header"><button class="mobile-back" data-back>← 返回案件列表</button><div class="detail-topline"><span class="case-id">${esc(c.id)}</span><span>案件版本 v${esc(c.revision)} · ${esc(c.source_type || "SYNTHETIC_DEMO")}</span></div><div class="detail-title"><h2>${surface === "merchant" ? "我的争议案件" : esc(c.merchant_id)}</h2><div class="detail-amount"><small>${esc(c.currency)}</small>${esc(money(c.amount_minor, c.currency))}</div></div><div class="case-facts"><span>卡组织 <strong>${esc(c.scheme)}</strong></span><span>原因码 <strong>${esc(c.reason_code)}</strong></span>${surface === "merchant" ? `<span>处理团队 <strong>OceanPayment</strong></span>` : `<span>渠道 <strong>${esc(c.channel)}</strong></span><span>案件负责人 <strong>${esc(c.owner || "OceanPayment")}</strong></span>`}</div></div><div class="dimension-strip">${dimensions
         .map(
           ([key, value]) =>
             `<div class="dimension"><label>${key}</label>${badge(value)}</div>`,
@@ -804,6 +859,466 @@
         .map(([k, v]) => `<span>${esc(k)}：${esc(text(v))}</span>`)
         .join("")}</div></div></div>`;
   }
+  function agentSource(record = {}) {
+    const source = String(
+      record.source || record.output_source || "",
+    ).toUpperCase();
+    const provider = String(record.provider || "").toUpperCase();
+    if (source === "FALLBACK")
+      return { label: "模型异常 · 确定性降级", tone: "amber" };
+    if (source === "MODEL")
+      return {
+        label: `${record.provider || "模型"} · 实时回答`,
+        tone: "green",
+      };
+    if (source === "DETERMINISTIC" || provider === "DETERMINISTIC")
+      return { label: "确定性工具结果", tone: "gray" };
+    return { label: "输出来源未报告", tone: "gray" };
+  }
+  function sourceBadge(record) {
+    const source = agentSource(record);
+    return `<span class="badge ${source.tone}">${esc(source.label)}</span>`;
+  }
+  function agentAnswerText(value) {
+    return esc(value)
+      .replace(/\*\*([^*\n]+)\*\*/g, "<strong>$1</strong>")
+      .replace(/`([^`\n]+)`/g, "<code>$1</code>")
+      .replace(/^#{1,4}\s+(.+)$/gm, "<strong>$1</strong>")
+      .replace(/^\s*[-*]\s+/gm, "• ");
+  }
+  function collaborationActor(role) {
+    if (role === "MERCHANT") return "商户";
+    if (["OPERATOR", "RISK_OFFICER", "SUPERVISOR"].includes(role))
+      return "OceanPayment";
+    if (role === "AGENT") return "OceanPilot";
+    return label(role || "协作人");
+  }
+  function agentTrigger(trigger) {
+    const name = String(trigger || "").replace(/^AUTO_EVENT:/, "");
+    return (
+      {
+        USER_MESSAGE: "回应你的问题",
+        CASE_OPENED: "打开案件后检查",
+        MANUAL_REFRESH: "按要求重新检查",
+        MANUAL: "人工请求检查",
+        INTAKE: "接收到上游争议",
+        PUBLISH_TASK: "商户任务已发布",
+        MERCHANT_DECISION: "商户已确认处理决定",
+        REGISTER_EVIDENCE: "有新证据登记",
+        WITHDRAW_EVIDENCE: "证据已撤回",
+        SUBMIT_EVIDENCE: "商户证据已送审",
+        REVIEW: "收到 OP 审核结果",
+        BUILD_PACKAGE: "证据包草稿已生成",
+        APPROVE_PACKAGE: "主管已终审冻结",
+        SUBMIT: "已取得 Mock 提交回执",
+        RECORD_OUTCOME: "收到上游结果",
+        RECORD_FINANCIAL: "有新资金事件",
+        RECONCILE: "资金核对已更新",
+        NOTIFY_MERCHANT: "结果已通知商户",
+        CLOSE: "案件已关闭",
+      }[name] || label(name || "最新案件事件")
+    );
+  }
+  function currentAgentContext() {
+    return S.current ? `${S.current.id}:${S.current.revision}:${S.role}` : "";
+  }
+  function agentDraftKey() {
+    return S.current ? `${S.current.id}:${S.role}` : "";
+  }
+  function preserveAgentDraft() {
+    const input = $("agentMessage");
+    if (
+      input &&
+      S.current &&
+      input.dataset?.case === S.current.id &&
+      input.dataset.role === S.role
+    ) {
+      S.agentDrafts[agentDraftKey()] = input.value;
+    }
+  }
+  function proposalsFor(activity, c) {
+    if (!c || activity?.stale || activity?.run?.case_revision !== c.revision)
+      return [];
+    return list(activity?.proposals).filter(
+      (p) =>
+        p.case_id === c.id &&
+        p.expected_revision === c.revision &&
+        p.status === "PENDING_CONFIRMATION",
+    );
+  }
+  function renderCollaborationRoles() {
+    if (surface === "governance") {
+      $("collaborationRoles").hidden = true;
+      return;
+    }
+    $("collaborationRoles").innerHTML =
+      `<div class="actor-role ${surface === "merchant" ? "active" : ""}"><span class="actor-avatar merchant">M</span><div><strong>商户客户端</strong><span>确认决定 · 提交事实与证据</span></div></div><span class="actor-link">⇄</span><div class="actor-role agent"><span class="actor-avatar pilot">✧</span><div><strong>OceanPilot 智能体</strong><span>解读案件 · 准备下一步 · 持续跟进</span></div></div><span class="actor-link">⇄</span><div class="actor-role ${surface === "operations" ? "active" : ""}"><span class="actor-avatar operations">OP</span><div><strong>OceanPayment 运营端</strong><span>人工审核 · 上游处理 · 资金核对</span></div></div>`;
+  }
+  function renderAgentInbox() {
+    const target = $("agentInbox");
+    target.hidden = surface !== "operations";
+    if (target.hidden) return;
+    const pending = S.cases.flatMap((c) =>
+      proposalsFor(S.agentIndex[c.id], c).map((p) => ({
+        ...p,
+        merchant_id: c.merchant_id,
+      })),
+    );
+    const actionable = pending.filter(
+      (p) => p.owner === S.role && permitted(p.action),
+    );
+    const items = [
+      ...actionable,
+      ...pending.filter((p) => p.owner !== S.role || !permitted(p.action)),
+    ].slice(0, 3);
+    const loaded = Object.keys(S.agentIndex).filter((id) =>
+      S.cases.some((c) => c.id === id),
+    ).length;
+    target.innerHTML = `<div class="agent-inbox-heading"><span class="agent-symbol">✧</span><div><strong>OceanPilot 已为你准备</strong><p>${pending.length ? `${pending.length} 项已保存提案等待人工确认，当前角色可处理 ${actionable.length} 项。` : loaded ? "已读取的案件暂无待确认提案。智能体将在案件事件后重新检查。" : "正在读取案件智能体的实际待办…"}</p></div><span class="agent-inbox-scope">已读取 ${loaded} / ${S.cases.length} 案件</span></div>${items.length ? `<div class="agent-inbox-items">${items.map((p) => `<button type="button" class="agent-inbox-item" data-agent-case="${esc(p.case_id)}" data-agent-proposal="${esc(p.id)}"><span>${esc(p.title || label(p.action))}</span><small>${esc(p.case_id)} · ${esc(label(p.owner))}</small><b>${p.owner === S.role && permitted(p.action) ? "核对 →" : "查看 →"}</b></button>`).join("")}</div>` : ""}`;
+  }
+  async function loadAgentInbox() {
+    if (surface !== "operations") return;
+    const ticket = ++S.agentInboxTicket;
+    const cases = S.cases.slice(0, 50);
+    const results = await Promise.allSettled(
+      cases.map((c) => api(`/cases/${encodeURIComponent(c.id)}/agent`)),
+    );
+    if (ticket !== S.agentInboxTicket) return;
+    for (let i = 0; i < results.length; i++)
+      if (results[i].status === "fulfilled")
+        S.agentIndex[cases[i].id] = results[i].value;
+    renderAgentInbox();
+  }
+  function renderAgentPanel() {
+    const panel = $("agentPanel");
+    panel.hidden = surface === "governance";
+    if (panel.hidden) return;
+    preserveAgentDraft();
+    const focused = document.activeElement?.id === "agentMessage";
+    const selection = focused
+      ? [
+          document.activeElement.selectionStart,
+          document.activeElement.selectionEnd,
+        ]
+      : null;
+    const c = S.current,
+      activity = S.activity,
+      run = activity?.run;
+    const stale = Boolean(
+      run && (activity.stale || run.case_revision !== c?.revision),
+    );
+    const runtime = activity?.runtime || {};
+    const conversations = list(activity?.conversations);
+    const proposals = proposalsFor(activity, c);
+    const prepared = run?.prepared || {};
+    const preparedLabels = {
+      merchant_message: "商户沟通文案",
+      review_brief: "人工审核摘要",
+      response_draft: "抗辩回复草稿",
+    };
+    const preparedKeys = Object.keys(preparedLabels).filter(
+      (key) => prepared[key],
+    );
+    if (!preparedKeys.includes(S.agentPrepared))
+      S.agentPrepared = preparedKeys[0] || "merchant_message";
+    const source =
+      runtime.mode === "DEEPSEEK_LIVE"
+        ? "DeepSeek 已配置"
+        : runtime.mode === "OFFLINE_FALLBACK"
+          ? "确定性协同模式"
+          : runtime.provider
+            ? `${runtime.provider} 已配置`
+            : "读取运行配置";
+    panel.classList.toggle("collapsed", S.agentCollapsed);
+    panel.innerHTML = `<header class="pilot-heading"><div class="pilot-identity"><span class="pilot-mark">✧</span><div><h2>OceanPilot</h2><p>案件智能体 · ${surface === "merchant" ? "陪你准备每一次回应" : "让团队接手准备好的下一步"}</p></div></div><button type="button" class="pilot-collapse" data-agent-collapse aria-label="${S.agentCollapsed ? "展开" : "收起"} OceanPilot" aria-expanded="${!S.agentCollapsed}">${S.agentCollapsed ? "＋" : "−"}</button></header><div class="pilot-status"><span class="status-dot"></span><span>${esc(source)}</span><span>${c ? `案件 v${esc(c.revision)}` : "选择案件开始"}</span></div><div class="pilot-body" ${S.agentCollapsed ? "hidden" : ""}>${
+      !c
+        ? `<div class="pilot-empty"><span>✧</span><h3>你的案件，交给我一起推进。</h3><p>选择一个争议案件。我会读取规则与证据，准备下一步，并把需要你确认的决定放在这里。</p></div>`
+        : `<div class="pilot-event"><span>${S.agentLoading ? "正在读取工具运行记录" : runtime.analysis_pending ? "正在分析最新案件事件" : run ? agentTrigger(run.trigger) : "准备开始案件检查"}</span><time>${run ? date(run.completed_at || run.created_at) : ""}</time></div>${stale ? '<div class="pilot-warning">下方运行属于旧版案件，提案已停用。请基于当前版本重新检查。</div>' : ""}${run ? `<div class="pilot-summary"><p>${esc(run.summary || activity.summary || "")}</p><div>${sourceBadge(run)}<span>运行 ${esc(String(run.id).slice(-8))} · v${esc(run.case_revision)}</span></div></div>` : `<div class="pilot-empty compact"><p>尚无已保存的工具检查。启动后会实际读取规则、证据、时限和下一步。</p></div>`}${
+            list(run?.steps).length
+              ? `<details class="pilot-tools"><summary><span>✓ 已完成 ${list(run.steps).filter((s) => s.status === "COMPLETED").length} 项工具检查</span><span>查看依据 ↗</span></summary><div class="pilot-tool-list">${list(
+                  run.steps,
+                )
+                  .map(
+                    (step) =>
+                      `<details class="pilot-tool"><summary><span class="check-mark ${step.status === "COMPLETED" ? "done" : ""}">${step.status === "COMPLETED" ? "✓" : "○"}</span><span>${esc(step.title || step.capability)}</span><small>${esc(label(step.status))}</small></summary><pre class="code-block">${esc(JSON.stringify(step.output || {}, null, 2))}</pre>${citations(step.citations)}</details>`,
+                  )
+                  .join("")}</div></details>`
+              : ""
+          }${
+            list(run?.findings).length
+              ? `<div class="pilot-findings"><h3>我发现了什么</h3>${list(
+                  run.findings,
+                )
+                  .slice(0, 3)
+                  .map(
+                    (f) =>
+                      `<div class="pilot-finding ${["ERROR", "CRITICAL", "BLOCKER", "HIGH"].includes(String(f.severity).toUpperCase()) ? "blocking" : ""}"><strong>${esc(f.title || f.severity)}</strong><p>${esc(f.detail || f.message || "")}</p></div>`,
+                  )
+                  .join("")}</div>`
+              : ""
+          }${
+            proposals.length
+              ? `<div class="pilot-proposals"><h3>已准备好，等人确认</h3>${proposals
+                  .slice(0, 3)
+                  .map(
+                    (p) =>
+                      `<div class="pilot-proposal"><div class="pilot-proposal-title"><span>↗</span><strong>${esc(p.title || label(p.action))}</strong></div><p>${esc(p.reason || "")}</p><div class="pilot-proposal-meta">${esc(label(p.owner))} · 绑定案件 v${esc(p.expected_revision)}</div>${p.owner === S.role && permitted(p.action) ? `<button type="button" class="button primary" data-agent-proposal="${esc(p.id)}">核对内容并确认 →</button>` : `<div class="pilot-owner-note">由 ${esc(label(p.owner))} 确认。${surface === "merchant" ? "你可以在下方补充说明或准备证据。" : "切换对应演示角色后可处理。"}</div>`}</div>`,
+                  )
+                  .join("")}</div>`
+              : ""
+          }${preparedKeys.length ? `<details class="pilot-prepared" ${surface === "merchant" ? "" : "open"}><summary>✎ 已备好的文案与摘要</summary><div class="pilot-prepared-tabs">${preparedKeys.map((key) => `<button type="button" class="${S.agentPrepared === key ? "active" : ""}" data-agent-prepared="${key}">${preparedLabels[key]}</button>`).join("")}</div><p class="pilot-draft">${esc(text(prepared[S.agentPrepared]))}</p><div class="pilot-draft-note">草稿供人工核对。确认前不会发送或提交。</div></details>` : ""}<div class="pilot-conversation"><div class="pilot-conversation-heading"><h3>${surface === "merchant" ? "和 OceanPilot 一起处理" : "继续与 OceanPilot 协作"}</h3><span>${conversations.length ? `${conversations.length} 条已保存记录` : "基于当前案件"}</span></div>${conversations
+            .slice(-4)
+            .reverse()
+            .map((turn) => {
+              const auto = String(turn.trigger || "").startsWith("AUTO_EVENT:");
+              return `<div class="pilot-turn">${!auto && turn.message ? `<div class="pilot-question"><span>${esc(collaborationActor(turn.actor_role))}</span>${esc(turn.message)}</div>` : ""}<div class="pilot-answer"><div class="pilot-answer-head"><span class="mini-pilot">✧</span><strong>OceanPilot</strong>${sourceBadge(turn)}${turn.model ? `<small class="pilot-model">${esc(turn.model)}</small>` : ""}</div>${auto ? `<small class="pilot-auto-trigger">${esc(agentTrigger(turn.trigger))} · 自动跟进</small>` : ""}<p>${agentAnswerText(turn.answer || "")}</p><div class="pilot-answer-foot">${date(turn.created_at)} · 案件 v${esc(turn.case_revision ?? "—")}${turn.model ? ` · ${esc(turn.model)}` : ""}</div>${turn.source_citations?.length ? `<details><summary>查看引用</summary>${citations(turn.source_citations)}</details>` : ""}</div></div>`;
+            })
+            .join(
+              "",
+            )}${!conversations.length ? '<div class="pilot-conversation-empty">你可以问我为什么受阻、还缺什么，或让我起草下一条沟通消息。</div>' : ""}</div>${S.agentNotice ? `<div class="pilot-warning" role="status">${esc(S.agentNotice)}</div>` : ""}`
+    }</div>${c && !S.agentCollapsed ? `<div class="pilot-composer"><div class="pilot-prompts">${(surface === "merchant" ? ["我下一步该怎么做", "还缺什么证据", "起草一条回复"] : ["为什么不能提交", "还缺什么证据", "起草补证通知"]).map((q) => `<button type="button" data-agent-prompt="${esc(q)}"${S.agentBusy ? " disabled" : ""}>${esc(q)}</button>`).join("")}</div><form id="agentMessageForm"><label for="agentMessage" class="sr-only">向 OceanPilot 发送案件问题</label><textarea id="agentMessage" name="message" data-case="${esc(c.id)}" data-role="${esc(S.role)}" placeholder="${surface === "merchant" ? "告诉我你的情况，或问我怎么准备证据…" : "问案件问题，或让我准备下一步…"}" maxlength="2000" rows="2"${S.agentBusy ? " disabled" : ""}>${esc(S.agentDrafts[agentDraftKey()] || "")}</textarea><div class="pilot-compose-footer"><span>${S.agentBusy ? "正在请求实际模型回答…" : runtime.analysis_pending ? "最新事件分析中，完成后自动更新" : "回答与操作均保留案件上下文"}</span><button type="submit" class="pilot-send"${S.agentBusy ? " disabled" : ""} aria-label="发送给 OceanPilot">↑</button></div></form><button type="button" class="pilot-rerun" data-agent-run${S.agentBusy || S.agentLoading ? " disabled" : ""}>↻ ${run ? "基于当前版本重新检查" : "启动案件智能体"}</button></div>` : ""}`;
+    restoreAgentInputFocus(focused, selection);
+    fitAgentPanel();
+  }
+  function restoreAgentInputFocus(focused, selection) {
+    const input = $("agentMessage");
+    if (focused && input && !input.disabled) {
+      input.focus({ preventScroll: true });
+      if (selection) input.setSelectionRange(selection[0], selection[1]);
+    }
+  }
+  function fitAgentPanel() {
+    const panel = $("agentPanel");
+    if (typeof window === "undefined" || !panel?.getBoundingClientRect) return;
+    const top = Math.max(18, panel.getBoundingClientRect().top);
+    panel.style.setProperty(
+      "--pilot-available-height",
+      `${Math.max(470, window.innerHeight - top - 18)}px`,
+    );
+  }
+  function acceptAgentActivity(activity, context) {
+    if (context !== currentAgentContext()) return false;
+    const previous = JSON.stringify(S.activity);
+    S.activity = activity;
+    if (S.current) S.agentIndex[S.current.id] = activity;
+    if (previous !== JSON.stringify(activity)) renderAgentPanel();
+    renderAgentInbox();
+    return true;
+  }
+  function scheduleAgentPoll() {
+    if (S.agentPoll) clearTimeout(S.agentPoll);
+    S.agentPoll = null;
+    if (!S.current || surface === "governance") return;
+    const quick =
+      S.activity?.runtime?.analysis_pending && S.agentPollCount < 30;
+    const context = currentAgentContext();
+    S.agentPoll = setTimeout(
+      async () => {
+        if (context !== currentAgentContext()) return;
+        if (document.visibilityState === "hidden") {
+          scheduleAgentPoll();
+          return;
+        }
+        if (quick) S.agentPollCount++;
+        await refreshAgent({ ensure: false, quiet: true });
+      },
+      quick ? 2000 : 15000,
+    );
+  }
+  async function refreshAgent({ ensure = false, quiet = false } = {}) {
+    if (!S.current || surface === "governance") return;
+    const context = currentAgentContext(),
+      id = S.current.id,
+      revision = S.current.revision;
+    const ticket = ++S.activityTicket;
+    if (!quiet) {
+      S.agentLoading = true;
+      renderAgentPanel();
+    }
+    try {
+      let result = await api(`/cases/${encodeURIComponent(id)}/agent`);
+      if (ticket !== S.activityTicket || context !== currentAgentContext())
+        return;
+      if (result.run?.case_revision > revision) {
+        if (S.dialog?.case_id === id) {
+          S.dialog.stale = true;
+          $("dialogError").textContent =
+            "案件有新进展，此确认已失效。请关闭后重新核对当前版本。";
+          $("dialogError").hidden = false;
+          $("submitDialog").disabled = true;
+        }
+        S.agentLoading = false;
+        await refresh(true);
+        return;
+      }
+      if (ensure && !result.run) {
+        result = await api(`/cases/${encodeURIComponent(id)}/agent/run`, {
+          method: "POST",
+          body: JSON.stringify({ expected_revision: revision }),
+        });
+        if (ticket !== S.activityTicket || context !== currentAgentContext())
+          return;
+      }
+      S.agentLoading = false;
+      S.agentNotice = "";
+      acceptAgentActivity(result, context);
+      if (!quiet) renderAgentPanel();
+      scheduleAgentPoll();
+    } catch (error) {
+      if (ticket !== S.activityTicket || context !== currentAgentContext())
+        return;
+      S.agentLoading = false;
+      S.agentNotice = `Agent 活动暂不可用：${error.message}`;
+      renderAgentPanel();
+    }
+  }
+  async function runAgent() {
+    if (!S.current || S.agentBusy || S.agentLoading) return;
+    const context = currentAgentContext(),
+      c = S.current;
+    S.agentLoading = true;
+    S.agentNotice = "";
+    S.agentPollCount = 0;
+    renderAgentPanel();
+    try {
+      const result = await api(`/cases/${encodeURIComponent(c.id)}/agent/run`, {
+        method: "POST",
+        body: JSON.stringify({ expected_revision: c.revision }),
+      });
+      if (context !== currentAgentContext()) return;
+      S.agentLoading = false;
+      acceptAgentActivity(result, context);
+      renderAgentPanel();
+      scheduleAgentPoll();
+    } catch (error) {
+      if (context === currentAgentContext()) {
+        S.agentLoading = false;
+        S.agentNotice = error.message;
+        renderAgentPanel();
+      }
+    }
+  }
+  async function sendAgentMessage(message) {
+    if (!S.current || S.agentBusy) return;
+    preserveAgentDraft();
+    const value = String(
+      message ?? S.agentDrafts[agentDraftKey()] ?? "",
+    ).trim();
+    if (!value) {
+      S.agentNotice = "请输入案件问题或希望准备的内容。";
+      renderAgentPanel();
+      return;
+    }
+    if (value.length > 2000) {
+      S.agentNotice = "问题请控制在 2000 字以内。";
+      renderAgentPanel();
+      return;
+    }
+    const context = currentAgentContext(),
+      c = S.current,
+      key = agentDraftKey();
+    S.agentDrafts[key] = value;
+    const input = $("agentMessage");
+    if (input) input.value = value;
+    S.agentBusy = true;
+    S.agentNotice = "";
+    renderAgentPanel();
+    try {
+      const result = await api(
+        `/cases/${encodeURIComponent(c.id)}/agent/messages`,
+        {
+          method: "POST",
+          timeoutMs: 35000,
+          body: JSON.stringify({
+            message: value,
+            expected_revision: c.revision,
+          }),
+        },
+      );
+      if (context !== currentAgentContext()) return;
+      S.agentBusy = false;
+      S.agentDrafts[key] = "";
+      const input = $("agentMessage");
+      if (input) input.value = "";
+      if (result.answer) {
+        const turn = {
+          ...result,
+          case_id: c.id,
+          case_revision: c.revision,
+          message: value,
+          actor_role: S.role,
+          created_at: result.created_at || new Date().toISOString(),
+        };
+        S.activity = {
+          ...(S.activity || {}),
+          run: result.run || S.activity?.run,
+          proposals: result.proposals || S.activity?.proposals || [],
+          conversations: [...list(S.activity?.conversations), turn],
+        };
+        renderAgentPanel();
+      }
+      await refreshAgent({ quiet: true });
+    } catch (error) {
+      if (context !== currentAgentContext()) return;
+      S.agentBusy = false;
+      S.agentNotice = `未取得确认回答：${error.message}。问题已保留，可重新发送。`;
+      renderAgentPanel();
+    }
+  }
+  function prefillProposalData(data) {
+    const form = $("actionForm");
+    for (const input of form.querySelectorAll("[name]")) {
+      const key = input.name;
+      if (key === "allow_accept" || key === "allow_contest") {
+        input.checked = list(data.allowed_actions).includes(
+          key === "allow_accept" ? "ACCEPT" : "CONTEST",
+        );
+        continue;
+      }
+      if (!(key in data)) continue;
+      if (input.type === "checkbox") {
+        input.checked = key === "pii_checked" ? false : data[key] === true;
+        continue;
+      }
+      if (
+        [
+          "external_deadline",
+          "merchant_deadline",
+          "internal_deadline",
+        ].includes(key)
+      ) {
+        input.value = isoInput(data[key]);
+        continue;
+      }
+      input.value = Array.isArray(data[key])
+        ? data[key].join(", ")
+        : String(data[key] ?? "");
+    }
+  }
+  function openAgentProposal(id) {
+    const proposal = proposalsFor(S.activity, S.current).find(
+      (p) => p.id === id,
+    );
+    if (!proposal) {
+      S.agentNotice = "该提案已不适用于当前案件版本，请重新检查。";
+      renderAgentPanel();
+      return;
+    }
+    if (proposal.owner !== S.role || !permitted(proposal.action)) {
+      S.agentNotice = `此提案需 ${label(proposal.owner)} 核对并确认。`;
+      renderAgentPanel();
+      return;
+    }
+    openDialog(proposal.action, proposal.data || {});
+    if (!S.dialog || S.dialog.action !== proposal.action) return;
+    prefillProposalData(proposal.data || {});
+    S.dialog.proposal = proposal;
+    S.dialog.proposalInitialData = collectData($("actionForm"));
+    $("dialogEyebrow").textContent = "OCEANPILOT PROPOSAL → HUMAN CONFIRMATION";
+    $("dialogTitle").textContent = proposal.title || label(proposal.action);
+    $("dialogContext").innerHTML =
+      `<strong>OceanPilot 已准备 · 由 ${esc(label(S.role))} 确认</strong><br>${esc(proposal.reason || "")}<br>${esc(proposal.case_id)} · 绑定版本 v${esc(proposal.expected_revision)}<br>逐项核对下方内容。编辑后将以修改后的内容创建案件命令。<details><summary>查看已保存提案及引用</summary><pre class="code-block">${esc(JSON.stringify(proposal.data || {}, null, 2))}</pre>${citations(proposal.basis_citations)}</details>`;
+  }
   function writeNavigation() {
     const url = new URL(location.href);
     if (S.current) url.searchParams.set("case", S.current.id);
@@ -815,10 +1330,18 @@
       link.href = target.pathname + target.search;
     });
   }
-  async function openCase(id) {
+  async function openCase(id, { withAgent = true } = {}) {
     const ticket = ++S.selection;
+    preserveAgentDraft();
+    if (S.agentPoll) clearTimeout(S.agentPoll);
+    S.activityTicket++;
+    S.agentPollCount = 0;
+    S.activity = null;
+    S.agentBusy = false;
+    S.agentNotice = "";
     S.plan = null;
     S.current = null;
+    renderAgentPanel();
     renderQueue();
     $("caseDetail").innerHTML =
       '<div class="detail-load">正在读取案件与规则计划…</div>';
@@ -845,10 +1368,13 @@
       renderQueue();
       renderDetail();
       writeNavigation();
+      renderAgentPanel();
+      if (withAgent) await refreshAgent({ ensure: true });
     } catch (error) {
       if (ticket !== S.selection) return;
       S.current = null;
       renderDetail();
+      renderAgentPanel();
       setNotice(error.message, true);
     }
   }
@@ -874,6 +1400,7 @@
         setNotice(results[1].reason.message, true);
       renderMetrics();
       renderQueue();
+      renderAgentInbox();
       if (surface === "governance") renderGovernance();
       else {
         const preferred =
@@ -885,7 +1412,9 @@
           S.current = null;
           S.plan = null;
           renderDetail();
+          renderAgentPanel();
         }
+        if (!globalThis.OCEAN_V2_NO_BOOT) await loadAgentInbox();
       }
     } catch (error) {
       setNotice(`读取失败：${error.message}`, true);
@@ -1201,7 +1730,12 @@
           field("kind", "资金事件类型", "CREDIT", "select", {
             choices: ["DEBIT", "CREDIT", "REFUND", "FEE", "ADJUSTMENT"],
           }) +
-          field("amount_minor", "金额（最小货币单位）", c.amount_minor || 0, "number") +
+          field(
+            "amount_minor",
+            "金额（最小货币单位）",
+            c.amount_minor || 0,
+            "number",
+          ) +
           field("currency", "币种", c.currency || "USD") +
           field("source", "资金事件来源", "MOCK_UPSTREAM") +
           field("reference", "核对凭证 / 流水引用", "")
@@ -1211,9 +1745,15 @@
           field("status", "核对结论", "RECONCILED", "select", {
             choices: ["RECONCILED", "DISCREPANCY", "NOT_APPLICABLE"],
           }) +
-          field("expected_net_minor", "预期净影响（最小货币单位，有符号）", 0, "number", {
-            hint: "扣款与费用为负，返还为正。填写经核对的预期净影响。",
-          }) +
+          field(
+            "expected_net_minor",
+            "预期净影响（最小货币单位，有符号）",
+            0,
+            "number",
+            {
+              hint: "扣款与费用为负，返还为正。填写经核对的预期净影响。",
+            },
+          ) +
           reason() +
           field("reference", "核对依据 / 凭证引用", "")
         );
@@ -1381,8 +1921,11 @@
     $("submitDialog").disabled = true;
     try {
       const result = await api(
-        "/commands",
-        { method: "POST", body: JSON.stringify(pending.payload) },
+        pending.endpoint || "/commands",
+        {
+          method: "POST",
+          body: JSON.stringify(pending.requestBody || pending.payload),
+        },
         pending.identity,
       );
       S.pending = null;
@@ -1494,7 +2037,25 @@
       payload.case_id = d.case_id;
       payload.expected_revision = d.revision;
     }
-    S.pending = { payload, identity: d.identity };
+    const unchangedProposal =
+      d.proposal &&
+      !d.proposal.required_inputs?.length &&
+      d.proposal.owner === S.role &&
+      JSON.stringify(data) === JSON.stringify(d.proposalInitialData);
+    S.pending = {
+      payload,
+      identity: d.identity,
+      ...(unchangedProposal
+        ? {
+            endpoint: `/cases/${encodeURIComponent(d.case_id)}/agent/proposals/${encodeURIComponent(d.proposal.id)}/execute`,
+            requestBody: {
+              command_id: payload.command_id,
+              expected_revision: d.revision,
+              confirmed: true,
+            },
+          }
+        : {}),
+    };
     savePending();
     await executePending();
   }
@@ -1509,6 +2070,11 @@
     S.plan = null;
     S.governance = null;
     S.capabilities = null;
+    S.agentIndex = {};
+    S.activity = null;
+    S.agentBusy = false;
+    S.agentInboxTicket++;
+    S.activityTicket++;
     S.selection++;
     if ($("actionDialog").open) closeDialog();
     $("avatar").textContent =
@@ -1522,6 +2088,36 @@
     document.addEventListener("click", async (event) => {
       const button = event.target.closest("button");
       if (!button) return;
+      if (button.dataset.agentCase) {
+        await openCase(button.dataset.agentCase);
+        S.agentCollapsed = false;
+        renderAgentPanel();
+        if (button.dataset.agentProposal)
+          openAgentProposal(button.dataset.agentProposal);
+        return;
+      }
+      if (button.dataset.agentProposal) {
+        openAgentProposal(button.dataset.agentProposal);
+        return;
+      }
+      if (button.hasAttribute("data-agent-collapse")) {
+        S.agentCollapsed = !S.agentCollapsed;
+        renderAgentPanel();
+        return;
+      }
+      if (button.hasAttribute("data-agent-run")) {
+        await runAgent();
+        return;
+      }
+      if (button.dataset.agentPrepared) {
+        S.agentPrepared = button.dataset.agentPrepared;
+        renderAgentPanel();
+        return;
+      }
+      if (button.dataset.agentPrompt) {
+        await sendAgentMessage(button.dataset.agentPrompt);
+        return;
+      }
       if (button.dataset.case) {
         await openCase(button.dataset.case);
         return;
@@ -1564,6 +2160,25 @@
           openDialog("APPROVE_KNOWLEDGE", {
             candidate_id: button.dataset.knowledge,
           });
+      }
+    });
+    document.addEventListener("submit", (event) => {
+      if (event.target.id !== "agentMessageForm") return;
+      event.preventDefault();
+      sendAgentMessage();
+    });
+    document.addEventListener("input", (event) => {
+      if (event.target.id === "agentMessage") preserveAgentDraft();
+    });
+    document.addEventListener("keydown", (event) => {
+      if (
+        event.target.id === "agentMessage" &&
+        event.key === "Enter" &&
+        !event.shiftKey &&
+        !event.isComposing
+      ) {
+        event.preventDefault();
+        sendAgentMessage();
       }
     });
     $("refreshButton").addEventListener("click", () => refresh());
@@ -1609,10 +2224,10 @@
     const details =
       surface === "merchant"
         ? [
-            "商户协作",
-            "MERCHANT WORKSPACE",
-            "你的响应，让事实更清晰。",
-            "查看争议原因、确认决定，并按清单提交证据。",
+            "OceanPilot 商户客户端",
+            "MERCHANT × OCEANPILOT",
+            "OceanPilot 商户客户端",
+            "和案件智能体一起准备回应，与你的 OceanPayment 团队协同处理。",
           ]
         : surface === "governance"
           ? [
@@ -1622,10 +2237,10 @@
               "查看集成状态、规则来源、权限与知识审核。",
             ]
           : [
-              "争议运营",
-              "OPERATIONS WORKSPACE",
-              "让每一笔争议，有据可循。",
-              "从上游接收到资金核对，在一个案件中协同推进。",
+              "OceanPayment 争议运营",
+              "OCEANPAYMENT × OCEANPILOT",
+              "OceanPayment 争议运营",
+              "OceanPilot 读取事件、检查依据并准备下一步，授权人员确认关键决定。",
             ];
     $("surfaceBreadcrumb").textContent = details[0];
     $("eyebrow").textContent = details[1];
@@ -1639,13 +2254,24 @@
     $("intakeButton").hidden = surface !== "operations" || !permitted("INTAKE");
     $("demoButton").hidden = surface === "merchant" || S.role !== "OPERATOR";
     $("workspaceGrid").hidden = surface === "governance";
+    $("workspaceGrid").classList.toggle(
+      "merchant-layout",
+      surface === "merchant",
+    );
+    $("agentPanel").hidden = surface === "governance";
+    renderCollaborationRoles();
     $("governanceView").hidden = surface !== "governance";
     $("queueNav").hidden = surface === "governance";
     $("queueNavLabel").hidden = surface === "governance";
     const requestedTab = new URL(location.href).searchParams.get("tab");
     if (
       tabs.some(([key]) => key === requestedTab) &&
-      !(surface === "merchant" && requestedTab === "review")
+      !(
+        surface === "merchant" &&
+        !["tasks", "evidence", "collaboration", "outcome"].includes(
+          requestedTab,
+        )
+      )
     )
       S.tab = requestedTab;
     try {
@@ -1661,6 +2287,8 @@
       S.pending = null;
     }
     bindEvents();
+    window.addEventListener("scroll", fitAgentPanel, { passive: true });
+    window.addEventListener("resize", fitAgentPanel, { passive: true });
     refresh();
   }
   globalThis.OceanV2 = {
@@ -1680,6 +2308,15 @@
     permitted,
     openDialog,
     submitDialog,
+    renderAgentPanel,
+    renderAgentInbox,
+    agentSource,
+    proposalsFor,
+    refreshAgent,
+    sendAgentMessage,
+    runAgent,
+    openAgentProposal,
+    acceptAgentActivity,
   };
   if (!globalThis.OCEAN_V2_NO_BOOT) initialize();
 })();

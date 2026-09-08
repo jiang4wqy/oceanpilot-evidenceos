@@ -142,7 +142,7 @@ def test_late_case_response_cannot_replace_current_selection():
     run_js("""
 const pending=new Map();
 global.fetch=url=>new Promise(resolve=>pending.set(url,resolve));
-const first=OceanV2.openCase('a'),second=OceanV2.openCase('b');
+const first=OceanV2.openCase('a',{withAgent:false}),second=OceanV2.openCase('b',{withAgent:false});
 pending.get('/api/v2/cases/b')(ok({...sample,id:'b',revision:8}));
 pending.get('/api/v2/cases/b/plan')(ok({case_id:'b',revision:8}));await second;
 pending.get('/api/v2/cases/a')(ok(sample));
@@ -181,7 +181,7 @@ def test_mismatched_plan_revision_is_not_presented_as_current_advice():
     run_js("""
 global.fetch=async url=>ok(url.endsWith('/plan')?
  {case_id:'a',revision:1,summary:'stale advice'}:sample);
-await OceanV2.openCase('a');
+await OceanV2.openCase('a',{withAgent:false});
 assert.equal(OceanV2.state.plan,null);
 assert.equal(node('caseDetail').innerHTML.includes('stale advice'),false);
 """)
@@ -229,4 +229,116 @@ assert.match(OceanV2.money(12800,'JPY'),/12,800/);
 assert.equal(OceanV2.money(12800,'JPY').includes('.00'),false);
 assert.match(OceanV2.money(12800,'KWD'),/12\.800/);
 assert.equal(OceanV2.money(12800,'INVALID'),'INVALID 12800（原始最小货币单位）');
+""")
+
+
+def test_agent_sources_distinguish_model_answers_tools_and_fallback():
+    run_js("""
+assert.match(OceanV2.agentSource({source:'MODEL',provider:'DEEPSEEK'}).label,/实时回答/);
+assert.match(OceanV2.agentSource({source:'FALLBACK',provider:'DETERMINISTIC'}).label,/降级/);
+assert.match(OceanV2.agentSource({provider:'DETERMINISTIC'}).label,/工具结果/);
+assert.equal(OceanV2.agentSource({provider:'DEEPSEEK'}).label,'输出来源未报告');
+""")
+
+
+def test_first_agent_render_handles_real_absent_textarea_before_case_selection():
+    run_js("""
+document.getElementById=id=>id==='agentMessage'?null:node(id);
+OceanV2.state.current=null;
+OceanV2.renderAgentPanel();
+assert.match(node('agentPanel').innerHTML,/选择一个争议案件/);
+""")
+
+
+def test_agent_activity_keeps_unsent_input_and_escapes_actual_tool_and_model_output():
+    run_js("""
+const ui=OceanV2;ui.state.current=sample;
+node('agentMessage').dataset={case:'a',role:'OPERATOR'};
+node('agentMessage').value='尚未发送的商户沟通草稿';
+const activity={run:{id:'run-2',case_id:'a',case_revision:2,provider:'DETERMINISTIC',
+ trigger:'REGISTER_EVIDENCE',summary:'<script>bad()</script>',steps:[{
+ capability:'evidence_check',title:'检查证据',status:'COMPLETED',output:{note:'<img>'}}],
+ findings:[],prepared:{}},proposals:[],conversations:[{message:'我的问题',
+ answer:'<iframe src=x>',source:'MODEL',provider:'DEEPSEEK',model:'actual-model',
+ case_revision:2}],runtime:{mode:'DEEPSEEK_LIVE'}};
+assert.equal(ui.acceptAgentActivity(activity,'a:2:OPERATOR'),true);
+const output=node('agentPanel').innerHTML;
+assert.match(output,/已完成 1 项工具检查/);
+assert.match(output,/DEEPSEEK · 实时回答/);
+assert.match(output,/actual-model/);
+assert.match(output,/&lt;iframe/);assert.equal(output.includes('<iframe'),false);
+assert.equal(ui.state.agentDrafts['a:OPERATOR'],'尚未发送的商户沟通草稿');
+assert.equal(ui.acceptAgentActivity({...activity,summary:'wrong'},'b:2:OPERATOR'),false);
+assert.equal(ui.state.activity.summary,undefined);
+""")
+
+
+def test_stale_or_other_owners_agent_proposals_never_offer_execution():
+    run_js("""
+const ui=OceanV2;ui.state.current=sample;
+const proposal={id:'p',case_id:'a',expected_revision:2,status:'PENDING_CONFIRMATION',
+ action:'MERCHANT_DECISION',owner:'MERCHANT',title:'确认商户决定',data:{}};
+ui.state.activity={run:{id:'r',case_revision:2,steps:[]},proposals:[proposal]};
+assert.equal(ui.permitted('MERCHANT_DECISION'),true);
+ui.renderAgentPanel();
+assert.equal(node('agentPanel').innerHTML.includes('data-agent-proposal="p"'),false);
+ui.openAgentProposal('p');assert.equal(ui.state.dialog,null);
+assert.match(ui.state.agentNotice,/商户/);
+assert.deepEqual(ui.proposalsFor({...ui.state.activity,stale:true},sample),[]);
+assert.deepEqual(ui.proposalsFor(ui.state.activity,{...sample,revision:3}),[]);
+""")
+
+
+@pytest.mark.parametrize(
+    "edited, required_inputs, expected_route",
+    [
+        (False, [], "/cases/a/agent/proposals/proposal-a/execute"),
+        (True, [], "/commands"),
+        (False, ["message"], "/commands"),
+    ],
+)
+def test_proposal_confirmation_uses_saved_proposal_only_when_unchanged_and_complete(
+    edited, required_inputs, expected_route
+):
+    run_js(f"""
+const ui=OceanV2,writes=[];ui.state.current=sample;
+const initial={{message:'prepared notice',required:true}};
+ui.state.dialog={{action:'PUBLISH_TASK',case_id:'a',revision:2,
+ identity:{{role:'OPERATOR',actor:'synthetic-operator',merchant_id:'synthetic-merchant-001'}},
+ proposal:{{id:'proposal-a',owner:'OPERATOR',required_inputs:{json.dumps(required_inputs)}}},
+ proposalInitialData:initial}};
+node('actionForm').reportValidity=()=>true;
+node('actionForm').querySelectorAll=()=>[{{name:'required',checked:true}}];
+node('confirmCheckbox').checked=true;
+global.FormData=class{{entries(){{return [['message',
+ {json.dumps("edited notice" if edited else "prepared notice")}]];}}}};
+global.fetch=async(url,options)=>{{if(options.method==='POST'){{
+ writes.push({{url,body:JSON.parse(options.body)}});
+ return ok({{case:{{...sample,revision:3}},receipt:{{command_id:'done'}}}});
+ }}if(url==='/api/v2/cases')return ok({{cases:[]}});
+ if(url==='/api/v2/capabilities')return ok({{role:'OPERATOR',actions:[]}});
+ throw Error(url);}};
+await ui.submitDialog({{preventDefault(){{}}}});
+assert.equal(writes.length,1);assert.equal(writes[0].url,'/api/v2{expected_route}');
+assert.equal(writes[0].body.expected_revision,2);
+assert.equal(writes[0].body.confirmed,true);
+if(writes[0].url.endsWith('/execute'))assert.equal('data' in writes[0].body,false);
+else assert.equal(writes[0].body.data.message,
+ {json.dumps("edited notice" if edited else "prepared notice")});
+""")
+
+
+def test_late_model_answer_never_appears_in_another_case_or_role():
+    run_js("""
+const ui=OceanV2;ui.state.current=sample;
+let resolve;
+global.fetch=()=>new Promise(done=>resolve=done);
+const pending=ui.sendAgentMessage('为什么不能提交');
+ui.state.current={...sample,id:'b'};ui.state.role='MERCHANT';
+ui.state.activity=null;ui.state.agentBusy=false;
+resolve(ok({answer:'A private reply',source:'MODEL',provider:'DEEPSEEK'}));
+await pending;
+assert.equal(ui.state.current.id,'b');assert.equal(ui.state.role,'MERCHANT');
+assert.equal(ui.state.activity,null);
+assert.equal(node('agentPanel').innerHTML.includes('A private reply'),false);
 """)

@@ -8,6 +8,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictInt, StrictStr, ValidationError
 
 from oceanpilot.api.cases import COMMON_PROBLEMS, PROBLEM_RESPONSE
+from oceanpilot.domain.dispute import require
 from oceanpilot.domain.dispute_rules import case_plan, rule_catalog
 from oceanpilot.domain.security import assert_no_sensitive_data
 
@@ -264,6 +265,103 @@ def rules(identity: Identity) -> dict:
     return {"rules": rule_catalog(), "production_eligible": False}
 
 
+class AgentRunRequest(StrictDTO):
+    expected_revision: StrictInt = Field(ge=1)
+
+
+class AgentMessageRequest(AgentRunRequest):
+    message: StrictStr = Field(min_length=1, max_length=6000)
+
+
+class AgentProposalRequest(AgentRunRequest):
+    command_id: StrictStr = Field(min_length=8, max_length=100, pattern=r"^[A-Za-z0-9._:-]+$")
+    confirmed: StrictBool
+
+
+def _activity(case_id: str, request: Request, identity: dict) -> dict:
+    result = request.app.state.dispute_agent.get_activity(case_id, identity)
+    result["runtime"] = {
+        **request.app.state.agent_runtime,
+        "analysis_pending": request.app.state.dispute_agent_events.is_pending(case_id),
+    }
+    return result
+
+
+@router.get("/api/v2/cases/{case_id}/agent")
+def agent_activity(case_id: str, request: Request, identity: Identity) -> dict:
+    return _activity(case_id, request, identity)
+
+
+@router.post("/api/v2/cases/{case_id}/agent/run")
+def agent_run(case_id: str, payload: AgentRunRequest, request: Request, identity: Identity) -> dict:
+    case = request.app.state.disputes.get_case(case_id, identity)
+    require(
+        case["revision"] == payload.expected_revision,
+        "REVISION_CONFLICT",
+        "Refresh the case before requesting Agent analysis",
+    )
+    request.app.state.dispute_agent.observe(case, "USER_RUN")
+    request.app.state.dispute_agent_events.schedule(case, "USER_RUN")
+    return _activity(case_id, request, identity)
+
+
+@router.post("/api/v2/cases/{case_id}/agent/messages")
+def agent_message(
+    case_id: str, payload: AgentMessageRequest, request: Request, identity: Identity
+) -> dict:
+    return request.app.state.dispute_agent.converse(
+        case_id,
+        identity,
+        payload.message,
+        payload.expected_revision,
+    )
+
+
+@router.post("/api/v2/cases/{case_id}/agent/proposals/{proposal_id}/execute")
+def agent_proposal(
+    case_id: str,
+    proposal_id: str,
+    payload: AgentProposalRequest,
+    request: Request,
+    identity: Identity,
+) -> dict:
+    proposal = request.app.state.dispute_agent.get_proposal(case_id, proposal_id, identity)
+    require(
+        payload.confirmed is True,
+        "CONFIRMATION_REQUIRED",
+        "Review the prepared action and explicitly confirm it",
+    )
+    require(
+        payload.expected_revision == proposal["expected_revision"],
+        "REVISION_CONFLICT",
+        "The request must use the proposal's case revision",
+    )
+    require(
+        not proposal.get("required_inputs"),
+        "PROPOSAL_INPUT_REQUIRED",
+        "Complete the required fields in the reviewed command form",
+        422,
+    )
+    require(
+        identity["role"] == proposal["owner"],
+        "FORBIDDEN",
+        "This proposal requires its assigned decision maker",
+        403,
+    )
+    # The persisted kernel proposal is the only source of the action and payload.
+    # The command store checks actor-bound idempotency before current-revision CAS,
+    # allowing an exact retry after success while rejecting a new stale command.
+    command_payload = DisputeCommand(
+        command_id=payload.command_id,
+        case_id=case_id,
+        expected_revision=payload.expected_revision,
+        confirmed=True,
+        action=proposal["action"],
+        data=proposal["data"],
+    )
+    return command(command_payload, request, identity)
+
+
 @router.get("/api/v2/governance")
 def governance(request: Request, identity: Identity) -> dict:
     if identity["role"] not in ("ADMIN", "SUPERVISOR"):
@@ -279,7 +377,7 @@ def governance(request: Request, identity: Identity) -> dict:
             else "UNCONFIGURED",
             "email": "PORT_DEFINED_ONLY",
             "portal": "LOCAL_SYNTHETIC",
-            "model": "DETERMINISTIC_WORKFLOW_AGENT",
+            "model": request.app.state.agent_runtime["mode"],
         },
         "rules": rule_catalog(),
         "knowledge": [

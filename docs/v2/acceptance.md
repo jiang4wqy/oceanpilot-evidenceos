@@ -9,9 +9,9 @@
 | 检查 | 结果 |
 |---|---|
 | 原版本回归基线 | 1471 passed，6 skipped |
-| 最终完整 Python 测试 | **1640 passed，6 skipped** |
+| 最终完整 Python 测试 | **1703 passed，6 skipped** |
 | Ruff lint | 通过 |
-| Ruff format | 222 个 Python 源码/测试文件通过 |
+| Ruff format | 229 个 Python 源码/测试文件通过 |
 | compileall | 通过 |
 | wheel 构建 | `oceanpilot_evidenceos-2.0.0.dev0-py3-none-any.whl` 成功 |
 | 从 wheel 读取三个 V2 页面 | OP / Merchant / Admin 资源完整，模板已替换 |
@@ -41,13 +41,19 @@
 
 飞书提供 43 项测试覆盖的签名 callback、可信 tenant/sender/chat 绑定、卡片、角色与 revision 校验、同案协作和崩溃重试。外发保持 Disabled，真实 tenant smoke 未完成。渲染卡片或 callback 返回成功不能作为真实消息已投递的证据。
 
-V2 Agent 是可离线运行的确定性工作流规划器，提供上下文、规则解释、清单、缺证、下一步、总结和升级建议，提案绑定当前版本。没有把该结果描述成实时大模型回答，没有胜诉概率预测。证据为合成元数据登记，不进行真实正文/OCR/真实性验证。
+V2 Agent 已接入持久化事件观察、六项工具工作、可执行提案和真实模型对话。即时工具运行不等待网络；实时模式会对关键事件后台生成模型解读。商户客户端突出本人待办、举证和 OceanPilot 对话，OceanPayment 运营端突出人工审核、上游与资金处理；两端共享案件智能体与协作进展。
+
+在本机合成演示库中，使用用户已有本地配置完成 DeepSeek 实际调用：主动案件解读和用户问题均返回 `source=MODEL`、`provider=DEEPSEEK`、实际响应 `model=deepseek-v4-flash`（请求配置为 `deepseek-chat`），无降级。配置保持在 Git 忽略的本机 `.env`，未把密钥纳入交付。自动化测试仍使用离线或注入 provider；真实模型 smoke 独立记录，不计入确定性规则 benchmark。
+
+Agent/API/后台队列专项 55 项测试覆盖模型调用、错误降级、三方职责上下文、持久化、事件合并、旧版结果拒绝、跨商户范围、确认人与命令重放。模型文本不能创建领域动作，执行仍须人工确认。证据仍为合成元数据登记，不进行真实正文/OCR/真实性验证，也不预测胜诉率。[协作机制与验证说明](agent-workflow.md)。
 
 ## 演示与截图
 
 [逐步 Runbook](demo.md) · [浏览器验收细节](UI_VALIDATION.md) · [迁移与架构](architecture-and-migration.md) · [飞书配置](feishu.md)
 
-![OP 工作台](screenshots/operations-desktop.png)
+![OceanPayment 运营端与 OceanPilot 智能体](screenshots/agent-operations.png)
+
+![OceanPilot 商户客户端](screenshots/agent-merchant.png)
 
 ![资金差异阻止关闭](screenshots/financial-discrepancy.png)
 

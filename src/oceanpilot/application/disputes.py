@@ -4,6 +4,7 @@ Commands are deterministic business operations. Agents may prepare drafts and
 monitor, while distinct humans review evidence, approve packages and reconcile.
 """
 
+import logging
 from copy import deepcopy
 from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
@@ -43,6 +44,7 @@ class DisputeService:
         planner=None,
         clock=None,
         upstream_mode: str = "mock",
+        on_change=None,
     ) -> None:
         require(
             upstream_mode in {"mock", "disabled"},
@@ -55,6 +57,7 @@ class DisputeService:
         self.planner = planner or case_plan
         self.clock = clock or (lambda: datetime.now(UTC))
         self.upstream_mode = upstream_mode
+        self.on_change = on_change
 
     @staticmethod
     def _identity(identity: dict) -> dict:
@@ -146,7 +149,7 @@ class DisputeService:
                     command["data"], "upstream_case_id", default=event_id, limit=200
                 )
                 upstream_case_key = fingerprint([source.upper(), upstream_case_id])
-        return self.store.execute_atomic(
+        result = self.store.execute_atomic(
             command=command,
             identity=identity,
             mutate=lambda case: self._apply(case, command, identity),
@@ -154,6 +157,17 @@ class DisputeService:
             event_fingerprint=event_digest,
             upstream_case_key=upstream_case_key,
         )
+        # Observe only after the business transaction commits. The independent
+        # Agent journal must never turn a committed command into a failed HTTP
+        # response or require a user to repeat a financial/business operation.
+        if self.on_change is not None:
+            try:
+                current = self.store.get_case(result["case"]["id"])
+                self.on_change(current, action, result["replayed"])
+            except Exception:
+                logging.getLogger(__name__).warning("V2 agent observation unavailable")
+                result["agent_observation_status"] = "UNAVAILABLE"
+        return result
 
     def _apply(self, case: dict | None, command: dict, identity: dict) -> dict:
         now = self.clock().astimezone(UTC).isoformat()

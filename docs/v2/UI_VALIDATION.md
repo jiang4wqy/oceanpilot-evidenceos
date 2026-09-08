@@ -30,3 +30,15 @@ Ruff 检查通过；浏览器脚本语法检查通过。
 - [平台治理](screenshots/governance-desktop.png)：规则、权限、集成状态与已批准知识。
 
 截图不包含真实商户资料、文件正文或支付凭据。证据功能登记对象引用和元数据，不上传或解析原始文件；飞书与生产身份认证仍按治理页面报告的实际配置状态展示。
+
+## OceanPilot 常驻智能体与三方协作追加验收
+
+商户客户端以 OceanPilot 对话、我的待办、证据准备与 OceanPayment 反馈为核心；运营端保留完整案件流程与常驻 Agent 侧栏。两端明确区分商户、OceanPayment、OceanPilot 三方责任，不新增独立 Agent 页面。
+
+- 浏览器确认：未编辑的已保存商户任务提案经人工勾选确认，调用案件提案 `/execute` 接口，返回 200；补填材料引用后，改走普通版本化命令，证据登记成功。
+- 商户客户端实际发送案件问题，返回 `source=MODEL`、`provider=DEEPSEEK`、实际 `model=deepseek-v4-flash`。界面同时保留确定性工具记录与模型回答各自来源，不将工具检查宣传成模型推理过程。
+- 商户继续登记一份材料后，案件推进至 v6，自动收到 `AUTO_EVENT:REGISTER_EVIDENCE` 的真实模型跟进（`MODEL / DEEPSEEK / deepseek-v4-flash`）；工具观察与模型解读均关联 v6，后台待处理状态归零，浏览器无 JavaScript 错误。
+- 保存的提案必须匹配案件 revision 与 owner；旧版提案失效，需要人工补充输入或修改字段的提案走普通命令。Agent 轮询保留未发送文本，切换案件或角色后不展示先前请求的迟到回答。
+- 追加 UI 回归合计 21 passed，包括真实首屏缺少输入元素、来源区分、XSS、原提案确认、编辑与必填提案回退、owner 权限和迟到回答隔离。商户端六种屏宽未出现页面横向溢出。
+
+新截图：[运营 Agent](screenshots/agent-operations.png)、[商户客户端](screenshots/agent-merchant.png)、[移动客户端](screenshots/agent-mobile.png)、[提案人工确认](screenshots/agent-proposal-confirmation.png)、[已完成工具记录](screenshots/agent-tools.png)。

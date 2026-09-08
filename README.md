@@ -1,10 +1,10 @@
 # OceanPilot V2
 
-**OceanPayment 主导的争议运营系统：一个案件引擎、商户与 OP 两个工作台、统一协作与治理。**
+**商户客户端 × OceanPilot 案件智能体 × OceanPayment 争议运营：三方围绕同一个案件协作。**
 
 开发分支：`oceanpilot-v2`，从稳定 `master` 的 `250e7d9` 创建。V2 直接在此分支集成与验收；当前不创建 PR、不合并 master。master 保留原稳定比赛 Demo，后续是否合并单独决定。
 
-上游通知由 OP 受理，Agent 生成来源明确的规则与案件计划；商户选择 Accept / Contest 并举证，Risk Officer 审核，Supervisor 确认冻结包，OP 模拟提交后持续跟踪终局与资金，完成通知后结案。
+上游通知由 OP 受理；OceanPilot 在案件变化后检查规则、材料、期限和相似案件，准备沟通稿与绑定版本的操作提案。商户在客户端确认 Accept / Contest 并提供事实和证据，OceanPayment 完成人工审核、包终审、上游处理与资金核对。两端都能看到智能体做过的工作、待确认事项和持续对话。
 
 > 比赛演示边界：所有案例和规则均为 **SYNTHETIC_DEMO**，上游仅 **Mock / Disabled**。金额核对是合成账本记录，不执行退款、扣款或真实提交。Header 角色用于本地演示，不是生产身份认证。材料仅登记合成元数据，未读取真实文件正文。Feishu 签名 callback seam 已实现，真实租户联调未完成，未发送外部消息。
 
@@ -22,8 +22,8 @@ PYTHONPATH=src OCEANPILOT_DB_PATH=work/v2.db \
 
 | 入口 | 作用 |
 |---|---|
-| `/` → `/v2/operations` | OP 案件队列、任务、复核、提交、结果、资金 |
-| `/v2/merchant` | 本商户争议 Inbox、Accept / Contest、补证、协作与结果 |
+| `/` → `/v2/operations` | OceanPayment 争议运营：案件队列、Agent 协作、复核、提交、结果、资金 |
+| `/v2/merchant` | OceanPilot 商户客户端：我的待办、案件对话、意愿确认、补证与处理反馈 |
 | `/v2/governance` | 规则来源、角色权限、集成状态、人工审核知识 |
 | `/docs` | V2 严格命令 HTTP 合同及兼容 V1 API |
 | `/demo`、`/business`、`/admin` | 保留的 V1 历史演示和运维入口 |
@@ -52,7 +52,9 @@ PYTHONPATH=src OCEANPILOT_DB_PATH=work/v2.db \
 - **知识治理：** 结案后提取脱敏候选，独立 Admin 人工审核；只有批准候选可用于相似模式检索。
 - **持久化安全：** 新增 V2 SQLite 表保留 V1；案件、revision、审计、幂等命令回执在同一事务中提交，支持重启恢复和并发版本冲突拒绝。
 
-Agent 默认为离线确定性工作流规划器，显示 `DETERMINISTIC / case-planner-v2`；不宣称实时模型推理或胜诉率预测。V1 DeepSeek、其他 model provider 与旧规则/证据基础继续保留，供后续接入。
+**OceanPilot 案件智能体：** 每次案件命令提交后，六项工具检查、缺口、草稿和提案都保存为独立运行记录；实际业务命令继续检查确认人、当前版本与角色权限。启用 DeepSeek 后，关键案件事件在后台触发模型解读，用户也可直接追问和要求起草文本。界面区分规则工具、真实模型和失败降级，显示实际返回的模型名称。相似案件限定同商户；外部模型只接收经过检查与脱敏的问题及必要案件上下文。
+
+默认离线运行，不需要密钥。启用真实模型时在本机被 Git 忽略的 `.env` 中设置 `DEEPSEEK_API_KEY`、`OCEANPILOT_MODEL_PROVIDER=deepseek`、`OCEANPILOT_CHARGEBACK_LIVE_MODEL=1`，启动命令增加 `--env-file .env`。工具观察立即完成，后台模型请求不会阻塞材料登记。详情见 [Agent 协作与验证](docs/v2/agent-workflow.md)。
 
 ## 测试与复现
 

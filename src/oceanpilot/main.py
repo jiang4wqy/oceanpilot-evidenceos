@@ -139,7 +139,10 @@ def create_app(
         initialize_chargeback_schema(chargeback_db_path)
         initialize_workspace_schema(chargeback_db_path)
         initialize_rule_database(rules_db_path)
+        from oceanpilot.adapters.persistence.dispute_agent import SQLiteDisputeAgentStore
         from oceanpilot.adapters.persistence.disputes import SQLiteDisputeStore
+        from oceanpilot.application.dispute_agent import DisputeAgentService
+        from oceanpilot.application.dispute_agent_events import DisputeAgentEvents
         from oceanpilot.application.disputes import DisputeService
         from oceanpilot.domain.dispute_rules import case_plan, match_rule
 
@@ -149,6 +152,17 @@ def create_app(
             planner=case_plan,
             upstream_mode=os.getenv("OCEANPILOT_V2_UPSTREAM_MODE", "mock"),
         )
+        app.state.dispute_agent = DisputeAgentService(
+            SQLiteDisputeAgentStore(chargeback_db_path),
+            app.state.disputes,
+            model=app.state.v2_model_provider,
+            model_runtime=app.state.agent_runtime,
+        )
+        app.state.dispute_agent_events = DisputeAgentEvents(
+            app.state.dispute_agent,
+            enabled=app.state.agent_runtime["mode"] == "DEEPSEEK_LIVE",
+        )
+        app.state.disputes.on_change = app.state.dispute_agent_events.changed
         initialize_dispute_feishu(
             app,
             chargeback_db_path,
@@ -156,7 +170,10 @@ def create_app(
         )
         if resolved.feishu is not None:
             app.state.feishu_store_factory = FeishuCallbackStoreFactory(resolved.feishu.db_path)
-        yield
+        try:
+            yield
+        finally:
+            app.state.dispute_agent_events.close()
 
     application = FastAPI(title="OceanPilot V2", version=__version__, lifespan=lifespan)
     application.add_middleware(
@@ -204,6 +221,9 @@ def create_app(
     chargeback_provider = DeadlineModelProvider(
         chargeback_provider,
         timeout_seconds=resolved.model_timeout_seconds,
+    )
+    application.state.v2_model_provider = (
+        chargeback_provider if agent_runtime["mode"] != "OFFLINE_FALLBACK" else None
     )
     application.state.chargeback_supervisor = ChargebackSupervisor(
         intake=IntakeAgent(chargeback_provider),
