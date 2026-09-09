@@ -41,3 +41,15 @@
 - [未知结果交由风控核验](screenshots/v21-outcome-verification.png)
 
 浏览器脚本与原始结果保存在不纳入交付的 `work/v21-ui-qa/`。前端回归覆盖版本竞争、切换案件、草稿恢复、原命令重试、安全转义、字段选择、日期与金额校验。最终全量测试与构建记录由总体验收文档统一记录。
+
+## 标准化来源表单补充验收（2026-09-09）
+
+使用另一套隔离 SQLite、8016 服务和独立导演／运营会话，避免修改 8014 的演示案件。真实 Chrome 表单操作结果如下：
+
+- 在来源事件中填写 `CB-CASE-041` 建立案件，保留模板引用及 `NEEDS_CONFIRMATION` 规则状态。最新完整路径案件为 `OPV2-7e6dc285g9f3f9096`。
+- 更正选择 `OTHER`，映射为 `PARTIAL`，填写 USD 支持金额 `8000`、责任金额 `4800`，以及原事件、说明、来源和授权依据。接收成功，案件仍为 `OUTCOME_VERIFICATION / NOT_FINAL`。
+- 撤回表单要求操作人明确勾选上游终局，接收后仍等待风控核验，没有自动确认本案终局。
+- 首次测试暴露来源适配器遗漏币种，导致更正被隔离为 `INVALID_CURRENCY`。修复后，通过“核对原事件并重试”处理原案件 `OPV2-f01052b8gafcf3d62` 的同一来源记录：原 envelope 完全一致，保留失败和成功两次尝试；结果事件保留 USD、两笔金额及待核验状态。再次接收同一来源没有增加案件 revision 或重复业务事件。
+- 390 CSS px 的来源表单在视口内显示，无横向溢出；上述交互无 JavaScript 页面错误。长表单可在对话框内滚动。
+
+截图：[更正与分配金额](screenshots/v21-intake-correction.png)、[手机来源表单](screenshots/v21-intake-mobile.png)。原始浏览器记录保存在不纳入交付的 `work/v21-intake-form-qa/browser-report.json` 与 `retry-report.json`；本次来源适配器、HTTP、前端、独立审核与 V2.1 工作流定向回归合计 **248 项通过**。这些合成操作不代替真实飞书或卡组织联调。

@@ -31,6 +31,17 @@
 - **GitHub CI 全部通过**：[运行 34316977369](https://github.com/jiang4wqy/oceanpilot-evidenceos/actions/runs/34316977369)，对应代码提交 `1f8f160f0b6f5ddbde705886e67ea3a1fc3e4a97`。Ubuntu 环境全量 **2,146 passed / 5 skipped**，352.12 秒；5 项跳过均为未配置外部模型密钥的测试，本机跳过的 PowerShell 测试在 CI 通过。lint、格式、编译、四个离线脚本、Docker 镜像构建及容器实际登录／401／跨角色 403 均通过。
 - 该代码已推送至 `oceanpilot-v2`。本机 8014 已启动相同提交、未修改源码，模式为 `DEEPSEEK_LIVE`，来源库 62 条，飞书未配置且外发明确关闭。原 8012 保留；远端 `master` 仍为 `250e7d904fce451e6fe72b2192cba393b717c636`，没有创建 PR 或合并。
 
+## 标准化来源表单补充修复（2026-09-09）
+
+完成审查发现接收表单遗漏模板编号、映射依据和部分支持分配字段，且采用通用长度约束。本轮改为读取实际 DTO 表单元数据，补齐全部来源字段，并按更正、撤回和终局映射显示条件必填项。表单约束加载失败时禁止提交，可重新获取；不确定结果重试保留相同来源内容。
+
+实际浏览器进一步发现标准化适配器未向结果命令传递币种，导致合法 PARTIAL 更正隔离。现已传递经 registry 核验的币种，原隔离事件直接重试成功，原来源内容和历史失败均保留，仍等待独立风控核验。详见 [补充浏览器验收](ui-validation-v21.md#标准化来源表单补充验收2026-09-09)。
+
+- 定向回归：**248 passed**，覆盖来源 HTTP／适配器、全部前端、独立审核和 V2.1 工作流；Ruff 检查及格式通过。
+- 新增真实 HTTP 回归覆盖 PARTIAL、OTHER→PARTIAL 的币种／金额、待核验状态及原来源回放；新来源表单测试覆盖完整字段、条件必填、零金额、非法整数、约束加载失败及原始请求重试。
+- 回归中一个随机 UUID 在合成文件正文中偶然形成类似卡号的数字串，触发隐私检查。测试交易编号改用字母分隔，消除随机碰撞；生产敏感信息拦截规则未改变。
+- Wheel 构建通过。本补丁的远端全量 CI 结果以该提交对应的 GitHub Actions 为准，不沿用前一提交的通过状态。
+
 ## E01：固定合成规模实测
 
 运行 `PYTHONPATH=src .venv/bin/python scripts/benchmark_v21_queue.py`。每案 25 条合成审计与 5 条合成证据，两商户各占一半。两种读取方式各预热一次、测量 20 次。测试使用临时数据库，结束后自动清除。
@@ -100,7 +111,7 @@ V2.1 目标仍在进行中；本记录不构成完成声明。
 | U05 | 材料变更使旧审核和旧包失效；前端明确显示“历史审核 · 已失效”，不能继续凭旧 PASS 提交。 | 自动化：[前端历史失效审核](../../tests/web/test_v2_rendering.py)、[材料变更与冻结内容](../../tests/workflow/test_dispute_engine.py)、[替换已人工核验文件后重新核验](../../tests/review/test_v21_independent_review.py)。 |
 | U06 | 本轮采用“任务必需”的固定语义：已移除发布任务中无效的 required 复选框，旧 DTO 字段只保留接口兼容，不再提供可更改却忽略的配置。 | 源码核对：[dialogFields 的 PUBLISH_TASK](../../src/oceanpilot/web/v2/app.js)；相关发布与确认路径：[前端提案确认](../../tests/web/test_v2_rendering.py)、[提案发布 HTTP 与 DTO 默认值](../../tests/api/test_dispute_agent_api.py)。不声称旧复选框的 true/false 行为已通过。 |
 | U07 | 结果表单可明确选择 UNKNOWN，进入风控核验；未选的可选部分支持币种／金额不默认为事实，OTHER 不能直接成为终局。 | 自动化：[前端结果默认值与空金额](../../tests/web/test_v2_rendering.py)、[V2.1 UNKNOWN/OTHER](../../tests/workflow/test_dispute_v21.py)、[独立 HTTP 结果金额边界](../../tests/review/test_v21_independent_review.py)；浏览器：[UNKNOWN 核验](ui-validation-v21.md)。 |
-| U08 | 表单使用服务端字段约束，非法日期、越界金额、缺项及类型错误受到校验；被拒输入不部分修改案件，旧命令不因新增 DTO 默认字段改变回放 fingerprint。 | 自动化：[前端字段／日期／金额](../../tests/web/test_v2_rendering.py)、[V2.1 invalid_input/CAS/replay](../../tests/workflow/test_dispute_v21.py)、[标准化 DTO HTTP](../../tests/api/test_dispute_intake_http.py)、[严格 DTO](../../tests/api/test_dispute_api.py)。 |
+| U08 | 表单使用服务端字段约束，非法日期、越界金额、缺项及类型错误受到校验；被拒输入不部分修改案件，旧命令不因新增 DTO 默认字段改变回放 fingerprint。 | 自动化：[前端字段／日期／金额](../../tests/web/test_v2_rendering.py)、[V2.1 invalid_input/CAS/replay](../../tests/workflow/test_dispute_v21.py)、[标准化 DTO HTTP](../../tests/api/test_dispute_intake_http.py)、[来源表单条件约束与重试](../../tests/web/test_v21_intake_form.py)、[严格 DTO](../../tests/api/test_dispute_api.py)。 |
 | U09 | 无权或不存在的案件进入明确错误结束态，不持续 spinner、不回退到其他可见案；异步旧响应不会覆盖当前选择。 | 自动化：[前端 missing_case、late_case、case_page_never_falls_back](../../tests/web/test_v2_rendering.py)；浏览器：[跨商户及跨端 403 结束态](ui-validation-v21.md)。 |
 | U10 | PENDING_REVIEW 候选为获准审核角色显示人工审核按钮；APPROVED／REJECTED 只读。未批准模式不可检索，批准后按范围使用。 | 新增定向自动化：[前端 `test_governance_pending_review_has_action_but_decided_candidates_are_read_only`](../../tests/web/test_v2_rendering.py)；后端：[知识批准 HTTP](../../tests/api/test_dispute_api.py)、[关闭后独立知识审批](../../tests/workflow/test_dispute_engine.py)、[批准模式实际检索](../../tests/application/test_dispute_collaboration.py)。按钮差异此次为运行时 DOM 回归，未声称另做真实浏览器审批。 |
 
@@ -120,7 +131,7 @@ V2.1 目标仍在进行中；本记录不构成完成声明。
 | 编号 | 已验证边界 | 证据与层级 |
 | --- | --- | --- |
 | X01 | **仅本地通过；真实 Gate 5 待配置。** 已验证签名、token、时窗、可信用户／群／案件绑定、独立业务审计、SHARED 普通消息、持久 outbox、确认发送、失去回执重试、并发发送、授权撤销及同案 reply/update。模拟回执不代表真实投递。 | 自动化：[签名回调](../../tests/channels/test_dispute_feishu.py)、[真实本地账号＋mock transport outbox](../../tests/channels/test_dispute_feishu_outbox.py)、[官方消息协议 transport](../../tests/feishu/test_client.py)；边界：[飞书文档](feishu.md)。尚无获授权真实测试群、真实发卡／点击／提问／回执，不能标记 Gate 5 通过。 |
-| X02 | 导演登记显式合成交易事实，运营接收标准化事件；ALERT/INQUIRY 不建正式案，错配或未知交易隔离，重试保留原 envelope，撤回／更正关联已有案；旧 INTAKE/demo HTTP 不能绕过 registry 和真实角色。 | 自动化：[标准化 inbox/registry](../../tests/application/test_dispute_intake.py)、[真实账号入口及旧路径封口](../../tests/api/test_dispute_intake_http.py)；浏览器：[导演→运营标准化建案](ui-validation-v21.md)。外部 webhook／email 仍无生产接入声明。 |
+| X02 | 导演登记显式合成交易事实，运营接收标准化事件；ALERT/INQUIRY 不建正式案，错配或未知交易隔离，重试保留原 envelope，撤回／更正关联已有案；旧 INTAKE/demo HTTP 不能绕过 registry 和真实角色。 | 自动化：[标准化 inbox/registry](../../tests/application/test_dispute_intake.py)、[真实账号入口及旧路径封口](../../tests/api/test_dispute_intake_http.py)；浏览器：[导演→运营标准化建案、模板引用、部分支持更正和原事件重试](ui-validation-v21.md)。外部 webhook／email 仍无生产接入声明。 |
 | X03 | Mock 接口覆盖不确定、技术已收但业务拒绝、断网查询、相同请求重试与过期后禁重发；未查询原请求不能盲发第二次。 | 自动化：[V2.1 `x03_uncertain_submission_queries_before_any_resend`、`submission_unknown_then_expired_window_prevents_retry` 及 `w12` 失去回执](../../tests/workflow/test_dispute_v21.py)。仅为 Mock 故障合同，不是卡组织联调。 |
 | F01 | 部分支持／责任分配有明确金额与币种；退款、费用、返还和净影响分开，资金变化使核对及通知失效；商户仅显示公开资金摘要。币种单填的 WON/LOST 可正确全额分配，PARTIAL 缺分配或币种错误拒绝。 | 自动化：[V2.1 `f01` 场景](../../tests/workflow/test_dispute_v21.py)、[独立 HTTP 金额及重新通知](../../tests/review/test_v21_independent_review.py)、[商户公开 financial_summary](../../tests/web/test_v2_rendering.py)；浏览器：[合成资金→主管核对→通知→关闭](ui-validation-v21.md)。无真实银行入账验证。 |
 | E01 | 列表返回分页摘要和范围内统计；当前案件更新不重复下载全量列表，cursor 保留离线变化且按读者过滤。已量测固定合成规模的响应字节、SQL＋编码 P95 与受控锁等待。 | 自动化：[摘要分页／统计](../../tests/api/test_v21_identity.py)、[只读 cursor／范围／重启／锁预算](../../tests/application/test_dispute_updates.py)、[前端不全量刷新](../../tests/web/test_v2_rendering.py)；实测：[基准 JSON](benchmarks/v21-queue-20260909.json) 与 [基准脚本](../../scripts/benchmark_v21_queue.py)。不外推生产网络、浏览器绘制或模型延迟。 |

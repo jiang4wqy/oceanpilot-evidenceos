@@ -83,6 +83,38 @@ def test_unauthenticated_and_forged_role_headers_do_not_admit_source_events(stac
         )
 
 
+def test_event_forms_publish_the_actual_dto_limits_and_optional_source_fields(stack):
+    _, sessions = stack
+    response = sessions["operator-a"].get("/api/v2/intake/events")
+    assert response.status_code == 200
+    schemas = response.json()["form_schemas"]
+    fields = schemas["event"]["fields"]
+    assert fields["source_event_id"]["maxLength"] == 100
+    assert fields["channel"]["maxLength"] == 30
+    assert fields["currency"]["pattern"] == "^[A-Z]{3}$"
+    assert fields["amount_minor"]["exclusiveMinimum"] == 0
+    assert fields["amount_minor"]["maximum"] == 10**12
+    for key in ("supported_minor", "liable_minor"):
+        assert fields[key]["minimum"] == 0
+        assert fields[key]["type"] == "integer"
+        assert fields[key]["required_when"] == {
+            "outcome": "PARTIAL",
+            "mapped_outcome": "PARTIAL",
+        }
+    assert {
+        "case_template_id",
+        "reason",
+        "mapped_outcome",
+        "authorization_reference",
+    } <= fields.keys()
+    assert schemas["retry"]["fields"]["reason"]["minLength"] == 3
+    assert fields["final"]["required_when"] == {"event_type": "WITHDRAWAL"}
+    assert fields["corrects_event_id"]["required_when"] == {"event_type": "CORRECTION"}
+    for key in ("mapped_outcome", "basis_reference", "authorization_reference"):
+        assert fields[key]["required_when_all"] == {"outcome": "OTHER", "final": True}
+    assert sessions["merchant-a"].get("/api/v2/intake/events").status_code == 403
+
+
 def test_operator_cannot_provision_transaction_truth_and_director_cannot_run_business_intake(stack):
     _, sessions = stack
     event = envelope()
@@ -193,6 +225,75 @@ def test_withdrawal_http_command_is_safe_human_verification_not_automatic_finali
     assert result.status_code == 200, result.text
     case = app.state.disputes.store.get_case(first["case_id"])
     assert case["work_status"] == "OUTCOME_VERIFICATION" and case["finality"] == "NOT_FINAL"
+
+
+@pytest.mark.parametrize("outcome", ["PARTIAL", "OTHER"])
+def test_partial_source_correction_keeps_currency_allocations_and_risk_verification(stack, outcome):
+    app, sessions = stack
+    operator = sessions["operator-a"]
+    event = envelope()
+    registered = sessions["director"].post(
+        "/api/v2/director/transactions", json=registry_payload(event)
+    )
+    assert registered.status_code == 200
+    first = receive(operator, event).json()
+    original_id = str(uuid4())
+    prior = operator.post(
+        "/api/v2/commands",
+        json={
+            "command_id": str(uuid4()),
+            "case_id": first["case_id"],
+            "expected_revision": first["case"]["revision"],
+            "action": "RECORD_OUTCOME",
+            "confirmed": True,
+            "data": {
+                "event_id": original_id,
+                "source": "MOCK",
+                "outcome": "UNKNOWN",
+                "final": False,
+                "disposition": "VERIFY",
+                "stage_number": 1,
+                "reason": "Awaiting the corrected synthetic source result",
+                "basis_reference": "original-source-notice",
+                "occurred_at": event["occurred_at"],
+                "received_at": event["received_at"],
+            },
+        },
+    )
+    assert prior.status_code == 200, prior.text
+    correction = event | {
+        "event_type": "CORRECTION",
+        "source_event_id": str(uuid4()),
+        "target_case_id": first["case_id"],
+        "corrects_event_id": original_id,
+        "outcome": outcome,
+        "final": True,
+        "supported_minor": 8000,
+        "liable_minor": 4800,
+        "reason": "Source confirms the split between support and liability",
+        "basis_reference": "corrected-source-notice",
+        "authorization_reference": "source-result-mapping-review",
+    }
+    if outcome == "OTHER":
+        correction["mapped_outcome"] = "PARTIAL"
+    response = receive(operator, correction)
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["event"]["status"] == "PROCESSED", body
+    assert body["event"]["envelope"]["currency"] == "USD"
+    case = app.state.disputes.store.get_case(first["case_id"])
+    assert case["work_status"] == "OUTCOME_VERIFICATION" and case["finality"] == "NOT_FINAL"
+    recorded = [
+        e for e in case["upstream_events"] if e.get("event_id") == correction["source_event_id"]
+    ]
+    assert len(recorded) == 1
+    assert recorded[0]["verification"] == "PENDING"
+    data = recorded[0]["payload"]
+    assert data["currency"] == "USD"
+    assert data["supported_minor"] == 8000 and data["liable_minor"] == 4800
+    replay = receive(operator, correction).json()
+    assert replay["replayed"] and replay["event"]["envelope"] == body["event"]["envelope"]
+    assert app.state.disputes.store.get_case(first["case_id"]) == case
 
 
 def test_new_account_with_only_merchant_grant_cannot_read_existing_case_bound_inbox(stack):

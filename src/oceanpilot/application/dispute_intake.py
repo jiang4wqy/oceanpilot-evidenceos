@@ -335,6 +335,7 @@ class DisputeIntakeService:
             data = {
                 "event_id": event["source_event_id"],
                 "source": event["channel"],
+                "currency": event["currency"],
                 "outcome": "WITHDRAWN"
                 if event["event_type"] == "WITHDRAWAL"
                 else event.get("outcome", "UNKNOWN"),

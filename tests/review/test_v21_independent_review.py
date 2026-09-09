@@ -56,7 +56,9 @@ def api(tmp_path_factory):
 
 def intake(api, **changes):
     client, _, headers = api
-    event = envelope(**changes)
+    # This identifier is embedded in uploaded document text. Keep synthetic random
+    # digits separated by letters so the privacy screen cannot mistake them for PANs.
+    event = envelope(**({"transaction_id": str(uuid4()).replace("-", "g")} | changes))
     response = client.post(
         "/api/v2/director/transactions",
         headers=headers["director"],

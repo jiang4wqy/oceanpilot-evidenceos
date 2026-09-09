@@ -58,16 +58,43 @@ class NormalizedEvent(StrictDTO):
         ]
         | None
     ) = None
-    final: StrictBool | None = None
-    corrects_event_id: StrictStr | None = Field(default=None, max_length=100)
-    basis_reference: StrictStr | None = Field(default=None, max_length=500)
+    final: StrictBool | None = Field(
+        default=None, json_schema_extra={"required_when": {"event_type": "WITHDRAWAL"}}
+    )
+    corrects_event_id: StrictStr | None = Field(
+        default=None,
+        max_length=100,
+        json_schema_extra={"required_when": {"event_type": "CORRECTION"}},
+    )
+    basis_reference: StrictStr | None = Field(
+        default=None,
+        max_length=500,
+        json_schema_extra={"required_when_all": {"outcome": "OTHER", "final": True}},
+    )
     reason: StrictStr | None = Field(default=None, max_length=1000)
-    supported_minor: StrictInt | None = Field(default=None, ge=0, le=10**12)
-    liable_minor: StrictInt | None = Field(default=None, ge=0, le=10**12)
+    supported_minor: StrictInt | None = Field(
+        default=None,
+        ge=0,
+        le=10**12,
+        json_schema_extra={"required_when": {"outcome": "PARTIAL", "mapped_outcome": "PARTIAL"}},
+    )
+    liable_minor: StrictInt | None = Field(
+        default=None,
+        ge=0,
+        le=10**12,
+        json_schema_extra={"required_when": {"outcome": "PARTIAL", "mapped_outcome": "PARTIAL"}},
+    )
     mapped_outcome: (
         Literal["WON", "LOST", "PARTIAL", "ACCEPTED_RESPONSIBILITY", "WITHDRAWN"] | None
-    ) = None
-    authorization_reference: StrictStr | None = Field(default=None, max_length=500)
+    ) = Field(
+        default=None,
+        json_schema_extra={"required_when_all": {"outcome": "OTHER", "final": True}},
+    )
+    authorization_reference: StrictStr | None = Field(
+        default=None,
+        max_length=500,
+        json_schema_extra={"required_when_all": {"outcome": "OTHER", "final": True}},
+    )
 
 
 class EventData(StrictDTO):
@@ -92,9 +119,15 @@ def events(
     identity: Identity,
     status: Literal["RECEIVED", "PROCESSING", "QUARANTINED", "RECORDED", "PROCESSED"] | None = None,
 ):
+    from oceanpilot.api.dispute_presenter import command_schema
+
     return {
         "events": request.app.state.dispute_intake.list_events(identity, status),
         "production_eligible": False,
+        "form_schemas": {
+            "event": command_schema(NormalizedEvent),
+            "retry": command_schema(RetryData),
+        },
     }
 
 
