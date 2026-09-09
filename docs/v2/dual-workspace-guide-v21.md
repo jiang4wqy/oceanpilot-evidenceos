@@ -91,3 +91,21 @@ OceanPilot 嵌在两端，没有第三个业务客户端。维护人员另有隔
 金额输入使用币种的最小单位。USD `12800` 表示 128 美元。部分支持结果分别记录支持金额与责任金额，并与争议金额对应；费用、退款、扣款和返还分别展示，不能把胜诉标签当成已经对账。
 
 指南资料先作为引用来源使用，后续再替换真实数据提供者；已有案件保留创建时来源与规则版本。上游、交易登记和财务目前均为合成/Mock。飞书已进入独立出站与回调联调工作，真实测试群闭环仍待配置和验证；门户可见消息不等于飞书已送达。
+
+## 本机运行与重启
+
+当前 8014 已启用本地 `.env` 中的 DeepSeek 配置。登录后 `/api/v2/runtime` 可核对实际运行版本、代码指纹、模型模式与资料库数量；模型回答还会标明实际返回的模型名。密钥不写入页面或仓库。
+
+如需重启，从仓库目录执行下面的命令，先退出已占用 8014 的旧进程。保留同一数据路径和账号文件即可继续已有演练，不要重新初始化账号或删除数据库：
+
+```bash
+OCEANPILOT_DB_PATH=work/v21-qa/core.db \
+OCEANPILOT_CHARGEBACK_DB_PATH=work/v21-qa/dispute.db \
+OCEANPILOT_RULES_DB_PATH=work/v21-qa/rules.db \
+OCEANPILOT_V2_BASE_URL=http://127.0.0.1:8014 \
+OCEANPILOT_V21_FEISHU_OUTBOUND=disabled \
+PYTHONPATH=src .venv/bin/python -m uvicorn oceanpilot.main:create_app \
+  --factory --env-file .env --host 127.0.0.1 --port 8014 --no-access-log
+```
+
+离线备用运行在同一命令前增加 `OCEANPILOT_CHARGEBACK_LIVE_MODEL=0`。飞书外发在上述命令中明确关闭，启用真实测试群前须完成独立配置与发送内容核对。
