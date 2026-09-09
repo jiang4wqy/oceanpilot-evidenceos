@@ -39,7 +39,9 @@ def test_v2_pages_are_self_contained_and_identify_demo_boundaries(surface):
     assert parser.images and parser.images[0].startswith("data:image/png;base64,")
     assert "__V2_" not in page
     assert json.dumps({"surface": surface}) in page
-    assert "非生产身份认证" in page
+    assert "X-Demo-Role" not in page
+    assert 'id="roleSelect"' not in page
+    assert 'id="logoutButton"' in page
     assert "Mock" in page
     assert 'aria-labelledby="dialogTitle"' in page
     assert parser.confirmation_required
@@ -70,21 +72,31 @@ const sample={id:'a',revision:2,merchant_id:'synthetic-merchant-001',owner:'Ocea
  scheme:'VISA',channel:'MOCK',reason_code:'13.1',amount_minor:123400,currency:'USD',
  stage:'FORMAL_DISPUTE',work_status:'EVIDENCE_COLLECTING',merchant_decision:'CONTEST',
  business_outcome:'UNKNOWN',finality:'NOT_FINAL',financial_status:'PENDING',
+ available_actions:['COMMENT','PUBLISH_TASK','MERCHANT_DECISION','CONFIRM_RULE',
+ 'REVIEW','BUILD_PACKAGE','REGISTER_EVIDENCE'].map(action=>({action,visible:true,enabled:true,revision:2})),
  tasks:[],evidence:[],audit:[],rule_snapshot:{required_evidence:['ORDER','DELIVERY']}};
 const ok=body=>({ok:true,status:200,json:async()=>body});
+global.OceanV21Collaboration={mount(options){
+ if(options.c){options.renderTools();node('agentPanel').innerHTML=node('agentToolsPanel').innerHTML;}
+ else node('agentPanel').innerHTML='';
+}};
 """
 
 
-def run_js(assertions):
+def run_js(assertions, *, surface="operations"):
     node = shutil.which("node")
     assert node, "Node.js is required for the V2 page runtime tests"
     script = files("oceanpilot.web").joinpath("v2/app.js").read_text("utf-8")
     result = subprocess.run(
         [node, "-"],
         input="const assert=require('node:assert/strict');\n"
-        + DOM
+        + DOM.replace("surface:'operations'", f"surface:{json.dumps(surface)}")
         + script
         + "\n(async()=>{\n"
+        + "OceanV2.state.session={user:{id:'synthetic-operator',"
+        + "display_name:'OP User',role:'OPERATOR'}};"
+        + "OceanV2.state.csrfToken='session-csrf';"
+        + "OceanV2.state.capabilities={actions:[],intake_events:true};\n"
         + assertions
         + "\n})().catch(e=>{console.error(e);process.exitCode=1;});",
         text=True,
@@ -95,19 +107,23 @@ def run_js(assertions):
     assert result.returncode == 0, result.stderr
 
 
-def test_merchant_and_agent_controls_never_offer_human_review_or_submit():
+def test_controls_use_server_actions_and_never_client_role_headers():
     run_js("""
 const ui=OceanV2;
-ui.state.role='MERCHANT';ui.state.current=sample;
-assert.equal(ui.headers()['X-Demo-Merchant'],'synthetic-merchant-001');
-assert.equal(ui.headers()['X-Demo-Role'],'MERCHANT');
-for(const action of ['INTAKE','REVIEW','APPROVE_PACKAGE','SUBMIT','CLOSE'])
- assert.equal(ui.permitted(action),false);
-ui.openDialog('SUBMIT');assert.equal(ui.state.dialog,null);
-ui.state.role='AGENT';
+ui.state.role='MERCHANT';ui.state.current={...sample,available_actions:[
+ {action:'REGISTER_EVIDENCE',visible:true,enabled:true,revision:2}]};
+assert.equal('X-Demo-Merchant' in ui.headers(),false);
+assert.equal('X-Demo-Role' in ui.headers(),false);
+assert.equal(ui.headers()['X-CSRF-Token'],'session-csrf');
 for(const action of ['REVIEW','APPROVE_PACKAGE','SUBMIT','CLOSE'])
  assert.equal(ui.permitted(action),false);
-assert.equal(ui.permitted('BUILD_PACKAGE'),true);
+ui.openDialog('SUBMIT');assert.equal(ui.state.dialog,null);
+ui.state.role='SUPERVISOR';
+assert.equal(ui.permitted('CLOSE'),false);
+ui.state.current.available_actions=[{action:'CLOSE',visible:true,enabled:false,
+ blocked_reason:'当前资金尚未核对',revision:2}];
+ui.openDialog('CLOSE');assert.equal(ui.state.dialog,null);
+assert.match(node('globalNotice').innerHTML,/当前资金尚未核对/);
 """)
 
 
@@ -166,7 +182,7 @@ global.fetch=async(url,options)=>{if(url==='/api/v2/commands'){
  writes.push({payload:JSON.parse(options.body),headers:options.headers});
  if(writes.length===1)throw Error('Connection dropped');
  return ok({case:{...sample,revision:3},receipt:{command_id:'immutable-id'},replayed:true});
- }if(url==='/api/v2/cases')return ok({cases:[]});
+ }if(url.startsWith('/api/v2/cases?'))return ok({cases:[]});
  if(url==='/api/v2/capabilities')return ok({role:'OPERATOR',actions:['COMMENT']});
  throw Error(url);};
 await ui.executePending();assert.equal(ui.state.pending.payload.command_id,'immutable-id');
@@ -174,7 +190,7 @@ assert.equal(writes.length,1);assert.match(node('globalNotice').innerHTML,/原�
 ui.state.role='MERCHANT';await ui.executePending();assert.equal(writes.length,1);
 ui.state.role='OPERATOR';await ui.executePending();
 assert.equal(writes.length,2);assert.deepEqual(writes[0],writes[1]);
-assert.equal(ui.state.pending,null);assert.equal(stored.has('oceanpilot.v2.pending'),false);
+assert.equal(ui.state.pending,null);assert.equal(stored.has('oceanpilot.v21.pending.synthetic-operator'),false);
 """)
 
 
@@ -264,7 +280,7 @@ const activity={run:{id:'run-2',case_id:'a',case_revision:2,provider:'DETERMINIS
  answer:'<iframe src=x>',source:'MODEL',provider:'DEEPSEEK',model:'actual-model',
  case_revision:2}],runtime:{mode:'DEEPSEEK_LIVE'}};
 assert.equal(ui.acceptAgentActivity(activity,'a:2:OPERATOR'),true);
-const output=node('agentPanel').innerHTML;
+const output=node('agentToolsPanel').innerHTML;
 assert.match(output,/已完成 1 项工具检查/);
 assert.match(output,/DEEPSEEK · 实时回答/);
 assert.match(output,/actual-model/);
@@ -317,7 +333,7 @@ global.FormData=class{{entries(){{return [['message',
 global.fetch=async(url,options)=>{{if(options.method==='POST'){{
  writes.push({{url,body:JSON.parse(options.body)}});
  return ok({{case:{{...sample,revision:3}},receipt:{{command_id:'done'}}}});
- }}if(url==='/api/v2/cases')return ok({{cases:[]}});
+ }}if(url.startsWith('/api/v2/cases?'))return ok({{cases:[]}});
  if(url==='/api/v2/capabilities')return ok({{role:'OPERATOR',actions:[]}});
  throw Error(url);}};
 await ui.submitDialog({{preventDefault(){{}}}});
@@ -349,7 +365,7 @@ assert.equal(node('agentPanel').innerHTML.includes('A private reply'),false);
 def test_list_page_does_not_select_a_case_or_start_an_unrelated_conversation():
     run_js("""
 const calls=[];
-global.fetch=async url=>{calls.push(url);return ok(url.endsWith('/cases')?
+global.fetch=async url=>{calls.push(url);return ok(url.includes('/cases?')?
  {cases:[sample]}:{actions:[]});};
 await OceanV2.refresh();
 assert.equal(OceanV2.state.current,null);
@@ -367,7 +383,7 @@ node('agentMessage').dataset={case:'a',role:'OPERATOR'};
 node('agentMessage').value='还没有发送的本案问题';
 node('dialogFields').innerHTML='<textarea>未提交的协作说明</textarea>';
 node('confirmCheckbox').checked=true;
-global.fetch=async url=>ok(url.endsWith('/cases')?{cases:[{...sample,revision:3}]}:
+global.fetch=async url=>ok(url.includes('/cases?')?{cases:[{...sample,revision:3}]}:
  url.endsWith('/plan')?{revision:3}:url.endsWith('/agent')?
  {case_revision:3,conversations:[],run:null}:{...sample,revision:3});
 await ui.reconcileUpdates();
@@ -387,7 +403,7 @@ const ui=OceanV2;ui.state.current=sample;ui.state.caseId='a';ui.state.isCasePage
 ui.state.dialog={case_id:'a',revision:2,action:'COMMENT'};
 ui.state.plan={revision:2};
 node('caseDetail').innerHTML='existing detail';
-global.fetch=async url=>ok(url.endsWith('/cases')?{cases:[sample]}:
+global.fetch=async url=>ok(url.includes('/cases?')?{cases:[sample]}:
  url.endsWith('/plan')?{revision:2}:url.endsWith('/agent')?
  {case_revision:2,conversations:[{answer:'新的本案分析',source:'DETERMINISTIC'}]}:sample);
 await ui.reconcileUpdates();
@@ -418,7 +434,7 @@ def test_case_page_never_falls_back_to_another_accessible_case():
 const ui=OceanV2;ui.state.caseId='missing';ui.state.isCasePage=true;
 global.fetch=async url=>url.includes('/missing')?
  {ok:false,status:404,json:async()=>({detail:'Case not found'})}:
- ok(url.endsWith('/cases')?{cases:[sample]}:{actions:[]});
+ ok(url.includes('/cases?')?{cases:[sample]}:{actions:[]});
 await ui.refresh();
 assert.equal(ui.state.current,null);
 assert.equal(ui.state.caseId,'missing');
@@ -456,33 +472,225 @@ assert.equal(ui.state.agentBusy,false);
 """)
 
 
-def test_intake_generates_exact_uuid_identifiers_for_value_screening():
+def test_command_ids_use_exact_uuids_without_inventing_transaction_fields():
     run_js("""
 const identifier='00000000-0000-4000-8000-000000000000';
 Object.defineProperty(globalThis,'crypto',{value:{randomUUID:()=>identifier},configurable:true});
+assert.equal(OceanV2.uuid(),identifier);
+let opened=false;global.OceanV21Intake={open(){opened=true;}};
 OceanV2.openDialog('INTAKE');
-const markup=node('dialogFields').innerHTML;
-for(const field of ['transaction_id','event_id']) {
- const pattern=new RegExp('name="'+field+'"[^>]*value="([^"]+)"');
- assert.equal(markup.match(pattern)[1],identifier);
-}
+assert.equal(opened,true);assert.equal(OceanV2.state.dialog,null);
+assert.equal(node('dialogFields').innerHTML,'');
 """)
 
 
 @pytest.mark.parametrize("random_bytes_available", [True, False])
-def test_intake_uuid_fallback_preserves_the_identifier_format(random_bytes_available):
+def test_command_uuid_fallback_preserves_identifier_format(random_bytes_available):
     run_js(
         """
 Object.defineProperty(globalThis,'crypto',{value:CRYPTO,configurable:true});
-OceanV2.openDialog('INTAKE');
-const markup=node('dialogFields').innerHTML;
-for(const field of ['transaction_id','event_id']) {
- const pattern=new RegExp('name="'+field+'"[^>]*value="([^"]+)"');
- const identifier=markup.match(pattern)[1];
- assert.match(identifier,/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
-}
+assert.match(OceanV2.uuid(),/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
 """.replace(
             "CRYPTO",
             "{getRandomValues:bytes=>bytes.fill(255)}" if random_bytes_available else "undefined",
         )
+    )
+
+
+def test_v21_error_is_terminal_and_never_keeps_missing_case_loading():
+    run_js("""
+const ui=OceanV2;ui.state.isCasePage=true;
+global.fetch=async()=>({ok:false,status:403,json:async()=>({detail:'No access to case'})});
+await ui.openCase('private',{withAgent:false});
+assert.match(node('caseDetail').innerHTML,/没有此案件的访问权限/);
+assert.equal(node('caseDetail').innerHTML.includes('正在读取这个案件'),false);
+assert.equal(node('caseDetail').innerHTML.includes('data-reload'),false);
+assert.equal(ui.state.current,null);
+""")
+
+
+def test_v21_action_schema_filters_decisions_and_applies_constraints():
+    run_js("""
+const ui=OceanV2;ui.state.current={...sample,available_actions:[{
+ action:'MERCHANT_DECISION',visible:true,enabled:true,revision:2,
+ required_fields:['decision','reason'],choices:{decision:['ACCEPT']},
+ fields:{reason:{type:'string',min_length:3,max_length:1000}}}]};
+ui.openDialog('MERCHANT_DECISION',{decision:'CONTEST'});
+const output=node('dialogFields').innerHTML;
+assert.match(output,/value="ACCEPT"/);
+assert.equal(output.includes('value="CONTEST"'),false);
+assert.match(output,/minlength="3"/);
+assert.match(output,/maxlength="1000"/);
+assert.match(output,/value="">请选择/);
+""")
+
+
+def test_v21_close_gate_uses_current_notification_and_invalidates_old_review():
+    run_js("""
+const ui=OceanV2;ui.state.isCasePage=true;ui.state.tab='outcome';
+ui.state.current={...sample,merchant_notified:true,collaboration:[{type:'RESULT_NOTIFICATION'}],
+ close_gate:{notification_current:false,finality_confirmed:true,
+ financial_reconciled:true,required_tasks_resolved:true}};
+ui.renderDetail();
+assert.match(node('caseDetail').innerHTML,/商户已收到当前结果与资金通知/);
+assert.match(node('caseDetail').innerHTML,/待完成/);
+ui.state.tab='review';
+ui.state.current.reviews=[{decision:'PASS',valid:false,reason:'Old approval'}];
+ui.renderDetail();assert.match(node('caseDetail').innerHTML,/历史审核 · 已失效/);
+""")
+
+
+def test_v21_case_updates_do_not_download_entire_case_list():
+    run_js("""
+const ui=OceanV2,calls=[];ui.state.caseId='a';ui.state.isCasePage=true;ui.state.current=sample;
+global.fetch=async url=>{calls.push(url);return ok(url.endsWith('/plan')?{revision:2}:
+ url.endsWith('/agent')?{case_revision:2,run:null,conversations:[]}:sample);};
+await ui.reconcileUpdates();
+assert.equal(calls.some(url=>url.includes('/cases?')||url==='/api/v2/cases'),false);
+assert.equal(calls.length,3);
+""")
+
+
+def test_v21_invalid_datetime_is_reported_without_throwing_from_submit():
+    run_js("""
+const ui=OceanV2;ui.state.current=sample;
+ui.state.dialog={action:'CONFIRM_RULE',case_id:'a',revision:2,
+ identity:{role:'OPERATOR',actor:'synthetic-operator'}};
+node('actionForm').reportValidity=()=>true;node('confirmCheckbox').checked=true;
+global.FormData=class{entries(){return [['external_deadline','not-a-date']];}};
+await ui.submitDialog({preventDefault(){}});
+assert.match(node('dialogError').textContent,/有效/);assert.equal(ui.state.pending,null);
+""")
+
+
+def test_optional_blank_amounts_are_omitted_instead_of_invented_zeroes():
+    run_js("""
+global.FormData=class{entries(){return [
+ ['supported_minor',''],['liable_minor',''],['stage_number','1'],['expected_net_minor','0']
+ ];}};
+const data=OceanV2.collectData({querySelectorAll:()=>[]});
+assert.equal('supported_minor' in data,false);
+assert.equal('liable_minor' in data,false);
+assert.equal(data.stage_number,1);assert.equal(data.expected_net_minor,0);
+""")
+
+
+def test_outcome_form_does_not_preselect_optional_partial_allocation_currency():
+    run_js("""
+const ui=OceanV2;ui.state.current={...sample,
+ available_actions:[{action:'RECORD_OUTCOME',visible:true,enabled:true,revision:2}]};
+ui.openDialog('RECORD_OUTCOME');
+assert.match(node('dialogFields').innerHTML,/name="currency"[^>]*value=""/);
+""")
+
+
+def test_register_evidence_opens_real_upload_with_checklist_fields():
+    run_js("""
+const ui=OceanV2;ui.state.current=sample;let captured;
+global.OceanV21Collaboration.openFiles=data=>captured=data;
+ui.openDialog('REGISTER_EVIDENCE',{code:'transaction.receipt',title:'订单记录'});
+assert.deepEqual(captured,{code:'transaction.receipt',title:'订单记录'});
+assert.equal(ui.state.dialog,null);
+""")
+
+
+def test_merchant_closed_result_uses_public_financial_summary():
+    run_js(
+        """
+const ui=OceanV2;ui.state.isCasePage=true;ui.state.tab='outcome';
+ui.state.current={...sample,work_status:'CLOSED',business_outcome:'WON',
+ finality:'FINAL_CONFIRMED',financial_status:'RECONCILED',available_actions:[],
+ current_task:{action:'CLOSED',reason:'本案处理已结束'},
+ financial_summary:{currency:'USD',credit_minor:31900,supported_minor:31900,
+ liable_minor:0,boundary:'合成账本，仅供演练'}};
+ui.renderDetail();const output=node('caseDetail').innerHTML;
+assert.match(output,/公开资金摘要/);assert.ok(output.includes('319.00'));
+assert.match(output,/已确认承担金额/);assert.match(output,/合成账本，仅供演练/);
+assert.equal(output.includes('收到上游结果后会显示在这里'),false);
+assert.equal(output.includes('当前回应期限'),false);
+""",
+        surface="merchant",
+    )
+
+
+def test_internal_uncertain_message_recovers_original_scope_and_command():
+    collaboration_script = (
+        files("oceanpilot.web").joinpath("v2/collaboration.js").read_text("utf-8")
+    )
+    run_js(
+        collaboration_script
+        + """
+const elements=new Map(),listeners=new Map(),calls=[];
+const element=selector=>{if(!elements.has(selector))elements.set(selector,{
+ innerHTML:'',textContent:'',value:'',checked:false,hidden:false,disabled:false,
+ classList:{toggle(){}},scrollHeight:100,scrollTop:0,clientHeight:100,
+ addEventListener(name,handler){listeners.set(selector+':'+name,handler);}
+ });return elements.get(selector);};
+const host={isConnected:true,innerHTML:'',querySelector:element,
+ querySelectorAll:()=>[],addEventListener(){}};
+const original={command_id:'original-message-id',scope:'OP_INTERNAL',
+ message:'仅 OP 可见的待确认原消息',ask_agent:false};
+stored.set('oceanpilot.v21.thread.pending.op:a',JSON.stringify(original));
+OceanV21Collaboration.mount({host,c:{id:'a',revision:2,available_actions:[]},
+ session:{user:{id:'op',role:'OPERATOR'}},api:async(url,options)=>{
+ calls.push({url,options});return {messages:[],files:[],handoffs:[],cursor:0};}});
+await new Promise(resolve=>setTimeout(resolve,0));
+assert.match(calls[0].url,/scope=OP_INTERNAL/);
+assert.equal(element('.thread-input').value,original.message);
+assert.match(element('.thread-heading h2').textContent,/内部/);
+listeners.get('.thread-composer:submit')({preventDefault(){}});
+await new Promise(resolve=>setTimeout(resolve,0));
+const post=calls.find(call=>call.url.endsWith('/messages'));
+assert.deepEqual(JSON.parse(post.options.body),original);
+assert.equal(stored.has('oceanpilot.v21.thread.pending.op:a'),false);
+"""
+    )
+
+
+def test_governance_pending_review_has_action_but_decided_candidates_are_read_only():
+    run_js("""
+const ui=OceanV2;ui.state.capabilities={actions:['APPROVE_KNOWLEDGE']};
+ui.state.governance={knowledge:[
+ {id:'pending',case_id:'a',status:'PENDING_REVIEW',summary:'Needs review'},
+ {id:'approved',case_id:'a',status:'APPROVED',summary:'Approved'},
+ {id:'rejected',case_id:'a',status:'REJECTED',summary:'Rejected'}]};
+ui.renderGovernance();const output=node('governanceView').innerHTML;
+assert.ok(output.includes('data-knowledge="pending"'));
+assert.equal(output.includes('data-knowledge="approved"'),false);
+assert.equal(output.includes('data-knowledge="rejected"'),false);
+""")
+
+
+@pytest.mark.parametrize(
+    ("work_status", "decision", "phase"),
+    [
+        ("SUBMISSION_PENDING_CONFIRMATION", "CONTEST", "OP_REVIEW"),
+        ("OUTCOME_VERIFICATION", "CONTEST", "SUBMITTED"),
+        ("SUBMISSION_UNCERTAIN", "CONTEST", "SUBMITTED"),
+        ("UPSTREAM_ACTION_REQUIRED", "CONTEST", "SUBMITTED"),
+        ("RESPONSE_REVIEW_REQUIRED", "NO_RESPONSE", "MERCHANT_ACTION_REQUIRED"),
+        ("ACCEPT_PROCESSING", "ACCEPT", "ACCEPT_PROCESSING"),
+        ("WAITING_UPSTREAM", "AUTHORIZED_WAIVER", "SUBMITTED"),
+    ],
+)
+def test_lifecycle_positions_new_branches_without_inventing_completed_approvals(
+    work_status, decision, phase
+):
+    run_js(
+        f"const state={json.dumps({'status': work_status, 'decision': decision, 'phase': phase})};"
+        + """
+const ui=OceanV2;ui.state.isCasePage=true;ui.state.tab='overview';
+ui.state.current={...sample,work_status:state.status,merchant_decision:state.decision};
+ui.renderDetail();const output=node('caseDetail').innerHTML;
+assert.ok(output.includes('data-lifecycle-step="'+state.phase+'" aria-current="step"'));
+assert.equal((output.match(/aria-current="step"/g)||[]).length,1);
+assert.match(output,/环节定位不代表前序材料或审批均已完成/);
+assert.equal(output.includes('timeline-step done'),false);
+if(['ACCEPT','AUTHORIZED_WAIVER'].includes(state.decision)){
+ assert.match(output,/跳过抗辩材料收集和材料包终审/);
+ assert.equal(output.includes('data-lifecycle-step="EVIDENCE_COLLECTING"'),false);
+ assert.equal(output.includes('data-lifecycle-step="OP_REVIEW"'),false);
+ assert.equal(output.includes('证据准备度'),false);
+}
+"""
     )

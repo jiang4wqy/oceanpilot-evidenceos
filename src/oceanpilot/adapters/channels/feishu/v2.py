@@ -1,4 +1,4 @@
-"""Verified Feishu callbacks into the V2 Case Engine; outbound delivery is disabled.
+"""Verified Feishu callbacks into the case engine and V2.1 shared thread.
 
 External identities are resolved only through operator-managed bindings. Opaque
 card references bind the case and revision on the server, never in card input.
@@ -82,7 +82,7 @@ class TrustedBindings:
             for key, raw_identity in actors.items():
                 identity = _mapping(raw_identity)
                 role = _text(identity.get("role"))
-                if role not in {"MERCHANT", "OPERATOR", "RISK_OFFICER", "SUPERVISOR", "AGENT"}:
+                if role not in {"MERCHANT", "OPERATOR", "RISK_OFFICER", "SUPERVISOR"}:
                     raise ValueError("unsupported role")
                 normalized_actors[key] = {
                     "role": role,
@@ -205,7 +205,7 @@ _CARD_TITLES = {
 
 
 def _plan_text(plan: dict[str, Any]) -> str:
-    lines = []
+    lines = [f"案件版本：{plan['revision']}"] if "revision" in plan else []
     if plan.get("summary"):
         lines.append(str(plan["summary"]))
     missing = [
@@ -215,7 +215,7 @@ def _plan_text(plan: dict[str, Any]) -> str:
     ]
     if missing:
         lines.append("待补材料：" + "、".join(missing))
-    for label, key in (("商户截止", "merchant"), ("OP 截止", "internal"), ("外部截止", "external")):
+    for label, key in (("商户截止", "merchant"),):
         lines.append(f"{label}：{plan.get('deadlines', {}).get(key) or '待确认'}")
     next_action = plan.get("next_action", {})
     if isinstance(next_action, dict) and next_action.get("reason"):
@@ -245,10 +245,16 @@ class FeishuV2Adapter:
             raise ValueError("base_url must be an absolute http(s) application URL")
         self.service, self.bindings, self.store = service, bindings, store
         self.base_url, self.plan, self.now = base_url.rstrip("/"), plan, now
+        self.outbox = None
+
+    def shared_plan(self, case):
+        from oceanpilot.application.dispute_views import merchant_plan_view
+
+        return merchant_plan_view(self.plan(case))
 
     def _case(self, case_id: str, identity: dict[str, str]) -> dict[str, Any]:
         case = self.service.get_case(case_id, identity)
-        if case.get("merchant_id") != identity["merchant_id"]:
+        if identity.get("merchant_id") and case.get("merchant_id") != identity["merchant_id"]:
             raise FeishuV2Error("CASE_BINDING_MISMATCH", 403)
         return case
 
@@ -265,10 +271,10 @@ class FeishuV2Adapter:
         if kind not in _CARD_TITLES:
             raise FeishuV2Error("INVALID_CARD_KIND")
         chat_ref = binding_key("chat", tenant_key, chat_id)
-        if self.bindings.chats.get(chat_ref) != identity.get("merchant_id"):
-            raise FeishuV2Error("UNTRUSTED_BINDING", 403)
         case = self._case(case_id, identity)
-        plan = self.plan(case)
+        if self.bindings.chats.get(chat_ref) != case.get("merchant_id"):
+            raise FeishuV2Error("UNTRUSTED_BINDING", 403)
+        plan = self.shared_plan(case)
         ref = self.store.issue_card(
             {
                 "case_id": case_id,
@@ -289,7 +295,7 @@ class FeishuV2Adapter:
             f"\n状态：{case.get('work_status', 'NEEDS_CONFIRMATION')}"
             f"\n原因：{case.get('reason_code', 'NEEDS_CONFIRMATION')}"
             f"\n数据：{case.get('source_type', 'SYNTHETIC_DEMO')}"
-            "\n上游：Mock；外部消息发送：Disabled"
+            "\n上游：Mock；卡片：本地预览，投递状态以消息回执为准"
         )
         elements: list[dict[str, Any]] = [
             {"tag": "div", "text": {"tag": "plain_text", "content": text}},
@@ -334,7 +340,7 @@ class FeishuV2Adapter:
             {
                 "tag": "button",
                 "text": {"tag": "plain_text", "content": "查看案件"},
-                "url": f"{self.base_url}/v2/merchant?case_id={quote(case_id, safe='')}",
+                "url": f"{self.base_url}/v2/merchant/cases/{quote(case_id, safe='')}",
             }
         )
         elements.append({"tag": "action", "actions": actions})
@@ -376,20 +382,78 @@ class FeishuV2Adapter:
             if command is None:
                 return {"code": 0, "outcome": "IGNORED"}
             receipt = self.store.remember(event_ref, fingerprint, command)
-        self._case(receipt["command"]["case_id"], identity)
+        case = self._case(receipt["command"]["case_id"], identity)
         if receipt["response"] is not None:
             return receipt["response"]
-        result = self.service.execute(receipt["command"], identity)
-        case = result["case"]
+        command = receipt["command"]
+        collaboration = getattr(self.service, "collaboration", None)
+        if command["action"] == "COLLABORATION_MESSAGE":
+            if collaboration is None:
+                raise FeishuV2Error("SHARED_THREAD_UNAVAILABLE", 503)
+            message_id = _mapping(event.get("message")).get("message_id")
+            root_id = _mapping(event.get("message")).get("root_id")
+            if root_id and self.outbox is not None:
+                linked_case = self.outbox.message_case(root_id, chat_ref)
+                if linked_case is not None and linked_case != command["case_id"]:
+                    raise FeishuV2Error("CASE_BINDING_MISMATCH", 403)
+            shared = collaboration.post_message(
+                command["case_id"],
+                identity,
+                command["command_id"],
+                command["data"]["message"],
+                "SHARED",
+                False,
+                metadata={
+                    key: command["data"][key]
+                    for key in ("channel", "external_event_id", "thread_id")
+                },
+            )
+            case = self._case(command["case_id"], identity)
+            # The first verified event freezes its deterministic answer. If receipt
+            # completion is interrupted, later business changes cannot mutate the replay.
+            public_plan = command["data"]["reply_plan"]
+            collaboration.publish_agent_answer(
+                command["case_id"],
+                {
+                    "answer": _plan_text(public_plan),
+                    "source": "DETERMINISTIC",
+                    "provider": "DETERMINISTIC",
+                    "model": "case-plan",
+                    "source_citations": public_plan.get("source_citations", []),
+                    "conversation_id": command["command_id"],
+                    "run": {"case_revision": command["expected_revision"]},
+                },
+                "SHARED",
+                parent_id=shared["message"]["id"],
+            )
+        else:
+            result = self.service.execute(command, identity)
+            case = result["case"]
+            message_id = _mapping(event.get("context") or {}).get("open_message_id")
         response = {
             "code": 0,
             "outcome": "RECORDED",
             "case_id": _case_id(case),
             "revision": case["revision"],
-            "case_plan": self.plan(case),
+            "case_plan": self.shared_plan(case),
             "channel": "FEISHU",
             "outbound_delivery": "DISABLED",
         }
+        if self.outbox is not None:
+            try:
+                queued = self.outbox.callback(
+                    event_ref=event_ref,
+                    case_id=_case_id(case),
+                    identity=identity,
+                    target_ref=chat_ref,
+                    message_id=message_id,
+                    update=mode == "card",
+                )
+                response["outbound_delivery"] = queued["state"]
+                response["outbox_id"] = queued.get("id")
+            except Exception:
+                # A committed decision/shared message stays successful when delivery is disabled.
+                response["outbound_delivery"] = "NOT_QUEUED"
         self.store.complete(event_ref, response)
         return response
 
@@ -445,11 +509,16 @@ class FeishuV2Adapter:
         if match is None:
             return None
         case = self._case(match[1], identity)
+        shared = bool(getattr(self.service, "collaboration", None))
         return {
             "command_id": _event_command_id(event_ref),
             "case_id": _case_id(case),
-            "action": "COMMENT",
+            "action": "COLLABORATION_MESSAGE" if shared else "COMMENT",
             "expected_revision": case["revision"],
             "confirmed": False,
-            "data": {**metadata, "message": text},
+            "data": {
+                **metadata,
+                "message": text,
+                **({"reply_plan": self.shared_plan(case)} if shared else {}),
+            },
         }

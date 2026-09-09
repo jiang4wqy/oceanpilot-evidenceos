@@ -25,6 +25,7 @@ class Settings:
     mock_send_enabled: bool = False
     model_timeout_seconds: float = 12.0
     model_request_budget_seconds: float = 20.0
+    v21_secure_cookies: bool = False
 
     def resolved_chargeback_db_path(self) -> Path:
         """Durable store file for the chargeback cluster (sibling of ``db_path``)."""
@@ -50,6 +51,7 @@ class Settings:
             chargeback_db_path=Path(chargeback_env) if chargeback_env else None,
             rules_db_path=Path(rules_env) if rules_env else None,
             mock_send_enabled=os.getenv("OCEANPILOT_MOCK_SEND_ENABLED", "0") == "1",
+            v21_secure_cookies=os.getenv("OCEANPILOT_V21_SECURE_COOKIES", "0") == "1",
         )
 
 

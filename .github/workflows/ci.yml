@@ -97,19 +97,30 @@ jobs:
             --output "${RUNNER_TEMP}/oceanpilot-business.html"
 
           curl --fail --silent --show-error \
-            http://127.0.0.1:8000/v2/operations \
-            --output "${RUNNER_TEMP}/oceanpilot-v2.html"
+            http://127.0.0.1:8000/v2/login \
+            --output "${RUNNER_TEMP}/oceanpilot-login.html"
+
+          docker exec "${oceanpilot_container}" \
+            python -m oceanpilot.v21_accounts \
+            --db /app/work/oceanpilot-chargeback.db \
+            --output /app/work/ci-accounts.json
+          docker cp "${oceanpilot_container}:/app/work/ci-accounts.json" \
+            "${RUNNER_TEMP}/oceanpilot-ci-accounts.json"
+          chmod 600 "${RUNNER_TEMP}/oceanpilot-ci-accounts.json"
 
           python - <<'PY'
           import json
           import os
+          from http.cookiejar import CookieJar
           from pathlib import Path
+          from urllib.error import HTTPError
+          from urllib.request import HTTPCookieProcessor, Request, build_opener, urlopen
 
           runner_temp = Path(os.environ["RUNNER_TEMP"])
           health = json.loads((runner_temp / "oceanpilot-health.json").read_text())
           demo = (runner_temp / "oceanpilot-demo.html").read_text()
           business = (runner_temp / "oceanpilot-business.html").read_text()
-          v2 = (runner_temp / "oceanpilot-v2.html").read_text()
+          login = (runner_temp / "oceanpilot-login.html").read_text()
 
           assert health == {"status": "ok"}
           assert "Oceanpayment · 商户工作台" in demo
@@ -125,7 +136,35 @@ jobs:
           assert '"role":"BUSINESS"' in business
           assert "企业争议运营区" in business
           assert "预览本版本复核" in business
+          assert "登录你的工作空间" in login
+
+          base = "http://127.0.0.1:8000"
+          try:
+              urlopen(base + "/api/v2/cases")
+              raise AssertionError("V2 API must require a real session")
+          except HTTPError as error:
+              assert error.code == 401
+          credentials_file = runner_temp / "oceanpilot-ci-accounts.json"
+          records = json.loads(credentials_file.read_text())["accounts"]
+          credentials_file.unlink()
+          account = next(row for row in records if row["user"]["username"] == "operator-a")
+          browser = build_opener(HTTPCookieProcessor(CookieJar()))
+          request = Request(base + "/api/v2/session/login", data=json.dumps({
+              "username": account["user"]["username"], "password": account["password"],
+          }).encode(), headers={"Content-Type": "application/json", "Origin": base})
+          with browser.open(request) as response:
+              assert json.load(response)["user"]["role"] == "OPERATOR"
+          with browser.open(base + "/v2/operations") as response:
+              v2 = response.read().decode()
           assert "/api/v2" in v2
           assert "OceanPilot" in v2
+          assert "OceanV21Intake" in v2
           assert "__V2_" not in v2
+          with browser.open(base + "/api/v2/cases") as response:
+              assert json.load(response)["cases"] == []
+          try:
+              browser.open(base + "/v2/merchant")
+              raise AssertionError("Operator session must not become a merchant")
+          except HTTPError as error:
+              assert error.code == 403
           PY

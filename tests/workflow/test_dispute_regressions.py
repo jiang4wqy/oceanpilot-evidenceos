@@ -9,7 +9,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from oceanpilot.adapters.persistence.disputes import SQLiteDisputeStore
-from oceanpilot.api.disputes import dispute_error_handler, router
+from oceanpilot.api.disputes import dispute_error_handler, router, v2_identity
 from oceanpilot.application.disputes import DisputeError, DisputeService
 from oceanpilot.domain.dispute import close_blockers
 from oceanpilot.domain.dispute_rules import case_plan, match_rule
@@ -178,7 +178,8 @@ def test_next_stage_event_also_remains_bound_to_its_original_case(service):
                 {
                     "event_id": uuid4().hex,
                     "source": "mock-upstream",
-                    "outcome": "OTHER",
+                    "outcome": "LOST",
+                    "disposition": "NEXT_STAGE",
                     "final": False,
                 },
             )
@@ -374,6 +375,7 @@ def test_financial_http_invalid_types_are_422_and_leave_no_partial_audit(service
     case = terminal(service)
     app = FastAPI()
     app.state.disputes = service
+    app.dependency_overrides[v2_identity] = lambda: OP
     app.add_exception_handler(DisputeError, dispute_error_handler)
     app.include_router(router)
     payload = command(
@@ -390,9 +392,7 @@ def test_financial_http_invalid_types_are_422_and_leave_no_partial_audit(service
     )
     payload["data"][field] = value
     with TestClient(app, raise_server_exceptions=False) as client:
-        response = client.post(
-            "/api/v2/commands", json=payload, headers={"X-Demo-Role": "OPERATOR"}
-        )
+        response = client.post("/api/v2/commands", json=payload)
     assert response.status_code == 422, response.text
     assert service.get_case(case["id"], OP) == case
 
@@ -416,13 +416,21 @@ def test_frozen_human_approved_package_plan_recommends_submission(service):
 def test_intake_date_outside_representable_utc_range_is_422(service, received_at):
     app = FastAPI()
     app.state.disputes = service
+    app.dependency_overrides[v2_identity] = lambda: OP
     app.add_exception_handler(DisputeError, dispute_error_handler)
-    app.include_router(router)
-    payload = command(None, "INTAKE", intake_data(received_at=received_at))
+    from oceanpilot.api.dispute_intake import initialize_dispute_intake
+    from oceanpilot.api.dispute_intake import router as intake_router
+
+    initialize_dispute_intake(app, service.store.db_path)
+    app.include_router(intake_router)
+    data = intake_data(received_at=received_at)
+    event = {key: value for key, value in data.items() if key != "event_id"}
+    event.update(
+        event_type="FORMAL_DISPUTE", source_event_id=data["event_id"], occurred_at=received_at
+    )
+    payload = {"confirmed": True, "event": event}
     with TestClient(app, raise_server_exceptions=False) as client:
-        response = client.post(
-            "/api/v2/commands", json=payload, headers={"X-Demo-Role": "OPERATOR"}
-        )
+        response = client.post("/api/v2/intake/events", json=payload)
     assert response.status_code == 422, response.text
     assert response.json()["code"] == "INVALID_DATE"
     assert service.list_cases(OP) == []

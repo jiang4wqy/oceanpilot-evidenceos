@@ -26,6 +26,7 @@ from oceanpilot.application.model_provider import (
     model_request_budget,
 )
 from oceanpilot.domain.dispute import (
+    DisputeError,
     close_blockers,
     redact_knowledge,
     require,
@@ -67,6 +68,12 @@ _SYSTEM = (
     "intent 仅是当前问题的分类，不是案件状态；描述工作状态只使用 case_state.work_status。"
     "保留来源版本，使用清楚简短的中文。"
 )
+_SHARED_SYSTEM = (
+    "本回答会出现在本案商户与 OceanPayment 共同可见的共享线程。明确区分真人、AI与系统。"
+    "基于 collaboration.messages 的既有往来和 evidence_content 中文件内容/定位解释具体事实，"
+    "使用消息ID、对象ID和行号作为引用。不披露内部审核备忘、账务引用、未发布策略或旧私聊。"
+    "发现缺证、矛盾或未知时说明差别并请求本案负责人处理；不冒称已执行审核或资金动作。"
+)
 _AUDIENCE_SYSTEM = {
     "MERCHANT": (
         "读者是本案商户。优先解释争议进度、审核退回原因、为什么无法送审、缺哪些材料、"
@@ -98,6 +105,7 @@ class DisputeAgentService:
         self.clock = clock or (lambda: datetime.now(UTC))
         self.model_runtime = deepcopy(model_runtime or {})
         self.knowledge_provider = knowledge_provider
+        self.collaboration_provider = None
 
     def _now(self):
         return self.clock().astimezone(UTC).isoformat()
@@ -127,6 +135,9 @@ class DisputeAgentService:
         prepared = self._prepare(case, plan)
         findings = self._findings(case, plan)
         proposals = self._proposals(case, plan, prepared, citations)
+        for proposal in proposals:
+            proposal["scope"] = "SHARED"
+            proposal["scope_origin"] = "DETERMINISTIC_CASE_PLAN"
         summary = (
             f"已观察案件第 {case['revision']} 版，完成规则检索、材料检查、期限监测、"
             f"同商户案例检索及行动准备。登记材料 {plan['readiness']['submitted']}/"
@@ -233,7 +244,8 @@ class DisputeAgentService:
             "source_citations": self._answer_citations(citations, knowledge),
             "similar_cases": similar,
             "production_eligible": False,
-            "agent_version": "2026-09-08",
+            "agent_version": "2026-09-09-v2.1",
+            "proposal_scope": "SHARED",
             "model_analysis": None,
         }
         if knowledge is not None:
@@ -242,9 +254,11 @@ class DisputeAgentService:
 
     def get_activity(self, case_id: str, identity: dict) -> dict:
         case = self.disputes.get_case(case_id, identity)
-        audience = audience_for_role(identity["role"])
+        audience = "SHARED" if self.collaboration_provider else audience_for_role(identity["role"])
+        view_audience = audience_for_role(identity["role"])
         runs = self.store.list_runs(case_id)
-        runs = [self._run_for_audience(run, audience) for run in runs]
+        projection = self._reader_projection(case, identity, view_audience, runs)
+        runs = [self._run_for_reader(run, view_audience, projection) for run in runs]
         latest = runs[0] if runs else None
         stale = latest is None or latest["case_revision"] != case["revision"]
         history_keys = (
@@ -264,7 +278,13 @@ class DisputeAgentService:
             "history": [{key: run.get(key) for key in history_keys} for run in runs],
             "proposals": deepcopy(latest["proposals"]) if latest and not stale else [],
             "summary": latest["summary"] if latest else "尚无 Agent 运行记录，请显式运行一次。",
-            "conversations": self.store.list_conversations(case_id, audience=audience),
+            "conversations": projection(self.store.list_conversations(case_id, audience=audience)),
+            "legacy_conversations": (
+                projection(self.store.list_conversations(case_id, audience=view_audience))
+                if self.collaboration_provider
+                else []
+            ),
+            "legacy_read_only": bool(self.collaboration_provider),
             "stale": stale,
             "case_revision": case["revision"],
             "audience": audience,
@@ -277,7 +297,96 @@ class DisputeAgentService:
         proposal_id = text_field({"proposal_id": proposal_id}, "proposal_id", limit=200)
         proposal = self.store.get_proposal(case_id, proposal_id)
         require(proposal is not None, "PROPOSAL_NOT_FOUND", "Agent proposal not found", 404)
-        return proposal
+        return {**proposal, "scope": proposal.get("scope", "SHARED")}
+
+    def validate_proposal_edit(
+        self,
+        case_id,
+        identity,
+        *,
+        run_id,
+        proposal_id,
+        scope,
+        original_revision,
+        expected_revision,
+        action,
+        actual_data,
+    ):
+        """Bind an edited human command to the immutable, authorized source proposal."""
+        case = self.disputes.get_case(case_id, identity)
+        require(scope in {"SHARED", "OP_INTERNAL"}, "INVALID_SCOPE", "Invalid proposal scope", 422)
+        require(
+            scope != "OP_INTERNAL" or identity["role"] != "MERCHANT",
+            "PROPOSAL_FORBIDDEN",
+            "Internal proposal is unavailable",
+            403,
+        )
+        require(
+            type(original_revision) is int
+            and type(expected_revision) is int
+            and original_revision == expected_revision == case["revision"],
+            "REVISION_CONFLICT",
+            "Proposal no longer matches the current case",
+        )
+        run = self.store.get_run(case_id, original_revision)
+        require(
+            run is not None and run["id"] == run_id,
+            "PROPOSAL_NOT_FOUND",
+            "Proposal run not found",
+            404,
+        )
+        proposal = next((p for p in run["proposals"] if p["id"] == proposal_id), None)
+        require(
+            proposal is not None and proposal["case_id"] == case_id,
+            "PROPOSAL_NOT_FOUND",
+            "Proposal not found",
+            404,
+        )
+        require(
+            proposal.get("scope", "SHARED") == scope,
+            "PROPOSAL_SCOPE_MISMATCH",
+            "Edited command must retain the proposal scope",
+            409,
+        )
+        require(
+            proposal["action"] == action,
+            "PROPOSAL_ACTION_MISMATCH",
+            "Edited command must retain the proposal action",
+            409,
+        )
+        require(
+            proposal["owner"] == identity["role"],
+            "PROPOSAL_FORBIDDEN",
+            "Only the proposal owner may confirm its edited command",
+            403,
+        )
+        require(
+            isinstance(actual_data, dict), "INVALID_INPUT", "Command data must be an object", 422
+        )
+        self.disputes._screen_values(actual_data)
+        original = deepcopy(proposal["data"])
+        normalizer = getattr(self, "proposal_data_normalizer", None)
+        comparable = normalizer(action, original) if callable(normalizer) else original
+        fields = sorted(
+            k
+            for k in comparable.keys() | actual_data.keys()
+            if comparable.get(k) != actual_data.get(k)
+        )
+        return {
+            "run_id": run_id,
+            "proposal_id": proposal_id,
+            "scope": scope,
+            "original_revision": original_revision,
+            "confirmed_by": identity["actor_id"],
+            "original_data": original,
+            "normalized_original_data": comparable,
+            "actual_data": deepcopy(actual_data),
+            "changed_fields": fields,
+            "edited": bool(fields),
+            "change_summary": "Human modified fields: " + ", ".join(fields)
+            if fields
+            else "Human confirmed the saved proposal without edits",
+        }
 
     def converse(
         self,
@@ -306,7 +415,51 @@ class DisputeAgentService:
         # The current question gets its own real retrieval, persisted with this conversation.
         knowledge = self._retrieve_knowledge(case, query=self._minimize_text(message, case))
         citations = self._answer_citations(plan["source_citations"], knowledge)
-        answer = self._answer(intent, case, run, plan, audience)
+        view_audience = (
+            "MERCHANT"
+            if audience == "SHARED"
+            else "OPERATIONS"
+            if audience == "OP_INTERNAL"
+            else audience
+        )
+        projection = self._reader_projection(
+            case, identity, audience, self.store.list_runs(case_id)
+        )
+        run = self._run_for_reader(run, audience, projection)
+        answer = self._answer(intent, case, run, plan, view_audience)
+        shared_context = (
+            self.collaboration_provider.context(case_id, identity, audience)
+            if self.collaboration_provider and audience in {"SHARED", "OP_INTERNAL"}
+            else None
+        )
+        if shared_context:
+            human = [m for m in shared_context["messages"] if m["actor_type"] != "OCEANPILOT"]
+            if human:
+                operations_messages = [m for m in human if m["actor_type"] == "OCEANPAYMENT"]
+                latest_message = operations_messages[-1] if operations_messages else human[-1]
+                answer += (
+                    "\n本案共享往来：" + self._minimize_text(latest_message["message"], case)[:600]
+                )
+                citations.append(
+                    {
+                        "scope": audience,
+                        "message_id": latest_message["id"],
+                        "source_locator": "message:" + latest_message["id"],
+                    }
+                )
+            for item in shared_context["evidence_content"]:
+                citations.append(
+                    {
+                        "scope": "EVIDENCE_OBJECT",
+                        "object_id": item["object_id"],
+                        "sha256": item["sha256"],
+                        "source_locator": ", ".join(item["content_check"]["locators"]),
+                    }
+                )
+                if item["content_check"]["findings"]:
+                    answer += (
+                        "\n材料内容检查：" + "；".join(item["content_check"]["findings"])[:800]
+                    )
         if knowledge is not None:
             answer += "\n\n" + self._knowledge_answer(knowledge, audience)
         provider, model, source = "DETERMINISTIC", "case-workflow-agent-v2", "DETERMINISTIC"
@@ -318,13 +471,31 @@ class DisputeAgentService:
                     plan,
                     intent,
                     message,
-                    self._run_for_audience(run, audience)["prepared"],
+                    run["prepared"],
                     identity["role"],
-                    audience,
-                    self.store.list_conversations(case_id, limit=8, audience=audience),
+                    view_audience,
+                    projection(self.store.list_conversations(case_id, limit=8, audience=audience)),
                     trigger,
                     knowledge,
                 )
+                if shared_context:
+
+                    def clean(value):
+                        if isinstance(value, str):
+                            return self._minimize_text(value, case)
+                        if isinstance(value, list):
+                            return [clean(v) for v in value]
+                        if isinstance(value, dict):
+                            return {k: clean(v) for k, v in value.items()}
+                        return value
+
+                    context["collaboration"] = clean(shared_context)
+                    context["audience"] = audience
+                    context["scope"]["audience"] = audience
+                    if audience == "SHARED":
+                        context["requester_role"] = "CASE_PARTICIPANTS"
+                        context["latest_review_feedback"] = clean(case.get("public_feedback"))
+                context = projection(context)
                 with model_request_budget(15):
                     result = self.model.complete(
                         TaskSpec(
@@ -338,7 +509,12 @@ class DisputeAgentService:
                                 role=ModelRole.USER, content=json.dumps(context, ensure_ascii=False)
                             )
                         ],
-                        system=_SYSTEM + _AUDIENCE_SYSTEM[audience],
+                        system=_SYSTEM
+                        + (
+                            _SHARED_SYSTEM
+                            if audience == "SHARED"
+                            else _AUDIENCE_SYSTEM[view_audience]
+                        ),
                     )
                 require(
                     isinstance(result.text, str)
@@ -390,29 +566,46 @@ class DisputeAgentService:
         if knowledge is not None:
             conversation["knowledge_retrieval"] = knowledge
             conversation["tool_steps"] = [knowledge]
+        conversation = projection(conversation)
         self.store.save_conversation(conversation)
-        return {
-            "answer": answer,
-            "model_analysis": answer,
-            "run": self._run_for_audience(run, audience),
-            "proposals": self._run_for_audience(run, audience)["proposals"],
-            "provider": provider,
-            "source": source,
-            "model": model,
-            "provider_fallback": fallback,
-            "reference_notice": deepcopy(reference_notice),
-            "trigger": trigger,
-            "source_citations": deepcopy(citations),
-            "intent": intent,
-            "conversation_id": conversation["id"],
-            "audience": audience,
-            "scope": conversation["scope"],
-            "knowledge_retrieval": deepcopy(knowledge),
-            "tool_steps": [deepcopy(knowledge)] if knowledge is not None else [],
-        }
+        return projection(
+            {
+                "answer": conversation["answer"],
+                "model_analysis": conversation["model_analysis"],
+                "run": run,
+                "proposals": run["proposals"],
+                "provider": provider,
+                "source": source,
+                "model": model,
+                "provider_fallback": fallback,
+                "reference_notice": deepcopy(reference_notice),
+                "trigger": trigger,
+                "source_citations": deepcopy(citations),
+                "intent": intent,
+                "conversation_id": conversation["id"],
+                "audience": audience,
+                "scope": conversation["scope"],
+                "knowledge_retrieval": deepcopy(knowledge),
+                "tool_steps": [deepcopy(knowledge)] if knowledge is not None else [],
+            }
+        )
 
-    @staticmethod
-    def _conversation_audience(identity, trigger, audience):
+    def _conversation_audience(self, identity, trigger, audience):
+        if self.collaboration_provider:
+            audience = audience or "SHARED"
+            require(
+                audience in {"SHARED", "OP_INTERNAL"},
+                "LEGACY_THREAD_READ_ONLY",
+                "Legacy private conversations are read-only",
+                409,
+            )
+            require(
+                audience != "OP_INTERNAL" or identity["role"] != "MERCHANT",
+                "AUDIENCE_FORBIDDEN",
+                "Internal thread is unavailable",
+                403,
+            )
+            return audience
         derived = audience_for_role(identity["role"])
         if audience is None:
             return derived
@@ -430,10 +623,15 @@ class DisputeAgentService:
     def _run_for_audience(run, audience):
         """Project shared objective tool facts; never expose internal drafts as merchant advice."""
         result = deepcopy(run)
+        for proposal in result["proposals"]:
+            # Old deterministic case-plan proposals are not private chat messages.
+            proposal.setdefault("scope", "SHARED")
+            proposal.setdefault("scope_origin", "DETERMINISTIC_CASE_PLAN")
+        result["proposal_scope"] = "SHARED"
         result["audience"] = audience
         result["scope"] = {"case_id": run["case_id"], "audience": audience}
         # Old observations may have model text written before reader separation.
-        if audience == "MERCHANT":
+        if audience in {"MERCHANT", "SHARED"}:
             result["model_analysis"] = None
             result["summary"] = run["prepared"]["merchant_message"]
             result["prepared"] = {
@@ -455,20 +653,101 @@ class DisputeAgentService:
                     step["output"] = deepcopy(result["prepared"])
                 elif step["capability"] == "next_action_planning":
                     step["output"]["proposal_ids"] = [p["id"] for p in result["proposals"]]
+                elif step["capability"] == "sla_monitor":
+                    deadlines = step["output"].get("deadlines", {})
+                    step["output"]["deadlines"] = {
+                        key: deadlines[key] for key in ("merchant", "status") if key in deadlines
+                    }
+        return result
+
+    def _reader_projection(self, case, identity, audience, runs):
+        """Authorize nested case references at every read, including old persisted results.
+
+        Shared output has multiple readers with different participation grants, so raw
+        other-case facts never enter it. Approved redacted knowledge remains a separately
+        published reference and contains no private case identifier.
+        """
+        public = audience in {"MERCHANT", "SHARED"}
+        allowed = {case["id"]: True}
+
+        def can_read(identifier):
+            if identifier not in allowed:
+                if audience == "SHARED":
+                    allowed[identifier] = False
+                else:
+                    try:
+                        self.disputes.get_case(identifier, identity)
+                        allowed[identifier] = True
+                    except DisputeError:
+                        allowed[identifier] = False
+            return allowed[identifier]
+
+        hidden_values = set()
+        public_deadlines = {case.get("deadlines", {}).get("merchant")}
+        deadline_snapshots = [case.get("deadlines", {})]
+        for run in runs:
+            for item in run.get("similar_cases", []):
+                if item.get("case_id"):
+                    can_read(item["case_id"])
+            for step in run.get("steps", []):
+                if step.get("capability") == "sla_monitor":
+                    deadlines = step.get("output", {}).get("deadlines", {})
+                    deadline_snapshots.append(deadlines)
+                    public_deadlines.add(deadlines.get("merchant"))
+        if public:
+            hidden_values.update(
+                value
+                for deadlines in deadline_snapshots
+                for key, value in deadlines.items()
+                if key in {"internal", "external"}
+                and isinstance(value, str)
+                and value not in public_deadlines
+            )
+
+        def project(value):
+            if isinstance(value, dict):
+                referenced_case = value.get("case_id") or value.get("source_case_id")
+                if isinstance(referenced_case, str) and not can_read(referenced_case):
+                    return None
+                result = {}
+                for key, item in value.items():
+                    if public and key == "deadlines" and isinstance(item, dict):
+                        item = {k: item[k] for k in ("merchant", "status") if k in item}
+                    result[key] = project(item)
+                return result
+            if isinstance(value, list):
+                return [result for item in value if (result := project(item)) is not None]
+            if isinstance(value, str):
+                for identifier, permitted in allowed.items():
+                    if not permitted:
+                        value = value.replace(identifier, "[未获授权的案件引用已隐藏]")
+                for private_value in hidden_values:
+                    value = value.replace(private_value, "[内部时限已隐藏]")
+                return value
+            return value
+
+        return project
+
+    @staticmethod
+    def _run_for_reader(run, audience, projection):
+        result = projection(DisputeAgentService._run_for_audience(run, audience))
+        for step in result.get("steps", []):
+            if step.get("capability") == "similar_case_retrieval":
+                step["output"]["matches"] = deepcopy(result.get("similar_cases", []))
+                step["output"]["count"] = len(result.get("similar_cases", []))
+                step["output"]["scope"] = "CURRENT_READER_AUTHORIZED_CASES"
         return result
 
     def _similar_cases(self, case):
-        scope = {
-            "role": "MERCHANT",
-            "actor_id": _AGENT["actor_id"],
-            "merchant_id": case["merchant_id"],
-        }
-        candidates = self.disputes.list_cases(scope)
+        candidates = self.disputes.list_cases(_AGENT)
         matches = []
         for other in candidates:
             if other["id"] == case["id"] or other["scheme"] != case["scheme"]:
                 continue
-            if other["reason_code"] != case["reason_code"]:
+            if (
+                other["reason_code"] != case["reason_code"]
+                or other["merchant_id"] != case["merchant_id"]
+            ):
                 continue
             matches.append(
                 {
@@ -488,8 +767,60 @@ class DisputeAgentService:
                 break
         return matches
 
+    def _approved_knowledge(self, case):
+        references = []
+        for other in self.disputes.list_cases(_AGENT):
+            if (
+                other["scheme"] != case["scheme"]
+                or other["reason_code"] != case["reason_code"]
+                or other["stage"] != case["stage"]
+                or other["id"] == case["id"]
+                or other["merchant_id"] != case["merchant_id"]
+            ):
+                continue
+            for item in other["knowledge_candidates"]:
+                if (
+                    item["status"] != "APPROVED"
+                    or not item.get("redacted")
+                    or not item.get("human_pii_review_confirmed")
+                    or item.get("rule_version") != case["rule_snapshot"].get("rule_version")
+                ):
+                    continue
+                identifier = item["id"]
+                references.append(
+                    {
+                        "template_id": identifier,
+                        "knowledge_id": identifier,
+                        "title": "人工批准的脱敏案件模式",
+                        "summary": item["summary"],
+                        "pattern": item["pattern"],
+                        "scheme": case["scheme"],
+                        "reason_code": case["reason_code"],
+                        "stage": case["stage"],
+                        "verification_status": "HUMAN_APPROVED",
+                        "evidence_level": "APPROVED_PATTERN",
+                        "approval_version": item.get("reviewed_at"),
+                        "conflict_ids": [],
+                        "source_ids": ["approved-knowledge:" + identifier],
+                        "source_locators": ["approved-pattern:" + identifier],
+                        "required_evidence": [],
+                        "production_eligible": False,
+                        "citations": [
+                            {
+                                "source_id": "approved-knowledge:" + identifier,
+                                "source_locator": "approved-pattern:" + identifier,
+                                "rule_version": item["rule_version"],
+                                "approval_version": item.get("reviewed_at"),
+                            }
+                        ],
+                        "scope": "REFERENCE_KNOWLEDGE",
+                    }
+                )
+        return references[:5]
+
     def _retrieve_knowledge(self, case, query=None):
-        if self.knowledge_provider is None:
+        approved = self._approved_knowledge(case)
+        if self.knowledge_provider is None and not approved:
             return None
         record = {
             "id": uuid4().hex,
@@ -507,12 +838,21 @@ class DisputeAgentService:
             "boundary": "参考案例用于解释和准备建议，不覆盖当前案件规则、证据清单、期限或审批。",
         }
         try:
-            manifest = deepcopy(self.knowledge_provider.manifest())
+            manifest = (
+                deepcopy(self.knowledge_provider.manifest())
+                if self.knowledge_provider
+                else {"approved_pattern_count": len(approved)}
+            )
             # The case, not arbitrary question text, supplies the scope of the search.
-            references = deepcopy(
-                self.knowledge_provider.search(
-                    scheme=case["scheme"], reason_code=case["reason_code"], limit=5
+            references = (
+                deepcopy(
+                    self.knowledge_provider.search(
+                        scheme=case["scheme"], reason_code=case["reason_code"], limit=5
+                    )
+                    if self.knowledge_provider
+                    else []
                 )
+                + approved
             )
             for reference in references:
                 reference["scope"] = "REFERENCE_KNOWLEDGE"
@@ -1071,8 +1411,12 @@ class DisputeAgentService:
             return (
                 f"期限风险：{plan['sla_risk']}。"
                 f"商户目标：{case['deadlines'].get('merchant') or '待确认'}；"
-                f"外部期限：{case['deadlines'].get('external') or '待确认'}。"
-                "未响应不会自动视为接受，需要人工核对剩余权利。"
+                + (
+                    f"外部期限：{case['deadlines'].get('external') or '待确认'}。"
+                    if audience != "MERCHANT"
+                    else "后续时限由 OceanPayment 跟进。"
+                )
+                + "未响应不会自动视为接受，需要人工核对剩余权利。"
             )
         if audience == "MERCHANT":
             return scoped["summary"] + (
@@ -1163,7 +1507,7 @@ class DisputeAgentService:
             "deadlines": {
                 key: case["deadlines"].get(key)
                 for key in (
-                    ("merchant", "external")
+                    ("merchant",)
                     if audience == "MERCHANT"
                     else ("merchant", "internal", "external")
                 )

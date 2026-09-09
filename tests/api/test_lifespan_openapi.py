@@ -2,6 +2,7 @@ from fastapi.testclient import TestClient
 
 from oceanpilot.config import Settings
 from oceanpilot.main import create_app
+from tests.api.v21_contract import V21_PATHS
 
 
 def test_lifespan_owns_database_initialization(tmp_path):
@@ -21,7 +22,7 @@ def test_openapi_freezes_paths_replay_and_problem_contract(tmp_path):
     app = create_app(Settings(db_path=tmp_path / "api.db"))
     document = app.openapi()
 
-    assert set(document["paths"]) == {
+    assert set(document["paths"]) == V21_PATHS | {
         "/health",
         "/api/v2/case-library",
         "/api/v2/case-library/{template_id}",

@@ -66,6 +66,7 @@ def rule_catalog() -> list[dict[str, Any]]:
                         "merchant_hours": 72,
                         "internal_hours": 96,
                         "external_hours": 120,
+                        "anchor_field": "received_at",
                         "basis": "Synthetic elapsed UTC hours; not a scheme deadline",
                     },
                     "limitation": "合成演示规则，仅验证工作流；正式规则、授权与期限待企业确认。",
@@ -141,6 +142,34 @@ _NEXT = {
     "SUBMITTED": ("RECORD_OUTCOME", "OPERATOR", "保存上游正式结果，技术回执不等于业务结果"),
     "WAITING_UPSTREAM": ("RECORD_OUTCOME", "OPERATOR", "等待上游结果与终局确认"),
     "FINANCIAL_RECONCILIATION": ("RECONCILE", "SUPERVISOR", "核对资金事件及差异"),
+    "RESPONSE_REVIEW_REQUIRED": (
+        "RESOLVE_RESPONSE",
+        "RISK_OFFICER",
+        "核实剩余权利并恢复决定、材料或确认失权",
+    ),
+    "ACCEPT_RECOMMENDATION": (
+        "MERCHANT_DECISION",
+        "MERCHANT",
+        "查看人工建议后明确接受责任或继续抗辩",
+    ),
+    "ACCEPT_PROCESSING": ("PROCESS_ACCEPT", "OPERATOR", "核查授权与已有资金事件，完成渠道接受处理"),
+    "DOCUMENT_REVISION_REQUIRED": ("BUILD_PACKAGE", "OPERATOR", "依据主管意见修改文书并重新送终审"),
+    "ON_HOLD": ("FINAL_REVIEW", "SUPERVISOR", "解决暂缓事项并明确退回或升级方向"),
+    "OUTCOME_VERIFICATION": (
+        "VERIFY_OUTCOME",
+        "RISK_OFFICER",
+        "核实上游事件来源、阶段、终局依据和更正范围",
+    ),
+    "UPSTREAM_ACTION_REQUIRED": (
+        "RESOLVE_RESPONSE",
+        "RISK_OFFICER",
+        "确认本阶段需要的处理动作与剩余权利",
+    ),
+    "SUBMISSION_UNCERTAIN": (
+        "QUERY_SUBMISSION",
+        "OPERATOR",
+        "先查询原业务请求回执，受理未明时不得重复发送",
+    ),
     "CLOSED": ("KNOWLEDGE_CANDIDATE", "OPERATOR", "提取脱敏案例模式，交由知识管理员审核"),
 }
 
@@ -149,11 +178,9 @@ def case_plan(case: dict[str, Any], *, now: datetime | None = None) -> dict[str,
     rule = case.get("rule_snapshot") or {}
     required = rule.get("required_evidence", [])
     critical = set(rule.get("critical_evidence", required))
-    present = {
-        item.get("code")
-        for item in case.get("evidence", [])
-        if item.get("active", True) and item.get("status") != "WITHDRAWN"
-    }
+    from oceanpilot.domain.dispute import evidence_codes
+
+    present = evidence_codes(case)
     checklist = []
     for code in required:
         try:
@@ -190,7 +217,7 @@ def case_plan(case: dict[str, Any], *, now: datetime | None = None) -> dict[str,
         blockers.append("资金存在差异，不能结案。")
     if case.get("finality") != "FINAL_CONFIRMED":
         blockers.append("终局尚未确认，不能结案。")
-    if case.get("merchant_decision") == "ACCEPT":
+    if case.get("merchant_decision") in {"ACCEPT", "AUTHORIZED_WAIVER"}:
         checklist, missing, missing_critical = [], [], []
     if case.get("work_status") == "READY_TO_SUBMIT":
         package = next(
@@ -220,11 +247,45 @@ def case_plan(case: dict[str, Any], *, now: datetime | None = None) -> dict[str,
         "MERCHANT_REVISION_REQUIRED",
     ):
         action, owner, reason = "SUBMIT_EVIDENCE", "MERCHANT", "登记清单齐全，提交 OP 人工复核"
+    if (
+        rule_status in {"VERIFIED", "HUMAN_CONFIRMED"}
+        and case.get("work_status")
+        in {
+            "EVIDENCE_COLLECTING",
+            "MERCHANT_REVISION_REQUIRED",
+            "OP_REVIEW",
+            "READY_TO_SUBMIT",
+            "SUBMISSION_PENDING_CONFIRMATION",
+            "DOCUMENT_REVISION_REQUIRED",
+        }
+        and any(
+            item.get("active")
+            and item.get("object_id")
+            and item.get("content_check", {}).get("status") == "NEEDS_MANUAL"
+            and case.get("stage_number", 1)
+            in item.get("applicable_stages", [item.get("stage_number", 1)])
+            for item in case.get("evidence", [])
+        )
+    ):
+        action, owner, reason = (
+            "REVIEW_EVIDENCE_CONTENT",
+            "RISK_OFFICER",
+            "核对已保存文件的正文位置和本案适用事实",
+        )
     if case.get("pending_next_stage"):
         action, owner, reason = (
             "NEXT_STAGE",
             "OPERATOR",
             "非终局结果：确认后续争议阶段并重新匹配规则",
+        )
+    if case.get("eligibility_status") in {"REQUIRES_RECONFIRMATION", "RIGHTS_LOST"}:
+        blockers.append("当前抗辩资格需重新核实；旧决定不代表仍有提交权利。")
+        action, owner, reason = "RESOLVE_RESPONSE", "RISK_OFFICER", "核实当前规则与剩余处理权利"
+    if case.get("outcome_verification_required"):
+        action, owner, reason = (
+            "VERIFY_OUTCOME",
+            "RISK_OFFICER",
+            "核实上游来源与终局依据后再处理结果",
         )
     deadlines = deepcopy(case.get("deadlines") or rule.get("deadlines") or {})
     current = now or datetime.now(UTC)

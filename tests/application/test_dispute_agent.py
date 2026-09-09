@@ -389,21 +389,20 @@ def test_http_long_custom_rule_publishes_saved_proposal_without_losing_checklist
 
     from oceanpilot.config import Settings
     from oceanpilot.main import create_app
+    from tests.v21_support import normalized_intake
 
     app = create_app(Settings(db_path=tmp_path / "long-rule.db"), chargeback_model=RecordingModel())
 
     def headers(role):
-        return {
-            "X-Demo-Role": role,
-            "X-Demo-Actor": f"long-rule-{role}",
-            "X-Demo-Merchant": "merchant-long",
-        }
+        from tests.v21_support import session_headers
+
+        return session_headers(client, role, "merchant-long")
 
     with TestClient(app, raise_server_exceptions=False) as client:
-        response = client.post(
-            "/api/v2/commands",
-            headers=headers("OPERATOR"),
-            json={
+        response = normalized_intake(
+            client,
+            request_headers=headers("OPERATOR"),
+            payload={
                 "command_id": str(uuid4()),
                 "action": "INTAKE",
                 "confirmed": True,

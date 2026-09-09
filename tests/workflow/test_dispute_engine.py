@@ -149,8 +149,10 @@ def reconciled(service):
 
 def test_golden_contest_closes_only_after_reconciled_and_notified(service):
     case = reconciled(service)
-    with pytest.raises(DisputeError, match="Merchant has not received"):
+    assert case["merchant_notification_completed"] is False
+    with pytest.raises(DisputeError) as missing_notification:
         run(service, case, "CLOSE", identity=SUPERVISOR)
+    assert missing_notification.value.code == "CLOSE_BLOCKED"
     case = run(service, case, "NOTIFY_MERCHANT")
     case = run(service, case, "CLOSE", identity=SUPERVISOR)
     assert case["owner"] == "OCEANPAYMENT"
@@ -411,6 +413,12 @@ def test_accept_is_authorized_but_neither_final_nor_financially_closed(service):
     case = run(
         service,
         case,
+        "PROCESS_ACCEPT",
+        {"mode": "MOCK", "reason": "Reviewed authority and ledger", "reference": "mock-accept"},
+    )
+    case = run(
+        service,
+        case,
         "RECORD_OUTCOME",
         {
             "event_id": uuid4().hex,
@@ -448,9 +456,10 @@ def test_nonterminal_outcome_advances_stage_and_resets_reviews_and_rule(service)
         {
             "event_id": uuid4().hex,
             "source": "mock-upstream",
-            "outcome": "OTHER",
+            "outcome": "LOST",
             "final": False,
             "next_stage": "REPRESENTMENT",
+            "received_at": (NOW + timedelta(days=2)).isoformat(),
         },
     )
     assert case["stage"] == "REPRESENTMENT"
@@ -462,12 +471,18 @@ def test_nonterminal_outcome_advances_stage_and_resets_reviews_and_rule(service)
     assert case["packages"][0]["status"] == "INVALIDATED"
 
 
-def test_nonterminal_without_stage_blocks_continuation_until_next_stage(service):
+def test_confirmed_next_stage_disposition_blocks_continuation_until_stage_created(service):
     case = run(
         service,
         submitted(service),
         "RECORD_OUTCOME",
-        {"event_id": uuid4().hex, "source": "mock-upstream", "outcome": "OTHER", "final": False},
+        {
+            "event_id": uuid4().hex,
+            "source": "mock-upstream",
+            "outcome": "LOST",
+            "final": False,
+            "disposition": "NEXT_STAGE",
+        },
     )
     with pytest.raises(DisputeError) as error:
         run(service, case, "PUBLISH_TASK")
@@ -683,9 +698,10 @@ def test_stage_history_keeps_the_exact_original_frozen_snapshot(service):
         {
             "event_id": uuid4().hex,
             "source": "mock-upstream",
-            "outcome": "OTHER",
+            "outcome": "LOST",
             "final": False,
             "next_stage": "REPRESENTMENT",
+            "received_at": NOW.isoformat(),
         },
     )
     history = case["stage_history"][0]
@@ -693,7 +709,7 @@ def test_stage_history_keeps_the_exact_original_frozen_snapshot(service):
     assert history["packages"] == old_packages
     assert history["packages"][0]["status"] == "FROZEN"
     assert case["packages"][0]["status"] == "INVALIDATED"
-    assert history["business_outcome"] == "OTHER"
+    assert history["business_outcome"] == "LOST"
 
 
 def test_refund_reduces_merchant_net_and_requires_matching_human_reconciliation(service):
@@ -736,7 +752,7 @@ def test_unknown_outcome_is_preserved_but_cannot_become_final(service):
     data["final"] = False
     case = run(service, case, "RECORD_OUTCOME", data)
     assert case["business_outcome"] == "UNKNOWN"
-    assert case["work_status"] == "WAITING_UPSTREAM"
+    assert case["work_status"] == "OUTCOME_VERIFICATION"
     assert case["pending_next_stage"] is False
     assert any(t["type"] == "OUTCOME_CONFIRMATION" for t in case["tasks"])
     with pytest.raises(DisputeError):

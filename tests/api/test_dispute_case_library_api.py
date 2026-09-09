@@ -12,6 +12,7 @@ from oceanpilot.adapters.model.fake import ScriptedModelProvider
 from oceanpilot.application.dispute_demo import complete_contest
 from oceanpilot.config import Settings
 from oceanpilot.main import create_app
+from tests.v21_support import legacy_fixture_service, normalized_intake, session_headers
 
 MERCHANT = "library-api-merchant"
 MODEL_ANSWER = "指南案例仅供参考；本案采用风控确认的证据要求与期限。"
@@ -23,12 +24,8 @@ _NETWORK_TEMPLATES = [
 ]
 
 
-def headers(role="OPERATOR", merchant=MERCHANT):
-    return {
-        "X-Demo-Role": role,
-        "X-Demo-Actor": "library-api-" + role.lower(),
-        "X-Demo-Merchant": merchant,
-    }
+def headers(client, role="OPERATOR", merchant=MERCHANT):
+    return session_headers(client, role, merchant)
 
 
 @pytest.fixture
@@ -62,7 +59,9 @@ def intake_payload(template_id="CB-CASE-041", **data_changes):
 
 
 def post(client, payload, role="OPERATOR"):
-    return client.post("/api/v2/commands", headers=headers(role), json=payload)
+    if payload["action"] == "INTAKE":
+        return normalized_intake(client, payload, MERCHANT, role=role)
+    return client.post("/api/v2/commands", headers=headers(client, role), json=payload)
 
 
 def execute(client, case, action, data, role="OPERATOR"):
@@ -81,13 +80,13 @@ def execute(client, case, action, data, role="OPERATOR"):
 
 
 def all_cases(client):
-    result = client.get("/api/v2/cases", headers=headers())
+    result = client.get("/api/v2/cases", headers=headers(client))
     assert result.status_code == 200, result.text
     return result.json()["cases"]
 
 
 def get_case(client, case):
-    result = client.get(f"/api/v2/cases/{case['id']}", headers=headers())
+    result = client.get(f"/api/v2/cases/{case['id']}", headers=headers(client))
     assert result.status_code == 200, result.text
     return result.json()
 
@@ -136,7 +135,7 @@ def assert_unconfirmed_rehearsal(case, template_id):
 @pytest.mark.parametrize("role", ["OPERATOR", "MERCHANT"])
 def test_library_get_reports_actual_uploaded_inventory_without_creating_cases(stack, role):
     client, model = stack
-    response = client.get("/api/v2/case-library", headers=headers(role))
+    response = client.get("/api/v2/case-library", headers=headers(client, role))
     assert response.status_code == 200, response.text
     data = response.json()
     assert data["manifest"]["reference_case_count"] == len(data["references"]) == 62
@@ -158,18 +157,18 @@ def test_library_get_reports_actual_uploaded_inventory_without_creating_cases(st
 
 def test_detail_distinguishes_original_example_from_sandbox_preview_and_unknown_id(stack):
     client, _ = stack
-    original = client.get("/api/v2/case-library/CB-CASE-001", headers=headers())
+    original = client.get("/api/v2/case-library/CB-CASE-001", headers=headers(client))
     assert original.status_code == 200, original.text
     assert original.json()["reference"]["evidence_level"] == "SOURCE_EXPLICIT"
     assert original.json()["template"] is None
-    response = client.get("/api/v2/case-library/CB-CASE-041", headers=headers())
+    response = client.get("/api/v2/case-library/CB-CASE-041", headers=headers(client))
     assert response.status_code == 200, response.text
     preview = response.json()["template"]
     assert preview["scope"] == "SANDBOX_TEMPLATE_PREVIEW"
     assert preview["template"]["transaction_facts"]["amount"] == "NOT_STATED"
     assert preview["template"]["transaction_facts"]["transaction_id"] == "NOT_STATED"
     assert preview["requires_confirmation"] is True
-    missing = client.get("/api/v2/case-library/CB-CASE-035", headers=headers())
+    missing = client.get("/api/v2/case-library/CB-CASE-035", headers=headers(client))
     assert missing.status_code == 404
     assert missing.headers["content-type"].startswith("application/problem+json")
 
@@ -178,7 +177,7 @@ def test_detail_distinguishes_original_example_from_sandbox_preview_and_unknown_
 def test_template_selection_does_not_grant_intake_permission(stack, role):
     client, model = stack
     response = post(client, intake_payload(), role)
-    assert response.status_code == 403, response.text
+    assert response.status_code == (401 if role == "AGENT" else 403), response.text
     assert all_cases(client) == []
     assert model.requests == []
 
@@ -198,7 +197,9 @@ def test_all_34_source_examples_are_reference_only_and_cannot_create_live_cases(
     assert len(source_examples) == 34
     for reference in source_examples:
         response = post(client, intake_payload(reference["template_id"]))
-        assert response.status_code == 404, (reference["template_id"], response.text)
+        assert response.status_code == 200, (reference["template_id"], response.text)
+        assert response.json()["event"]["status"] == "QUARANTINED"
+        assert response.json()["event"]["reason"] == "TEMPLATE_NOT_FOUND"
     assert all_cases(client) == []
 
 
@@ -244,8 +245,16 @@ def test_wrong_template_scope_is_rejected_without_case_or_agent_writes(stack, da
     payload = intake_payload()
     payload["data"].update(data_changes)
     response = post(client, payload)
-    expected = 404 if "case_template_id" in data_changes else 422
-    assert response.status_code == expected, response.text
+    assert response.status_code == 200, response.text
+    expected = (
+        "TEMPLATE_NOT_FOUND"
+        if "case_template_id" in data_changes
+        else "INVALID_TEMPLATE_CHANNEL"
+        if "channel" in data_changes
+        else "TEMPLATE_SCOPE_MISMATCH"
+    )
+    assert response.json()["event"]["status"] == "QUARANTINED"
+    assert response.json()["event"]["reason"] == expected
     assert all_cases(client) == []
     assert model.requests == []
 
@@ -261,11 +270,13 @@ def test_other_scheme_and_product_security_templates_remain_preview_only(
     stack, template_id, scheme, reason
 ):
     client, _ = stack
-    preview = client.get(f"/api/v2/case-library/{template_id}", headers=headers())
+    preview = client.get(f"/api/v2/case-library/{template_id}", headers=headers(client))
     assert preview.status_code == 200
     assert preview.json()["template"] is not None
     response = post(client, intake_payload(template_id, scheme=scheme, reason_code=reason))
-    assert response.status_code == 422, response.text
+    assert response.status_code == 200, response.text
+    assert response.json()["event"]["status"] == "QUARANTINED"
+    assert response.json()["event"]["reason"] == "UNSUPPORTED_TEMPLATE_SCHEME"
     assert all_cases(client) == []
 
 
@@ -277,7 +288,7 @@ def test_unknown_template_facts_are_not_silently_filled_into_intake(stack, missi
     response = post(client, payload)
     assert response.status_code == 422, response.text
     assert all_cases(client) == []
-    source = client.get("/api/v2/case-library/CB-CASE-041", headers=headers()).json()
+    source = client.get("/api/v2/case-library/CB-CASE-041", headers=headers(client)).json()
     assert source["template"]["template"]["transaction_facts"]["amount"] == "NOT_STATED"
 
 
@@ -300,7 +311,7 @@ def test_case_library_snapshot_is_detached_from_provider_and_survives_provider_c
     assert get_case(client, case)["library_reference"] == original
 
 
-def test_same_command_replay_is_atomic_and_cannot_change_selected_template(stack):
+def test_normalized_source_replay_is_atomic_and_cannot_change_selected_template(stack):
     client, _ = stack
     payload = intake_payload()
     first = post(client, payload)
@@ -313,7 +324,8 @@ def test_same_command_replay_is_atomic_and_cannot_change_selected_template(stack
     changed = deepcopy(payload)
     changed["data"]["case_template_id"] = "CB-CASE-060"
     assert post(client, changed).status_code == 409
-    assert all_cases(client) == [case]
+    assert [item["id"] for item in all_cases(client)] == [case["id"]]
+    assert get_case(client, case) == case
 
 
 def test_duplicate_source_event_cannot_rebind_to_another_template(stack):
@@ -324,7 +336,8 @@ def test_duplicate_source_event_cannot_rebind_to_another_template(stack):
     changed["command_id"] = str(uuid4())
     changed["data"]["case_template_id"] = "CB-CASE-060"
     assert post(client, changed).status_code == 409
-    assert all_cases(client) == [case]
+    assert [item["id"] for item in all_cases(client)] == [case["id"]]
+    assert get_case(client, case) == case
 
 
 @pytest.mark.parametrize(
@@ -346,8 +359,11 @@ def test_duplicate_upstream_case_cannot_change_or_add_or_remove_template(
     changed["data"]["event_id"] = str(uuid4())
     changed["data"]["case_template_id"] = new_template
     response = post(client, changed)
-    assert response.status_code == 409, response.text
-    assert all_cases(client) == [case]
+    assert response.status_code == 200, response.text
+    assert response.json()["event"]["status"] == "QUARANTINED"
+    assert response.json()["event"]["reason"] == "UPSTREAM_CASE_CONFLICT"
+    assert [item["id"] for item in all_cases(client)] == [case["id"]]
+    assert get_case(client, case) == case
 
 
 def test_duplicate_upstream_notice_retains_original_confirmed_inputs_and_reference(stack):
@@ -385,16 +401,16 @@ def test_reference_rehearsal_041_requires_risk_confirmation_before_merchant_hand
     case = require_success(execute(client, case, "PUBLISH_TASK", {"message": "请确认接受或抗辩。"}))
     assert case["work_status"] == "MERCHANT_ACTION_REQUIRED"
     assert case["library_reference"] == original_reference
-    merchant = client.get(f"/api/v2/cases/{case['id']}", headers=headers("MERCHANT"))
+    merchant = client.get(f"/api/v2/cases/{case['id']}", headers=headers(client, "MERCHANT"))
     assert merchant.status_code == 200, merchant.text
     assert merchant.json()["tasks"]
     assert merchant.json()["rule_snapshot"]["source_id"] == rule["source_id"]
     other = client.get(
-        f"/api/v2/cases/{case['id']}", headers=headers("MERCHANT", "another-merchant")
+        f"/api/v2/cases/{case['id']}", headers=headers(client, "MERCHANT", "another-merchant")
     )
     assert other.status_code == 404
 
-    activity = client.get(f"/api/v2/cases/{case['id']}/agent", headers=headers()).json()
+    activity = client.get(f"/api/v2/cases/{case['id']}/agent", headers=headers(client)).json()
     knowledge = activity["run"]["knowledge_retrieval"]
     assert knowledge["status"] == "COMPLETED"
     assert knowledge["manifest"]["reference_case_count"] == 62
@@ -404,7 +420,7 @@ def test_reference_rehearsal_041_requires_risk_confirmation_before_merchant_hand
 
     answer = client.post(
         f"/api/v2/cases/{case['id']}/agent/messages",
-        headers=headers(),
+        headers=headers(client),
         json={
             "message": "参考指南中的相似案例，本案为什么需要签收证明？",
             "expected_revision": case["revision"],
@@ -431,7 +447,7 @@ def test_next_stage_never_promotes_library_template_to_mock_fixture_rule_or_dead
     case = require_success(
         execute(client, case, "PUBLISH_TASK", {"message": "请确认本案演练立场。"})
     )
-    case = complete_contest(client.app.state.disputes, case)
+    case = complete_contest(legacy_fixture_service(client), case)
     previous_rule = deepcopy(case["rule_snapshot"])
     previous_deadlines = deepcopy(case["deadlines"])
     previous_submissions = deepcopy(case["submissions"])
@@ -442,6 +458,7 @@ def test_next_stage_never_promotes_library_template_to_mock_fixture_rule_or_dead
         "final": False,
         "source": "MOCK_UPSTREAM",
         "reason": "上游非终局结果，允许继续下一阶段演练。",
+        "disposition": "NEXT_STAGE",
     }
     if advance_inline:
         data["next_stage"] = "REPRESENTMENT"

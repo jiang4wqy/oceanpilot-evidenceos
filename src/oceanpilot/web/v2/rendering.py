@@ -29,6 +29,10 @@ def render_v2_page(role: str = "operations") -> str:
             "__V2_SCRIPT__",
             resources.joinpath("v2/library.js").read_text("utf-8")
             + "\n"
+            + resources.joinpath("v2/collaboration.js").read_text("utf-8")
+            + "\n"
+            + resources.joinpath("v2/intake.js").read_text("utf-8")
+            + "\n"
             + resources.joinpath("v2/app.js").read_text("utf-8"),
         )
         .replace("__V2_CONFIG__", json.dumps({"surface": surface}))

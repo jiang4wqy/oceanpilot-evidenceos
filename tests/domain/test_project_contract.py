@@ -8,4 +8,4 @@ def test_runtime_is_python_312() -> None:
 def test_package_exposes_version() -> None:
     from oceanpilot import __version__
 
-    assert __version__ == "2.0.0.dev0"
+    assert __version__ == "2.1.0.dev0"

@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from types import MappingProxyType
 from typing import Any, Literal
-from urllib.parse import urlencode, urlsplit
+from urllib.parse import quote, urlencode, urlsplit
 from urllib.request import Request, urlopen
 
 _IDEMPOTENCY_KEY = re.compile(r"[A-Za-z0-9_-]{1,64}")
@@ -26,7 +26,7 @@ class FeishuReceiveIdType(StrEnum):
 
 @dataclass(frozen=True, slots=True)
 class FeishuHttpRequest:
-    method: Literal["POST"]
+    method: Literal["POST", "PATCH"]
     url: str
     headers: tuple[tuple[str, str], ...]
     body: bytes
@@ -101,6 +101,7 @@ class FeishuOutboundClient:
         payload: Mapping[str, Any],
         *,
         headers: Mapping[str, str] | None = None,
+        method: Literal["POST", "PATCH"] = "POST",
     ) -> dict[str, Any]:
         request_headers = {"Content-Type": "application/json; charset=utf-8"}
         if headers is not None:
@@ -112,7 +113,7 @@ class FeishuOutboundClient:
             sort_keys=True,
         ).encode()
         request = FeishuHttpRequest(
-            method="POST",
+            method=method,
             url=f"{self._base_url}{path}",
             headers=tuple(request_headers.items()),
             body=body,
@@ -205,3 +206,53 @@ class FeishuOutboundClient:
             message_id=message_id,
             idempotency_key=idempotency_key,
         )
+
+    def reply_interactive_card(
+        self, *, message_id: str, card: dict[str, object], idempotency_key: str
+    ) -> FeishuMessageReceipt:
+        """Reply in the verified message's thread; uuid is retained on retries."""
+        content = self._message_content(message_id, card, idempotency_key)
+        token = self.get_tenant_access_token()
+        response = self._post_json(
+            f"/open-apis/im/v1/messages/{quote(message_id, safe='')}/reply",
+            {
+                "content": content,
+                "msg_type": "interactive",
+                "reply_in_thread": True,
+                "uuid": idempotency_key,
+            },
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        data = response.get("data")
+        reply_id = data.get("message_id") if isinstance(data, dict) else None
+        if not isinstance(reply_id, str) or not reply_id:
+            raise FeishuOutboundError()
+        return FeishuMessageReceipt(reply_id, idempotency_key)
+
+    def update_interactive_card(
+        self, *, message_id: str, card: dict[str, object], idempotency_key: str
+    ) -> FeishuMessageReceipt:
+        """Replace the same card content. PATCH has no provider uuid parameter."""
+        content = self._message_content(message_id, card, idempotency_key)
+        token = self.get_tenant_access_token()
+        self._post_json(
+            f"/open-apis/im/v1/messages/{quote(message_id, safe='')}",
+            {"content": content},
+            headers={"Authorization": f"Bearer {token}"},
+            method="PATCH",
+        )
+        return FeishuMessageReceipt(message_id, idempotency_key)
+
+    def _message_content(self, message_id, card, idempotency_key):
+        if not isinstance(message_id, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,128}", message_id):
+            raise ValueError("message_id has an invalid format")
+        if not isinstance(idempotency_key, str) or not _IDEMPOTENCY_KEY.fullmatch(idempotency_key):
+            raise ValueError("idempotency_key has an invalid format")
+        if not isinstance(card, dict):
+            raise TypeError("card must be a dict")
+        try:
+            content = json.dumps(card, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
+        except (TypeError, ValueError):
+            raise FeishuOutboundError() from None
+        self._reject_credentials(message_id, idempotency_key, content)
+        return content

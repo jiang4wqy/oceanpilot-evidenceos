@@ -36,6 +36,14 @@ class WorkStatus(StrEnum):
     SUBMITTED = "SUBMITTED"
     WAITING_UPSTREAM = "WAITING_UPSTREAM"
     FINANCIAL_RECONCILIATION = "FINANCIAL_RECONCILIATION"
+    RESPONSE_REVIEW_REQUIRED = "RESPONSE_REVIEW_REQUIRED"
+    ACCEPT_RECOMMENDATION = "ACCEPT_RECOMMENDATION"
+    ACCEPT_PROCESSING = "ACCEPT_PROCESSING"
+    DOCUMENT_REVISION_REQUIRED = "DOCUMENT_REVISION_REQUIRED"
+    ON_HOLD = "ON_HOLD"
+    OUTCOME_VERIFICATION = "OUTCOME_VERIFICATION"
+    UPSTREAM_ACTION_REQUIRED = "UPSTREAM_ACTION_REQUIRED"
+    SUBMISSION_UNCERTAIN = "SUBMISSION_UNCERTAIN"
     CLOSED = "CLOSED"
 
 
@@ -77,6 +85,7 @@ ACTION_ROLES = {
     "PUBLISH_TASK": {"OPERATOR"},
     "MERCHANT_DECISION": {"MERCHANT", "OPERATOR"},
     "REGISTER_EVIDENCE": {"MERCHANT", "OPERATOR"},
+    "REVIEW_EVIDENCE_CONTENT": {"RISK_OFFICER"},
     "WITHDRAW_EVIDENCE": {"MERCHANT", "OPERATOR"},
     "SUBMIT_EVIDENCE": {"MERCHANT", "OPERATOR"},
     "REVIEW": {"RISK_OFFICER"},
@@ -85,6 +94,15 @@ ACTION_ROLES = {
     "SUBMIT": {"OPERATOR"},
     "RECORD_OUTCOME": {"OPERATOR"},
     "NEXT_STAGE": {"OPERATOR"},
+    "RESOLVE_RESPONSE": {"RISK_OFFICER"},
+    "FINAL_REVIEW": {"SUPERVISOR"},
+    "VERIFY_OUTCOME": {"RISK_OFFICER"},
+    "REOPEN_CASE": {"SUPERVISOR"},
+    "REUSE_EVIDENCE": {"RISK_OFFICER"},
+    "PROCESS_ACCEPT": {"OPERATOR"},
+    "QUERY_SUBMISSION": {"OPERATOR"},
+    "RESOLVE_TASK": {"SUPERVISOR"},
+    "ASSIGN_CASE": {"OPERATOR", "SUPERVISOR"},
     "RECORD_FINANCIAL": {"OPERATOR"},
     "RECONCILE": {"SUPERVISOR"},
     "NOTIFY_MERCHANT": {"OPERATOR"},
@@ -150,8 +168,21 @@ def fingerprint(value: object) -> str:
     return sha256(encoded.encode()).hexdigest()
 
 
+def evidence_applicable(case: dict, item: dict) -> bool:
+    # Legacy evidence only belongs to its recorded stage (default stage one).
+    stages = item.get("applicable_stages", [item.get("stage_number", 1)])
+    return bool(item.get("active")) and case.get("stage_number", 1) in stages
+
+
 def evidence_codes(case: dict) -> set[str]:
-    return {item["code"] for item in case["evidence"] if item["active"]}
+    return {
+        item["code"]
+        for item in case.get("evidence", [])
+        if evidence_applicable(case, item)
+        and (
+            not item.get("object_id") or item.get("content_check", {}).get("status") == "SUPPORTED"
+        )
+    }
 
 
 def missing_evidence(case: dict) -> list[str]:
@@ -168,6 +199,19 @@ def close_blockers(case: dict) -> list[str]:
         blockers.append("Required tasks remain open")
     if not case.get("merchant_notification_completed"):
         blockers.append("Merchant has not received the terminal result")
+    if case.get("outcome_verification_required"):
+        blockers.append("Upstream outcome requires verification")
+    if case.get("business_outcome") == "OTHER" and not case.get("outcome_mapping"):
+        blockers.append("Custom outcome has no verified terminal mapping")
+    if case.get("outcome_version", 0):
+        reconciliation = case.get("reconciliation", {})
+        if reconciliation.get("outcome_version") != case["outcome_version"]:
+            blockers.append("Reconciliation does not cover the current outcome")
+        notification = case.get("merchant_notification", {})
+        if notification.get("outcome_version") != case["outcome_version"] or notification.get(
+            "financial_version"
+        ) != case.get("financial_version", 0):
+            blockers.append("Merchant notification does not cover the current result and finances")
     actions = {event["action"] for event in case["audit"]}
     if not {"INTAKE", "RECORD_OUTCOME", "RECONCILE", "NOTIFY_MERCHANT"}.issubset(actions):
         blockers.append("Required audit artifacts are missing")

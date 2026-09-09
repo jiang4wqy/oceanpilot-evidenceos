@@ -1,0 +1,53 @@
+{
+  "synthetic_only": true,
+  "created_at": "2026-09-09T05:12:16.519380+00:00",
+  "measurement": "Local SQL read + JSON encoding; excludes HTTP transport and browser render.",
+  "baseline": "Pre-V2.1 list response: all authorized full aggregates.",
+  "limitations": "Warm local filesystem; controlled 50 ms exclusive SQLite lock probe; not production SLO.",
+  "results": [
+    {
+      "total_cases": 100,
+      "authorized_cases": 50,
+      "page_size": 25,
+      "fixture_audit_rows_per_case": 25,
+      "fixture_evidence_per_case": 5,
+      "before_full_aggregate": {
+        "payload_bytes": 2342601,
+        "p50_ms": 5.435,
+        "p95_ms": 5.693,
+        "iterations": 20
+      },
+      "after_scoped_summary": {
+        "payload_bytes": 17024,
+        "p50_ms": 2.769,
+        "p95_ms": 2.822,
+        "iterations": 20
+      },
+      "sqlite_exclusive_hold_ms": 50,
+      "sqlite_blocked_read_ms": 66.448,
+      "database_bytes": 4796416
+    },
+    {
+      "total_cases": 1000,
+      "authorized_cases": 500,
+      "page_size": 25,
+      "fixture_audit_rows_per_case": 25,
+      "fixture_evidence_per_case": 5,
+      "before_full_aggregate": {
+        "payload_bytes": 23426901,
+        "p50_ms": 56.161,
+        "p95_ms": 58.066,
+        "iterations": 20
+      },
+      "after_scoped_summary": {
+        "payload_bytes": 17077,
+        "p50_ms": 13.537,
+        "p95_ms": 13.791,
+        "iterations": 20
+      },
+      "sqlite_exclusive_hold_ms": 50,
+      "sqlite_blocked_read_ms": 66.531,
+      "database_bytes": 47230976
+    }
+  ]
+}

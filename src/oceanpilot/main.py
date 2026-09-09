@@ -48,8 +48,14 @@ from oceanpilot.api.cases import router as cases_router
 from oceanpilot.api.chargeback import router as chargeback_router
 from oceanpilot.api.demo import router as demo_router
 from oceanpilot.api.dependencies import RequestContext
+from oceanpilot.api.dispute_collaboration import initialize_dispute_collaboration
+from oceanpilot.api.dispute_collaboration import router as dispute_collaboration_router
 from oceanpilot.api.dispute_feishu import initialize_dispute_feishu
 from oceanpilot.api.dispute_feishu import router as dispute_feishu_router
+from oceanpilot.api.dispute_identity import initialize_dispute_identity
+from oceanpilot.api.dispute_identity import router as dispute_identity_router
+from oceanpilot.api.dispute_intake import initialize_dispute_intake
+from oceanpilot.api.dispute_intake import router as dispute_intake_router
 from oceanpilot.api.dispute_updates import router as dispute_updates_router
 from oceanpilot.api.disputes import dispute_error_handler
 from oceanpilot.api.disputes import router as disputes_router
@@ -146,11 +152,13 @@ def create_app(
         from oceanpilot.adapters.persistence.disputes import SQLiteDisputeStore
         from oceanpilot.application.dispute_agent import DisputeAgentService
         from oceanpilot.application.dispute_agent_events import DisputeAgentEvents
+        from oceanpilot.application.dispute_runtime import runtime_manifest
         from oceanpilot.application.dispute_updates import DisputeUpdatesService
         from oceanpilot.application.disputes import DisputeService
         from oceanpilot.domain.dispute_rules import case_plan, match_rule
 
         app.state.dispute_case_library = DisputeCaseLibrary()
+        app.state.v21_runtime = runtime_manifest(chargeback_db_path)
         app.state.disputes = DisputeService(
             SQLiteDisputeStore(chargeback_db_path),
             rule_matcher=match_rule,
@@ -158,6 +166,8 @@ def create_app(
             upstream_mode=os.getenv("OCEANPILOT_V2_UPSTREAM_MODE", "mock"),
             case_library=app.state.dispute_case_library,
         )
+        initialize_dispute_identity(app, chargeback_db_path)
+        initialize_dispute_intake(app, chargeback_db_path)
         app.state.dispute_agent = DisputeAgentService(
             SQLiteDisputeAgentStore(chargeback_db_path),
             app.state.disputes,
@@ -165,8 +175,19 @@ def create_app(
             model_runtime=app.state.agent_runtime,
             knowledge_provider=app.state.dispute_case_library,
         )
+        from oceanpilot.api.dispute_presenter import present_result
+        from oceanpilot.api.disputes import DATA_MODELS
+
+        app.state.dispute_agent.proposal_data_normalizer = lambda action, data: (
+            DATA_MODELS[action].model_construct(**data).model_dump(exclude_none=True)
+        )
+        app.state.disputes.proposal_validator = app.state.dispute_agent.validate_proposal_edit
+        app.state.v21_project_result = lambda result, identity: present_result(
+            result, identity, app.state.disputes
+        )
+        initialize_dispute_collaboration(app, chargeback_db_path)
         app.state.dispute_updates = DisputeUpdatesService(
-            SQLiteDisputeUpdateReader(chargeback_db_path)
+            SQLiteDisputeUpdateReader(chargeback_db_path, app.state.disputes.access_policy)
         )
         app.state.dispute_agent_events = DisputeAgentEvents(
             app.state.dispute_agent,
@@ -183,6 +204,10 @@ def create_app(
         try:
             yield
         finally:
+            feishu_outbox = getattr(app.state, "dispute_feishu_outbox", None)
+            if feishu_outbox is not None:
+                feishu_outbox.close()
+            app.state.dispute_collaboration_scheduler.close()
             app.state.dispute_agent_events.close()
 
     application = FastAPI(title="OceanPilot V2", version=__version__, lifespan=lifespan)
@@ -325,6 +350,9 @@ def create_app(
     application.include_router(demo_router)
     application.include_router(workspace_router)
     application.include_router(disputes_router)
+    application.include_router(dispute_identity_router)
+    application.include_router(dispute_intake_router)
+    application.include_router(dispute_collaboration_router)
     application.include_router(dispute_feishu_router)
     application.include_router(dispute_updates_router)
 

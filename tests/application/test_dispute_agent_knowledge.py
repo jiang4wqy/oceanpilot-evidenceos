@@ -131,7 +131,10 @@ def test_both_readers_get_case_specific_reference_text_and_model_sources_without
     assert context["reference_knowledge"]["references"][0]["source_ids"][0] in result["answer"]
     assert context["reference_knowledge"]["references"][0]["rule_versions"]
     assert context["rule_status"] == case["rule_snapshot"]["conflict_status"]
-    assert context["deadlines"]["external"] == case["deadlines"]["external"]
+    if identity["role"] == "MERCHANT":
+        assert set(context["deadlines"]) == {"merchant"}
+    else:
+        assert context["deadlines"]["external"] == case["deadlines"]["external"]
     assert context["source_versions"][0]["source_id"] == case["rule_snapshot"]["source_id"]
     assert "不得据参考期限覆盖本案deadlines" in agent.model.systems[0]
     assert "intent 仅是当前问题的分类，不是案件状态" in agent.model.systems[0]

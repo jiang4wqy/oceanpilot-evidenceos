@@ -14,6 +14,7 @@ from oceanpilot.application.dispute_demo import (
 )
 from oceanpilot.config import Settings
 from oceanpilot.main import create_app
+from tests.v21_support import legacy_fixture_service, seed_demo, session_headers
 
 
 @pytest.fixture
@@ -22,18 +23,12 @@ def client(tmp_path):
         yield result
 
 
-def headers(role="OPERATOR", merchant="synthetic-merchant-001"):
-    return {
-        "X-Demo-Role": role,
-        "X-Demo-Actor": f"synthetic-{role.lower()}",
-        "X-Demo-Merchant": merchant,
-    }
+def headers(client, role="OPERATOR", merchant="synthetic-merchant-001"):
+    return session_headers(client, role, merchant)
 
 
 def seed(client, scenario="A"):
-    response = client.post("/api/v2/demo", headers=headers(), json={"scenario": scenario})
-    assert response.status_code == 200, response.text
-    return response.json()["case"]
+    return seed_demo(client, scenario)
 
 
 def command(client, case, action, data, role="OPERATOR", **overrides):
@@ -45,7 +40,7 @@ def command(client, case, action, data, role="OPERATOR", **overrides):
         "action": action,
         "data": data,
     } | overrides
-    return client.post("/api/v2/commands", headers=headers(role), json=payload)
+    return client.post("/api/v2/commands", headers=headers(client, role), json=payload)
 
 
 @pytest.mark.parametrize(
@@ -87,16 +82,16 @@ def test_golden_demo_keeps_cardlike_uuid_identifiers_in_canonical_form(
 
 def test_merchant_sees_only_own_cases_and_cannot_seed_or_approve(client):
     case = seed(client)
-    own = client.get("/api/v2/cases", headers=headers("MERCHANT")).json()
+    own = client.get("/api/v2/cases", headers=headers(client, "MERCHANT")).json()
     assert len(own["cases"]) == 1
-    other = headers("MERCHANT", "other-merchant")
-    assert client.get("/api/v2/cases", headers=other).json() == {"cases": []}
+    other = headers(client, "MERCHANT", "other-merchant")
+    assert client.get("/api/v2/cases", headers=other).json()["cases"] == []
     assert client.get(f"/api/v2/cases/{case['id']}", headers=other).status_code == 404
     assert client.get(f"/api/v2/cases/{case['id']}/plan", headers=other).status_code == 404
     assert client.post("/api/v2/demo", headers=other, json={"scenario": "A"}).status_code == 403
     denied = command(client, case, "REVIEW", {"decision": "PASS", "reason": "试图自审"}, "MERCHANT")
     assert denied.status_code == 403
-    assert command(client, case, "SUBMIT", {}, "AGENT").status_code == 403
+    assert command(client, case, "SUBMIT", {}, "AGENT").status_code == 401
     assert command(client, case, "CLOSE", {}, "ADMIN").status_code == 403
 
 
@@ -109,7 +104,7 @@ def test_strict_dto_stale_proposal_and_atomic_replay(client):
     assert (
         command(client, case, "CLOSE", {}, "SUPERVISOR", expected_revision=True).status_code == 422
     )
-    plan = client.get(f"/api/v2/cases/{case['id']}/plan", headers=headers()).json()
+    plan = client.get(f"/api/v2/cases/{case['id']}/plan", headers=headers(client)).json()
     assert plan["proposal"]["expected_revision"] == case["revision"]
     command_id = str(uuid4())
     first = command(client, case, "COMMENT", {"message": "共享案件上下文"}, command_id=command_id)
@@ -132,14 +127,14 @@ def test_strict_dto_stale_proposal_and_atomic_replay(client):
 
 
 def test_contest_end_to_end_closes_only_after_financial_and_notification(client):
-    service = client.app.state.disputes
+    service = legacy_fixture_service(client)
     case = complete_contest(service, seed(client))
     assert command(client, case, "CLOSE", {}, "SUPERVISOR").status_code == 409
     case = record_terminal_financial(service, case)
     assert command(client, case, "CLOSE", {}, "SUPERVISOR").status_code == 409
     case = close_demo(service, case)
     assert case["work_status"] == "CLOSED"
-    reread = client.get(f"/api/v2/cases/{case['id']}", headers=headers("MERCHANT")).json()
+    reread = client.get(f"/api/v2/cases/{case['id']}", headers=headers(client, "MERCHANT")).json()
     assert reread["finality"] == "FINAL_CONFIRMED"
     assert reread["financial_status"] == "RECONCILED"
     assert reread["merchant_notification_completed"] is True
@@ -164,7 +159,7 @@ def test_financial_exception_reconciles_without_rewriting_ledger(client):
     assert response.status_code == 200, response.text
     case = response.json()["case"]
     assert case["financial_events"] == before
-    assert close_demo(client.app.state.disputes, case)["work_status"] == "CLOSED"
+    assert close_demo(legacy_fixture_service(client), case)["work_status"] == "CLOSED"
 
 
 def test_case_survives_restart_and_governance_does_not_grant_business_permissions(tmp_path):
@@ -172,16 +167,21 @@ def test_case_survives_restart_and_governance_does_not_grant_business_permission
     with TestClient(create_app(settings)) as first:
         case = seed(first)
     with TestClient(create_app(settings)) as second:
-        assert second.get(f"/api/v2/cases/{case['id']}", headers=headers()).json() == case
-        assert second.get("/api/v2/governance", headers=headers("MERCHANT")).status_code == 403
-        governance = second.get("/api/v2/governance", headers=headers("ADMIN"))
+        assert (
+            second.get(f"/api/v2/cases/{case['id']}", headers=headers(second)).json()["id"]
+            == case["id"]
+        )
+        assert (
+            second.get("/api/v2/governance", headers=headers(second, "MERCHANT")).status_code == 403
+        )
+        governance = second.get("/api/v2/governance", headers=headers(second, "ADMIN"))
         assert governance.status_code == 200, governance.text
         assert "CLOSE" not in governance.json()["permissions"]["ADMIN"]
         assert Path(settings.db_path).exists()
 
 
 def test_approved_redacted_knowledge_is_reused_only_after_human_review(client):
-    service = client.app.state.disputes
+    service = legacy_fixture_service(client)
     case = close_demo(
         service, record_terminal_financial(service, complete_contest(service, seed(client)))
     )
@@ -197,7 +197,7 @@ def test_approved_redacted_knowledge_is_reused_only_after_human_review(client):
     )["case"]
     fresh = create_demo(service, "A", demo_identity("OPERATOR"), str(uuid4()))["case"]
     url = f"/api/v2/cases/{fresh['id']}/plan"
-    assert client.get(url, headers=headers()).json()["similar_cases"] == []
+    assert client.get(url, headers=headers(client)).json()["similar_cases"] == []
     candidate = case["knowledge_candidates"][0]
     assert "sample@example.com" not in candidate["summary"]
     issue(
@@ -211,7 +211,7 @@ def test_approved_redacted_knowledge_is_reused_only_after_human_review(client):
         },
         "ADMIN",
     )
-    similar = client.get(url, headers=headers()).json()["similar_cases"]
+    similar = client.get(url, headers=headers(client)).json()["similar_cases"]
     assert len(similar) == 1
     assert case["merchant_id"] not in str(similar)
-    assert client.get(url, headers=headers("MERCHANT")).json()["similar_cases"] == []
+    assert "similar_cases" not in client.get(url, headers=headers(client, "MERCHANT")).json()

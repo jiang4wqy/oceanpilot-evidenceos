@@ -8,10 +8,11 @@ from fastapi.testclient import TestClient
 from oceanpilot.adapters.model.fake import ScriptedModelProvider
 from oceanpilot.config import Settings
 from oceanpilot.main import create_app
+from tests.v21_support import normalized_intake, session_headers
 
 
-def headers(role="OPERATOR", merchant="sync-a"):
-    return {"X-Demo-Role": role, "X-Demo-Actor": f"sync-{role}", "X-Demo-Merchant": merchant}
+def headers(client, role="OPERATOR", merchant="sync-a"):
+    return session_headers(client, role, merchant)
 
 
 @pytest.fixture
@@ -23,16 +24,16 @@ def stack(tmp_path):
 
 
 def intake(client, merchant="sync-a"):
-    response = client.post(
-        "/api/v2/commands",
-        headers=headers(),
-        json={
+    response = normalized_intake(
+        client,
+        request_headers=headers(client, merchant=merchant),
+        payload={
             "command_id": str(uuid4()),
             "action": "INTAKE",
             "confirmed": True,
             "data": {
                 "merchant_id": merchant,
-                "transaction_id": "sync-transaction",
+                "transaction_id": f"sync-transaction-{merchant}",
                 "scheme": "VISA",
                 "channel": "MOCK",
                 "reason_code": "13.1",
@@ -48,7 +49,7 @@ def intake(client, merchant="sync-a"):
 
 def updates(client, role="OPERATOR", merchant="sync-a", **params):
     return client.get(
-        "/api/v2/updates", headers=headers(role, merchant), params={"timeout": 0, **params}
+        "/api/v2/updates", headers=headers(client, role, merchant), params={"timeout": 0, **params}
     )
 
 
@@ -78,7 +79,7 @@ def test_http_long_poll_returns_on_commit_without_client_refresh(stack):
         sleep(0.04)
         changed = client.post(
             "/api/v2/commands",
-            headers=headers(),
+            headers=headers(client),
             json={
                 "command_id": str(uuid4()),
                 "case_id": case["id"],
@@ -97,20 +98,20 @@ def test_http_long_poll_returns_on_commit_without_client_refresh(stack):
     assert model.requests == []
 
 
-def test_http_private_ai_message_wakes_only_its_workspace(stack):
+def test_http_shared_ai_message_wakes_both_workspaces(stack):
     client, model = stack
     case = intake(client)
     op_cursor = updates(client).json()["cursor"]
     merchant_cursor = updates(client, "MERCHANT").json()["cursor"]
     answer = client.post(
         f"/api/v2/cases/{case['id']}/agent/messages",
-        headers=headers("MERCHANT"),
+        headers=headers(client, "MERCHANT"),
         json={"expected_revision": case["revision"], "message": "请协助商户补证"},
     )
     assert answer.status_code == 200, answer.text
     count = len(model.requests)
     assert count == 1
-    assert updates(client, cursor=op_cursor).json()["changes"] == []
+    assert updates(client, cursor=op_cursor).json()["changed_case_ids"] == [case["id"]]
     changes = updates(client, "MERCHANT", cursor=merchant_cursor).json()["changes"]
     assert changes == [
         {
@@ -119,6 +120,7 @@ def test_http_private_ai_message_wakes_only_its_workspace(stack):
             "case_changed": False,
             "agent_changed": False,
             "conversation_changed": True,
+            "collaboration_changed": True,
         }
     ]
     assert len(model.requests) == count

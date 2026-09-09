@@ -1,13 +1,15 @@
-"""Signed V2 Feishu inbound seams; no outbound network calls."""
+"""Signed callbacks and locally authorized test-chat delivery; default disabled."""
 
 import os
 import sqlite3
 import time
 from collections.abc import Mapping
 from pathlib import Path
+from typing import Literal
 
 from fastapi import APIRouter, FastAPI, Request
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictStr
 from starlette.concurrency import run_in_threadpool
 
 from oceanpilot.adapters.channels.feishu.v2 import (
@@ -18,6 +20,7 @@ from oceanpilot.adapters.channels.feishu.v2 import (
 )
 from oceanpilot.adapters.feishu.security import FeishuRequestVerifier, FeishuVerificationError
 from oceanpilot.api.cases import COMMON_PROBLEMS, PROBLEM_RESPONSE
+from oceanpilot.api.disputes import Identity
 
 router = APIRouter(
     prefix="/api/v2/integrations/feishu",
@@ -38,6 +41,7 @@ def initialize_dispute_feishu(
     env = os.environ if environ is None else environ
     app.state.dispute_feishu = None
     app.state.dispute_feishu_verifier = None
+    app.state.dispute_feishu_outbox = None
     required = (
         "OCEANPILOT_V2_FEISHU_BINDINGS_JSON",
         "FEISHU_ENCRYPT_KEY",
@@ -64,6 +68,27 @@ def initialize_dispute_feishu(
     except (ValueError, TypeError):
         return False
     app.state.dispute_feishu, app.state.dispute_feishu_verifier = adapter, verifier
+    from oceanpilot.adapters.channels.feishu.outbox import FeishuDisputeOutbox, load_test_targets
+    from oceanpilot.adapters.feishu.client import FeishuOutboundClient
+
+    try:
+        targets = load_test_targets(env.get("OCEANPILOT_V21_FEISHU_TEST_TARGETS_JSON"), bindings)
+    except ValueError:
+        targets = {}
+    client = None
+    if (
+        targets
+        and env.get("OCEANPILOT_V21_FEISHU_OUTBOUND") == "authorized-test"
+        and env.get("FEISHU_APP_ID")
+        and env.get("FEISHU_APP_SECRET")
+    ):
+        client = FeishuOutboundClient(
+            app_id=env["FEISHU_APP_ID"], app_secret=env["FEISHU_APP_SECRET"]
+        )
+    outbox = FeishuDisputeOutbox(adapter, targets=targets, client=client)
+    adapter.outbox = outbox
+    app.state.dispute_feishu_outbox = outbox
+    outbox.start()
     return True
 
 
@@ -127,3 +152,45 @@ async def dispute_feishu_events(request: Request) -> JSONResponse:
 @router.post("/card")
 async def dispute_feishu_card(request: Request) -> JSONResponse:
     return await _handle(request, "card")
+
+
+class OutboxPreviewDTO(BaseModel):
+    model_config = ConfigDict(extra="forbid", hide_input_in_errors=True)
+    command_id: StrictStr = Field(min_length=8, max_length=200)
+    case_id: StrictStr = Field(min_length=1, max_length=128)
+    target_ref: StrictStr = Field(pattern=r"^[0-9a-f]{64}$")
+    kind: Literal[
+        "NEW_DISPUTE", "MISSING_EVIDENCE", "SLA_REMINDER", "REVIEW_FEEDBACK", "SUMMARY"
+    ] = "NEW_DISPUTE"
+
+
+class OutboxSendDTO(BaseModel):
+    model_config = ConfigDict(extra="forbid", hide_input_in_errors=True)
+    confirmed: StrictBool
+
+
+async def _outbox_call(request, method, *args, **kwargs):
+    outbox = getattr(request.app.state, "dispute_feishu_outbox", None)
+    if outbox is None:
+        return _error(503, "FEISHU_V2_DISABLED")
+    try:
+        return await run_in_threadpool(getattr(outbox, method), *args, **kwargs)
+    except FeishuV2Error as exc:
+        return _error(exc.status, exc.code)
+    except sqlite3.Error:
+        return _error(503, "FEISHU_V2_STORAGE_UNAVAILABLE")
+
+
+@router.get("/outbox")
+async def list_outbox(request: Request, identity: Identity, case_id: str):
+    return await _outbox_call(request, "list_for_case", case_id, identity)
+
+
+@router.post("/outbox")
+async def preview_outbox(payload: OutboxPreviewDTO, request: Request, identity: Identity):
+    return await _outbox_call(request, "preview", identity=identity, **payload.model_dump())
+
+
+@router.post("/outbox/{outbox_id}/send")
+async def send_outbox(outbox_id: str, payload: OutboxSendDTO, request: Request, identity: Identity):
+    return await _outbox_call(request, "send", outbox_id, identity, confirmed=payload.confirmed)

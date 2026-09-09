@@ -155,6 +155,7 @@ def test_new_agent_run_wakes_both_audiences_without_case_revision_change(stack):
                 "case_changed": False,
                 "agent_changed": True,
                 "conversation_changed": False,
+                "collaboration_changed": False,
             }
         ]
 

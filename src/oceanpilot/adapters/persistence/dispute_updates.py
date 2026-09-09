@@ -15,7 +15,8 @@ from oceanpilot.domain.dispute import DisputeError, require
 
 
 class SQLiteDisputeUpdateReader:
-    def __init__(self, db_path: str | Path) -> None:
+    def __init__(self, db_path: str | Path, access_policy=None) -> None:
+        self.access_policy = access_policy
         location = str(db_path)
         self.database = (
             location
@@ -33,6 +34,21 @@ class SQLiteDisputeUpdateReader:
                 connection.execute("PRAGMA query_only=ON")
                 connection.execute("BEGIN")
                 clauses, parameters = [], []
+                if self.access_policy and not self.access_policy._system(identity):
+                    user = self.access_policy._user(identity)
+                    grants = user["merchant_ids"] if user else []
+                    if not grants:
+                        clauses.append("0=1")
+                    else:
+                        placeholders = ",".join("?" for _ in grants)
+                        clauses.append(f"c.merchant_id IN ({placeholders})")
+                        parameters.extend(grants)
+                        clauses.append(
+                            "(json_type(c.snapshot,'$.participants') IS NULL OR EXISTS "
+                            "(SELECT 1 FROM json_each(c.snapshot,'$.participants') p "
+                            "WHERE json_extract(p.value,'$.user_id')=?))"
+                        )
+                        parameters.append(identity["actor_id"])
                 if identity["role"] == "MERCHANT":
                     clauses.append("c.merchant_id=?")
                     parameters.append(identity["merchant_id"])
@@ -64,17 +80,39 @@ class SQLiteDisputeUpdateReader:
                     )
                 )
                 audience = "MERCHANT" if identity["role"] == "MERCHANT" else "OPERATIONS"
-                per_case = {}
-                for kind, table in (
+                tables = (
                     ("case", "v2_dispute_audit"),
                     ("agent", "v2_dispute_agent_runs"),
                     ("conversation", "v2_dispute_agent_conversations"),
-                ):
+                )
+                has_collaboration = (
+                    connection.execute(
+                        "SELECT 1 FROM sqlite_master WHERE type='table' "
+                        "AND name='v21_collaboration_events'"
+                    ).fetchone()
+                    is not None
+                )
+                if has_collaboration:
+                    tables += (("collaboration", "v21_collaboration_events"),)
+                per_case = {}
+                for kind, table in tables:
                     predicate = scope
                     values = list(parameters)
                     if kind == "conversation":
-                        predicate += f" AND {audience_expression}=?"
-                        values.append(audience)
+                        visible = (
+                            [audience, "SHARED"]
+                            if identity["role"] == "MERCHANT"
+                            else [audience, "SHARED", "OP_INTERNAL"]
+                        )
+                        placeholders = ",".join("?" for _ in visible)
+                        predicate += f" AND {audience_expression} IN ({placeholders})"
+                        values.extend(visible)
+                    if kind == "collaboration":
+                        predicate += (
+                            " AND e.scope='SHARED'"
+                            if identity["role"] == "MERCHANT"
+                            else " AND e.scope IN ('SHARED','OP_INTERNAL')"
+                        )
                     # Table names are fixed constants above, never supplied by an HTTP caller.
                     rows = connection.execute(
                         f"SELECT e.case_id,MAX(e.rowid) AS position FROM {table} e "
@@ -90,7 +128,7 @@ class SQLiteDisputeUpdateReader:
                     parameters,
                 ).fetchone()
                 epoch = sha256(
-                    ("dispute-updates-v1:" + (first[0] if first else "EMPTY")).encode()
+                    ("dispute-updates-v2:" + (first[0] if first else "EMPTY")).encode()
                 ).hexdigest()
                 positions = {
                     kind: max(values.values(), default=0) for kind, values in per_case.items()
@@ -98,7 +136,10 @@ class SQLiteDisputeUpdateReader:
                 reset = (
                     position is None
                     or position["epoch"] != epoch
-                    or any(position["positions"][kind] > value for kind, value in positions.items())
+                    or any(
+                        position["positions"].get(kind, 0) > value
+                        for kind, value in positions.items()
+                    )
                 )
                 changes = []
                 for identifier, revision in sorted(revisions.items()):
@@ -106,7 +147,8 @@ class SQLiteDisputeUpdateReader:
                         kind: (
                             (kind == "case" or identifier in per_case[kind])
                             if reset
-                            else per_case[kind].get(identifier, 0) > position["positions"][kind]
+                            else per_case[kind].get(identifier, 0)
+                            > position["positions"].get(kind, 0)
                         )
                         for kind in per_case
                     }
@@ -117,7 +159,9 @@ class SQLiteDisputeUpdateReader:
                                 "revision": revision,
                                 "case_changed": flags["case"],
                                 "agent_changed": flags["agent"],
-                                "conversation_changed": flags["conversation"],
+                                "conversation_changed": flags["conversation"]
+                                or flags.get("collaboration", False),
+                                "collaboration_changed": flags.get("collaboration", False),
                             }
                         )
                 connection.rollback()

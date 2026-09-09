@@ -13,6 +13,7 @@ from oceanpilot.config import Settings
 from oceanpilot.domain.enums import EvidenceValueType, SourceReliability, SourceType
 from oceanpilot.domain.models import CaseView
 from oceanpilot.main import create_app
+from tests.api.v21_contract import V21_METHODS, V21_PATHS
 
 CASE_ID_V1 = "00000000-0000-1000-8000-000000000010"
 EVIDENCE_ID = "00000000-0000-4000-8000-000000000011"
@@ -308,7 +309,7 @@ def test_parse_rfc3339_rejects_non_exact_forms(value: object):
 
 def test_openapi_has_exact_foundation_paths(app: FastAPI):
     paths = app.openapi()["paths"]
-    assert set(paths) == {
+    assert set(paths) == V21_PATHS | {
         "/health",
         "/api/v2/case-library",
         "/api/v2/case-library/{template_id}",
@@ -360,7 +361,7 @@ def test_openapi_has_exact_foundation_paths(app: FastAPI):
         "/api/v1/workspace/cases/{case_id}/summaries",
         "/api/v1/workspace/summaries/{summary_id}",
     }
-    assert {path: set(item) for path, item in paths.items()} == {
+    assert {path: set(item) for path, item in paths.items()} == V21_METHODS | {
         "/health": {"get"},
         "/api/v2/case-library": {"get"},
         "/api/v2/case-library/{template_id}": {"get"},

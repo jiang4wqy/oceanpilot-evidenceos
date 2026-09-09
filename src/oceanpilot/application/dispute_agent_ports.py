@@ -2,7 +2,7 @@
 
 from typing import Protocol
 
-AUDIENCES = {"MERCHANT", "OPERATIONS"}
+AUDIENCES = {"MERCHANT", "OPERATIONS", "SHARED", "OP_INTERNAL"}
 
 
 def audience_for_role(role: str | None) -> str:

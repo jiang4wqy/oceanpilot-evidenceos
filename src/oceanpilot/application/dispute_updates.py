@@ -70,7 +70,7 @@ class DisputeUpdatesService:
                 422,
             )
             require(
-                type(decoded["v"]) is int and decoded["v"] == 1,
+                type(decoded["v"]) is int and decoded["v"] in {1, 2},
                 "INVALID_CURSOR",
                 "Unsupported update cursor version",
                 422,
@@ -87,7 +87,11 @@ class DisputeUpdatesService:
             positions = decoded["positions"]
             require(
                 isinstance(positions, dict)
-                and set(positions) == {"case", "agent", "conversation"}
+                and set(positions)
+                in (
+                    {"case", "agent", "conversation"},
+                    {"case", "agent", "conversation", "collaboration"},
+                )
                 and all(
                     type(value) is int and 0 <= value <= 2**63 - 1 for value in positions.values()
                 ),
@@ -102,7 +106,7 @@ class DisputeUpdatesService:
     @staticmethod
     def _encode(scope: str, snapshot: dict) -> str:
         payload = {
-            "v": 1,
+            "v": 2,
             "scope": scope,
             "epoch": snapshot["epoch"],
             "positions": snapshot["positions"],

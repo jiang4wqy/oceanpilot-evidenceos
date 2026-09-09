@@ -9,16 +9,13 @@ from oceanpilot.adapters.model.fake import ScriptedModelProvider
 from oceanpilot.application.model_provider import ModelResult
 from oceanpilot.config import Settings
 from oceanpilot.main import create_app
+from tests.v21_support import normalized_intake, session_headers
 
 MODEL_ANSWER = "已调用注入模型：请先核对规则来源，再由有权限的人确认下一步。"
 
 
-def headers(role="OPERATOR", merchant="agent-merchant"):
-    return {
-        "X-Demo-Role": role,
-        "X-Demo-Actor": f"agent-test-{role.lower()}",
-        "X-Demo-Merchant": merchant,
-    }
+def headers(client, role="OPERATOR", merchant="agent-merchant"):
+    return session_headers(client, role, merchant)
 
 
 @pytest.fixture
@@ -30,10 +27,10 @@ def stack(tmp_path):
 
 
 def intake(client):
-    response = client.post(
-        "/api/v2/commands",
-        headers=headers(),
-        json={
+    response = normalized_intake(
+        client,
+        request_headers=headers(client),
+        payload={
             "command_id": str(uuid4()),
             "action": "INTAKE",
             "confirmed": True,
@@ -58,13 +55,13 @@ def path(case, suffix=""):
 
 
 def activity(client, case):
-    response = client.get(path(case), headers=headers())
+    response = client.get(path(case), headers=headers(client))
     assert response.status_code == 200, response.text
     return response.json()
 
 
 def current_case(client, case):
-    response = client.get(f"/api/v2/cases/{case['id']}", headers=headers())
+    response = client.get(f"/api/v2/cases/{case['id']}", headers=headers(client))
     assert response.status_code == 200, response.text
     return response.json()
 
@@ -87,7 +84,7 @@ def execute_proposal(
 ):
     return client.post(
         path(case, f"/proposals/{proposal['id']}/execute"),
-        headers=headers(role, merchant),
+        headers=headers(client, role, merchant),
         json=body or proposal_body(case),
     )
 
@@ -101,32 +98,38 @@ def comment(client, case, *, command_id=None):
         "confirmed": False,
         "data": {"message": "OP 补充本案上下文，等待人工处理。"},
     }
-    return client.post("/api/v2/commands", headers=headers(), json=payload), payload
+    return client.post("/api/v2/commands", headers=headers(client), json=payload), payload
 
 
-def test_same_case_ai_messages_and_activity_are_private_to_each_audience(stack):
+def test_same_case_ai_messages_join_shared_thread_without_cross_case_leak(stack):
     client, _ = stack
     case = intake(client)
     for role, audience in (("OPERATOR", "OPERATIONS"), ("MERCHANT", "MERCHANT")):
         response = client.post(
             path(case, "/messages"),
-            headers=headers(role),
+            headers=headers(client, role),
             json={"message": f"PRIVATE-{audience}", "expected_revision": case["revision"]},
         )
         assert response.status_code == 200, response.text
         result = response.json()
-        assert result["audience"] == audience
-        assert result["scope"] == {"case_id": case["id"], "audience": audience}
-    for role, audience in (("OPERATOR", "OPERATIONS"), ("MERCHANT", "MERCHANT")):
-        response = client.get(path(case), headers=headers(role))
+        assert result["audience"] == "SHARED"
+        assert result["scope"] == {"case_id": case["id"], "audience": "SHARED"}
+    for role in ("OPERATOR", "MERCHANT"):
+        response = client.get(path(case), headers=headers(client, role))
         assert response.status_code == 200, response.text
         result = response.json()
-        assert result["scope"] == {"case_id": case["id"], "audience": audience}
-        assert [item["message"] for item in result["conversations"]] == [f"PRIVATE-{audience}"]
+        assert result["scope"] == {"case_id": case["id"], "audience": "SHARED"}
+        assert [item["message"] for item in result["conversations"]] == [
+            "PRIVATE-OPERATIONS",
+            "PRIVATE-MERCHANT",
+        ]
         assert all(item["source"] == "MODEL" for item in result["conversations"])
     other_case = intake(client)
     for role in ("OPERATOR", "MERCHANT"):
-        assert client.get(path(other_case), headers=headers(role)).json()["conversations"] == []
+        assert (
+            client.get(path(other_case), headers=headers(client, role)).json()["conversations"]
+            == []
+        )
 
 
 def test_http_cannot_choose_another_audience_or_return_internal_drafts_to_merchant(stack):
@@ -134,7 +137,7 @@ def test_http_cannot_choose_another_audience_or_return_internal_drafts_to_mercha
     case = intake(client)
     response = client.post(
         path(case, "/messages"),
-        headers=headers("MERCHANT"),
+        headers=headers(client, "MERCHANT"),
         json={
             "message": "读取运营对话",
             "expected_revision": case["revision"],
@@ -144,12 +147,12 @@ def test_http_cannot_choose_another_audience_or_return_internal_drafts_to_mercha
     assert response.status_code == 422
     response = client.post(
         path(case, "/run"),
-        headers=headers("MERCHANT"),
+        headers=headers(client, "MERCHANT"),
         json={"expected_revision": case["revision"]},
     )
     assert response.status_code == 200, response.text
     result = response.json()
-    assert result["audience"] == "MERCHANT"
+    assert result["audience"] == "SHARED"
     assert result["proposals"] == []
     assert "review_brief" not in response.text
     assert "商户答复草稿" in result["run"]["prepared"]["response_draft"]
@@ -204,7 +207,9 @@ def test_refresh_at_same_revision_reuses_run_without_duplicate_work(stack):
     requests = len(model.requests)
     for _ in range(2):
         response = client.post(
-            path(case, "/run"), headers=headers(), json={"expected_revision": case["revision"]}
+            path(case, "/run"),
+            headers=headers(client),
+            json={"expected_revision": case["revision"]},
         )
         assert response.status_code == 200, response.text
         assert response.json()["run"]["id"] == before["run"]["id"]
@@ -221,7 +226,7 @@ def test_all_agent_endpoints_enforce_merchant_case_scope(stack, endpoint):
     proposal = publish_proposal(client, case)
     before = activity(client, case)
     requests = len(model.requests)
-    foreign = headers("MERCHANT", "unrelated-merchant")
+    foreign = headers(client, "MERCHANT", "unrelated-merchant")
     if endpoint == "get":
         response = client.get(path(case), headers=foreign)
     elif endpoint == "run":
@@ -286,7 +291,32 @@ def test_successful_proposal_replay_has_exactly_one_business_effect(stack):
     updated = current_case(client, case)
     assert updated == first.json()["case"]
     assert len([item for item in updated["audit"] if item["action"] == "PUBLISH_TASK"]) == 1
+    lineage = updated["audit"][-1]["proposal_origin"]
+    assert lineage["proposal_id"] == proposal["id"]
+    assert lineage["edited"] is False and lineage["changed_fields"] == []
+    assert lineage["actual_data"] == lineage["normalized_original_data"]
+    assert lineage["original_data"] == proposal["data"]
+    assert lineage["confirmed_by"]
     assert len(activity(client, case)["history"]) == 2
+
+
+def test_legacy_proposal_receipt_replays_without_rewriting_its_fingerprint(stack):
+    client, _ = stack
+    case = intake(client)
+    proposal = publish_proposal(client, case)
+    body = proposal_body(case)
+    legacy = body | {
+        "case_id": case["id"],
+        "action": proposal["action"],
+        "data": proposal["data"],
+    }
+    first = client.post("/api/v2/commands", headers=headers(client), json=legacy)
+    assert first.status_code == 200, first.text
+    assert "proposal_origin" not in first.json()["case"]["audit"][-1]
+    replay = execute_proposal(client, case, proposal, body)
+    assert replay.status_code == 200, replay.text
+    assert replay.json()["replayed"] is True
+    assert replay.json()["case"] == first.json()["case"]
 
 
 def test_client_cannot_replace_server_proposal_command_or_data(stack):
@@ -325,7 +355,7 @@ def test_sensitive_dialogue_never_reaches_model_or_conversation_storage(stack):
     sensitive = "请分析卡号 4111 1111 1111 1111 的证据"
     response = client.post(
         path(case, "/messages"),
-        headers=headers(),
+        headers=headers(client),
         json={
             "message": sensitive,
             "expected_revision": case["revision"],
@@ -344,7 +374,7 @@ def test_model_text_cannot_create_financial_or_submit_commands(tmp_path):
         case = intake(client)
         response = client.post(
             path(case, "/messages"),
-            headers=headers(),
+            headers=headers(client),
             json={
                 "message": "请给下一步建议",
                 "expected_revision": case["revision"],
@@ -366,7 +396,7 @@ def test_messages_call_injected_model_and_preserve_tool_source_provenance(tmp_pa
         requests = len(model.requests)
         response = client.post(
             path(case, "/messages"),
-            headers=headers(),
+            headers=headers(client),
             json={
                 "message": "本案为什么要这些材料，下一步需要谁确认？",
                 "expected_revision": case["revision"],
@@ -418,7 +448,7 @@ def test_model_failure_falls_back_without_mislabeling_or_leaking_exception(tmp_p
         case = intake(client)
         response = client.post(
             path(case, "/messages"),
-            headers=headers(),
+            headers=headers(client),
             json={
                 "message": "下一步需要谁处理？",
                 "expected_revision": case["revision"],
@@ -452,14 +482,14 @@ def test_observer_failure_does_not_turn_committed_command_into_500_or_duplicate_
     assert response.status_code == 200, response.text
     updated = response.json()["case"]
     assert updated["revision"] == case["revision"] + 1
-    replay = client.post("/api/v2/commands", headers=headers(), json=payload)
+    replay = client.post("/api/v2/commands", headers=headers(client), json=payload)
     assert replay.status_code == 200, replay.text
     assert replay.json()["replayed"] is True
     assert current_case(client, case) == updated
     assert activity(client, case)["stale"] is True
     monkeypatch.setattr(client.app.state.dispute_agent, "observe", observer)
     refreshed = client.post(
-        path(case, "/run"), headers=headers(), json={"expected_revision": updated["revision"]}
+        path(case, "/run"), headers=headers(client), json={"expected_revision": updated["revision"]}
     )
     assert refreshed.status_code == 200, refreshed.text
     assert refreshed.json()["stale"] is False
@@ -476,7 +506,7 @@ def test_stale_agent_requests_do_not_call_model_or_change_business_state(stack, 
     payload = {"expected_revision": case["revision"]}
     if suffix == "/messages":
         payload["message"] = "使用旧版做出建议"
-    rejected = client.post(path(case, suffix), headers=headers(), json=payload)
+    rejected = client.post(path(case, suffix), headers=headers(client), json=payload)
     assert rejected.status_code == 409, rejected.text
     assert len(model.requests) == requests
     assert current_case(client, case) == updated
@@ -489,7 +519,7 @@ def test_agent_history_and_conversations_survive_app_restart_without_get_writes(
         case = intake(client)
         response = client.post(
             path(case, "/messages"),
-            headers=headers(),
+            headers=headers(client),
             json={
                 "message": "总结本案待办",
                 "expected_revision": case["revision"],

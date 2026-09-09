@@ -23,7 +23,7 @@ from oceanpilot.domain.dispute_rules import case_plan
 from oceanpilot.domain.errors import SensitiveDataRejected
 from oceanpilot.domain.security import assert_no_sensitive_data
 
-NOW = 1809860400
+NOW = int(datetime(2026, 9, 9, 11, tzinfo=UTC).timestamp())
 ENCRYPT_KEY = "synthetic-feishu-v2-encrypt-key"
 TOKEN = "synthetic-feishu-v2-token"
 IDENTITY = {"role": "MERCHANT", "actor_id": "merchant-user", "merchant_id": "merchant-1"}
@@ -378,9 +378,9 @@ def test_card_kinds_render_locally_with_case_deep_link_and_explicit_boundaries(s
         kind=kind,
     )
     serialized = json.dumps(card, ensure_ascii=False)
-    assert "SYNTHETIC_DEMO" in serialized and "Mock" in serialized and "Disabled" in serialized
+    assert "SYNTHETIC_DEMO" in serialized and "Mock" in serialized and "本地预览" in serialized
     actions = card["elements"][-1]["actions"]
-    assert actions[-1]["url"].endswith("/v2/merchant?case_id=case-1")
+    assert actions[-1]["url"].endswith("/v2/merchant/cases/case-1")
     assert all("case_id" not in action.get("value", {}) for action in actions)
     if kind == "NEW_DISPUTE":
         assert len(actions) == 3 and "confirm" in actions[0]
@@ -413,7 +413,7 @@ def test_new_dispute_card_only_offers_confirmed_rule_actions(stack, allowed):
     actions = card["elements"][-1]["actions"]
     assert [a["value"]["decision"] for a in actions if "value" in a] == (allowed or [])
     assert actions[-1]["text"]["content"] == "查看案件"
-    assert actions[-1]["url"].endswith("/v2/merchant?case_id=case-1")
+    assert actions[-1]["url"].endswith("/v2/merchant/cases/case-1")
     assert adapter.service.commands == []
 
 

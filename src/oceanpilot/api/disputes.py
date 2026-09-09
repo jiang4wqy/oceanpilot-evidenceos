@@ -3,14 +3,14 @@
 from typing import Annotated, Any, Literal
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictInt, StrictStr, ValidationError
 
 from oceanpilot.api.cases import COMMON_PROBLEMS, PROBLEM_RESPONSE
-from oceanpilot.domain.dispute import require
+from oceanpilot.api.dispute_commands_v21 import DATA_MODELS as V21_DATA_MODELS
+from oceanpilot.domain.dispute import fingerprint, require
 from oceanpilot.domain.dispute_rules import case_plan, rule_catalog
-from oceanpilot.domain.security import assert_no_sensitive_data
 
 router = APIRouter(
     tags=["OceanPilot V2"],
@@ -175,7 +175,15 @@ DATA_MODELS = {
     "MONITOR_SLA": StrictDTO,
     "KNOWLEDGE_CANDIDATE": KnowledgeData,
     "APPROVE_KNOWLEDGE": KnowledgeReviewData,
+    **V21_DATA_MODELS,
 }
+
+
+class ProposalOrigin(StrictDTO):
+    run_id: StrictStr = Field(min_length=1, max_length=200)
+    proposal_id: StrictStr = Field(min_length=1, max_length=200)
+    scope: Literal["SHARED", "OP_INTERNAL", "MERCHANT", "OPERATIONS"]
+    original_revision: StrictInt = Field(ge=1)
 
 
 class DisputeCommand(StrictDTO):
@@ -185,19 +193,15 @@ class DisputeCommand(StrictDTO):
     expected_revision: StrictInt | None = Field(default=None, ge=0)
     confirmed: StrictBool
     data: dict[str, Any]
+    proposal_origin: ProposalOrigin | None = None
 
 
-def v2_identity(
-    role: Annotated[str, Header(alias="X-Demo-Role")] = "MERCHANT",
-    actor: Annotated[str, Header(alias="X-Demo-Actor")] = "synthetic-user",
-    merchant: Annotated[str, Header(alias="X-Demo-Merchant")] = "synthetic-merchant-001",
-) -> dict[str, str]:
-    if role not in ROLES:
-        raise HTTPException(403, "未识别的演示角色。")
-    if any(not text.strip() or len(text) > 100 for text in (actor, merchant)):
-        raise HTTPException(422, "身份标识不合法。")
-    assert_no_sensitive_data({"actor": actor, "merchant": merchant})
-    return {"role": role, "actor_id": actor, "merchant_id": merchant}
+def v2_identity(request: Request) -> dict:
+    from oceanpilot.api.dispute_identity import session_identity
+
+    identity = session_identity(request)
+    require(identity["role"] in ROLES, "FORBIDDEN", "此账号不能执行业务操作。", 403)
+    return identity
 
 
 Identity = Annotated[dict[str, str], Depends(v2_identity)]
@@ -218,27 +222,86 @@ async def dispute_error_handler(request: Request, exc: Exception) -> JSONRespons
 
 
 @router.get("/api/v2/cases")
-def list_cases(request: Request, identity: Identity) -> dict:
-    return {"cases": request.app.state.disputes.list_cases(identity)}
+def list_cases(
+    request: Request,
+    identity: Identity,
+    limit: Annotated[int, Query(ge=1, le=100)] = 25,
+    offset: Annotated[int, Query(ge=0, le=1000000)] = 0,
+    q: Annotated[str, Query(max_length=100)] = "",
+    queue: Literal[
+        "ALL",
+        "URGENT",
+        "MERCHANT",
+        "EVIDENCE",
+        "REVIEW",
+        "SUBMISSION",
+        "FINANCIAL",
+        "PROCESSING",
+        "CLOSED",
+    ] = "ALL",
+    assigned_to: Annotated[str, Query(max_length=100)] = "",
+) -> dict:
+    from oceanpilot.adapters.persistence.dispute_queue import DisputeQueueReader
+
+    service = request.app.state.disputes
+    return DisputeQueueReader(service.store, service.access_policy).read(
+        identity,
+        limit=limit,
+        offset=offset,
+        query=q,
+        queue=queue,
+        assigned_to=assigned_to,
+        now=service.clock(),
+    )
 
 
 @router.get("/api/v2/cases/{case_id}")
 def get_case(case_id: str, request: Request, identity: Identity) -> dict:
-    return request.app.state.disputes.get_case(case_id, identity)
+    from oceanpilot.api.dispute_presenter import present_case
+
+    service = request.app.state.disputes
+    return present_case(service.get_case(case_id, identity), identity, service)
 
 
-@router.post("/api/v2/commands")
+@router.post("/api/v2/commands", responses={410: PROBLEM_RESPONSE})
 def command(payload: DisputeCommand, request: Request, identity: Identity) -> dict:
+    if payload.action == "INTAKE":
+        require(
+            identity["role"] == "OPERATOR",
+            "FORBIDDEN",
+            "Only an authorized Operator can receive source events",
+            403,
+        )
+        require(
+            False,
+            "NORMALIZED_INTAKE_REQUIRED",
+            "Use /api/v2/intake/events with source times and a registered synthetic transaction",
+            410,
+        )
     model = DATA_MODELS.get(payload.action)
     if model is None:
         raise HTTPException(422, "不支持的 V2 命令。")
     try:
         data = model.model_validate(payload.data).model_dump(exclude_none=True)
-    except ValidationError:
-        raise HTTPException(422, "操作字段不符合 V2 命令合同。") from None
+    except ValidationError as exc:
+        errors = [
+            {
+                "field": ".".join(str(part) for part in item["loc"]),
+                "message": item["msg"],
+                "type": item["type"],
+            }
+            for item in exc.errors(include_input=False, include_context=False)
+        ]
+        raise HTTPException(422, {"message": "请核对标出的操作字段。", "fields": errors}) from None
     if payload.action != "INTAKE" and (not payload.case_id or payload.expected_revision is None):
         raise HTTPException(422, "命令必须绑定案件及当前版本。")
-    return request.app.state.disputes.execute(payload.model_dump() | {"data": data}, identity)
+    from oceanpilot.api.dispute_presenter import present_result
+
+    service = request.app.state.disputes
+    normalized = payload.model_dump(exclude={"proposal_origin"}) | {"data": data}
+    if payload.proposal_origin is not None:
+        normalized["proposal_origin"] = payload.proposal_origin.model_dump()
+    return present_result(service.execute(normalized, identity), identity, service)
 
 
 @router.get("/api/v2/cases/{case_id}/plan")
@@ -258,7 +321,9 @@ def plan(case_id: str, request: Request, identity: Identity) -> dict:
                     result["similar_cases"].append(
                         {k: candidate.get(k) for k in ("id", "summary", "pattern", "status")}
                     )
-    return result
+    from oceanpilot.api.dispute_presenter import present_plan
+
+    return present_plan(result, identity, case, request.app.state.disputes)
 
 
 @router.get("/api/v2/rules")
@@ -306,16 +371,65 @@ def agent_run(case_id: str, payload: AgentRunRequest, request: Request, identity
     return _activity(case_id, request, identity)
 
 
-@router.post("/api/v2/cases/{case_id}/agent/messages")
+@router.post("/api/v2/cases/{case_id}/agent/messages", deprecated=True)
 def agent_message(
     case_id: str, payload: AgentMessageRequest, request: Request, identity: Identity
 ) -> dict:
-    return request.app.state.dispute_agent.converse(
+    case = request.app.state.disputes.get_case(case_id, identity)
+    require(
+        case["revision"] == payload.expected_revision,
+        "REVISION_CONFLICT",
+        "案件已变化，请刷新后提问。",
+    )
+    # Compatibility transport now joins the same public journal as the main UI.
+    # Previously saved private conversations remain available only as history.
+    result = request.app.state.dispute_collaboration.post_message(
         case_id,
         identity,
+        "compat-message-" + str(uuid4()),
         payload.message,
-        payload.expected_revision,
+        scope="SHARED",
+        ask_agent=True,
     )
+    require(
+        result.get("agent_status") != "CASE_CHANGED",
+        "REVISION_CONFLICT",
+        "问题已保留；案件在分析期间发生变化，请重新请求分析。",
+    )
+    reply = result["agent_reply"]
+    conversation = next(
+        item
+        for item in request.app.state.dispute_agent.store.list_conversations(
+            case_id, audience="SHARED"
+        )
+        if item["id"] == reply["conversation_id"]
+    )
+    response = {
+        key: conversation.get(key)
+        for key in (
+            "answer",
+            "model_analysis",
+            "provider",
+            "source",
+            "model",
+            "provider_fallback",
+            "reference_notice",
+            "trigger",
+            "source_citations",
+            "intent",
+            "audience",
+            "scope",
+            "knowledge_retrieval",
+            "tool_steps",
+        )
+    }
+    current = _activity(case_id, request, identity)
+    return response | {
+        "run": current["run"],
+        "proposals": current["proposals"],
+        "conversation_id": conversation["id"],
+        "message_id": result["message"]["id"],
+    }
 
 
 @router.post("/api/v2/cases/{case_id}/agent/proposals/{proposal_id}/execute")
@@ -360,6 +474,28 @@ def agent_proposal(
         action=proposal["action"],
         data=proposal["data"],
     )
+    legacy_command = command_payload.model_dump(exclude={"proposal_origin"}) | {
+        "data": DATA_MODELS[proposal["action"]]
+        .model_validate(proposal["data"])
+        .model_dump(exclude_none=True)
+    }
+    saved_fingerprint = request.app.state.disputes.store.get_command_fingerprint(payload.command_id)
+    # Keep exact historical retries byte-compatible; the atomic store still
+    # enforces the original actor. Every new confirmation gets trusted lineage.
+    if saved_fingerprint != fingerprint(legacy_command):
+        run = request.app.state.dispute_agent.store.get_run(case_id, proposal["expected_revision"])
+        require(
+            run is not None and any(p["id"] == proposal_id for p in run["proposals"]),
+            "PROPOSAL_NOT_FOUND",
+            "Proposal run not found",
+            404,
+        )
+        command_payload.proposal_origin = ProposalOrigin(
+            run_id=run["id"],
+            proposal_id=proposal_id,
+            scope=proposal.get("scope", "SHARED"),
+            original_revision=proposal["expected_revision"],
+        )
     return command(command_payload, request, identity)
 
 
@@ -402,7 +538,7 @@ def governance(request: Request, identity: Identity) -> dict:
             "提交回执及结果语义",
             "财务核对字段与费用规则",
         ],
-        "boundary": "全部案例为合成演示；Header 角色仅用于本地演示，未接生产身份认证。",
+        "boundary": "本地合成案例；身份来自服务端账号会话及案件授权。尚未接入生产 SSO 与真实上游。",
     }
 
 
@@ -416,17 +552,38 @@ def capabilities(identity: Identity) -> dict:
 
     return {
         "role": identity["role"],
-        "actions": sorted(a for a, roles in ACTION_ROLES.items() if identity["role"] in roles),
+        "intake_events": identity["role"] == "OPERATOR",
+        "actions": sorted(
+            a for a, roles in ACTION_ROLES.items() if identity["role"] in roles and a != "INTAKE"
+        ),
     }
 
 
-@router.post("/api/v2/demo")
-def demo(payload: DemoData, request: Request, identity: Identity) -> dict:
-    if identity["role"] != "OPERATOR":
-        raise HTTPException(403, "只有 OP 运营角色可以接收合成演示案件。")
-    from oceanpilot.application.dispute_demo import create_demo
+@router.get("/api/v2/command-schemas")
+def command_schemas(identity: Identity) -> dict:
+    from oceanpilot.api.dispute_presenter import command_schema
+    from oceanpilot.domain.dispute import ACTION_ROLES
 
-    return create_demo(request.app.state.disputes, payload.scenario, identity, str(uuid4()))
+    return {
+        "commands": {
+            action: command_schema(model)
+            for action, model in DATA_MODELS.items()
+            if identity["role"] in ACTION_ROLES.get(action, set()) and action != "INTAKE"
+        }
+    }
+
+
+@router.post("/api/v2/demo", responses={410: PROBLEM_RESPONSE})
+def demo(payload: DemoData, request: Request, identity: Identity) -> dict:
+    require(
+        identity["role"] == "OPERATOR", "FORBIDDEN", "此入口不能替代商户、风控或主管执行决定。", 403
+    )
+    require(
+        False,
+        "NORMALIZED_INTAKE_REQUIRED",
+        "请先由独立导演登记合成交易，再经标准事件入口接收；后续由各角色本人处理。",
+        410,
+    )
 
 
 @router.get("/api/v2/case-library")
@@ -450,22 +607,34 @@ def case_library_reference(template_id: str, request: Request, identity: Identit
 @router.get("/v2/operations", response_class=HTMLResponse, include_in_schema=False)
 @router.get("/v2/operations/library", response_class=HTMLResponse, include_in_schema=False)
 @router.get("/v2/operations/cases/{case_id}", response_class=HTMLResponse, include_in_schema=False)
-def operations_page() -> HTMLResponse:
+def operations_page(request: Request) -> HTMLResponse:
+    from oceanpilot.api.dispute_identity import page_access
     from oceanpilot.web.v2.rendering import render_v2_page
 
+    denied = page_access(request, {"OPERATOR", "RISK_OFFICER", "SUPERVISOR"})
+    if denied is not None:
+        return denied
     return HTMLResponse(render_v2_page("OPERATOR"))
 
 
 @router.get("/v2/merchant", response_class=HTMLResponse, include_in_schema=False)
 @router.get("/v2/merchant/cases/{case_id}", response_class=HTMLResponse, include_in_schema=False)
-def merchant_page() -> HTMLResponse:
+def merchant_page(request: Request) -> HTMLResponse:
+    from oceanpilot.api.dispute_identity import page_access
     from oceanpilot.web.v2.rendering import render_v2_page
 
+    denied = page_access(request, {"MERCHANT"})
+    if denied is not None:
+        return denied
     return HTMLResponse(render_v2_page("MERCHANT"))
 
 
 @router.get("/v2/governance", response_class=HTMLResponse, include_in_schema=False)
-def governance_page() -> HTMLResponse:
+def governance_page(request: Request) -> HTMLResponse:
+    from oceanpilot.api.dispute_identity import page_access
     from oceanpilot.web.v2.rendering import render_v2_page
 
+    denied = page_access(request, {"ADMIN", "SUPERVISOR"})
+    if denied is not None:
+        return denied
     return HTMLResponse(render_v2_page("ADMIN"))

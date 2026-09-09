@@ -852,6 +852,10 @@ p {
   box-shadow: 0 0 0 4px #e7f0e1;
   background: var(--green);
 }
+.timeline-step.current {
+  color: var(--green);
+  font-weight: 700;
+}
 .task-row,
 .evidence-row,
 .record-row {
@@ -3882,3 +3886,117 @@ body { background: var(--canvas); color: var(--ink); }
 @media (max-width: 520px) {
   .list-page .case-queue .case-id { font-size: 10px; }
 }
+
+/* V2.1 authorized workspaces: a current task and a shared case conversation. */
+.account-name { font-size: 13px; font-weight: 650; color: #28414a; }
+.account-logout { border: 0; background: transparent; color: #536d76; font-size: 12px; padding: 8px; cursor: pointer; }
+.workspace-nav a { width: 100%; }
+.current-task { margin: 18px 22px; padding: 20px; border: 1px solid #c8e2e3; border-radius: 12px; background: #f2faf9; }
+.current-task-kicker { display: flex; justify-content: space-between; gap: 12px; font-size: 12px; color: #337773; }
+.current-task-kicker span { color: #496971; }
+.current-task h3 { font-size: 21px; line-height: 1.45; margin: 10px 0 8px; letter-spacing: -.4px; }
+.current-task p { font-size: 14px; line-height: 1.7; color: #45636c; margin: 0 0 16px; white-space: pre-wrap; }
+.current-task-footer { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 14px; }
+.current-task-footer > span { font-size: 12px; color: #59727b; }
+.current-task-footer strong { display: block; margin-top: 4px; color: #2c4b55; font-size: 14px; }
+.secondary-actions { margin-top: 16px; border-top: 1px solid #d7e9e8; padding-top: 12px; }
+.secondary-actions summary { cursor: pointer; font-size: 12px; color: #57716e; }
+.secondary-actions .action-bar { align-items: flex-start; }
+.action-control { display: inline-flex; flex-direction: column; align-items: flex-start; max-width: 100%; gap: 5px; }
+.action-control .button { max-width: 100%; white-space: normal; text-align: left; }
+.action-blocked-reason { display: block; max-width: 300px; font-size: 12px; line-height: 1.5; color: #756144; }
+.field-error { color: #b23e36; font-size: 12px; line-height: 1.5; }
+.field-error[hidden] { display: none; }
+.access-error { width: 100%; min-height: 300px; padding: 40px 24px; grid-column: 1 / -1; text-align: center; }
+.access-error h2 { font-size: 22px; }
+.access-error p { font-size: 14px; line-height: 1.7; }
+.access-error .action-bar { justify-content: center; }
+.queue-footer { justify-content: space-between; align-items: center; gap: 16px; font-size: 12px; }
+.queue-footer > div { display: flex; gap: 8px; }
+#agentPanel { display: flex; flex-direction: column; overflow: hidden; height: auto; max-height: none; }
+#agentPanel[hidden] { display: none; }
+.thread-heading { padding: 20px 20px 12px; display: flex; align-items: start; justify-content: space-between; gap: 12px; }
+.thread-heading h2 { font-size: 18px; line-height: 1.4; margin: 0 0 4px; }
+.thread-heading p { font-size: 12px; line-height: 1.5; color: #66818a; margin: 0; }
+.thread-symbol { float: left; margin-right: 9px; color: #16877f; font-size: 26px; }
+.thread-visibility { padding: 0 20px 12px; margin: 0; color: #677e86; font-size: 12px; line-height: 1.5; }
+.thread-scopes { display: flex; padding: 0 20px; margin-bottom: 12px; gap: 8px; }
+.thread-scopes button { flex: 1; padding: 9px; border: 1px solid #dce7e9; background: #fff; border-radius: 7px; font-size: 12px; color: #647a82; cursor: pointer; }
+.thread-scopes button.active { background: #eaf6f4; color: #117f74; border-color: #afdad5; font-weight: 650; }
+.thread-messages { flex: 1 1 330px; min-height: 230px; max-height: 470px; overflow-y: auto; overscroll-behavior: contain; padding: 8px 18px 18px; border-block: 1px solid #e8eef0; background: #fbfdfd; scroll-behavior: auto; }
+.thread-message { border: 1px solid #e0e9eb; background: #fff; border-radius: 10px; padding: 13px; margin-bottom: 12px; overflow-wrap: anywhere; }
+.thread-message.from-ai { background: #f0f8f7; border-color: #d5e9e5; }
+.thread-message header { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+.thread-message header strong { font-size: 12px; color: #284f5b; }
+.thread-message time { font-size: 12px; color: #768a90; }
+.thread-message-body { white-space: pre-wrap; font-size: 14px; line-height: 1.75; color: #334e58; }
+.thread-source { display: block; margin-top: 10px; font-size: 12px; color: #608079; }
+.thread-empty { padding: 26px 8px; font-size: 14px; color: #789096; line-height: 1.75; text-align: center; }
+.thread-empty strong { color: #446a6e; }
+.thread-empty p { font-size: 13px; margin-top: 8px; }
+.thread-composer { padding: 14px 18px; background: #fff; }
+.thread-input { width: 100%; min-height: 95px; resize: vertical; font: inherit; font-size: 14px; line-height: 1.6; padding: 12px; border: 1px solid #bfcfd3; border-radius: 8px; color: #304e59; box-sizing: border-box; }
+.thread-input:focus { outline: 2px solid #b6dfda; border-color: #29978a; }
+.thread-prompts { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 9px; }
+.thread-prompts button { font-size: 12px; color: #486a73; border: 1px solid #e1ebed; background: #f7fafb; padding: 7px 9px; border-radius: 6px; cursor: pointer; }
+.thread-compose-actions { margin-top: 10px; display: flex; gap: 12px; align-items: center; justify-content: space-between; }
+.thread-compose-actions label { font-size: 12px; color: #456571; display: flex; align-items: center; gap: 6px; }
+.thread-compose-actions input { accent-color: #14897d; }
+.thread-notice { margin: 10px 18px 0; font-size: 12px; }
+.thread-human,.thread-files,.thread-tools { border-top: 1px solid #e6edef; padding: 14px 18px; }
+.thread-human summary,.thread-files summary,.thread-tools summary { font-size: 12px; color: #4d6d78; cursor: pointer; line-height: 1.6; }
+.thread-human form,.thread-upload { display: grid; gap: 12px; margin-top: 13px; }
+.thread-human label,.thread-upload label { display: grid; gap: 6px; font-size: 12px; color: #49656f; }
+.thread-human textarea,.thread-upload input { box-sizing: border-box; width: 100%; max-width: 100%; min-width: 0; padding: 9px; border: 1px solid #d5e0e3; border-radius: 6px; font: inherit; font-size: 13px; }
+.thread-upload p,.private-history-notice { font-size: 12px; line-height: 1.6; color: #6b7f86; }
+.thread-file { display: flex; flex-direction: column; gap: 5px; margin-top: 12px; color: #276a77; font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
+.thread-file small { font-size: 12px; color: #71858d; }
+.thread-handoffs { max-height: 190px; overflow: auto; }
+.thread-handoff { margin: 0 18px 12px; padding: 12px; border-left: 3px solid #b2914d; background: #fffbf1; font-size: 13px; }
+.thread-handoff p { line-height: 1.6; margin: 6px 0; }
+.thread-handoff small { font-size: 12px; line-height: 1.5; }
+.thread-handoff .button { margin-top: 8px; }
+#agentToolsPanel .pilot-heading { padding: 16px 0; }
+#agentToolsPanel .pilot-heading h2 { font-size: 15px; }
+#agentToolsPanel .pilot-body { max-height: 420px; overflow-y: auto; }
+.case-page .workspace-grid { grid-template-columns: minmax(0,1fr) 400px; }
+@media (min-width: 1201px) { .case-page #agentPanel { position: sticky; top: 16px; } }
+@media (max-width: 1200px) { .case-page .workspace-grid { grid-template-columns: minmax(0,1fr); } .thread-messages { max-height: 430px; } }
+@media (max-width: 600px) {
+  .account-name { max-width: 115px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .identity { gap: 6px; }
+  .current-task { margin: 14px; padding: 16px; }
+  .current-task h3 { font-size: 19px; }
+  .current-task-kicker { flex-direction: column; gap: 5px; }
+  .current-task-footer { align-items: stretch; }
+  .thread-heading { padding: 18px 14px 12px; }
+  .thread-messages { padding: 10px 12px; min-height: 240px; max-height: 390px; }
+  .thread-composer { padding: 12px; }
+  .thread-compose-actions { align-items: flex-start; }
+  .thread-compose-actions label { max-width: 180px; line-height: 1.5; }
+  .thread-message-body { font-size: 14px; }
+  .workspace-nav { width: auto; flex: 1; margin: 0; }
+  .workspace-nav a { font-size: 12px; }
+  .queue-footer { flex-wrap: wrap; }
+}
+.thread-read { display:block; font-size:12px; color:#7b8c92; margin-top:9px; }
+.thread-file-check { margin-top:8px; font-size:12px; line-height:1.6; }
+.thread-file-check p,.thread-file-check pre { white-space:pre-wrap; overflow-wrap:anywhere; }
+.thread-file-check pre { max-height:230px; overflow:auto; font-size:12px; padding:10px; background:#f5f8f9; }
+.intake-events { padding:16px 20px; margin:0 0 18px; border:1px solid #dce7e9; border-radius:10px; background:white; }
+.intake-events>summary { font-size:14px; font-weight:650; cursor:pointer; color:#345c69; }
+.intake-events>summary span { font-size:12px; font-weight:400; margin-left:10px; color:#788b91; }
+.intake-events>p,.intake-event>p { font-size:13px; line-height:1.6; }
+.intake-event { border-top:1px solid #e6edef; padding:16px 0; font-size:13px; }
+.intake-event>div { display:flex; gap:12px; align-items:center; margin:8px 0; }
+.intake-event small { font-size:12px; overflow-wrap:anywhere; color:#718a92; }
+.intake-event pre,.intake-fields pre { max-height:250px; overflow:auto; padding:12px; background:#f5f8fa; font-size:12px; white-space:pre-wrap; overflow-wrap:anywhere; }
+.intake-event details>summary,.intake-extra>summary { cursor:pointer; font-size:12px; padding:10px 0; }
+.intake-event-dialog { width:min(680px,calc(100vw - 30px)); max-height:90vh; overflow:auto; }
+.intake-form { padding:24px; }
+.intake-fields { display:grid; grid-template-columns:1fr 1fr; gap:15px; }
+.intake-extra { grid-column:1/-1; }
+.intake-extra .form-field { margin-top:12px; }
+.intake-confirm { margin-right:8px; }
+@media(max-width:600px){.intake-fields{grid-template-columns:1fr}.intake-form{padding:18px}.intake-event>div{flex-wrap:wrap}}
+.case-reason-summary { margin:14px 0 0; max-width:650px; font-size:13px; line-height:1.7; color:#526f7a; }

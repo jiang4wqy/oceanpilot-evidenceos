@@ -13,31 +13,17 @@
     <div class="app-shell" id="appShell">
       <aside class="sidebar">
         <a
+          id="brandHome"
           class="brand"
           href="/v2/operations"
           aria-label="OceanPilot 争议协作"
           ><img src="__V2_LOGO__" alt="OceanPayment" /><span
             >OceanPilot<small>争议处理 · 案件智能体</small></span
-          ><b>V2</b></a
+          ><b>V2.1</b></a
         >
-        <div class="workspace-label">操作端</div>
+        <div class="workspace-label">我的工作空间</div>
         <nav class="workspace-nav" aria-label="工作空间">
-          <a href="/v2/operations" data-surface="operations"
-            ><span class="nav-icon">▦</span>运营工作台<span
-              class="nav-shortcut"
-              >OP</span
-            ></a
-          >
-          <a href="/v2/merchant" data-surface="merchant"
-            ><span class="nav-icon">▤</span>商户客户端<span class="nav-shortcut"
-              >M</span
-            ></a
-          >
-          <a href="/v2/governance" data-surface="governance"
-            ><span class="nav-icon">◇</span>平台治理<span class="nav-shortcut"
-              >G</span
-            ></a
-          >
+          <a href="/v2/merchant" id="workspaceHome" class="active"><span class="nav-icon">▤</span><span id="workspaceName">我的案件</span></a>
         </nav>
         <div class="workspace-label" id="queueNavLabel">案件视图</div>
         <nav id="queueNav" class="queue-nav" aria-label="案件队列"></nav>
@@ -46,7 +32,7 @@
             <span class="status-dot"></span>合成数据演示环境
           </div>
           <p>商户回应 · OceanPayment 处理<br />OceanPilot 在每个案件中协作</p>
-          <a href="/business" class="legacy-link">打开 V1 工作台 ↗</a>
+
         </div>
       </aside>
       <main class="main">
@@ -56,18 +42,13 @@
             <strong id="surfaceBreadcrumb">争议运营</strong>
           </div>
           <div class="identity">
-            <span class="demo-pill">SYNTHETIC DEMO</span
-            ><label for="roleSelect" class="sr-only"
-              >演示角色（非生产认证）</label
-            ><select
-              id="roleSelect"
-              aria-label="演示角色（非生产认证）"
-            ></select
-            ><span class="avatar" id="avatar">OP</span>
+            <span class="account-name" id="accountName">正在验证账号…</span>
+            <span class="avatar" id="avatar">·</span>
+            <button type="button" class="account-logout" id="logoutButton">退出</button>
           </div>
         </header>
         <div class="identity-note" id="identityNote">
-          角色切换用于 Synthetic 权限演示，非生产身份认证。
+          正在确认账号与案件访问范围。
         </div>
         <div class="page-heading">
           <div>
@@ -79,7 +60,6 @@
           </div>
           <div class="heading-actions">
             <button class="button secondary" id="refreshButton">↻ 刷新</button
-            ><button class="button secondary" id="demoButton">演示案例</button
             ><button class="button primary" id="intakeButton">
               ＋ 接收上游事件
             </button>
@@ -115,28 +95,17 @@
               ><span>⌕</span
               ><input
                 id="caseSearch"
+                maxlength="100"
                 type="search"
                 placeholder="搜索案件、商户或原因码"
                 aria-label="搜索案件"
             /></label>
-            <div class="queue-filter">
-              <label for="stageFilter">阶段</label
-              ><select id="stageFilter">
-                <option value="ALL">全部阶段</option>
-                <option value="FORMAL_DISPUTE">正式争议</option>
-                <option value="REPRESENTMENT">再请款</option>
-                <option value="PRE_ARBITRATION">预仲裁</option>
-                <option value="ARBITRATION">仲裁</option>
-                <option value="OTHER">其他</option>
-              </select>
-            </div>
+            <div class="queue-filter" id="assignedFilterGroup"><label for="assignedFilter">负责人</label><select id="assignedFilter"><option value="me">分配给我</option><option value="">全部获授权案件</option></select></div>
             </div>
             <div id="caseList" class="case-list">
               <div class="empty-state">正在读取案件…</div>
             </div>
-            <div class="queue-footer">
-              点击案件查看详情、处理任务与本案 OceanPilot
-            </div>
+            <div class="queue-footer" id="queuePagination" aria-label="案件分页"></div>
           </aside>
           <article class="case-detail" id="caseDetail" aria-label="案件详情">
             <div class="empty-state">
@@ -153,7 +122,7 @@
         </section>
         <section id="governanceView" hidden aria-label="平台治理"></section>
         <footer class="page-footer">
-          <span>OceanPilot V2</span><span
+          <span>OceanPilot V2.1</span><span
             >合成数据 · 上游提交为 Mock · 每次操作均保留案件记录</span
           >
         </footer>

@@ -7,7 +7,7 @@ from threading import Lock
 from oceanpilot.domain.dispute import DisputeError
 
 _LOG = logging.getLogger(__name__)
-_IDENTITY = {"role": "AGENT", "actor_id": "oceanpilot-event-agent"}
+_IDENTITY = {"role": "AGENT", "actor_id": "oceanpilot-workflow-agent"}
 _AUDIENCE_MESSAGES = {
     "OPERATIONS": (
         "请向 OceanPayment 处理团队说明本案最新变化、商户响应和材料进度、审核阻断、"
@@ -54,6 +54,8 @@ class DisputeAgentEvents:
         self._pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="v2-agent")
 
     def changed(self, case: dict, action: str, replayed: bool = False) -> None:
+        if self.agent.collaboration_provider:
+            self.agent.collaboration_provider.observe_business(case, action)
         self.agent.observe(case, action)
         if not replayed:
             self.schedule(case, action)
@@ -95,7 +97,15 @@ class DisputeAgentEvents:
                     continue
                 # Completed analyses survive process restart. Explicit user runs
                 # may retry a failed model attempt, ordinary events do not repeat it.
-                for audience, message in _AUDIENCE_MESSAGES.items():
+                messages = (
+                    {
+                        "SHARED": "请在本案共享线程说明最新变化、缺口与下一步责任人。"
+                        "引用已发布往来和材料，不含内部策略。"
+                    }
+                    if self.agent.collaboration_provider
+                    else _AUDIENCE_MESSAGES
+                )
+                for audience, message in messages.items():
                     prior = self.agent.store.list_conversations(case_id, audience=audience)
                     if trigger != "USER_RUN" and any(
                         item["case_revision"] == revision
@@ -103,7 +113,7 @@ class DisputeAgentEvents:
                         for item in prior
                     ):
                         continue
-                    self.agent.converse(
+                    answer = self.agent.converse(
                         case_id,
                         _IDENTITY,
                         message,
@@ -111,6 +121,10 @@ class DisputeAgentEvents:
                         trigger=f"AUTO_EVENT:{trigger}",
                         audience=audience,
                     )
+                    if self.agent.collaboration_provider:
+                        self.agent.collaboration_provider.publish_agent_answer(
+                            case_id, answer, audience
+                        )
             except DisputeError as error:
                 if error.code != "REVISION_CONFLICT":
                     _LOG.warning("V2 background agent analysis unavailable")

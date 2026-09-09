@@ -197,3 +197,61 @@ def test_send_inputs_are_strict_and_closed():
             card={"schema": "2.0"},
             idempotency_key="contains spaces",
         )
+
+
+def test_reply_card_uses_official_thread_reply_contract_and_stable_uuid():
+    transport = _ScriptedTransport(
+        [
+            _response({"code": 0, "tenant_access_token": TOKEN}),
+            _response({"code": 0, "data": {"message_id": "om_reply"}}),
+        ]
+    )
+    receipt = _client(transport).reply_interactive_card(
+        message_id="om_parent", card={"elements": []}, idempotency_key="stable-reply-uuid"
+    )
+    request = transport.requests[-1]
+    assert request.method == "POST"
+    assert request.url.endswith("/im/v1/messages/om_parent/reply")
+    assert json.loads(request.body) == {
+        "content": '{"elements":[]}',
+        "msg_type": "interactive",
+        "reply_in_thread": True,
+        "uuid": "stable-reply-uuid",
+    }
+    assert receipt.message_id == "om_reply"
+
+
+def test_update_card_uses_patch_and_does_not_invent_provider_idempotency_parameter():
+    transport = _ScriptedTransport(
+        [
+            _response({"code": 0, "tenant_access_token": TOKEN}),
+            _response({"code": 0}),
+        ]
+    )
+    receipt = _client(transport).update_interactive_card(
+        message_id="om_existing", card={"elements": []}, idempotency_key="local-update-id"
+    )
+    request = transport.requests[-1]
+    assert request.method == "PATCH"
+    assert request.url.endswith("/im/v1/messages/om_existing")
+    assert json.loads(request.body) == {"content": '{"elements":[]}'}
+    assert receipt.message_id == "om_existing"
+
+
+@pytest.mark.parametrize("method", ["reply_interactive_card", "update_interactive_card"])
+@pytest.mark.parametrize("message_id", ["../other", "om_id?foo=bar", "", "om_id/unsafe"])
+def test_reply_and_patch_reject_unsafe_message_paths_without_network(method, message_id):
+    transport = _ScriptedTransport([])
+    with pytest.raises(ValueError):
+        getattr(_client(transport), method)(message_id=message_id, card={}, idempotency_key="key")
+    assert not transport.requests
+
+
+@pytest.mark.parametrize("method", ["reply_interactive_card", "update_interactive_card"])
+def test_reply_and_patch_never_send_configured_credentials_in_card(method):
+    transport = _ScriptedTransport([])
+    with pytest.raises(FeishuOutboundError):
+        getattr(_client(transport), method)(
+            message_id="om_safe", card={"text": APP_SECRET}, idempotency_key="key"
+        )
+    assert not transport.requests
