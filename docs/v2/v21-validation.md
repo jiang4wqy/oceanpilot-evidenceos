@@ -42,6 +42,14 @@
 - 回归中一个随机 UUID 在合成文件正文中偶然形成类似卡号的数字串，触发隐私检查。测试交易编号改用字母分隔，消除随机碰撞；生产敏感信息拦截规则未改变。
 - Wheel 构建通过。本补丁的远端全量 CI 结果以该提交对应的 GitHub Actions 为准，不沿用前一提交的通过状态。
 
+## 飞书加密回调与 URL 握手补充（2026-09-09）
+
+真实联调预检发现，仅支持明文签名回调不能覆盖已配置 Encrypt Key 的飞书请求。已按官方 SDK 的协议补齐加密正文，以及只返回 challenge 的 URL 校验握手。普通业务回调仍在解析／解密前校验原始正文签名和时窗，随后核对内部 token 与现有账号、群、案件权限。协议来源和边界见 [飞书说明](feishu.md)。
+
+新增测试先复现 12 项失败，再完成实现。当前 `tests/feishu`、V2 回调和持久 outbox 共 **198 项通过**，包含独立 OpenSSL 密文向量、坏填充／密文／token 拒绝、握手不能执行业务、加密消息的共享可见性及不增加 revision、商户决定的原子审计和重复回调幂等。回复与更新仍使用显式 Mock transport，不代表外部发送。
+
+新增固定运行依赖 `cryptography==50.0.1`；代码规范、格式及 Wheel 构建通过。本机两个已知配置文件仍无测试应用、可信飞书用户／群绑定和测试目标；Gate 5 继续待真实配置及回执验证。
+
 ## E01：固定合成规模实测
 
 运行 `PYTHONPATH=src .venv/bin/python scripts/benchmark_v21_queue.py`。每案 25 条合成审计与 5 条合成证据，两商户各占一半。两种读取方式各预热一次、测量 20 次。测试使用临时数据库，结束后自动清除。
@@ -130,7 +138,7 @@ V2.1 目标仍在进行中；本记录不构成完成声明。
 
 | 编号 | 已验证边界 | 证据与层级 |
 | --- | --- | --- |
-| X01 | **仅本地通过；真实 Gate 5 待配置。** 已验证签名、token、时窗、可信用户／群／案件绑定、独立业务审计、SHARED 普通消息、持久 outbox、确认发送、失去回执重试、并发发送、授权撤销及同案 reply/update。模拟回执不代表真实投递。 | 自动化：[签名回调](../../tests/channels/test_dispute_feishu.py)、[真实本地账号＋mock transport outbox](../../tests/channels/test_dispute_feishu_outbox.py)、[官方消息协议 transport](../../tests/feishu/test_client.py)；边界：[飞书文档](feishu.md)。尚无获授权真实测试群、真实发卡／点击／提问／回执，不能标记 Gate 5 通过。 |
+| X01 | **仅本地通过；真实 Gate 5 待配置。** 已验证签名、加密正文、URL 握手、token、时窗、可信用户／群／案件绑定、独立业务审计、SHARED 普通消息、持久 outbox、确认发送、失去回执重试、并发发送、授权撤销及同案 reply/update。模拟回执不代表真实投递。 | 自动化：[签名回调](../../tests/channels/test_dispute_feishu.py)、[真实本地账号＋mock transport outbox](../../tests/channels/test_dispute_feishu_outbox.py)、[官方消息协议 transport](../../tests/feishu/test_client.py)；边界：[飞书文档](feishu.md)。尚无获授权真实测试群、真实发卡／点击／提问／回执，不能标记 Gate 5 通过。 |
 | X02 | 导演登记显式合成交易事实，运营接收标准化事件；ALERT/INQUIRY 不建正式案，错配或未知交易隔离，重试保留原 envelope，撤回／更正关联已有案；旧 INTAKE/demo HTTP 不能绕过 registry 和真实角色。 | 自动化：[标准化 inbox/registry](../../tests/application/test_dispute_intake.py)、[真实账号入口及旧路径封口](../../tests/api/test_dispute_intake_http.py)；浏览器：[导演→运营标准化建案、模板引用、部分支持更正和原事件重试](ui-validation-v21.md)。外部 webhook／email 仍无生产接入声明。 |
 | X03 | Mock 接口覆盖不确定、技术已收但业务拒绝、断网查询、相同请求重试与过期后禁重发；未查询原请求不能盲发第二次。 | 自动化：[V2.1 `x03_uncertain_submission_queries_before_any_resend`、`submission_unknown_then_expired_window_prevents_retry` 及 `w12` 失去回执](../../tests/workflow/test_dispute_v21.py)。仅为 Mock 故障合同，不是卡组织联调。 |
 | F01 | 部分支持／责任分配有明确金额与币种；退款、费用、返还和净影响分开，资金变化使核对及通知失效；商户仅显示公开资金摘要。币种单填的 WON/LOST 可正确全额分配，PARTIAL 缺分配或币种错误拒绝。 | 自动化：[V2.1 `f01` 场景](../../tests/workflow/test_dispute_v21.py)、[独立 HTTP 金额及重新通知](../../tests/review/test_v21_independent_review.py)、[商户公开 financial_summary](../../tests/web/test_v2_rendering.py)；浏览器：[合成资金→主管核对→通知→关闭](ui-validation-v21.md)。无真实银行入账验证。 |

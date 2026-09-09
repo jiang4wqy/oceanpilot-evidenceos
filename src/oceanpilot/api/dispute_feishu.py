@@ -111,7 +111,7 @@ async def _handle(request: Request, mode: str) -> JSONResponse:
     ):
         return _error(415, "UNSUPPORTED_MEDIA_TYPE")
     for name in (b"x-lark-request-timestamp", b"x-lark-request-nonce", b"x-lark-signature"):
-        if sum(key.lower() == name for key, _ in request.headers.raw) != 1:
+        if sum(key.lower() == name for key, _ in request.headers.raw) > 1:
             return _error(401, "VERIFICATION_FAILED")
     chunks, size = [], 0
     async for chunk in request.stream():
@@ -120,7 +120,9 @@ async def _handle(request: Request, mode: str) -> JSONResponse:
             return _error(413, "PAYLOAD_TOO_LARGE")
         chunks.append(chunk)
     try:
-        payload = verifier.verify(dict(request.headers), b"".join(chunks))
+        payload = verifier.verify(
+            dict(request.headers), b"".join(chunks), allow_url_verification=True
+        )
     except FeishuVerificationError:
         return _error(401, "VERIFICATION_FAILED")
     if payload.get("type") == "url_verification":

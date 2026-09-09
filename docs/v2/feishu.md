@@ -6,7 +6,7 @@
 
 | 接口 | 用途与权限 |
 | --- | --- |
-| `POST /api/v2/integrations/feishu/events` | 签名 URL challenge、`im.message.receive_v1` 回调 |
+| `POST /api/v2/integrations/feishu/events` | token 校验的 URL challenge、签名 `im.message.receive_v1` 回调 |
 | `POST /api/v2/integrations/feishu/card` | 签名 `card.action.trigger`；仅可信商户确认 Accept/Contest |
 | `GET /api/v2/integrations/feishu/outbox?case_id=...` | 当前可信 OP、审核人或主管查看本案预览、投递状态、最近 100 条记录和可用测试群引用 |
 | `POST /api/v2/integrations/feishu/outbox` | 当前可信 OP、审核人或主管创建本地预览；无网络调用 |
@@ -20,9 +20,15 @@
 
 所需本机配置：
 
-- `FEISHU_ENCRYPT_KEY`：签名校验密钥。
+- `FEISHU_ENCRYPT_KEY`：签名校验和加密正文解密密钥。
 - `FEISHU_VERIFICATION_TOKEN`：每个 payload 的 token，包括 challenge。
 - `OCEANPILOT_V2_FEISHU_BINDINGS_JSON`：`actors` 和 `chats` 映射。
+
+支持普通 JSON 和 `{"encrypt":"..."}` 加密正文。加密格式遵循 [飞书官方 Python SDK 的解密器](https://github.com/larksuite/oapi-sdk-python/blob/898add64e33436602a77f0a88661e6f0d5c86ea0/lark_oapi/core/utils/decryptor.py)：Base64 包含 16 字节 IV 与 AES-256-CBC 密文，密钥为 Encrypt Key 的 SHA-256，正文严格检查 PKCS7 填充及 UTF-8 JSON。实现使用固定版本 `cryptography==50.0.1`。
+
+普通消息／卡片仍必须先对原始 HTTP 正文校验签名与五分钟时窗，再解密并校验内部 token、账号、群及案件权限。损坏密文、错误填充、错误 token 和不完整签名均返回统一认证错误，不泄露密钥、正文或解密失败细节。不会用外层 token 绕过内部校验。
+
+URL 校验握手按 [官方事件分发器](https://github.com/larksuite/oapi-sdk-python/blob/v2_main/lark_oapi/event/dispatcher_handler.py) 单独处理：允许三个签名头全部缺省，但必须获得正确 token，且只返回 `url_verification` 的 challenge，不进入业务分发。有任一签名头时仍要求完整有效签名；普通业务事件不能使用这个例外。该握手模式仅由 V2.1 回调路由显式启用。
 
 用 `binding_key(kind, tenant_key, external_id)` 创建域分离 SHA-256 索引。actor key 绑定租户与实际 sender/operator 的 `open_id`；chat key 绑定租户与 chat ID。哈希仅是最小化存储的索引，不能取代签名认证。
 
@@ -135,6 +141,8 @@ PYTHONPATH=src .venv/bin/pytest -q \
 
 这四组本次合计 **142 passed**；包括真实服务端账号与签名 HTTP、案件共享线程、商户决定原子审计、同案回执、网络失去回执后的幂等恢复、并发发送、权限撤销、跨案件 root 阻断和 callback 后台 drain。所有消息 transport 均为本地合成 mock。
 
-真实 Gate 5 尚需用户明确授权的测试空间、管理员配置及可达 HTTPS callback URL，按实际 tenant 的签名／确认 payload 验证商户操作、真实 reply/update、回执和跨端可见性。当前 verifier 只支持签名明文 JSON，未实现加密 body 解密；加密回调会拒绝。没有真实回执之前不能将 Gate 5 标记通过。
+2026-09-09 补充协议检查发现原 verifier 缺少加密正文和无签名 URL 握手支持，已先复现失败再修复。新增独立 OpenSSL 密文向量、畸形密文／填充、解密前验签、握手不得分发业务、加密卡片回放，以及真实本地账号下的加密共享消息／商户决定／Mock 回复更新测试。`tests/feishu` 与两组 V2 回调／outbox 测试合计 **198 passed**。原有出站授权条件不变；这些结果仍只是本地协议验收。
+
+真实 Gate 5 尚需用户明确授权的测试空间、管理员配置及可达 HTTPS callback URL，按实际 tenant 的签名／确认 payload 验证商户操作、真实 reply/update、回执和跨端可见性。没有真实回执之前不能将 Gate 5 标记通过。
 
 接口依据是飞书官方的[发送消息](https://open.feishu.cn/document/server-docs/im-v1/message/create)、[回复消息](https://open.feishu.cn/document/server-docs/im-v1/message/reply)与[更新应用发送的消息卡片](https://open.feishu.cn/document/server-docs/im-v1/message-card/patch)。字段和 HTTP 方法另核对官方 Python SDK 的 [`reply_message_request_body.py`](https://github.com/larksuite/oapi-sdk-python/blob/v2_main/lark_oapi/api/im/v1/model/reply_message_request_body.py)、[`reply_message_request.py`](https://github.com/larksuite/oapi-sdk-python/blob/v2_main/lark_oapi/api/im/v1/model/reply_message_request.py)、[`patch_message_request_body.py`](https://github.com/larksuite/oapi-sdk-python/blob/v2_main/lark_oapi/api/im/v1/model/patch_message_request_body.py) 和 [`patch_message_request.py`](https://github.com/larksuite/oapi-sdk-python/blob/v2_main/lark_oapi/api/im/v1/model/patch_message_request.py)：reply 为 POST、包含 `content/msg_type/reply_in_thread/uuid`，patch 为 PATCH、仅 `content`。

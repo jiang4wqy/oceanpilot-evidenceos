@@ -1,3 +1,4 @@
+import base64
 import hashlib
 import json
 
@@ -8,6 +9,7 @@ from oceanpilot.adapters.feishu.security import (
     FeishuRequestVerifier,
     FeishuVerificationError,
 )
+from tests.feishu.crypto_helpers import encrypted_body
 
 NOW = 1_786_250_000
 ENCRYPT_KEY = "synthetic-encrypt-key"
@@ -99,7 +101,7 @@ def test_signature_and_token_comparisons_use_constant_time_primitive(monkeypatch
     monkeypatch.setattr(security_module.hmac, "compare_digest", recording_compare)
     _verifier().verify(_headers(NOW, raw_body), raw_body)
     assert len(compared) == 2
-    assert compared[1] == (VERIFICATION_TOKEN, VERIFICATION_TOKEN)
+    assert compared[1] == (VERIFICATION_TOKEN.encode(), VERIFICATION_TOKEN.encode())
 
 
 @pytest.mark.parametrize(
@@ -134,3 +136,108 @@ def test_credentials_are_strict_nonempty_constructor_inputs(arguments):
 def test_raw_body_must_be_exact_bytes():
     with pytest.raises(TypeError):
         _verifier().verify({}, "{}")  # type: ignore[arg-type]
+
+
+def test_signed_encrypted_body_returns_verified_inner_payload():
+    payload = {"header": {"token": VERIFICATION_TOKEN}, "event": {"text": "合成测试消息"}}
+    raw = encrypted_body(payload, ENCRYPT_KEY)
+    assert _verifier().verify(_headers(NOW, raw), raw) == payload
+
+
+@pytest.mark.parametrize("encrypted", [False, True])
+def test_url_verification_may_omit_signing_headers_only_with_explicit_handshake_mode(encrypted):
+    payload = {"type": "url_verification", "token": VERIFICATION_TOKEN, "challenge": "test-only"}
+    raw = encrypted_body(payload, ENCRYPT_KEY) if encrypted else json.dumps(payload).encode()
+    with pytest.raises(FeishuVerificationError):
+        _verifier().verify({}, raw)
+    assert _verifier().verify({}, raw, allow_url_verification=True) == payload
+
+
+@pytest.mark.parametrize("encrypted", [False, True])
+def test_handshake_mode_never_accepts_unsigned_business_events(encrypted):
+    payload = {"header": {"token": VERIFICATION_TOKEN}, "event": {"text": "must-not-run"}}
+    raw = encrypted_body(payload, ENCRYPT_KEY) if encrypted else json.dumps(payload).encode()
+    with pytest.raises(FeishuVerificationError):
+        _verifier().verify({}, raw, allow_url_verification=True)
+
+
+@pytest.mark.parametrize("headers", [{"X-Lark-Signature": "bad"}, {"X-Lark-Request-Nonce": "x"}])
+def test_partial_signature_cannot_downgrade_to_unsigned_challenge(headers):
+    raw = encrypted_body(
+        {"type": "url_verification", "token": VERIFICATION_TOKEN, "challenge": "test"},
+        ENCRYPT_KEY,
+    )
+    with pytest.raises(FeishuVerificationError):
+        _verifier().verify(headers, raw, allow_url_verification=True)
+
+
+@pytest.mark.parametrize("plaintext", [b"not-json", b"[]", b"\xff", b'{"token":"wrong-token"}'])
+def test_invalid_decrypted_json_or_token_has_no_sensitive_error_details(plaintext, caplog):
+    raw = encrypted_body({}, ENCRYPT_KEY, plaintext=plaintext)
+    with pytest.raises(FeishuVerificationError) as captured:
+        _verifier().verify(_headers(NOW, raw), raw)
+    assert str(captured.value) == "feishu request verification failed"
+    assert not caplog.records
+
+
+@pytest.mark.parametrize("encrypted", ["", "!bad-base64!", "AAAA", 42, None])
+def test_bad_ciphertext_cannot_fall_back_to_valid_outer_token(encrypted):
+    raw = json.dumps({"encrypt": encrypted, "token": VERIFICATION_TOKEN}).encode()
+    with pytest.raises(FeishuVerificationError):
+        _verifier().verify(_headers(NOW, raw), raw)
+
+
+def test_independent_openssl_encrypted_challenge_vector():
+    # Generated with openssl enc -aes-256-cbc, SHA256(synthetic-encrypt-key), IV 00..0f.
+    ciphertext = (
+        "AAECAwQFBgcICQoLDA0OD6YbFy6P+SNhyIaElFlGd8kdUxNwobc0wXD35SXjyYlZvRaneGTy4vYX"
+        "vrFXWjEGoMBe2d9Dggqh3dZbdAIH4q+Epvz8slZvEGLwT/qBN48KS5OuxeRh0a3T+x/ICj8owuI/"
+        "iAZGEnS/wuMiv5PBcMo="
+    )
+    raw = json.dumps({"encrypt": ciphertext}).encode()
+    payload = _verifier().verify(_headers(NOW, raw), raw)
+    assert payload == {
+        "token": VERIFICATION_TOKEN,
+        "type": "url_verification",
+        "challenge": "OpenSSL-independent-vector",
+    }
+
+
+@pytest.mark.parametrize("kind", ["base64", "short", "alignment", "padding", "wrong-key"])
+def test_invalid_encrypted_wire_format_is_rejected_uniformly(kind):
+    payload = {"token": VERIFICATION_TOKEN, "type": "url_verification", "challenge": "test"}
+    encoded = json.loads(
+        encrypted_body(payload, "wrong-key" if kind == "wrong-key" else ENCRYPT_KEY)
+    )
+    if kind == "base64":
+        encoded["encrypt"] = "not-base64!"
+    elif kind in {"short", "alignment"}:
+        encoded["encrypt"] = base64.b64encode(b"x" * (16 if kind == "short" else 33)).decode()
+    elif kind == "padding":
+        wire = bytearray(base64.b64decode(encoded["encrypt"]))
+        # Alter the final plaintext padding byte via the preceding CBC block.
+        wire[-17] ^= 0x80
+        encoded["encrypt"] = base64.b64encode(wire).decode()
+    raw = json.dumps(encoded).encode()
+    with pytest.raises(FeishuVerificationError) as captured:
+        _verifier().verify(_headers(NOW, raw), raw)
+    assert str(captured.value) == "feishu request verification failed"
+
+
+def test_signature_rejection_precedes_encrypted_body_decryption(monkeypatch):
+    verifier = _verifier()
+    raw = encrypted_body({"token": VERIFICATION_TOKEN}, ENCRYPT_KEY)
+
+    def forbidden_decode(*args):
+        raise AssertionError("Unverified ciphertext must not be decrypted")
+
+    monkeypatch.setattr(verifier, "_decode_payload", forbidden_decode)
+    with pytest.raises(FeishuVerificationError):
+        verifier.verify(_headers(NOW, raw, **{"X-Lark-Signature": "bad"}), raw)
+
+
+@pytest.mark.parametrize("token", ["wrong", "错", "\ud800"])
+def test_unsigned_handshake_still_requires_exact_well_formed_token(token):
+    raw = json.dumps({"type": "url_verification", "token": token, "challenge": "test"}).encode()
+    with pytest.raises(FeishuVerificationError):
+        _verifier().verify({}, raw, allow_url_verification=True)

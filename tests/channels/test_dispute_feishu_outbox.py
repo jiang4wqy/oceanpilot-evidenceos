@@ -24,6 +24,7 @@ from oceanpilot.adapters.channels.feishu.v2 import (
 from oceanpilot.api.dispute_feishu import initialize_dispute_feishu
 from oceanpilot.config import Settings
 from oceanpilot.main import create_app
+from tests.feishu.crypto_helpers import encrypted_body
 
 NOW = datetime(2026, 9, 9, 11, tzinfo=UTC).timestamp()
 OP = {"role": "OPERATOR", "actor_id": "operator", "merchant_id": "merchant-a"}
@@ -399,7 +400,9 @@ def api(tmp_path):
         yield client, app, headers, identities, case, box, transport
 
 
-def signed_post(client, case_id, *, event_id="shared-event", text=None, root_id=None):
+def signed_post(
+    client, case_id, *, event_id="shared-event", text=None, root_id=None, encrypted=False
+):
     payload = {
         "schema": "2.0",
         "header": {
@@ -419,7 +422,7 @@ def signed_post(client, case_id, *, event_id="shared-event", text=None, root_id=
             },
         },
     }
-    raw = json.dumps(payload).encode()
+    raw = encrypted_body(payload, KEY) if encrypted else json.dumps(payload).encode()
     stamp = str(int(datetime.now(UTC).timestamp()))
     nonce = "synthetic-nonce"
     signature = hashlib.sha256((stamp + nonce + KEY).encode() + raw).hexdigest()
@@ -435,9 +438,10 @@ def signed_post(client, case_id, *, event_id="shared-event", text=None, root_id=
     )
 
 
-def test_real_trusted_callback_joins_shared_thread_without_business_revision(api):
+@pytest.mark.parametrize("encrypted", [False, True])
+def test_real_trusted_callback_joins_shared_thread_without_business_revision(api, encrypted):
     client, app, headers, identities, case, box, transport = api
-    response = signed_post(client, case["id"])
+    response = signed_post(client, case["id"], encrypted=encrypted)
     assert response.status_code == 200, response.text
     result = response.json()
     assert result["revision"] == case["revision"]
@@ -448,7 +452,7 @@ def test_real_trusted_callback_joins_shared_thread_without_business_revision(api
     assert message["actor_id"] == "merchant" and message["scope"] == "SHARED"
     assert any(m.get("model") == "case-plan" for m in shared["messages"])
     assert client.get(path, headers=headers["merchant"]).json()["messages"] == shared["messages"]
-    assert signed_post(client, case["id"]).json() == result
+    assert signed_post(client, case["id"], encrypted=encrypted).json() == result
     assert len(client.get(path, headers=headers["operator"]).json()["messages"]) == len(
         shared["messages"]
     )
@@ -539,7 +543,8 @@ def test_same_chat_cannot_reply_to_another_cases_delivered_root(api):
     assert response.status_code == 403 and response.json()["code"] == "CASE_BINDING_MISMATCH"
 
 
-def test_signed_decision_keeps_atomic_business_audit_and_updates_delivered_card(api):
+@pytest.mark.parametrize("encrypted", [False, True])
+def test_signed_decision_keeps_atomic_business_audit_and_updates_delivered_card(api, encrypted):
     from datetime import timedelta
 
     client, app, _, identities, case, box, transport = api
@@ -596,7 +601,7 @@ def test_signed_decision_keeps_atomic_business_audit_and_updates_delivered_card(
             "action": {"tag": "button", "value": value},
         },
     }
-    raw = json.dumps(payload).encode()
+    raw = encrypted_body(payload, KEY) if encrypted else json.dumps(payload).encode()
     timestamp = str(int(datetime.now(UTC).timestamp()))
     signed = {
         "Content-Type": "application/json",

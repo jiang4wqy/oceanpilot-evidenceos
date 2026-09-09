@@ -22,6 +22,7 @@ from oceanpilot.application.disputes import DisputeService
 from oceanpilot.domain.dispute_rules import case_plan
 from oceanpilot.domain.errors import SensitiveDataRejected
 from oceanpilot.domain.security import assert_no_sensitive_data
+from tests.feishu.crypto_helpers import encrypted_body
 
 NOW = int(datetime(2026, 9, 9, 11, tzinfo=UTC).timestamp())
 ENCRYPT_KEY = "synthetic-feishu-v2-encrypt-key"
@@ -334,13 +335,38 @@ def test_trusted_op_identity_cannot_make_a_merchants_card_decision(stack):
     assert adapter.service.commands == []
 
 
-def test_challenge_requires_signed_token_and_integration_configuration(stack):
+def test_challenge_requires_verified_token_and_integration_configuration(stack):
     client, adapter = stack
     payload = {"type": "url_verification", "token": TOKEN, "challenge": "synthetic-challenge"}
     assert post(client, EVENTS_PATH, payload).json() == {"challenge": "synthetic-challenge"}
     client.app.state.dispute_feishu = None
     assert post(client, EVENTS_PATH, payload).status_code == 503
     assert adapter.service.commands == []
+
+
+@pytest.mark.parametrize("encrypted", [False, True])
+def test_unsigned_url_handshake_is_separate_from_business_dispatch(stack, encrypted):
+    client, adapter = stack
+    payload = {"type": "url_verification", "token": TOKEN, "challenge": "synthetic-challenge"}
+    raw = encrypted_body(payload, ENCRYPT_KEY) if encrypted else json.dumps(payload).encode()
+    response = client.post(EVENTS_PATH, content=raw, headers={"Content-Type": "application/json"})
+    assert response.status_code == 200 and response.json() == {"challenge": "synthetic-challenge"}
+    business = card_payload(action_value(adapter))
+    raw = encrypted_body(business, ENCRYPT_KEY) if encrypted else json.dumps(business).encode()
+    response = client.post(CARD_PATH, content=raw, headers={"Content-Type": "application/json"})
+    assert response.status_code == 401
+    assert not adapter.service.commands
+
+
+def test_encrypted_card_reencrypted_retry_keeps_one_business_command(stack):
+    client, adapter = stack
+    payload = card_payload(action_value(adapter))
+    first = post(client, CARD_PATH, json.loads(encrypted_body(payload, ENCRYPT_KEY)))
+    assert first.status_code == 200, first.text
+    repeated = post(client, CARD_PATH, json.loads(encrypted_body(payload, ENCRYPT_KEY)))
+    assert repeated.status_code == 200 and repeated.json() == first.json()
+    assert len(adapter.service.commands) == 1
+    assert adapter.service.cases["case-1"]["revision"] == 4
 
 
 def test_bad_media_type_and_large_body_are_rejected(stack):
