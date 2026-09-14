@@ -4033,3 +4033,6 @@ body { background: var(--canvas); color: var(--ink); }
 .intake-confirm { margin-right:8px; }
 @media(max-width:600px){.intake-fields{grid-template-columns:1fr}.intake-form{padding:18px}.intake-event>div{flex-wrap:wrap}}
 .case-reason-summary { margin:14px 0 0; max-width:650px; font-size:13px; line-height:1.7; color:#526f7a; }
+
+/* Keep repeated workspace explanations out of the primary task view. */
+#identityNote, #collaborationRoles, .page-heading .eyebrow { display: none; }

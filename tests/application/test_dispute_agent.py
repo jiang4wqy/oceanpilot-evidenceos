@@ -202,7 +202,7 @@ def test_similarity_retrieval_never_crosses_merchant_scope(stack):
 @pytest.mark.parametrize(
     "question,intent,expected",
     [
-        ("还缺什么材料", "EVIDENCE_GAPS", "尚缺"),
+        ("还缺什么材料", "EVIDENCE_GAPS", "请补充"),
         ("为什么不能关", "CLOSE_BLOCKERS", "不能结案"),
         ("起草一条商户通知", "MERCHANT_MESSAGE", "OceanPayment"),
         ("起草答复", "RESPONSE_DRAFT", "答复草稿"),
@@ -727,7 +727,7 @@ def test_merchant_review_feedback_uses_actual_review_and_submission_explains_mis
     )
     missing = agent.converse(case["id"], MERCHANT, "为什么不能提交", case["revision"])
     assert missing["intent"] == "SUBMISSION_BLOCKERS"
-    assert "尚缺" in missing["answer"]
+    assert "请补充" in missing["answer"]
     for code in case["rule_snapshot"]["required_evidence"]:
         case = execute(
             disputes,

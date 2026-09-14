@@ -9,6 +9,16 @@
   const storage = { get(key) { try { return sessionStorage.getItem(key); } catch { return null; } }, set(key,value) { try { sessionStorage.setItem(key,value); } catch {} }, remove(key) { try { sessionStorage.removeItem(key); } catch {} } };
   const draftKey = state => `oceanpilot.v21.thread.${state.key}.${state.scope}`;
   const pendingKey = state => `oceanpilot.v21.thread.pending.${state.key}`;
+  function readableAnswer(body) {
+    const marker = body.indexOf("本次检索到的指南参考");
+    let main = marker < 0 ? body : body.slice(0, marker).trim();
+    main = main.replace(/（(?:transaction|fulfillment|comms)\.[a-z_]+）/g, "");
+    main = main.replace(/尚缺以下登记材料：/g, "请补充以下材料：");
+    main = main.replace(/^(- [^：\n]+)：[^\n]*登记不(?:代表|表示)[^\n]*$/gm, "$1");
+    main = main.split("\n").filter(line => !line.startsWith("本案共享往来：")).filter((line, index, lines) => lines.indexOf(line) === index).join("\n");
+    main = main.replace(/缺少必需材料时不能进入提交；请按本案规则来源补齐。/g, "补齐后提交给 OceanPayment 审核。");
+    return `<div class="thread-message-body">${esc(main)}</div>${main !== body ? `<details class="thread-file-check"><summary>查看完整说明与参考依据</summary><div class="thread-message-body">${esc(body)}</div></details>` : ""}`;
+  }
   function same(state) { return active === state && state.host.isConnected; }
   function path(state, suffix = "") { return `/cases/${encodeURIComponent(state.caseId)}/collaboration${suffix}`; }
   function notice(state, message, error = false) {
@@ -50,7 +60,7 @@
       const who = sender(message, data.participants), body = message.message || message.text || message.answer || message.content || "";
       const source = message.source === "MODEL" ? `${message.provider || "模型"} · ${message.model || "实际模型"}` : message.source === "FALLBACK" ? "降级回答 · 请核对依据" : who.kind === "ai" ? "确定性案件检查" : "";
       const readers = list(data.read_receipts).filter(receipt => receipt.actor_id !== state.session.user.id && Number(receipt.cursor) >= Number(message.cursor)).length;
-      return `<article class="thread-message from-${who.kind}" data-message-id="${esc(message.id || message.message_id)}"><header><strong>${esc(who.name)}</strong><time>${esc(clock(message.created_at || message.at))}</time></header><div class="thread-message-body">${esc(body)}</div>${source ? `<small class="thread-source">${esc(source)}</small>` : ""}<small class="thread-read">${readers ? `已被 ${readers} 位参与者查看` : "已发布到本案"}</small>${list(message.attachments).map(file => `<a href="/api/v2${path(state, `/files/${encodeURIComponent(file.object_id || file.id)}`)}" target="_blank" rel="noopener">▧ ${esc(file.filename || file.title || "材料")}</a>`).join("")}</article>`;
+      return `<article class="thread-message from-${who.kind}" data-message-id="${esc(message.id || message.message_id)}"><header><strong>${esc(who.name)}</strong><time>${esc(clock(message.created_at || message.at))}</time></header>${who.kind === "ai" ? readableAnswer(body) : `<div class="thread-message-body">${esc(body)}</div>`}${source ? `<details class="thread-source"><summary>回答信息</summary>${esc(source)}</details>` : ""}<small class="thread-read">${readers ? `已被 ${readers} 位参与者查看` : "已发布到本案"}</small>${list(message.attachments).map(file => `<a href="/api/v2${path(state, `/files/${encodeURIComponent(file.object_id || file.id)}`)}" target="_blank" rel="noopener">▧ ${esc(file.filename || file.title || "材料")}</a>`).join("")}</article>`;
     }).join("") || `<div class="thread-empty"><strong>一起处理这一笔争议</strong><p>${state.scope === "SHARED" ? "你在这里发送的消息，商户、获授权的 OceanPayment 人员与 OceanPilot 都能看到。" : "这里仅供获授权的 OceanPayment 人员讨论内部审核和策略，不向商户公开。"}</p></div>`;
     if (nearBottom || !state.loaded) feed.scrollTop = feed.scrollHeight; else feed.scrollTop = oldTop;
     const handoffs = state.host.querySelector(".thread-handoffs");
