@@ -22,6 +22,7 @@ class RuleData(ReasonData):
     merchant_deadline: StrictStr | None = Field(default=None, max_length=60)
     internal_deadline: StrictStr | None = Field(default=None, max_length=60)
     required_evidence: list[StrictStr] = Field(min_length=0, max_length=30)
+    critical_evidence: list[StrictStr] | None = Field(default=None, max_length=30)
 
 
 class ResolveResponseData(ReasonData):

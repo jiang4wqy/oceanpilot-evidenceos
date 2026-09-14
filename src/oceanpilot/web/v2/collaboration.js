@@ -27,9 +27,10 @@
     const review = list(state.c?.available_actions).find(item => item.action === "REVIEW_EVIDENCE_CONTENT");
     const check = evidence?.content_check || file.content_check;
     const canReview = evidence && review?.visible && review.enabled && list(review.choices?.evidence_id).includes(evidence.id);
+    const uploader = list(state.c?.participants).find(person=>person.user_id === file.uploaded_by)?.display_name || "原上传人（当前名录未提供）";
     const statusText = check?.method === "INDEPENDENT_HUMAN_CONTENT_REVIEW" ? (check.status === "SUPPORTED" ? "人工已核验内容 · 待整包审核" : "人工确认内容不足") : ({SUPPORTED:"已解析 · 待核对材料内容",INSUFFICIENT:"内容不足 · 请查看材料反馈",NEEDS_MANUAL:"需人工核对内容"})[check?.status] || "已保存";
     const text = String(file.extracted_text || "").slice(0,16000).split("\n").map((line,index)=>`line:${index+1}  ${line}`).join("\n");
-    return `<a class="thread-file" href="/api/v2${path(state, `/files/${encodeURIComponent(file.object_id || file.id)}`)}" target="_blank" rel="noopener"><span>▧ ${esc(file.filename || file.title || "案件材料")}</span><small>${esc(statusText)} · ${esc(clock(file.created_at))}</small></a>${check ? `<details class="thread-file-check"><summary>查看材料核查与已解析内容</summary><p>${esc(list(check.findings).map(item=>typeof item === "object" ? item.message || item.detail || JSON.stringify(item) : item).join("\n"))}</p><pre>${esc(text || "暂无可读取正文，需人工核实。")}</pre>${canReview ? `<button type="button" class="button secondary small" data-review-evidence="${esc(evidence.id)}">人工核验这份材料内容</button>` : ""}</details>` : ""}`;
+    return `<a class="thread-file" href="/api/v2${path(state, `/files/${encodeURIComponent(file.object_id || file.id)}`)}" target="_blank" rel="noopener"><span>▧ ${esc(file.filename || file.title || "案件材料")}</span><small>${esc(statusText)} · ${esc(clock(file.created_at))}</small></a>${check ? `<details class="thread-file-check"><summary>查看材料核查与已解析内容</summary><p>上传者：${esc(uploader)} · ${esc(file.mime_type || "类型未提供")} · ${esc(file.size ?? "未知")} bytes</p><p>保存时 SHA-256：<code>${esc(file.sha256 || "未提供")}</code></p><p>哈希用于核对保存后的字节变化，不证明文件来源、业务事实或不可篡改；当前不提供 PDF/图片识别、OCR 或恶意文件扫描。</p><p>${esc(list(check.findings).map(item=>typeof item === "object" ? item.message || item.detail || JSON.stringify(item) : item).join("\n"))}</p><pre>${esc(text || "暂无可读取正文，需人工核实。")}</pre>${canReview ? `<button type="button" class="button secondary small" data-review-evidence="${esc(evidence.id)}">人工核验这份材料内容</button>` : ""}</details>` : ""}`;
   }
   function updateScope(state) {
     state.host.querySelectorAll("[data-thread-scope]").forEach(item=>item.classList.toggle("active",item.dataset.threadScope===state.scope));
@@ -105,27 +106,31 @@
       const bytes = new Uint8Array(await file.arrayBuffer()); let binary = "";
       for (let offset=0;offset<bytes.length;offset+=8192) binary += String.fromCharCode(...bytes.subarray(offset,offset+8192));
       const selected = form.elements.material.selectedOptions[0];
-      const payload = state.uploadPending || {command_id:uuid(),expected_revision:state.revision,code:selected.value,title:selected.dataset.title,filename:file.name,content_base64:btoa(binary),mime_type:file.type || "application/octet-stream"};
-      if (state.uploadPending && (payload.filename !== file.name || payload.content_base64 !== btoa(binary))) throw new Error("上一份文件的保存结果待确认，请先使用原文件重试。");
+      const payload = state.uploadPending || {command_id:uuid(),expected_revision:state.revision,code:selected.dataset.code || selected.value,title:selected.dataset.title,...(selected.dataset.evidenceId ? {evidence_id:selected.dataset.evidenceId} : {}),filename:file.name,content_base64:btoa(binary),mime_type:file.type || "application/octet-stream"};
+      if (state.uploadPending && (payload.filename !== file.name || payload.content_base64 !== btoa(binary) || payload.code !== (selected.dataset.code || selected.value) || (payload.evidence_id || "") !== (selected.dataset.evidenceId || ""))) throw Object.assign(new Error("上一份文件的保存结果待确认，请先使用原文件和原材料选项重试。"), {preservePending:true});
       state.uploadPending = payload;
       await state.api(path(state, "/files"), {method:"POST",body:JSON.stringify(payload)});
       state.uploadPending = null;
       if (same(state)) { form.reset(); notice(state, "材料已保存。读取状态与人工判断会明确显示。"); await state.onCaseChanged?.(); await refresh(state); }
     } catch (error) {
-      if (!error.uncertain) state.uploadPending = null;
+      if (!error.uncertain && !error.preservePending) state.uploadPending = null;
       notice(state, error.uncertain ? "文件保存结果待确认。保留原文件并再次点击，将使用原操作 ID 核对。" : error.message, true);
       if (error.status === 409) state.onCaseChanged?.();
     }
     finally { state.uploading = false; if (same(state)) form.querySelector("button[type=submit]").disabled = false; }
   }
-  function uploadChoices(checklist) {
-    return list(checklist).filter(item => ["MERCHANT_UPLOAD", "OCR_THEN_REVIEW"].includes(item.expected_source));
+  function uploadChoices(checklist, c) {
+    return list(checklist).filter(item => ["MERCHANT_UPLOAD", "OCR_THEN_REVIEW"].includes(item.expected_source) || (c?.view === "OPERATIONS" && item.expected_source === "SYSTEM_OF_RECORD"));
   }
   function uploadMarkup(c, checklist) {
     if (!list(c.available_actions).some(a=>a.action === "REGISTER_EVIDENCE" && a.enabled)) return '<p class="section-note">当前阶段不接受直接修改材料。请按本案任务或向负责人提出修订要求。</p>';
-    const choices = uploadChoices(checklist);
+    const choices = uploadChoices(checklist, c);
     if (!choices.length) return '<p class="section-note">当前清单没有需要商户上传的文件。系统记录与条件材料由 OceanPayment 核对，请勿自行填写内部代码。</p>';
-    return `<form class="thread-upload"><label>这份文件对应哪项材料<select name="material" required>${choices.map(item=>`<option value="${esc(item.code)}" data-title="${esc(item.label || "案件材料")}">${esc(item.label || "案件材料")}${item.present ? " · 已有文件，可上传修订版" : " · 待补充"}</option>`).join("")}</select></label><label>选择实际文件<input type="file" name="file" required accept=".txt,.csv,.json"></label><p>无需填写内部代码。支持 UTF-8 文本、JSON、CSV，最大 2 MiB；上传后会真实保存、哈希、解析并检查，已上传不等于审核通过。</p><button class="button secondary" type="submit">上传并检查这份材料</button></form>`;
+    return `<form class="thread-upload"><label>这份文件对应哪项材料<select name="material" required><option value="">请选择新增材料或要替换的文件</option>${choices.map(item=>{
+      const existing = list(c.evidence).filter(e=>e.active !== false && e.code === item.code);
+      const attrs = `data-code="${esc(item.code)}" data-title="${esc(item.label || "案件材料")}"`;
+      return existing.map(e=>`<option value="replace:${esc(e.id)}" ${attrs} data-evidence-id="${esc(e.id)}">${esc(item.label || "案件材料")} · 替换 ${esc(e.filename || e.title)}（${esc(clock(e.registered_at || e.created_at))}）</option>`).join("") + `<option value="${esc(item.code)}" ${attrs}>${esc(item.label || "案件材料")} · 新增文件${existing.length ? "（保留已有文件）" : ""}</option>`;
+    }).join("")}</select></label><label>选择实际文件<input type="file" name="file" required accept=".txt,.csv,.json"></label><p>${c.view === "OPERATIONS" ? "系统记录项请上传明确来源的导出文件；合成样例不表示已连接真实系统。" : ""}无需填写内部代码。替换会保留旧版历史并使旧审批失效；新增不会消除旧文件的内容问题。支持 UTF-8 文本、JSON、单行 CSV，最大 2 MiB；上传后会真实保存、哈希、解析并检查，已上传不等于审核通过。</p><button class="button secondary" type="submit">上传并检查这份材料</button></form>`;
   }
   function mount(options) {
     const {host, c, session} = options;
@@ -138,13 +143,13 @@
     if (active?.key === key && active.host === host) {
       active.revision = c.revision; active.c = c; active.checklist = list(options.plan?.checklist);
       const canUpload = list(c.available_actions).some(a=>a.action === "REGISTER_EVIDENCE" && a.enabled);
-      const checklistKey = JSON.stringify(active.checklist.map(item=>[item.code,item.present,item.upload_status]));
+      const checklistKey = JSON.stringify([active.checklist,c.evidence]);
       if (active.canUpload !== canUpload || active.checklistKey !== checklistKey) { active.canUpload = canUpload; active.checklistKey = checklistKey; host.querySelector(".thread-upload-host").innerHTML = uploadMarkup(c, active.checklist); }
       active.renderTools?.(); return;
     }
     if (active?.timer) clearInterval(active.timer);
     const checklist = list(options.plan?.checklist);
-    const state = active = {...options,key,caseId:c.id,revision:c.revision,scope:"SHARED",loaded:false,pending:null,checklist,checklistKey:JSON.stringify(checklist.map(item=>[item.code,item.present,item.upload_status])),canUpload:list(c.available_actions).some(a=>a.action === "REGISTER_EVIDENCE" && a.enabled)};
+    const state = active = {...options,key,caseId:c.id,revision:c.revision,scope:"SHARED",loaded:false,pending:null,checklist,checklistKey:JSON.stringify([checklist,c.evidence]),canUpload:list(c.available_actions).some(a=>a.action === "REGISTER_EVIDENCE" && a.enabled)};
     try { state.pending = JSON.parse(storage.get(pendingKey(state)) || "null"); } catch { state.pending = null; }
     const merchant = session.user.role === "MERCHANT";
     if (state.pending && (!["SHARED", "OP_INTERNAL"].includes(state.pending.scope) || (merchant && state.pending.scope === "OP_INTERNAL"))) { state.pending = null; storage.remove(pendingKey(state)); }
@@ -197,6 +202,9 @@
   }
   globalThis.OceanV21Collaboration={mount,refresh,openFiles(data={}) {
     if(!active)return;const details=active.host.querySelector(".thread-files");details.open=true;details.scrollIntoView({block:"center",behavior:"smooth"});
-    const form=details.querySelector(".thread-upload");if(form){if(data.code)form.elements.material.value=data.code;form.elements.file.focus();}
+    const form=details.querySelector(".thread-upload");if(form){if(data.code){
+      const matches=[...form.elements.material.options].filter(o=>o.dataset.code===data.code && o.dataset.evidenceId);
+      form.elements.material.value=data.evidence_id ? `replace:${data.evidence_id}` : matches.length===1 ? matches[0].value : matches.length ? "" : data.code;
+    }form.elements.material.focus();}
   }};
 })();

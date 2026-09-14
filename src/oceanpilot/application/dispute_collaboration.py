@@ -861,14 +861,24 @@ class DisputeCollaborationService:
             )
             if not result["replayed"]:
                 emitted.append(result["event"])
-            if deadline_type == "external" and overdue:
+            if deadline_type in {"merchant", "external"} and overdue:
                 self.create_handoff(
                     case["id"],
                     _SYSTEM,
                     "deadline-handoff-" + key,
-                    "外部期限已到，请人工核实剩余权利及后续处理。",
+                    (
+                        "商户任务已逾期，请运营核实未响应原因、剩余权利并安排跟进。"
+                        if deadline_type == "merchant"
+                        else "外部期限已到，请人工核实剩余权利及后续处理。"
+                    ),
                     "OP_INTERNAL",
-                    assignee_id=(sla["assignee_ids"][0] if sla["assignee_ids"] else None),
+                    assignee_id=(
+                        case.get("assigned_op_user_id")
+                        if deadline_type == "merchant"
+                        else sla["assignee_ids"][0]
+                        if sla["assignee_ids"]
+                        else None
+                    ),
                 )
         return {"observed_at": self._now(), "emitted": emitted}
 

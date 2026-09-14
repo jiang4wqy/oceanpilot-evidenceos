@@ -52,6 +52,7 @@ class RuleData(StrictDTO):
     merchant_deadline: StrictStr | None = Field(default=None, max_length=60)
     internal_deadline: StrictStr | None = Field(default=None, max_length=60)
     required_evidence: list[StrictStr] | None = Field(default=None, min_length=1, max_length=30)
+    critical_evidence: list[StrictStr] | None = Field(default=None, max_length=30)
     reason: StrictStr = Field(min_length=3, max_length=1000)
 
 
