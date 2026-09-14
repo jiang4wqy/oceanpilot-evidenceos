@@ -92,7 +92,7 @@ def test_merchant_sees_only_own_cases_and_cannot_seed_or_approve(client):
     denied = command(client, case, "REVIEW", {"decision": "PASS", "reason": "试图自审"}, "MERCHANT")
     assert denied.status_code == 403
     assert command(client, case, "SUBMIT", {}, "AGENT").status_code == 401
-    assert command(client, case, "CLOSE", {}, "ADMIN").status_code == 403
+    assert command(client, case, "CLOSE", {}, "ADMIN").status_code == 409
 
 
 def test_strict_dto_stale_proposal_and_atomic_replay(client):
@@ -162,7 +162,7 @@ def test_financial_exception_reconciles_without_rewriting_ledger(client):
     assert close_demo(legacy_fixture_service(client), case)["work_status"] == "CLOSED"
 
 
-def test_case_survives_restart_and_governance_does_not_grant_business_permissions(tmp_path):
+def test_case_survives_restart_and_admin_has_business_permissions(tmp_path):
     settings = Settings(db_path=tmp_path / "persistent.db")
     with TestClient(create_app(settings)) as first:
         case = seed(first)
@@ -177,7 +177,7 @@ def test_case_survives_restart_and_governance_does_not_grant_business_permission
         governance = second.get("/api/v2/governance", headers=headers(second, "ADMIN"))
         assert governance.status_code == 200, governance.text
         governance_data = governance.json()
-        assert "CLOSE" not in governance_data["permissions"]["ADMIN"]
+        assert "CLOSE" in governance_data["permissions"]["ADMIN"]
         sources = governance_data["data_sources"]
         assert sources["case_library"]["status"] == "LOADED"
         assert sources["case_library"]["validation_status"] == "PASSED"

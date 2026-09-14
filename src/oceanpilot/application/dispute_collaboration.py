@@ -26,7 +26,7 @@ from oceanpilot.domain.dispute_rules import case_plan
 from oceanpilot.domain.evidence_catalog import EVIDENCE_CONTENT_FIELDS
 
 SCOPES = {"SHARED", "OP_INTERNAL"}
-_INTERNAL_ROLES = {"OPERATOR", "RISK_OFFICER", "SUPERVISOR", "AGENT"}
+_INTERNAL_ROLES = {"OPERATOR", "SUPERVISOR", "ADMIN", "AGENT"}
 _SYSTEM = {"role": "AGENT", "actor_id": "oceanpilot-workflow-agent"}
 _FILE_TYPES = STRUCTURED_TYPES
 _FACTS = EVIDENCE_CONTENT_FIELDS
@@ -121,7 +121,7 @@ class DisputeCollaborationService:
                     {
                         "id": review["id"],
                         "type": "PUBLIC_REVIEW_FEEDBACK",
-                        "role": "RISK_OFFICER",
+                        "role": review.get("role", "RISK_OFFICER"),
                         "actor_id": review.get("reviewer", ""),
                         "message": "审核反馈：" + review["reason"],
                         "at": review.get("at") or review.get("created_at"),
@@ -382,7 +382,7 @@ class DisputeCollaborationService:
             require(current["status"] != "RESOLVED", "HANDOFF_RESOLVED", "Handoff is resolved")
             require(
                 current.get("assignee_id") in {None, identity["actor_id"]}
-                or identity["role"] == "SUPERVISOR",
+                or identity["role"] in {"SUPERVISOR", "ADMIN"},
                 "ASSIGNEE_FORBIDDEN",
                 "Only the assignee or supervisor may handle this handoff",
                 403,
@@ -612,7 +612,10 @@ class DisputeCollaborationService:
     ):
         case, identity = self._access(case_id, identity)
         require(
-            identity["role"] in {"MERCHANT", "OPERATOR"}, "FORBIDDEN", "Cannot upload evidence", 403
+            identity["role"] in {"MERCHANT", "OPERATOR", "SUPERVISOR", "ADMIN"},
+            "FORBIDDEN",
+            "Cannot upload evidence",
+            403,
         )
         filename = text_field({"filename": filename}, "filename", limit=180)
         require(
@@ -829,7 +832,7 @@ class DisputeCollaborationService:
                     event = handoff | {
                         "escalation_level": 1,
                         "escalated_at": self._now(),
-                        "update_reason": "跟进目标已到期，请主管协调接手。",
+                        "update_reason": "跟进目标已到期，请风控经理协调接手。",
                     }
                     event.pop("cursor", None)
                     self._write(

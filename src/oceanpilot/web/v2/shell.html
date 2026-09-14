@@ -24,6 +24,9 @@
         <div class="workspace-label">我的工作空间</div>
         <nav class="workspace-nav" aria-label="工作空间">
           <a href="/v2/merchant" id="workspaceHome" class="active"><span class="nav-icon">▤</span><span id="workspaceName">我的案件</span></a>
+          <a href="/v2/operations" id="operationsLink" hidden>风控工作台</a>
+          <a href="/v2/governance" id="governanceLink" hidden>平台治理</a>
+          <a href="/v2/admin" id="adminLink" hidden>账号与演示数据</a>
         </nav>
         <div class="workspace-label" id="queueNavLabel">案件视图</div>
         <nav id="queueNav" class="queue-nav" aria-label="案件队列"></nav>
@@ -71,6 +74,7 @@
           aria-label="三方协作责任"
         ></section>
         <section id="metrics" class="metrics" aria-label="案件指标"></section>
+        <section id="teamProgress" class="info-card" aria-label="团队进度" hidden></section>
         <section
           id="agentInbox"
           class="agent-inbox"

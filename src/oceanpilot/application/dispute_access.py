@@ -2,7 +2,7 @@
 
 from copy import deepcopy
 
-from oceanpilot.domain.dispute import require
+from oceanpilot.domain.dispute import MANAGEMENT_ROLES, STAFF_ROLES, require
 
 SYSTEM_ACTORS = frozenset({"oceanpilot-workflow-agent", "oceanpilot-sla-scheduler"})
 
@@ -25,8 +25,10 @@ class DisputeAccessPolicy:
         if self._system(identity):
             return True
         user = self._user(identity)
-        if user is None or user["role"] == "DIRECTOR":
+        if user is None:
             return False
+        if user["role"] in MANAGEMENT_ROLES:
+            return True
         if case["merchant_id"] not in user["merchant_ids"]:
             return False
         participants = case.get("participants")
@@ -42,7 +44,9 @@ class DisputeAccessPolicy:
     def require_intake(self, merchant_id: str, identity: dict) -> None:
         user = self._user(identity)
         require(
-            user is not None and user["role"] == "OPERATOR" and merchant_id in user["merchant_ids"],
+            user is not None
+            and user["role"] in STAFF_ROLES
+            and (user["role"] in MANAGEMENT_ROLES or merchant_id in user["merchant_ids"]),
             "FORBIDDEN",
             "你没有为此商户接收案件的授权。",
             403,
@@ -55,8 +59,7 @@ class DisputeAccessPolicy:
             {"user_id": user["id"], "role": user["role"], "display_name": user["display_name"]}
             for user in self.directory.list_users()
             if not user["disabled"]
-            and user["role"] != "DIRECTOR"
-            and case["merchant_id"] in user["merchant_ids"]
+            and (user["role"] in MANAGEMENT_ROLES or case["merchant_id"] in user["merchant_ids"])
             and (identifiers is None or user["id"] in identifiers)
         ]
 
@@ -67,7 +70,16 @@ class DisputeAccessPolicy:
         user = self._user(identity)
         case["assigned_op"] = {
             "user_id": identity["actor_id"],
-            "role": "OPERATOR",
+            "role": identity["role"],
             "display_name": user["display_name"] if user else "待分配运营人员",
         }
         return case
+
+    def assignment_candidates(self, case):
+        return [
+            {"user_id": user["id"], "role": user["role"], "display_name": user["display_name"]}
+            for user in self.directory.list_users()
+            if not user["disabled"]
+            and user["role"] in STAFF_ROLES
+            and (user["role"] in MANAGEMENT_ROLES or case["merchant_id"] in user["merchant_ids"])
+        ]

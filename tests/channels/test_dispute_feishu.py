@@ -18,7 +18,10 @@ from oceanpilot.adapters.channels.feishu.v2 import (
 )
 from oceanpilot.adapters.feishu.security import FeishuRequestVerifier
 from oceanpilot.adapters.persistence.disputes import SQLiteDisputeStore
-from oceanpilot.api.dispute_feishu import initialize_dispute_feishu, router
+from oceanpilot.api.dispute_feishu import (
+    initialize_legacy_dispute_feishu as initialize_dispute_feishu,
+)
+from oceanpilot.api.dispute_feishu import router
 from oceanpilot.application.disputes import DisputeService
 from oceanpilot.domain.dispute_rules import case_plan
 from oceanpilot.domain.errors import SensitiveDataRejected
@@ -507,8 +510,8 @@ def test_read_only_query_survives_unavailable_outbound_delivery(stack):
         ("OPERATOR", "检查时限", "MONITOR_SLA", False),
         ("OPERATOR", "构建材料包", "BUILD_PACKAGE", False),
         ("OPERATOR", "确认发布商户任务", "PUBLISH_TASK", True),
-        ("RISK_OFFICER", "确认审核通过：材料完整", "REVIEW", True),
-        ("RISK_OFFICER", "确认退回补件：缺少签收记录", "REVIEW", True),
+        ("OPERATOR", "确认审核通过：材料完整", "REVIEW", True),
+        ("OPERATOR", "确认退回补件：缺少签收记录", "REVIEW", True),
         (
             "SUPERVISOR",
             "确认已完成PII检查并批准材料包：内容及隐私检查通过",
@@ -727,7 +730,7 @@ def real_service(tmp_path):
         clock=lambda: datetime.fromtimestamp(NOW, UTC),
     )
     operator = {"role": "OPERATOR", "actor_id": "op-demo", "merchant_id": "merchant-1"}
-    risk = {**operator, "role": "RISK_OFFICER", "actor_id": "risk-demo"}
+    risk = {**operator, "role": "OPERATOR", "actor_id": "risk-demo"}
     case = service.execute(
         {
             "command_id": "seed-intake",

@@ -1,3 +1,5 @@
+import base64
+import hashlib
 import json
 import re
 from collections.abc import Callable, Mapping
@@ -9,6 +11,15 @@ from urllib.parse import quote, urlencode, urlsplit
 from urllib.request import Request, urlopen
 
 _IDEMPOTENCY_KEY = re.compile(r"[A-Za-z0-9_-]{1,64}")
+
+
+def _provider_uuid(key: str) -> str:
+    """Feishu allows 50 chars; retain persisted local keys and stable retry identity."""
+    if len(key) <= 50:
+        return key
+    return "h1_" + base64.urlsafe_b64encode(hashlib.sha256(key.encode()).digest()).decode().rstrip(
+        "="
+    )
 
 
 class FeishuOutboundError(Exception):
@@ -194,7 +205,7 @@ class FeishuOutboundClient:
                 "receive_id": receive_id,
                 "msg_type": "interactive",
                 "content": card_content,
-                "uuid": idempotency_key,
+                "uuid": _provider_uuid(idempotency_key),
             },
             headers=MappingProxyType({"Authorization": f"Bearer {token}"}),
         )
@@ -208,9 +219,16 @@ class FeishuOutboundClient:
         )
 
     def reply_interactive_card(
-        self, *, message_id: str, card: dict[str, object], idempotency_key: str
+        self,
+        *,
+        message_id: str,
+        card: dict[str, object],
+        idempotency_key: str,
+        reply_in_thread: bool = True,
     ) -> FeishuMessageReceipt:
         """Reply in the verified message's thread; uuid is retained on retries."""
+        if type(reply_in_thread) is not bool:
+            raise TypeError("reply_in_thread must be a boolean")
         content = self._message_content(message_id, card, idempotency_key)
         token = self.get_tenant_access_token()
         response = self._post_json(
@@ -218,8 +236,8 @@ class FeishuOutboundClient:
             {
                 "content": content,
                 "msg_type": "interactive",
-                "reply_in_thread": True,
-                "uuid": idempotency_key,
+                "reply_in_thread": reply_in_thread,
+                "uuid": _provider_uuid(idempotency_key),
             },
             headers={"Authorization": f"Bearer {token}"},
         )

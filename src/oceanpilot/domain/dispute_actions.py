@@ -81,6 +81,8 @@ STATES = {
 
 
 def action_gate(case, action, identity, now=None):
+    from oceanpilot.domain.dispute import package_preparers
+
     role = identity.get("role")
     owners = ACTION_ROLES.get(action, set())
     result = {
@@ -175,6 +177,17 @@ def action_gate(case, action, identity, now=None):
             "FINALITY_REQUIRED",
             "Financial reconciliation requires a verified terminal upstream outcome",
         )
+    if action == "RECONCILE" and any(
+        event.get("recorded_by") == identity.get("actor_id")
+        for event in case.get("financial_events", [])
+    ):
+        return block(
+            "REVIEWER_SEPARATION_REQUIRED", "Ledger recorder cannot reconcile their own events"
+        )
+    if action == "FINAL_REVIEW" and identity.get("actor_id") in package_preparers(case):
+        result["choices"] = {
+            "decision": ["RETURN_MATERIALS", "RETURN_DOCUMENT", "RECOMMEND_ACCEPT", "HOLD"]
+        }
     if action == "RESOLVE_TASK" and not any(
         t.get("status") == "OPEN" for t in case.get("tasks", [])
     ):
@@ -186,13 +199,13 @@ def action_gate(case, action, identity, now=None):
         current = timestamp(now) if isinstance(now, str) else now or datetime.now(UTC)
         merchant_deadline = case.get("deadlines", {}).get("merchant")
         if (
-            role == "OPERATOR"
+            role in {"OPERATOR", "SUPERVISOR", "ADMIN"}
             and case.get("merchant_decision") == "NONE"
             and merchant_deadline
             and current > timestamp(merchant_deadline)
         ):
             choices += ["NO_RESPONSE"]
-        if role == "OPERATOR" and "ACCEPT" in choices:
+        if role in {"OPERATOR", "SUPERVISOR", "ADMIN"} and "ACCEPT" in choices:
             choices += ["AUTHORIZED_WAIVER"]
         result["choices"] = choices
         if not choices:
@@ -230,10 +243,10 @@ def action_gate(case, action, identity, now=None):
         )
         if not review:
             return block("REVIEW_REQUIRED", "Current evidence requires Risk review")
-        if action == "APPROVE_PACKAGE" and review.get("reviewer") == identity.get("actor_id"):
+        if action == "APPROVE_PACKAGE" and identity.get("actor_id") in package_preparers(case):
             return block(
                 "REVIEWER_SEPARATION_REQUIRED",
-                "Evidence review and final approval require two different people",
+                "Case handler, package author and evidence reviewer cannot approve their own work",
             )
     if action == "SUBMIT":
         package = next(

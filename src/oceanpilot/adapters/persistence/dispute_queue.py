@@ -5,7 +5,7 @@ from contextlib import closing
 from datetime import UTC
 
 from oceanpilot.application.dispute_views import SUMMARY_FIELDS
-from oceanpilot.domain.dispute import require
+from oceanpilot.domain.dispute import MANAGEMENT_ROLES, require
 
 
 def _value(field: str) -> str:
@@ -55,7 +55,6 @@ class DisputeQueueReader:
         else:
             user = self.access_policy._user(identity)
             require(user is not None, "UNAUTHORIZED", "登录身份已失效。", 401)
-            require(user["role"] != "DIRECTOR", "FORBIDDEN", "导演账号不能读取业务案件。", 403)
             params.update(user_id=user["id"], merchants=json.dumps(user["merchant_ids"]))
             scope = (
                 "c.merchant_id IN (SELECT value FROM json_each(:merchants)) AND "
@@ -63,6 +62,8 @@ class DisputeQueueReader:
                 "(SELECT 1 FROM json_each(c.snapshot,'$.participants') p "
                 "WHERE json_extract(p.value,'$.user_id')=:user_id))"
             )
+            if user["role"] in MANAGEMENT_ROLES:
+                scope = "1"
         if query.strip():
             # Literal substring search, not caller-controlled SQL LIKE wildcards.
             params["query"] = query.strip().casefold()
@@ -95,8 +96,10 @@ class DisputeQueueReader:
         if identity["role"] == "MERCHANT":
             active += " AND json_extract(t.value,'$.owner')='MERCHANT'"
         mine = (
-            active + " AND (json_extract(t.value,'$.assignee_id')=:actor OR "
-            "(json_extract(t.value,'$.assignee_id') IS NULL AND "
+            active + " AND (coalesce(json_extract(t.value,'$.assignee_id'),"
+            "json_extract(t.value,'$.assignee'))=:actor OR "
+            "(coalesce(json_extract(t.value,'$.assignee_id'),"
+            "json_extract(t.value,'$.assignee')) IS NULL AND "
             "json_extract(t.value,'$.owner')=:role))"
         )
         pairs.append(
@@ -106,6 +109,9 @@ class DisputeQueueReader:
         with closing(self.store._connect()) as connection:
             # Counts and page share one read snapshot under concurrent business writes.
             connection.execute("BEGIN")
+            progress = None
+            if identity["role"] in MANAGEMENT_ROLES:
+                progress = self._progress(connection, predicates, params)
             counts = connection.execute(
                 "SELECT "
                 + ",".join(
@@ -126,10 +132,55 @@ class DisputeQueueReader:
         for case in cases:
             case["view"] = "MERCHANT" if identity["role"] == "MERCHANT" else "OPERATIONS"
             case["production_eligible"] = bool(case.get("production_eligible"))
-        return {
+        result = {
             "cases": cases,
             "total": counts[queue],
             "limit": limit,
             "offset": offset,
             "queue_counts": dict(counts),
         }
+        if progress is not None:
+            result["assignee_progress"] = progress
+        return result
+
+    def _progress(self, connection, predicates, params):
+        """All-case team totals, independent of page/search/assignee selection."""
+        rows = connection.execute(
+            "SELECT coalesce(json_extract(c.snapshot,'$.assigned_op_user_id'),'') AS user_id, "
+            "count(*) AS total, "
+            "sum((SELECT count(*) FROM json_each(c.snapshot,'$.tasks') t "
+            "WHERE json_extract(t.value,'$.status') IN ('OPEN','IN_PROGRESS'))) AS pending, "
+            f"sum(CASE WHEN {predicates['URGENT']} THEN 1 ELSE 0 END) AS urgent, "
+            f"sum(CASE WHEN ({predicates['REVIEW']} OR "
+            "json_extract(c.snapshot,'$.work_status')='SUBMISSION_PENDING_CONFIRMATION') "
+            "THEN 1 ELSE 0 END) AS review, "
+            f"sum(CASE WHEN {predicates['CLOSED']} THEN 1 ELSE 0 END) AS closed "
+            "FROM v2_dispute_cases c GROUP BY user_id ORDER BY user_id",
+            params,
+        ).fetchall()
+        directory = self.access_policy.directory.list_users() if self.access_policy else []
+        people = {user["id"]: user for user in directory}
+        metrics = {row["user_id"]: dict(row) for row in rows}
+        for user in directory:
+            if user["role"] == "OPERATOR" and not user["disabled"]:
+                metrics.setdefault(
+                    user["id"],
+                    {
+                        "user_id": user["id"],
+                        "total": 0,
+                        "pending": 0,
+                        "urgent": 0,
+                        "review": 0,
+                        "closed": 0,
+                    },
+                )
+        return [
+            item
+            | {
+                "display_name": people.get(identifier, {}).get("display_name")
+                or identifier
+                or "未分配",
+                "role": people.get(identifier, {}).get("role"),
+            }
+            for identifier, item in sorted(metrics.items())
+        ]

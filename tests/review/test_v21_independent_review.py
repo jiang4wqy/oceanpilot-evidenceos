@@ -25,9 +25,9 @@ def api(tmp_path_factory):
         app.state.dispute_intake.clock = lambda: NOW
         sessions = {}
         for name, role, merchant in (
-            ("director", "DIRECTOR", None),
+            ("director", "ADMIN", None),
             ("operator", "OPERATOR", "merchant-a"),
-            ("risk", "RISK_OFFICER", "merchant-a"),
+            ("risk", "OPERATOR", "merchant-a"),
             ("supervisor", "SUPERVISOR", "merchant-a"),
             ("merchant", "MERCHANT", "merchant-a"),
             ("outsider", "MERCHANT", "merchant-b"),
@@ -60,7 +60,7 @@ def intake(api, **changes):
     # digits separated by letters so the privacy screen cannot mistake them for PANs.
     event = envelope(**({"transaction_id": str(uuid4()).replace("-", "g")} | changes))
     response = client.post(
-        "/api/v2/director/transactions",
+        "/api/v2/admin/transactions",
         headers=headers["director"],
         json={
             key: event[key]
@@ -363,12 +363,11 @@ def test_unknown_file_has_content_bound_manual_exit_and_still_needs_two_approval
 
 
 @pytest.mark.parametrize("actor", ["merchant", "operator", "supervisor"])
-def test_manual_file_assessment_cannot_be_self_granted_by_other_roles(api, actor):
+def test_manual_file_assessment_requires_staff_role(api, actor):
     case = manual_case(api)
-    assert (
-        command(api, case, "REVIEW_EVIDENCE_CONTENT", manual_data(case), actor=actor).status_code
-        == 403
-    )
+    assert command(
+        api, case, "REVIEW_EVIDENCE_CONTENT", manual_data(case), actor=actor
+    ).status_code == (403 if actor == "merchant" else 200)
 
 
 @pytest.mark.parametrize(

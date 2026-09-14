@@ -22,7 +22,7 @@ router = APIRouter(
         409: PROBLEM_RESPONSE,
     },
 )
-ROLES = ("OPERATOR", "RISK_OFFICER", "SUPERVISOR", "ADMIN", "MERCHANT", "AGENT")
+ROLES = ("OPERATOR", "SUPERVISOR", "ADMIN", "MERCHANT", "AGENT")
 
 
 class StrictDTO(BaseModel):
@@ -269,7 +269,7 @@ def get_case(case_id: str, request: Request, identity: Identity) -> dict:
 def command(payload: DisputeCommand, request: Request, identity: Identity) -> dict:
     if payload.action == "INTAKE":
         require(
-            identity["role"] == "OPERATOR",
+            identity["role"] in {"OPERATOR", "SUPERVISOR", "ADMIN"},
             "FORBIDDEN",
             "Only an authorized Operator can receive source events",
             403,
@@ -513,7 +513,7 @@ def agent_proposal(
 @router.get("/api/v2/governance")
 def governance(request: Request, identity: Identity) -> dict:
     if identity["role"] not in ("ADMIN", "SUPERVISOR"):
-        raise HTTPException(403, "治理页面需要管理员或主管演示角色。")
+        raise HTTPException(403, "治理页面需要管理员或风控经理演示角色。")
     cases = request.app.state.disputes.list_cases(identity)
     from oceanpilot.domain.dispute import ACTION_ROLES
 
@@ -571,7 +571,9 @@ def governance(request: Request, identity: Identity) -> dict:
             ),
         },
         "permissions": {
-            role: sorted(a for a, roles in ACTION_ROLES.items() if role in roles) for role in ROLES
+            role: sorted(a for a, roles in ACTION_ROLES.items() if role in roles)
+            for role in ROLES
+            if role != "AGENT"
         },
         "open_confirmation_points": [
             "各渠道 OP 法律与清算角色",
@@ -595,7 +597,7 @@ def capabilities(identity: Identity) -> dict:
 
     return {
         "role": identity["role"],
-        "intake_events": identity["role"] == "OPERATOR",
+        "intake_events": identity["role"] in {"OPERATOR", "SUPERVISOR", "ADMIN"},
         "actions": sorted(
             a for a, roles in ACTION_ROLES.items() if identity["role"] in roles and a != "INTAKE"
         ),
@@ -619,12 +621,15 @@ def command_schemas(identity: Identity) -> dict:
 @router.post("/api/v2/demo", responses={410: PROBLEM_RESPONSE})
 def demo(payload: DemoData, request: Request, identity: Identity) -> dict:
     require(
-        identity["role"] == "OPERATOR", "FORBIDDEN", "此入口不能替代商户、风控或主管执行决定。", 403
+        identity["role"] in {"OPERATOR", "SUPERVISOR", "ADMIN"},
+        "FORBIDDEN",
+        "此入口不能替代商户、风控或风控经理执行决定。",
+        403,
     )
     require(
         False,
         "NORMALIZED_INTAKE_REQUIRED",
-        "请先由独立导演登记合成交易，再经标准事件入口接收；后续由各角色本人处理。",
+        "请先由IT 管理员登记合成交易，再经标准事件入口接收；后续由各角色本人处理。",
         410,
     )
 
@@ -658,7 +663,7 @@ def operations_page(request: Request) -> HTMLResponse:
     from oceanpilot.api.dispute_identity import page_access
     from oceanpilot.web.v2.rendering import render_v2_page
 
-    denied = page_access(request, {"OPERATOR", "RISK_OFFICER", "SUPERVISOR"})
+    denied = page_access(request, {"OPERATOR", "SUPERVISOR", "ADMIN"})
     if denied is not None:
         return denied
     return HTMLResponse(render_v2_page("OPERATOR"))

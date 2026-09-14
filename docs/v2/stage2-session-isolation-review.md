@@ -1,5 +1,7 @@
 # Stage 2 双端与案件隔离审核记录
 
+> 历史基线记录：角色模型已于 2026-09-14 收敛为商户、风控专员、风控经理、IT 管理员。下文旧角色与截图仅记录当时行为；当前权限及升级方式见 [四角色迁移](architecture-and-migration.md)，当前验收见 [四角色验收](four-roles-validation.md)。
+
 审核日期：2026-09-13
 分支：`oceanpilot-v2`
 基线 HEAD：`eb46b08d45d8b87c96b38a8248f890160aea436d`

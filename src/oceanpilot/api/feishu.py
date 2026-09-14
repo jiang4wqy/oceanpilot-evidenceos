@@ -489,6 +489,12 @@ def _process_card_action(
 
 
 async def _handle(request: Request, mode: str) -> JSONResponse:
+    """Retired business-bot endpoint; old URLs cannot bypass the public-only boundary."""
+    return _reply(410, {"code": 410, "msg": "case operations require the authenticated website"})
+
+
+async def _legacy_handle(request: Request, mode: str) -> JSONResponse:
+    """Historical regression seam only; not mounted by production routes."""
     state = request.app.state
     orchestrator = getattr(state, "feishu_orchestrator", None)
     chargeback_service = getattr(state, "chargeback_channel_service", None)

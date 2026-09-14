@@ -211,12 +211,15 @@ def test_library_collection_does_not_duplicate_full_detail_payload(stack):
     assert all("case_detail" not in item for item in response.json()["references"])
 
 
-@pytest.mark.parametrize("role", ["MERCHANT", "AGENT", "ADMIN", "RISK_OFFICER", "SUPERVISOR"])
-def test_template_selection_does_not_grant_intake_permission(stack, role):
+@pytest.mark.parametrize("role", ["MERCHANT", "AGENT", "ADMIN", "OPERATOR", "SUPERVISOR"])
+def test_template_selection_respects_inherited_intake_permission(stack, role):
     client, model = stack
     response = post(client, intake_payload(), role)
-    assert response.status_code == (401 if role == "AGENT" else 403), response.text
-    assert all_cases(client) == []
+    expected = (
+        200 if role in {"ADMIN", "OPERATOR", "SUPERVISOR"} else 401 if role == "AGENT" else 403
+    )
+    assert response.status_code == expected, response.text
+    assert len(client.app.state.disputes.store.list_cases()) == (1 if expected == 200 else 0)
     assert model.requests == []
 
 
@@ -431,9 +434,9 @@ def test_reference_rehearsal_041_requires_risk_confirmation_before_merchant_hand
     assert get_case(client, case) == case
 
     rule = confirmed_rule_data()
-    denied = execute(client, case, "CONFIRM_RULE", rule, "OPERATOR")
+    denied = execute(client, case, "CONFIRM_RULE", rule, "MERCHANT")
     assert denied.status_code == 403
-    case = require_success(execute(client, case, "CONFIRM_RULE", rule, "RISK_OFFICER"))
+    case = require_success(execute(client, case, "CONFIRM_RULE", rule, "OPERATOR"))
     assert case["rule_snapshot"]["required_evidence"] == sorted(rule["required_evidence"])
     assert case["deadlines"]["external"] == rule["external_deadline"]
     case = require_success(execute(client, case, "PUBLISH_TASK", {"message": "请确认接受或抗辩。"}))
@@ -479,9 +482,7 @@ def test_next_stage_never_promotes_library_template_to_mock_fixture_rule_or_dead
 ):
     client, model = stack
     case = require_success(post(client, intake_payload()))
-    case = require_success(
-        execute(client, case, "CONFIRM_RULE", confirmed_rule_data(), "RISK_OFFICER")
-    )
+    case = require_success(execute(client, case, "CONFIRM_RULE", confirmed_rule_data(), "OPERATOR"))
     case = require_success(
         execute(client, case, "PUBLISH_TASK", {"message": "请确认本案演练立场。"})
     )

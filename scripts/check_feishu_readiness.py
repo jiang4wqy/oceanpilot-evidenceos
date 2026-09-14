@@ -17,8 +17,8 @@ SRC = Path(__file__).resolve().parent.parent / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from oceanpilot.adapters.channels.feishu.outbox import load_test_targets  # noqa: E402
-from oceanpilot.adapters.channels.feishu.v2 import TrustedBindings  # noqa: E402
+from oceanpilot.adapters.channels.feishu.knowledge_bot import load_public_groups  # noqa: E402
+from oceanpilot.adapters.channels.feishu.public_knowledge import PublicKnowledge  # noqa: E402
 from oceanpilot.adapters.feishu.client import (  # noqa: E402
     FeishuOutboundClient,
     FeishuOutboundError,
@@ -45,22 +45,14 @@ def main() -> int:
     app_secret = os.getenv("FEISHU_APP_SECRET", "")
     token = os.getenv("FEISHU_VERIFICATION_TOKEN", "")
     encrypt_key = os.getenv("FEISHU_ENCRYPT_KEY", "")
-    raw_bindings = os.getenv("OCEANPILOT_V2_FEISHU_BINDINGS_JSON", "")
-    raw_targets = os.getenv("OCEANPILOT_V21_FEISHU_TEST_TARGETS_JSON", "")
     base_url = os.getenv("OCEANPILOT_V2_BASE_URL", "")
 
-    bindings = None
-    with suppress(ValueError):
-        bindings = TrustedBindings.from_json(raw_bindings)
-    placeholders = bool(bindings) and any(
-        value.startswith("pending-")
-        for identity in bindings.actors.values()
-        for value in identity.values()
-    )
-    try:
-        targets = load_test_targets(raw_targets, bindings) if bindings else {}
-    except ValueError:
-        targets = {}
+    groups = {}
+    knowledge = None
+    with suppress(ValueError, KeyError, TypeError):
+        groups = load_public_groups(os.getenv("OCEANPILOT_FEISHU_PUBLIC_GROUPS_JSON", ""))
+    with suppress(ValueError, KeyError, TypeError, OSError):
+        knowledge = PublicKnowledge.from_path(os.getenv("OCEANPILOT_FEISHU_PUBLIC_KNOWLEDGE_PATH"))
 
     api_credentials = bool(app_id and app_secret)
     api_token_ok = False
@@ -73,19 +65,22 @@ def main() -> int:
 
     checks = [
         ("callback_credentials", bool(token and encrypt_key)),
-        ("trusted_bindings", bool(bindings) and not placeholders),
+        ("authorized_public_groups", bool(groups)),
+        ("approved_public_knowledge", bool(knowledge and knowledge.documents)),
         ("feishu_api_credentials", api_credentials and api_token_ok),
         ("public_https_health", _public_health(base_url)),
         (
             "authorized_outbound",
-            bool(targets) and os.getenv("OCEANPILOT_V21_FEISHU_OUTBOUND") == "authorized-test",
+            bool(groups) and os.getenv("OCEANPILOT_FEISHU_PUBLIC_OUTBOUND") == "authorized-test",
         ),
     ]
     for name, ready in checks:
         print(f"{name}={_yes(ready)}")
-    print(f"binding_actor_count={len(bindings.actors) if bindings else 0}")
-    print(f"binding_chat_count={len(bindings.chats) if bindings else 0}")
-    print(f"authorized_target_count={len(targets)}")
+    print("bot_scope=PUBLIC_KNOWLEDGE_ONLY")
+    print(f"authorized_group_count={len(groups)}")
+    print(f"approved_public_document_count={len(knowledge.documents) if knowledge else 0}")
+    print("legacy_case_bindings_used=NO")
+    print("live_delivery_verified=NOT_CHECKED")
     print("credentials_printed=NO")
     return 0
 

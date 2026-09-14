@@ -1,4 +1,8 @@
-# V2.1 飞书协作与授权测试群 Outbox（X01）
+# 历史：V2.1 飞书案件协作与授权测试群 Outbox（X01）
+
+> **2026-09-14 范围已变更。** 当前生产入口为[全群知识助手](feishu-public-knowledge.md)。
+> 以下案件命令、商户绑定和业务卡片仅保留作历史实现／回归说明，不再由生产 initializer 启用。
+> 具体案件与业务操作仅在登录后的网站办理。不能用以下旧配置或测试作为新知识助手的验收证据。
 
 已实现签名回调、可信账号与群绑定、案件共享消息、角色化命令、卡片预览、持久投递队列、显式发送、真实消息接口适配及回执重试。默认关闭外发。2026-09-13 已在真实企业自建应用完成发布，并分别通过事件 URL 与卡片 URL 的 challenge；这证明公网回调和加密配置可达，**尚不等于真实业务消息、卡片投递或点击回流已经验收**。本地测试中的消息回执来自显式注入的 mock transport。上游案件提交仍是 Mock。
 
@@ -8,9 +12,9 @@
 | --- | --- |
 | `POST /api/v2/integrations/feishu/events` | token 校验的 URL challenge、签名 `im.message.receive_v1` 回调 |
 | `POST /api/v2/integrations/feishu/card` | 签名 `card.action.trigger`；仅可信商户确认 Accept/Contest |
-| `GET /api/v2/integrations/feishu/outbox?case_id=...` | 当前可信 OP、审核人或主管查看本案预览、投递状态、最近 100 条记录和可用测试群引用 |
-| `POST /api/v2/integrations/feishu/outbox` | 当前可信 OP、审核人或主管创建本地预览；无网络调用 |
-| `POST /api/v2/integrations/feishu/outbox/{id}/send` | 当前可信 OP、审核人或主管显式确认发送或重试；必须再次通过案件及目标授权校验 |
+| `GET /api/v2/integrations/feishu/outbox?case_id=...` | 当前可信 OP、审核人或风控经理查看本案预览、投递状态、最近 100 条记录和可用测试群引用 |
+| `POST /api/v2/integrations/feishu/outbox` | 当前可信 OP、审核人或风控经理创建本地预览；无网络调用 |
+| `POST /api/v2/integrations/feishu/outbox/{id}/send` | 当前可信 OP、审核人或风控经理显式确认发送或重试；必须再次通过案件及目标授权校验 |
 
 `initialize_dispute_feishu(app, db_path, base_url, environ=...)` 只能在 FastAPI lifespan 内、`app.state.disputes` 与协作服务初始化后调用。构造 application 不打开数据库。初始化提供 `app.state.dispute_feishu`、`dispute_feishu_verifier` 和 `dispute_feishu_outbox`；lifespan 退出时调用 outbox 的 `close()`。
 
@@ -51,7 +55,7 @@ bindings = {
 }
 ```
 
-允许绑定角色为 `MERCHANT`、`OPERATOR`、`RISK_OFFICER`、`SUPERVISOR`；不允许外部 actor 使用保留的内核 `AGENT` 角色。`actor_id` 必须对应当前启用的服务端账号，角色匹配、商户授权和案件 participants 仍由 access policy 逐次校验。即使回调响应已持久化，账号撤销或案件访问撤销后也不能读取其回放。治理 `ADMIN` 不自动获得业务权限。
+历史案件适配器现按四角色回归：`MERCHANT`、`OPERATOR`、`SUPERVISOR`、`ADMIN`，外部 actor 不得使用保留的内核 `AGENT` 身份。`actor_id` 必须匹配当前启用的服务端账号；角色、商户范围及案件访问逐次验证，账号撤销后不能读取回放。风控经理和 IT 管理员继承经办权限，IT 管理员拥有全部后台功能，但均不得跳过独立终审。本节不重新启用生产案件机器人；当前生产入口继续使用全群知识助手。
 
 不能从卡片 value、消息文字或 URL 中获取可信 role、merchant、revision。未知租户、actor、chat 或商户不匹配均拒绝。每次业务操作还调用 `disputes.get_case(case_id, identity)`；同一个商户群内有多案时，消息必须显式指定案件。
 
@@ -127,7 +131,7 @@ bindings = {
 - 商户：`确认接受责任`、`确认提出抗辩`、`确认提交证据`。
 - 运营：`检查时限`、`构建材料包`、`确认发布商户任务`。
 - 风控：`确认审核通过：理由`、`确认退回补件：理由`。
-- 主管：`确认已完成PII检查并批准材料包：理由`。
+- 风控经理：`确认已完成PII检查并批准材料包：理由`。
 
 高风险业务命令必须包含精确“确认”短语，随后仍由领域层再次检查当前版本、状态、规则、截止日、材料完整性、角色分离和 PII 复核条件。没有材料的“确认提交证据”仍返回 `MISSING_EVIDENCE`，不会因为来自飞书而绕过业务门禁。未匹配为该角色命令的文字只按普通协作消息处理。
 

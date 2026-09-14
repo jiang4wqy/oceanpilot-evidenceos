@@ -61,7 +61,7 @@ def complete_contest(service, case: dict) -> dict:
         case,
         "REVIEW",
         {"decision": "PASS", "reason": "已人工核对本版合成登记清单和规则来源"},
-        "RISK_OFFICER",
+        "OPERATOR",
     )["case"]
     case = issue(service, case, "BUILD_PACKAGE", {}, "OPERATOR")["case"]
     case = issue(

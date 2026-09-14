@@ -1,6 +1,8 @@
 # OceanPilot V2.1
 
-**两个操作端、三个参与角色：商户客户端与 OceanPayment 运营端分别嵌入 OceanPilot 案件智能体。**
+**四类用户：商户、风控专员、风控经理、IT 管理员。商户客户端与风控工作台分别嵌入 OceanPilot 案件智能体，AI 属于系统助手。**
+
+![四角色分工](docs/v2/four-roles.svg)
 
 开发分支：`oceanpilot-v2`，从稳定 `master` 的 `250e7d9` 创建。V2 直接在此分支集成与验收；当前不创建 PR、不合并 master。master 保留原稳定比赛 Demo，后续是否合并单独决定。
 
@@ -38,7 +40,7 @@ PYTHONPATH=src .venv/bin/python -m oceanpilot.v21_accounts \
 | `/v2/operations/cases/{id}` | 运营独立案件页、审核提交、共享沟通与明确隔离的内部讨论 |
 | `/v2/operations/library` | 62 条指南参考、28 个模板；26 个适用当前双卡演练建案 |
 | `/v2/governance` | 规则来源、角色权限、集成状态、人工审核知识 |
-| `/v2/director` | 隔离的演示准备页：管理账号和登记合成交易，不代替业务决策 |
+| `/v2/admin` | IT 管理员：创建/启停账号、登记合成交易；可进入风控工作台与治理页 |
 | `/docs` | V2 严格命令 HTTP 合同及兼容 V1 API |
 | `/demo`、`/business`、`/admin` | 保留的 V1 历史演示和运维入口 |
 
@@ -61,7 +63,7 @@ PYTHONPATH=src .venv/bin/python -m oceanpilot.v21_accounts \
 | A 正常抗辩 | OP 已发布商户任务 | Contest → 补齐材料 → 人工审核 → 包终审 → Mock 提交 → 终局 → 核对 → 通知 → 结案 |
 | B 缺证阻断 | 商户已 Contest，缺签收与物流材料 | Agent 显示缺口；不能送审或通过，补证后继续 |
 | C SLA 风险 | 商户截止时间已过，等待人工升级 | 未响应与 Accept 独立；不推断授权，不自动接受 |
-| D 财务异常 | 已 Mock 提交、WON 终局、资金差异 | WON 不等于结案；主管核对差异后，通知商户再关闭 |
+| D 财务异常 | 已 Mock 提交、WON 终局、资金差异 | WON 不等于结案；风控经理核对差异后，通知商户再关闭 |
 
 上表保留四种演练目标；V2.1 使用独立身份、合成交易登记和实际文件完成这些流程。旧快捷生成命令仅用于历史领域 fixtures，不作为新版 HTTP 入口。
 
@@ -70,9 +72,9 @@ PYTHONPATH=src .venv/bin/python -m oceanpilot.v21_accounts \
 ## 已实现能力
 
 - **多维案件状态：** Stage、Work Status、Merchant Decision、Outcome、Finality、Financial Status 独立保存。
-- **明确权限：** OP 建案和运营；Merchant 本商户响应举证；Risk Officer 规则与材料复核；Supervisor 包终审、资金核对与结案；Admin 知识治理。Agent 没有独立提交、终审或结案权限。
+- **四角色权限：** 风控专员（OPERATOR）负责建案、规则确认、补证推进、材料初审、提交和通知；风控经理（SUPERVISOR）继承专员权限，查看全部案件及团队进度、分配与接管案件、终审、资金核对和结案；IT 管理员（ADMIN）拥有全部后台功能；商户（MERCHANT）仅处理本人案件。所有人工操作保留真实身份、版本和审计，终审不得由本案经办人、材料审核人或包作者自审。Agent 没有独立提交、终审或结案权限。
 - **可追溯规则和计划：** 精确匹配 scheme / channel / reason / stage / 生效日期。内置六条 Mock fixture，只有合成规则使用 72/96/120 UTC 小时演示期限。其他条件进入 NEEDS_CONFIRMATION，旧案保留规则快照。
-- **人工复核与冻结包：** 缺必需证据不能通过；材料变化使旧审核和包失效；Risk 审核与 Supervisor 最终确认分离。提交保留版本、digest、技术回执、业务接收与幂等编号。
+- **人工复核与冻结包：** 缺必需证据不能通过；材料变化使旧审核和包失效；风控专员审核与风控经理最终确认分离。提交保留版本、digest、技术回执、业务接收与幂等编号。
 - **完整后处理：** 非终局明确区分同阶段等待、核验、行动与有依据的新阶段；未知结果不能直接终局。终局后登记借记、贷记、退款及费用，用整数最小货币单位核对。资金未核对、有差异、通知过期或人工作业未解决时不能关闭。
 - **真实文件内容：** UTF-8 TXT／JSON／单行交易 CSV 上传、哈希、版本、正文与事实定位。未知类型须由独立风控核验原文摘录与行号，只有引用的材料不能填满当前清单。
 - **同案协作：** Portal、标准化 Feishu 事件进入同一 timeline/audit。飞书使用签名、token、时窗、可信商户与聊天绑定、不透明卡片引用和持久化回执。

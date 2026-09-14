@@ -15,12 +15,10 @@ from oceanpilot.adapters.persistence.dispute_identity import SQLiteDisputeIdenti
 DEFAULT_ACCOUNTS = (
     ("merchant-a", "商户 A 协作人", "MERCHANT", ["merchant-a"]),
     ("merchant-b", "商户 B 协作人", "MERCHANT", ["merchant-b"]),
-    ("operator-a", "运营专员 A", "OPERATOR", ["merchant-a"]),
-    ("operator-b", "运营专员 B", "OPERATOR", ["merchant-b"]),
-    ("risk-reviewer", "独立风控审核员", "RISK_OFFICER", ["merchant-a", "merchant-b"]),
-    ("supervisor", "独立主管", "SUPERVISOR", ["merchant-a", "merchant-b"]),
-    ("administrator", "知识管理员", "ADMIN", ["merchant-a", "merchant-b"]),
-    ("director", "演示导演", "DIRECTOR", []),
+    ("operator-a", "风控专员 A", "OPERATOR", ["merchant-a"]),
+    ("operator-b", "风控专员 B", "OPERATOR", ["merchant-b"]),
+    ("supervisor", "独立风控经理", "SUPERVISOR", ["merchant-a", "merchant-b"]),
+    ("administrator", "IT 管理员", "ADMIN", ["merchant-a", "merchant-b"]),
 )
 
 
@@ -31,7 +29,7 @@ def provision(db_path, output_path):
     store = SQLiteDisputeIdentity(db_path)
     existing = {user["username"] for user in store.list_users()}
     if existing.intersection(name for name, *_ in DEFAULT_ACCOUNTS):
-        raise ValueError("部分默认账号已存在；请使用导演账号管理，不会静默重置密码。")
+        raise ValueError("部分默认账号已存在；请使用IT 管理员账号管理，不会静默重置密码。")
     output_path.parent.mkdir(parents=True, exist_ok=True)
     # Reserve a private output file before mutating the directory.
     descriptor = os.open(output_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)

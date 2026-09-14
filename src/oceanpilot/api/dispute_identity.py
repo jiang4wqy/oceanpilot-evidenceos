@@ -78,9 +78,7 @@ def session_identity(request: Request) -> dict:
 
 
 def surface_for(user: dict) -> str:
-    return {"MERCHANT": "merchant", "ADMIN": "governance", "DIRECTOR": "director"}.get(
-        user["role"], "operations"
-    )
+    return {"MERCHANT": "merchant", "ADMIN": "governance"}.get(user["role"], "operations")
 
 
 def _session_payload(auth, token: str, user: dict):
@@ -168,30 +166,33 @@ def logout(request: Request, response: Response) -> dict:
     return {"logged_out": True}
 
 
-def _director(request: Request) -> dict:
+def _administrator(request: Request) -> dict:
     identity = session_identity(request)
-    require(identity["role"] == "DIRECTOR", "FORBIDDEN", "需要独立的演示导演账号。", 403)
+    require(identity["role"] == "ADMIN", "FORBIDDEN", "需要 IT 管理员账号。", 403)
     return identity
 
 
-@router.get("/api/v2/director/accounts")
+@router.get("/api/v2/admin/accounts")
 def accounts(request: Request) -> dict:
-    _director(request)
+    _administrator(request)
     return {"users": request.app.state.v21_auth.list_users()}
 
 
-@router.post("/api/v2/director/accounts")
+@router.post("/api/v2/admin/accounts")
 def create_account(payload: AccountData, request: Request) -> dict:
-    _director(request)
-    require(payload.role != "DIRECTOR", "FORBIDDEN", "导演账号仅由本机维护命令创建。", 403)
-    return request.app.state.v21_auth.create_user(**payload.model_dump())
+    identity = _administrator(request)
+    return request.app.state.v21_auth.create_user(
+        **payload.model_dump(), performed_by=identity["actor_id"]
+    )
 
 
-@router.post("/api/v2/director/accounts/{user_id}/status")
+@router.post("/api/v2/admin/accounts/{user_id}/status")
 def account_status(user_id: str, payload: AccountStatus, request: Request) -> dict:
-    identity = _director(request)
-    require(user_id != identity["actor_id"], "FORBIDDEN", "不能停用当前导演账号。", 403)
-    request.app.state.v21_auth.set_disabled(user_id, payload.disabled)
+    identity = _administrator(request)
+    require(user_id != identity["actor_id"], "FORBIDDEN", "不能停用当前管理员账号。", 403)
+    request.app.state.v21_auth.set_disabled(
+        user_id, payload.disabled, performed_by=identity["actor_id"]
+    )
     return {"user": request.app.state.v21_auth.get_user(user_id)}
 
 
@@ -227,12 +228,22 @@ def login_page(request: Request) -> HTMLResponse:
     )
 
 
-@router.get("/v2/director", response_class=HTMLResponse, include_in_schema=False)
-def director_page(request: Request) -> HTMLResponse:
-    denied = page_access(request, {"DIRECTOR"})
+@router.get("/v2/admin", response_class=HTMLResponse, include_in_schema=False)
+def admin_page(request: Request) -> HTMLResponse:
+    denied = page_access(request, {"ADMIN"})
     if denied is not None:
         return denied
     return HTMLResponse(
-        files("oceanpilot.web").joinpath("v2/director.html").read_text("utf-8"),
+        files("oceanpilot.web").joinpath("v2/admin.html").read_text("utf-8"),
         headers={"Cache-Control": "no-store"},
     )
+
+
+@router.get("/v2/director", include_in_schema=False)
+def legacy_director_page():
+    return RedirectResponse("/v2/admin", status_code=308)
+
+
+@router.api_route("/api/v2/director/{path:path}", methods=["GET", "POST"], include_in_schema=False)
+def legacy_director_api(path: str):
+    require(False, "DIRECTOR_RETIRED", "请使用 /api/v2/admin 管理接口。", 410)

@@ -23,6 +23,7 @@ from oceanpilot.domain.dispute import (
     fingerprint,
     minor_units,
     missing_evidence,
+    package_preparers,
     redact_knowledge,
     require,
     text_field,
@@ -651,7 +652,7 @@ class DisputeService:
         owner = (
             "MERCHANT"
             if kind in merchant_types
-            else "RISK_OFFICER"
+            else "OPERATOR"
             if kind in risk_types
             else "SUPERVISOR"
             if kind in {"FINAL_REVIEW", "ESCALATION_HOLD", "FINANCIAL_RECONCILIATION"}
@@ -661,7 +662,7 @@ class DisputeService:
             "merchant"
             if owner == "MERCHANT"
             else "internal"
-            if owner in {"RISK_OFFICER", "SUPERVISOR"}
+            if kind in risk_types or owner == "SUPERVISOR"
             else "external"
         )
         case["tasks"].append(
@@ -1593,6 +1594,12 @@ class DisputeService:
             403,
         )
         package = self._package(case, data)
+        require(
+            identity["actor_id"] not in package_preparers(case),
+            "REVIEWER_SEPARATION_REQUIRED",
+            "Case handler and package author cannot approve their own work",
+            403,
+        )
         require(package["status"] == "DRAFT", "PACKAGE_NOT_DRAFT", "Only a draft may be approved")
         require(
             data.get("pii_checked") is True,
@@ -2774,7 +2781,15 @@ class DisputeService:
         user_id = text_field(data, "user_id", limit=200)
         reason = text_field(data, "reason", limit=1000)
         policy = getattr(self, "access_policy", None)
-        participants = policy.case_participants(case) if policy else case.get("participants", [])
+        participants = (
+            policy.assignment_candidates(case)
+            if policy
+            and hasattr(policy, "assignment_candidates")
+            and identity["role"] in {"SUPERVISOR", "ADMIN"}
+            else policy.case_participants(case)
+            if policy
+            else case.get("participants", [])
+        )
         if isinstance(participants, dict):
             participants = participants.get("participants", list(participants.values()))
         person = next(
@@ -2783,7 +2798,7 @@ class DisputeService:
                 for p in participants
                 if isinstance(p, dict)
                 and p.get("user_id", p.get("actor_id")) == user_id
-                and p.get("role") == "OPERATOR"
+                and p.get("role") in {"OPERATOR", "SUPERVISOR", "ADMIN"}
             ),
             None,
         )
@@ -2795,6 +2810,10 @@ class DisputeService:
         )
         case["assigned_op_user_id"] = user_id
         case["assigned_op"] = deepcopy(person)
+        if case.get("participants") is not None and not any(
+            p.get("user_id") == user_id for p in case["participants"]
+        ):
+            case["participants"].append(deepcopy(person))
         case.setdefault("assignment_history", []).append(
             {"user_id": user_id, "reason": reason, "actor_id": identity["actor_id"], "at": now}
         )

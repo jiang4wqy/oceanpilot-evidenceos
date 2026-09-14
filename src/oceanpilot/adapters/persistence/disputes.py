@@ -60,6 +60,55 @@ class SQLiteDisputeStore:
                     case_id TEXT NOT NULL
                 );
             """)
+            self._migrate_roles(connection)
+
+    @staticmethod
+    def _migrate_roles(connection):
+        """Migrate operational fields only; historical events/receipts remain immutable."""
+        from datetime import UTC, datetime
+
+        connection.execute("BEGIN IMMEDIATE")
+        for row in connection.execute(
+            "SELECT case_id, snapshot FROM v2_dispute_cases "
+            "WHERE instr(snapshot, 'RISK_OFFICER') > 0"
+        ).fetchall():
+            case = json.loads(row["snapshot"])
+            changed = False
+            for person in case.get("participants", []):
+                if person.get("role") == "RISK_OFFICER":
+                    person["role"] = "OPERATOR"
+                    changed = True
+            for task in case.get("tasks", []):
+                if task.get("status") not in {"OPEN", "IN_PROGRESS"}:
+                    continue
+                for key in ("owner", "assignee_role"):
+                    if task.get(key) == "RISK_OFFICER":
+                        task[key] = "OPERATOR"
+                        changed = True
+            if not changed:
+                continue
+            revision = case["revision"] + 1
+            event = {
+                "id": uuid4().hex,
+                "command_id": f"four-roles:{case['id']}",
+                "action": "ROLE_MIGRATION",
+                "revision": revision,
+                "actor_id": "oceanpilot-role-migration",
+                "role": "SYSTEM",
+                "at": datetime.now(UTC).isoformat(),
+                "reason": "Merge active risk reviewer responsibilities into risk officer",
+            }
+            case["revision"] = revision
+            case.setdefault("audit", []).append(event)
+            connection.execute(
+                "UPDATE v2_dispute_cases SET revision=?, snapshot=? WHERE case_id=?",
+                (revision, json.dumps(case, ensure_ascii=False), row["case_id"]),
+            )
+            connection.execute(
+                "INSERT INTO v2_dispute_audit VALUES (?,?,?,?)",
+                (row["case_id"], revision, event["command_id"], json.dumps(event)),
+            )
+        connection.commit()
 
     def _connect(self) -> sqlite3.Connection:
         connection = sqlite3.connect(self.db_path, uri=self._uri, timeout=15)

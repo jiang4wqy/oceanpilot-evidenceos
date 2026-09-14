@@ -131,13 +131,13 @@ def match_rule(
 
 
 _NEXT = {
-    "RECEIVED": ("CONFIRM_RULE", "RISK_OFFICER", "确认适用规则和时限"),
+    "RECEIVED": ("CONFIRM_RULE", "OPERATOR", "确认适用规则和时限"),
     "TRIAGED": ("PUBLISH_TASK", "OPERATOR", "复核案件计划并发布商户任务"),
     "MERCHANT_ACTION_REQUIRED": ("MERCHANT_DECISION", "MERCHANT", "明确接受争议或继续抗辩"),
     "EVIDENCE_COLLECTING": ("REGISTER_EVIDENCE", "MERCHANT", "按清单补充合成材料登记"),
     "MERCHANT_REVISION_REQUIRED": ("REGISTER_EVIDENCE", "MERCHANT", "根据 OP 反馈补证后重新送审"),
-    "EVIDENCE_SUBMITTED": ("REVIEW", "RISK_OFFICER", "人工审核本次材料版本"),
-    "OP_REVIEW": ("REVIEW", "RISK_OFFICER", "人工审核本次材料版本"),
+    "EVIDENCE_SUBMITTED": ("REVIEW", "OPERATOR", "人工审核本次材料版本"),
+    "OP_REVIEW": ("REVIEW", "OPERATOR", "人工审核本次材料版本"),
     "READY_TO_SUBMIT": ("BUILD_PACKAGE", "OPERATOR", "起草证据包并安排最终人工确认"),
     "SUBMISSION_PENDING_CONFIRMATION": (
         "APPROVE_PACKAGE",
@@ -149,7 +149,7 @@ _NEXT = {
     "FINANCIAL_RECONCILIATION": ("RECONCILE", "SUPERVISOR", "核对资金事件及差异"),
     "RESPONSE_REVIEW_REQUIRED": (
         "RESOLVE_RESPONSE",
-        "RISK_OFFICER",
+        "OPERATOR",
         "核实剩余权利并恢复决定、材料或确认失权",
     ),
     "ACCEPT_RECOMMENDATION": (
@@ -158,16 +158,20 @@ _NEXT = {
         "查看人工建议后明确接受责任或继续抗辩",
     ),
     "ACCEPT_PROCESSING": ("PROCESS_ACCEPT", "OPERATOR", "核查授权与已有资金事件，完成渠道接受处理"),
-    "DOCUMENT_REVISION_REQUIRED": ("BUILD_PACKAGE", "OPERATOR", "依据主管意见修改文书并重新送终审"),
+    "DOCUMENT_REVISION_REQUIRED": (
+        "BUILD_PACKAGE",
+        "OPERATOR",
+        "依据风控经理意见修改文书并重新送终审",
+    ),
     "ON_HOLD": ("FINAL_REVIEW", "SUPERVISOR", "解决暂缓事项并明确退回或升级方向"),
     "OUTCOME_VERIFICATION": (
         "VERIFY_OUTCOME",
-        "RISK_OFFICER",
+        "OPERATOR",
         "核实上游事件来源、阶段、终局依据和更正范围",
     ),
     "UPSTREAM_ACTION_REQUIRED": (
         "RESOLVE_RESPONSE",
-        "RISK_OFFICER",
+        "OPERATOR",
         "确认本阶段需要的处理动作与剩余权利",
     ),
     "SUBMISSION_UNCERTAIN": (
@@ -175,12 +179,11 @@ _NEXT = {
         "OPERATOR",
         "先查询原业务请求回执，受理未明时不得重复发送",
     ),
-    "CLOSED": ("KNOWLEDGE_CANDIDATE", "OPERATOR", "提取脱敏案例模式，交由知识管理员审核"),
+    "CLOSED": ("KNOWLEDGE_CANDIDATE", "OPERATOR", "提取脱敏案例模式，交由IT 管理员审核"),
 }
 
 _SLA_DEADLINE_BY_OWNER = {
     "MERCHANT": "merchant",
-    "RISK_OFFICER": "internal",
     "SUPERVISOR": "internal",
     "OPERATOR": "external",
 }
@@ -228,6 +231,20 @@ def current_sla(
             }
         ]
     deadline_kind = _SLA_DEADLINE_BY_OWNER.get(owner) if tasks else None
+    if (
+        tasks
+        and owner == "OPERATOR"
+        and action
+        in {
+            "CONFIRM_RULE",
+            "REVIEW",
+            "REVIEW_EVIDENCE_CONTENT",
+            "RESOLVE_RESPONSE",
+            "VERIFY_OUTCOME",
+            "REUSE_EVIDENCE",
+        }
+    ):
+        deadline_kind = "internal"
     deadlines = case.get("deadlines") or case.get("rule_snapshot", {}).get("deadlines") or {}
     deadline_value = deadlines.get(deadline_kind) if deadline_kind else None
     deadline = _time(deadline_value) if deadline_value else None
@@ -333,7 +350,7 @@ def case_plan(case: dict[str, Any], *, now: datetime | None = None) -> dict[str,
     rule_status = rule.get("conflict_status", "NEEDS_CONFIRMATION")
     if rule_status not in ("VERIFIED", "HUMAN_CONFIRMED"):
         blockers.append("规则或时限待 OP 确认，不能猜测适用依据。")
-        action, owner, reason = "CONFIRM_RULE", "RISK_OFFICER", blockers[-1]
+        action, owner, reason = "CONFIRM_RULE", "OPERATOR", blockers[-1]
     elif missing_critical and case.get("merchant_decision") == "CONTEST":
         blockers.append("关键材料缺失，不能通过审核或提交。")
     if case.get("merchant_decision") == "NO_RESPONSE":
@@ -394,7 +411,7 @@ def case_plan(case: dict[str, Any], *, now: datetime | None = None) -> dict[str,
     ):
         action, owner, reason = (
             "REVIEW_EVIDENCE_CONTENT",
-            "RISK_OFFICER",
+            "OPERATOR",
             "核对已保存文件的正文位置和本案适用事实",
         )
     if case.get("pending_next_stage"):
@@ -405,11 +422,11 @@ def case_plan(case: dict[str, Any], *, now: datetime | None = None) -> dict[str,
         )
     if case.get("eligibility_status") in {"REQUIRES_RECONFIRMATION", "RIGHTS_LOST"}:
         blockers.append("当前抗辩资格需重新核实；旧决定不代表仍有提交权利。")
-        action, owner, reason = "RESOLVE_RESPONSE", "RISK_OFFICER", "核实当前规则与剩余处理权利"
+        action, owner, reason = "RESOLVE_RESPONSE", "OPERATOR", "核实当前规则与剩余处理权利"
     if case.get("outcome_verification_required"):
         action, owner, reason = (
             "VERIFY_OUTCOME",
-            "RISK_OFFICER",
+            "OPERATOR",
             "核实上游来源与终局依据后再处理结果",
         )
     deadlines = deepcopy(case.get("deadlines") or rule.get("deadlines") or {})

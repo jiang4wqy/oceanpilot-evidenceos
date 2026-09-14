@@ -1,6 +1,22 @@
 # OceanPilot V2 · 实现与迁移
 
-V2 以 OceanPayment 为正式争议的案件运营主体。Merchant 决策和举证，OP 运营发布任务与登记上游事件，Risk Officer 审核材料和规则，Supervisor 终审与核对结案，Admin 审核知识。Agent 读取快照、引用规则、解释缺口并提出绑定版本的下一步。
+V2 以 OceanPayment 为正式争议的案件运营主体。商户（MERCHANT）决策和举证，风控专员（OPERATOR）负责运营、规则确认和材料初审，风控经理（SUPERVISOR）负责全局进度、分配、终审和核对结案，IT 管理员（ADMIN）拥有全部后台功能。Agent 读取快照、引用规则、解释缺口并提出绑定版本的下一步。
+
+## 四角色迁移（2026-09-14）
+
+启动身份库时，旧 RISK_OFFICER → OPERATOR、DIRECTOR → ADMIN。账号 ID、用户名、密码哈希和商户授权保持不变；迁移账号的旧会话撤销，新角色重新登录。只有这四类账号可以新建或登录；AGENT 是保留的系统身份。
+
+启动案件库时，仅迁移参与者当前角色及 OPEN/IN_PROGRESS 任务的旧 RISK_OFFICER 责任字段。每个变更案件增加一次 revision 与 ROLE_MIGRATION 审计，旧审核、已完成任务、消息及命令回执保持原样，历史角色展示为“历史风控专员”。重复启动无重复迁移；旧版本操作和提案须刷新后重新确认。
+
+SUPERVISOR/ADMIN 可读取全部案件，不受专员商户范围和案件参与者限制；OPERATOR/MERCHANT 继续执行原对象授权。经理可把案件分配给已获该商户授权的专员或管理人员，分配时加入案件参与者。队列和自动更新使用同一访问范围。
+
+独立复核按真实 actor_id 判断，经理和 IT 管理员没有豁免：本案经办、材料审核与包作者不能终审，重新分配案件不清除原经办记录；账务登记人不能核对自己的资金事件。管理员仍可退回材料、修订文书或转交其他经理/管理员处理。
+
+GET /api/v2/cases 为 SUPERVISOR/ADMIN 增加 assignee_progress：按负责人提供 user_id、display_name、role、total、pending（未完成任务数）、urgent（现有 URGENT 队列条件）、review（初审或包终审中）和 closed。统计覆盖全部案件，不受分页、搜索或负责人筛选影响；零案件的启用专员也列出。
+
+管理入口改为 /v2/admin 和 /api/v2/admin/accounts、/api/v2/admin/accounts/{user_id}/status、/api/v2/admin/transactions。旧 /v2/director 返回 308，旧管理 API 返回 410。账号创建与启停在 v21_account_audit 中记录真实管理员，不保存密码。
+
+升级前按部署方式备份争议 SQLite（运行中使用 SQLite backup API，或停服后完整备份数据库及 WAL）。回退时先停服，恢复旧代码与同一次备份，再启动；不要只回退代码而保留已迁移账号。迁移本身不重置账号和密码。
 
 分支策略：从稳定 master `250e7d9` 建立 `oceanpilot-v2`，所有 V2 工作在该分支集成。按用户 2026-09-08 补充要求，不创建 PR，也不合并 master；master 保留原稳定 Demo。
 

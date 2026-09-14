@@ -127,6 +127,28 @@ assert.match(node('globalNotice').innerHTML,/当前资金尚未核对/);
 """)
 
 
+def test_manager_progress_is_escaped_and_independent_of_filtered_page():
+    run_js("""
+const ui=OceanV2;ui.state.role='SUPERVISOR';ui.state.assignedTo='officer-a';
+const progress=[{user_id:'officer-a',display_name:'<专员 A>',role:'OPERATOR',
+ total:12,pending:4,urgent:2,review:3,closed:5},
+ {user_id:'officer-b',display_name:'专员 B',role:'OPERATOR',
+ total:9,pending:1,urgent:0,review:0,closed:8}];
+const requests=[];
+global.fetch=async url=>{requests.push(String(url));return ok(String(url).includes('/cases?')?
+ {cases:[sample],total:12,queue_counts:{ALL:12},assignee_progress:progress}:{});};
+await ui.refresh();
+assert.equal(node('teamProgress').hidden,false);
+assert.match(node('teamProgress').innerHTML,/&lt;专员 A&gt;/);
+assert.match(node('teamProgress').innerHTML,/专员 B/);
+assert.match(node('assignedFilter').innerHTML,/officer-b/);
+assert.equal(node('assignedFilter').value,'officer-a');
+assert(requests.some(url=>url.includes('assigned_to=officer-a')));
+ui.state.role='OPERATOR';await ui.refresh(true);
+assert.equal(node('teamProgress').hidden,true);
+""")
+
+
 def test_untrusted_case_content_is_escaped_in_rendered_detail():
     run_js("""
 OceanV2.state.current={...sample,merchant_id:'<img src=x onerror=alert(1)>'};
@@ -221,9 +243,9 @@ assert.equal(node('caseDetail').innerHTML.includes('stale advice'),false);
 def test_human_confirmation_cannot_execute_against_a_newer_case_revision():
     run_js("""
 const ui=OceanV2;
-ui.state.role='RISK_OFFICER';ui.state.current=sample;
+ui.state.role='OPERATOR';ui.state.current=sample;
 ui.state.dialog={action:'REVIEW',case_id:'a',revision:1,
- identity:{role:'RISK_OFFICER'}};
+ identity:{role:'OPERATOR'}};
 node('actionForm').reportValidity=()=>true;
 node('confirmCheckbox').checked=true;
 global.fetch=()=>{throw Error('A stale human confirmation must never issue a request');};
@@ -236,7 +258,7 @@ assert.equal(ui.state.pending,null);
 def test_unknown_rules_never_preselect_merchant_rights():
     run_js("""
 const ui=OceanV2;
-ui.state.role='RISK_OFFICER';
+ui.state.role='OPERATOR';
 ui.state.current={...sample,rule_snapshot:{conflict_status:'NEEDS_CONFIRMATION'}};
 ui.openDialog('CONFIRM_RULE');
 const markup=node('dialogFields').innerHTML;
@@ -476,7 +498,7 @@ const replies=[];global.fetch=url=>url.endsWith('/messages')?
  new Promise(resolve=>replies.push(resolve)):
  Promise.resolve(ok({case_revision:2,conversations:[]}));
 const first=ui.sendAgentMessage('运营问题');
-ui.state.role='RISK_OFFICER';ui.state.agentBusy=false;
+ui.state.role='OPERATOR';ui.state.agentBusy=false;
 const second=ui.sendAgentMessage('风控问题');
 replies[0](ok({answer:'旧运营答案'}));await first;
 assert.equal(ui.state.agentBusy,true);
@@ -613,7 +635,7 @@ def test_merchant_material_cards_explain_upload_status_without_object_ids():
         """
 const ui=OceanV2;ui.state.role='MERCHANT';ui.state.isCasePage=true;ui.state.tab='evidence';
 ui.state.current={...sample,work_status:'OP_REVIEW',primary_action:null,
- current_task:{action:'REVIEW',reason:'人工审核本次材料版本',owner:{role:'RISK_OFFICER',display_name:'独立风控审核员'}},
+ current_task:{action:'REVIEW',reason:'人工审核本次材料版本',owner:{role:'OPERATOR',display_name:'独立风控专员'}},
  evidence:[{id:'evidence-id',code:'fulfillment.proof_of_delivery',
  title:'合成签收证明',reference:'object:private-object-id',filename:'stage3-missing.json',
  active:true,content_check:{status:'INSUFFICIENT',findings:['未提供签收确认。']}}],

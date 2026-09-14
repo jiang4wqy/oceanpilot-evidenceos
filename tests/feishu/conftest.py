@@ -3,7 +3,10 @@ import json
 import time
 from pathlib import Path
 
+from fastapi import Request
+
 from oceanpilot.adapters.feishu.client import FeishuHttpRequest, FeishuHttpResponse
+from oceanpilot.api.feishu import _legacy_handle
 from oceanpilot.config import FeishuSettings, Settings
 from oceanpilot.main import create_app
 
@@ -60,7 +63,27 @@ def make_app(
             db_path=tmp_path / "feishu.db",
         )
     settings = Settings(db_path=tmp_path / "cases.db", feishu=feishu)
-    return create_app(settings, feishu_transport=transport)
+    app = create_app(settings, feishu_transport=transport)
+    # Preserve historical unit/integration regressions without leaving a production
+    # configuration switch that can re-enable case operations in the public bot.
+    app.router.routes = [
+        route
+        for route in app.router.routes
+        if getattr(route, "path", None) not in {EVENTS_PATH, CARD_PATH}
+    ]
+
+    async def legacy_events(request: Request):
+        return await _legacy_handle(request, "event")
+
+    async def legacy_cards(request: Request):
+        return await _legacy_handle(request, "card")
+
+    app.add_api_route(EVENTS_PATH, legacy_events, methods=["POST"])
+    app.add_api_route(CARD_PATH, legacy_cards, methods=["POST"])
+    # New FastAPI versions may retain included routers as nested entries; put
+    # test-only handlers first rather than relying solely on flat path removal.
+    app.router.routes[:] = app.router.routes[-2:] + app.router.routes[:-2]
+    return app
 
 
 def sign(

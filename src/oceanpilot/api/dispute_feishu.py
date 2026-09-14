@@ -37,7 +37,68 @@ def initialize_dispute_feishu(
     *,
     environ: Mapping[str, str] | None = None,
 ) -> bool:
-    """Call inside lifespan, after app.state.disputes exists; fail closed."""
+    """Production composition: knowledge-only; old case bindings never authorize this bot."""
+    from oceanpilot.adapters.channels.feishu.knowledge_bot import KnowledgeBot, load_public_groups
+    from oceanpilot.adapters.channels.feishu.public_knowledge import PublicKnowledge
+    from oceanpilot.adapters.feishu.client import FeishuOutboundClient
+
+    env = os.environ if environ is None else environ
+    app.state.dispute_feishu = None
+    app.state.dispute_feishu_verifier = None
+    app.state.dispute_feishu_outbox = None
+    required = ("FEISHU_APP_ID", "FEISHU_ENCRYPT_KEY", "FEISHU_VERIFICATION_TOKEN")
+    if not all(env.get(key) for key in required):
+        return False
+    try:
+        path = env.get("OCEANPILOT_FEISHU_PUBLIC_KNOWLEDGE_PATH")
+        model = (
+            getattr(app.state, "v2_model_provider", None)
+            if env.get("OCEANPILOT_FEISHU_KNOWLEDGE_MODEL") == "enabled"
+            else None
+        )
+        knowledge = PublicKnowledge.from_path(path, model=model)
+        groups = load_public_groups(env.get("OCEANPILOT_FEISHU_PUBLIC_GROUPS_JSON"))
+        client = None
+        if (
+            groups
+            and env.get("OCEANPILOT_FEISHU_PUBLIC_OUTBOUND") == "authorized-test"
+            and env.get("FEISHU_APP_SECRET")
+        ):
+            client = FeishuOutboundClient(
+                app_id=env["FEISHU_APP_ID"], app_secret=env["FEISHU_APP_SECRET"]
+            )
+        bot = KnowledgeBot(
+            Path(db_path).with_name("feishu-public-knowledge.db"),
+            knowledge,
+            groups=groups,
+            secret=env["FEISHU_ENCRYPT_KEY"],
+            app_id=env["FEISHU_APP_ID"],
+            base_url=base_url,
+            client=client,
+            approval_revision=lambda: PublicKnowledge.from_path(path).revision,
+        )
+        verifier = FeishuRequestVerifier(
+            encrypt_key=env["FEISHU_ENCRYPT_KEY"],
+            verification_token=env["FEISHU_VERIFICATION_TOKEN"],
+            now=lambda: int(time.time()),
+        )
+    except (ValueError, TypeError, KeyError, OSError):
+        return False
+    app.state.dispute_feishu = bot
+    app.state.dispute_feishu_verifier = verifier
+    app.state.dispute_feishu_outbox = bot  # Existing lifespan closes this worker.
+    bot.start()
+    return True
+
+
+def initialize_legacy_dispute_feishu(
+    app: FastAPI,
+    db_path: Path,
+    base_url: str = "http://127.0.0.1:8000",
+    *,
+    environ: Mapping[str, str] | None = None,
+) -> bool:
+    """Historical regression composition only; never selected by production lifespan."""
     env = os.environ if environ is None else environ
     app.state.dispute_feishu = None
     app.state.dispute_feishu_verifier = None
@@ -173,6 +234,10 @@ class OutboxSendDTO(BaseModel):
 
 
 async def _outbox_call(request, method, *args, **kwargs):
+    from oceanpilot.adapters.channels.feishu.knowledge_bot import KnowledgeBot
+
+    if isinstance(getattr(request.app.state, "dispute_feishu", None), KnowledgeBot):
+        return _error(403, "FEISHU_BUSINESS_ACTIONS_DISABLED")
     outbox = getattr(request.app.state, "dispute_feishu_outbox", None)
     if outbox is None:
         return _error(503, "FEISHU_V2_DISABLED")

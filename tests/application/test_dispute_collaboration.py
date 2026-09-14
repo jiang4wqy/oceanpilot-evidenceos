@@ -21,7 +21,7 @@ from oceanpilot.domain.dispute import DisputeError
 from oceanpilot.domain.dispute_rules import current_sla
 
 OP = {"role": "OPERATOR", "actor_id": "operator"}
-RISK = {"role": "RISK_OFFICER", "actor_id": "risk"}
+RISK = {"role": "OPERATOR", "actor_id": "risk"}
 SUPERVISOR = {"role": "SUPERVISOR", "actor_id": "supervisor"}
 MERCHANT = {"role": "MERCHANT", "actor_id": "merchant", "merchant_id": "merchant-a"}
 OTHER = {"role": "MERCHANT", "actor_id": "other", "merchant_id": "merchant-b"}
@@ -471,7 +471,7 @@ def test_submitted_material_switches_to_only_current_internal_task(stack):
     assert len(events) == 1
     assert events[0]["deadline_type"] == "internal"
     assert events[0]["reminder_band"] == "T_MINUS_24H"
-    assert events[0]["owner"] == "RISK_OFFICER"
+    assert events[0]["owner"] == "OPERATOR"
     assert events[0]["task_types"] == ["OP_REVIEW"]
     assert not collab.activity(case["id"], MERCHANT)["messages"]
     assert disputes.get_case(case["id"], OP)["revision"] == revision
@@ -672,7 +672,7 @@ def test_approved_closed_case_pattern_is_used_by_next_case_and_pending_is_exclud
             "reason": "已核对合成上游来源和当前阶段",
             "authorization_reference": "mock-review-confirmed",
         },
-        {"role": "RISK_OFFICER", "actor_id": "risk-reviewer"},
+        {"role": "OPERATOR", "actor_id": "risk-reviewer"},
     )
     source = command(
         disputes,

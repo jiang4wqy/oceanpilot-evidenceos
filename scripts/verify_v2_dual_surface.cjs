@@ -70,7 +70,7 @@ async function json(path, options={}) { const r=await fetch(base+'/api/v2'+path,
   start=Date.now();v=await act(m,'SUBMIT_EVIDENCE');await checkSync(o,v,start);
   assert.equal(await o.evaluate(()=>OceanV2.state.current.work_status),'OP_REVIEW');
   report.checks.push('merchant evidence registration / send to OP synchronizes without refresh');
-  await role('RISK_OFFICER');await tab(o,'review');start=Date.now();v=await act(o,'REVIEW',{decision:'REVISION',reason:'请确认沟通记录明确包含配送地址，本轮退回补证。'});await checkSync(m,v,start);
+  await role('OPERATOR');await tab(o,'review');start=Date.now();v=await act(o,'REVIEW',{decision:'REVISION',reason:'请确认沟通记录明确包含配送地址，本轮退回补证。'});await checkSync(m,v,start);
   await tab(m,'tasks');assert.match(await m.locator('#caseDetail').innerText(),/请确认沟通记录明确包含配送地址/);
   report.checks.push('risk review feedback appears in merchant tasks automatically');
   await tab(m,'evidence');v=await act(m,'SUBMIT_EVIDENCE');await checkSync(o,v,Date.now());

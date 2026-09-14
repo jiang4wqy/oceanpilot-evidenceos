@@ -80,7 +80,9 @@ def test_trusted_sessions_share_case_and_read_receipts_without_role_switch(api):
     view = client.get(prefix(case), headers=headers["merchant"]).json()
     assert view["messages"][0]["id"] == message["id"]
     assert view["case_revision"] == case["revision"]
-    assert {p["user_id"] for p in view["participants"]} == {"operator", "merchant"}
+    assert {
+        p["user_id"] for p in view["participants"] if p["role"] not in {"SUPERVISOR", "ADMIN"}
+    } == {"operator", "merchant"}
     read = client.post(
         prefix(case) + "/read", headers=headers["merchant"], json={"cursor": message["cursor"]}
     )
@@ -322,7 +324,7 @@ def test_case_sample_download_uses_real_upload_and_content_check(
         merchant_case = submitted.json()["case"]
         assert merchant_case["work_status"] == "OP_REVIEW"
         assert merchant_case["current_task"]["action"] == "REVIEW"
-        assert merchant_case["current_task"]["owner"]["role"] == "RISK_OFFICER"
+        assert merchant_case["current_task"]["owner"]["role"] == "OPERATOR"
         assert merchant_case["primary_action"] is None
 
 

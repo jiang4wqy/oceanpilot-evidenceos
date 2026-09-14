@@ -118,7 +118,7 @@ class TrustedBindings:
             for key, raw_identity in actors.items():
                 identity = _mapping(raw_identity)
                 role = _text(identity.get("role"))
-                if role not in {"MERCHANT", "OPERATOR", "RISK_OFFICER", "SUPERVISOR"}:
+                if role not in {"MERCHANT", "OPERATOR", "SUPERVISOR", "ADMIN"}:
                     raise ValueError("unsupported role")
                 normalized_actors[key] = {
                     "role": role,
@@ -383,14 +383,15 @@ class FeishuV2Adapter:
                 "- `案件 CASE_ID 检查时限`：运行一次 SLA 检查\n"
                 "- `案件 CASE_ID 构建材料包`：基于已审核材料生成草稿\n"
                 "- `案件 CASE_ID 确认发布商户任务`：发布下一项商户任务\n"
-            ),
-            "RISK_OFFICER": (
                 "- `案件 CASE_ID 确认审核通过：理由`：通过证据审核\n"
                 "- `案件 CASE_ID 确认退回补件：理由`：退回商户补件\n"
             ),
             "SUPERVISOR": ("- `案件 CASE_ID 确认已完成PII检查并批准材料包：理由`：冻结材料包\n"),
         }
-        content += role_commands.get(role, "")
+        if role in {"SUPERVISOR", "ADMIN"}:
+            content += role_commands["OPERATOR"] + role_commands["SUPERVISOR"]
+        else:
+            content += role_commands.get(role, "")
         content += (
             "\n群聊中请把 `案件` 换成 `@OceanPilot`。涉及决定、审核或提交的命令必须包含“确认”。"
         )
@@ -808,7 +809,7 @@ class FeishuV2Adapter:
                 },
             }
         if instruction == "确认提交证据":
-            if identity["role"] not in {"MERCHANT", "OPERATOR"}:
+            if identity["role"] not in {"MERCHANT", "OPERATOR", "SUPERVISOR", "ADMIN"}:
                 raise FeishuV2Error("MERCHANT_AUTHORIZATION_REQUIRED", 403)
             return {
                 "command_id": _event_command_id(event_ref),
@@ -823,7 +824,10 @@ class FeishuV2Adapter:
             ("OPERATOR", "构建材料包"): ("BUILD_PACKAGE", False, {}),
             ("OPERATOR", "确认发布商户任务"): ("PUBLISH_TASK", True, {}),
         }
-        role_action = role_actions.get((identity["role"], instruction))
+        command_role = (
+            "OPERATOR" if identity["role"] in {"SUPERVISOR", "ADMIN"} else identity["role"]
+        )
+        role_action = role_actions.get((command_role, instruction))
         if role_action is not None:
             action, confirmed, data = role_action
             return {
@@ -837,7 +841,7 @@ class FeishuV2Adapter:
         review_match = re.fullmatch(
             r"确认(审核通过|退回补件)[：:]\s*(.{1,1000})", instruction, re.S
         )
-        if review_match is not None and identity["role"] == "RISK_OFFICER":
+        if review_match is not None and command_role == "OPERATOR":
             return {
                 "command_id": _event_command_id(event_ref),
                 "case_id": _case_id(case),
@@ -853,7 +857,7 @@ class FeishuV2Adapter:
         approval_match = re.fullmatch(
             r"确认已完成PII检查并批准材料包[：:]\s*(.{1,1000})", instruction, re.S
         )
-        if approval_match is not None and identity["role"] == "SUPERVISOR":
+        if approval_match is not None and identity["role"] in {"SUPERVISOR", "ADMIN"}:
             return {
                 "command_id": _event_command_id(event_ref),
                 "case_id": _case_id(case),

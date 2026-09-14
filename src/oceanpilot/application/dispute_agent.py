@@ -37,10 +37,10 @@ from oceanpilot.domain.dispute_rules import case_plan
 _AGENT = {"role": "AGENT", "actor_id": "oceanpilot-workflow-agent"}
 _OWNER_LABELS = {
     "MERCHANT": "商户本人",
-    "OPERATOR": "OceanPayment 运营人员",
-    "RISK_OFFICER": "OceanPayment 风险审核员",
-    "SUPERVISOR": "OceanPayment 主管",
-    "ADMIN": "平台知识管理员",
+    "OPERATOR": "OceanPayment 风控专员",
+    "RISK_OFFICER": "历史风控专员",
+    "SUPERVISOR": "OceanPayment 风控经理",
+    "ADMIN": "IT 管理员",
     "AGENT": "OceanPilot Agent（仅建议与草稿）",
 }
 _SYSTEM = (
@@ -50,7 +50,8 @@ _SYSTEM = (
     "严格区分三方：Merchant 商户本人确认 Accept/Contest 并提供真实事实和材料；"
     "OceanPilot Agent 只检索、检查登记缺口、监测期限、起草和提出待确认建议；"
     "OceanPayment Operator 发布商户任务、记录上游和账务事件、执行获准的 Mock 提交；"
-    "Risk Officer 人工审核材料，Supervisor 独立最终审核、核对资金及确认结案。"
+    "风控专员同时确认规则并人工审核材料；风控经理独立终审、查看团队进度、核对资金及结案。"
+    "IT 管理员拥有全部后台功能权限，但同样必须遵守版本校验和不同人终审要求。"
     "不得把商户与 Agent 合并称作同一个操作方，不得声称 Agent 已提供证据、替商户决定或完成人审。"
     "本次只服务 audience 指定的一端、当前案件；不得引用另一端私有 AI 对话或其他案件私有资料。"
     "允许使用本次检索到的 REFERENCE_KNOWLEDGE 指南案例作为公开参考。"
@@ -181,7 +182,7 @@ class DisputeAgentService:
                     "missing_required": plan["missing_required"],
                     "missing_critical": plan["missing_critical"],
                     "readiness": plan["readiness"],
-                    "boundary": "仅检查材料登记和版本，内容真实性仍需 Risk Officer 人工审核。",
+                    "boundary": "仅检查材料登记和版本，内容真实性仍需 风控专员 人工审核。",
                 },
             ),
             step(
@@ -994,7 +995,7 @@ class DisputeAgentService:
         )
         deadline = case["deadlines"].get("merchant") or "待 OP 确认，不能猜测期限"
         allowed = case["rule_snapshot"].get("allowed_actions", [])
-        rights = " / ".join(allowed) or "待 Risk Officer 确认可用操作"
+        rights = " / ".join(allowed) or "待 风控专员 确认可用操作"
         merchant_message = (
             f"OceanPayment 已收到 {case['scheme']} 原因码 {case['reason_code']} 的争议通知。"
             f"当前阶段 {case['stage']}，争议金额 {case['amount_minor']} "
@@ -1065,7 +1066,7 @@ class DisputeAgentService:
         draft_suffix = (
             f"\n当前材料缺口：{material_line}。\n"
             "本草稿仅组织已登记事实，不证明材料真实性或预测结果；"
-            "须完成 Risk Officer 内容审核、Supervisor 最终审核和 PII 检查后才能冻结并 Mock 提交。"
+            "须完成 风控专员 内容审核、风控经理 最终审核和 PII 检查后才能冻结并 Mock 提交。"
         )
         evidence_lines = (
             DisputeAgentService._summarize_items(
@@ -1135,7 +1136,7 @@ class DisputeAgentService:
             findings.append(
                 {
                     "severity": "REVIEW",
-                    "title": "需要 Risk Officer 审核",
+                    "title": "需要 风控专员 审核",
                     "detail": "登记完整不等于内容真实；Agent 未代替人审。",
                 }
             )
@@ -1190,7 +1191,7 @@ class DisputeAgentService:
         elif action == "CONFIRM_RULE":
             add(
                 action,
-                "请 Risk Officer 确认本案规则和权限",
+                "请 风控专员 确认本案规则和权限",
                 {"reason": "请核对正式来源、证据要求、可用操作和明确期限。"},
                 [
                     "source_id",
@@ -1251,7 +1252,7 @@ class DisputeAgentService:
         elif action == "KNOWLEDGE_CANDIDATE":
             add(
                 action,
-                "提取脱敏案例供知识管理员复核",
+                "提取脱敏案例供IT 管理员复核",
                 {
                     "summary": (
                         f"{case['scheme']} {case['reason_code']}：{case['business_outcome']}。"
@@ -1336,7 +1337,7 @@ class DisputeAgentService:
                 f"本案工作状态 {case['work_status']}；"
                 f"缺少必需材料 {len(plan['missing_required'])} 项；"
                 f"当前冻结证据包：{'已有' if package else '尚无'}。"
-                "上游提交前须规则和时限已确认、材料风控通过、主管独立终审并冻结，且未过外部截止时间。"
+                "上游提交前须规则和时限已确认、材料风控通过、风控经理独立终审并冻结，且未过外部截止时间。"
                 f"下一步由 {_OWNER_LABELS.get(plan['next_action']['owner'], '相应负责人')}："
                 f"{plan['next_action']['reason']}。"
             )
@@ -1358,7 +1359,7 @@ class DisputeAgentService:
             return answer + (
                 f"已登记资金事件 {len(case['financial_events'])} 笔，"
                 f"净影响 {net} 最小货币单位 {case['currency']}。"
-                "运营人员核对来源并登记事件，主管在明确终局后独立核对，之后重新通知商户。"
+                "运营人员核对来源并登记事件，风控经理在明确终局后独立核对，之后重新通知商户。"
             )
         if intent == "CLOSE_BLOCKERS":
             blockers = close_blockers(case)
@@ -1375,7 +1376,7 @@ class DisputeAgentService:
             return (
                 ("当前不能结案：\n" + "\n".join(f"- {item}" for item in blockers))
                 if blockers
-                else ("确定性结案条件已满足；仍须 Supervisor 查看当前版本并人工确认结案。")
+                else ("确定性结案条件已满足；仍须 风控经理 查看当前版本并人工确认结案。")
             )
         if intent == "MERCHANT_MESSAGE":
             return scoped["prepared"]["merchant_message"]

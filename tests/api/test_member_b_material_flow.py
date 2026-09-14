@@ -77,7 +77,7 @@ def test_invalid_material_replaced_then_submitted_to_current_reviewer(api, varia
     assert response.status_code == 200, response.text
     case = response.json()["case"]
     assert case["work_status"] == "OP_REVIEW"
-    assert case["current_task"]["owner"]["role"] == "RISK_OFFICER"
+    assert case["current_task"]["owner"]["role"] == "OPERATOR"
     internal = next(row for row in case["deadline_summary"] if row["kind"] == "internal")
     assert case["current_task"]["deadline"] == internal["at"]
     assert case["current_task"]["deadline_kind"] == "internal"
@@ -90,8 +90,8 @@ def test_http_rule_confirmation_accepts_explicit_critical_subset_and_replays(api
     from tests.v21_support import normalized_intake, session_headers
 
     client, _, _, case = api
-    risk = session_headers(client, "RISK_OFFICER", "merchant-a")
-    # Provision participants before intake snapshots authorize the risk reviewer.
+    risk = session_headers(client, "OPERATOR", "merchant-a")
+    # The four-role model assigns rule confirmation to the scoped Operator.
     response = normalized_intake(
         client,
         {

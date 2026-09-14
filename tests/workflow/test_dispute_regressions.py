@@ -15,7 +15,7 @@ from oceanpilot.domain.dispute import close_blockers
 from oceanpilot.domain.dispute_rules import case_plan, match_rule
 
 OP = {"role": "OPERATOR", "actor_id": "review-operator"}
-RISK = {"role": "RISK_OFFICER", "actor_id": "review-risk"}
+RISK = {"role": "OPERATOR", "actor_id": "review-risk"}
 SUPERVISOR = {"role": "SUPERVISOR", "actor_id": "review-supervisor"}
 MERCHANT = {"role": "MERCHANT", "actor_id": "review-merchant", "merchant_id": "merchant-a"}
 NOW = datetime(2026, 9, 8, 12, tzinfo=UTC)
@@ -245,7 +245,7 @@ def test_unknown_rule_requires_risk_confirmation_of_actions_as_well_as_deadlines
         run(service, case, "CONFIRM_RULE", rule, RISK)
     rule["allowed_actions"] = ["ACCEPT"]
     with pytest.raises(DisputeError) as error:
-        run(service, case, "CONFIRM_RULE", rule, OP)
+        run(service, case, "CONFIRM_RULE", rule, MERCHANT)
     assert error.value.status == 403
     confirmed = run(service, case, "CONFIRM_RULE", rule, RISK)
     assert confirmed["rule_snapshot"]["allowed_actions"] == ["ACCEPT"]

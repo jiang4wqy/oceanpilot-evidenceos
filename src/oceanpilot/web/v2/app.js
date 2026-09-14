@@ -20,10 +20,11 @@
       ? JSON.stringify(value)
       : String(value ?? "—");
   const names = {
-    OPERATOR: "OP 运营专员",
-    RISK_OFFICER: "OP 风控审核员",
-    SUPERVISOR: "OP 主管",
-    ADMIN: "平台管理员",
+    OPERATOR: "OP 风控专员",
+    RISK_OFFICER: "历史风控专员",
+    DIRECTOR: "历史演示维护人员",
+    SUPERVISOR: "OP 风控经理",
+    ADMIN: "IT 管理员",
     MERCHANT: "商户协作人",
     AGENT: "Agent（权限演示）",
     FORMAL_DISPUTE: "正式争议",
@@ -129,42 +130,6 @@
     CANCELLED: "已取消", WAIVED: "已豁免", SUPERSEDED: "已被替代", HOLD: "暂缓并升级", RETURN_MATERIALS: "退回材料", RETURN_DOCUMENT: "退回文书", RECOMMEND_ACCEPT: "建议接受责任", RESTORE_DECISION: "恢复商户决定", RESTORE_EVIDENCE: "恢复材料任务", CONFIRM_LOSS: "确认权利已失效", FOLLOW_UP: "继续核实跟进", WAIT: "同阶段继续等待", VERIFY: "需要核实", ACTION: "需要进一步行动", FINAL: "已确认终局", NO_ACTION_REQUIRED: "有依据无需渠道处理", NOT_ACCEPTED: "尚未受理", CLAIM: "已接手", RESOLVED: "已解决",
   };
   const label = (value) => names[value] || text(value);
-  const rolePermissions = {
-    OPERATOR: [
-      "INTAKE",
-      "PUBLISH_TASK",
-      "MERCHANT_DECISION",
-      "REGISTER_EVIDENCE",
-      "WITHDRAW_EVIDENCE",
-      "SUBMIT_EVIDENCE",
-      "SUBMIT",
-      "RECORD_OUTCOME",
-      "NEXT_STAGE",
-      "RECORD_FINANCIAL",
-      "NOTIFY_MERCHANT",
-      "COMMENT",
-      "MONITOR_SLA",
-      "BUILD_PACKAGE",
-      "KNOWLEDGE_CANDIDATE",
-    ],
-    RISK_OFFICER: ["CONFIRM_RULE", "REVIEW", "COMMENT", "MONITOR_SLA"],
-    SUPERVISOR: [
-      "APPROVE_PACKAGE",
-      "RECONCILE",
-      "CLOSE",
-      "COMMENT",
-      "MONITOR_SLA",
-    ],
-    MERCHANT: [
-      "MERCHANT_DECISION",
-      "REGISTER_EVIDENCE",
-      "WITHDRAW_EVIDENCE",
-      "SUBMIT_EVIDENCE",
-      "COMMENT",
-    ],
-    AGENT: ["BUILD_PACKAGE", "COMMENT", "MONITOR_SLA", "KNOWLEDGE_CANDIDATE"],
-    ADMIN: ["APPROVE_KNOWLEDGE"],
-  };
   const tabs = [
     ["overview", "概览"],
     ["tasks", "商户任务"],
@@ -796,7 +761,7 @@
             `<div class="task-row"><span class="check-mark ${t.status === "COMPLETED" ? "done" : ""}">${t.status === "COMPLETED" ? "✓" : "○"}</span><div class="row-content"><div class="row-title">${esc(label(t.type))}${t.required ? ' <span class="badge gray">必需</span>' : ""}</div><div class="row-subtitle">${esc(t.message || "")}<br>${esc(t.id)} · ${date(t.created_at)}</div></div>${badge(t.status)}</div>`,
         )
         .join("") || empty("尚未发布商户任务。")
-    }<div class="action-bar">${actionButton("MERCHANT_DECISION", "确认 Accept / Contest", { primary: true })}${actionButton("SUBMIT_EVIDENCE")}${actionButton("MONITOR_SLA")}</div>${surface !== "merchant" ? `<p class="section-note">商户的响应由商户门户完成。主管处理未响应或授权放弃时，必须记录依据。</p>` : ""}`;
+    }<div class="action-bar">${actionButton("MERCHANT_DECISION", "确认 Accept / Contest", { primary: true })}${actionButton("SUBMIT_EVIDENCE")}${actionButton("MONITOR_SLA")}</div>${surface !== "merchant" ? `<p class="section-note">商户的响应由商户门户完成。风控经理处理未响应或授权放弃时，必须记录依据。</p>` : ""}`;
   }
   function renderMerchantTasks(c, p) {
     const explanation =
@@ -849,7 +814,7 @@
             `<div class="record-row"><span class="row-icon">◇</span><div class="row-content"><div class="row-title">${esc(label(r.decision))} · ${esc(r.reviewer || r.actor || r.reviewed_by || "")}</div><div class="row-subtitle">${esc(r.reason || "")}<br>${date(r.created_at || r.reviewed_at || r.at)} · v${esc(r.revision || r.case_revision || "—")}</div></div>${badge(r.invalidated || r.valid === false || r.status === "INVALIDATED" ? "INVALIDATED" : r.decision, r.invalidated || r.valid === false || r.status === "INVALIDATED" ? "历史审核 · 已失效" : undefined)}${r.invalidated_reason ? `<p>${esc(r.invalidated_reason)}</p>` : ""}</div>`,
         )
         .join("") || empty("尚无人工审核记录。关键证据缺失时不能通过审核。")
-    }${section("证据包与最终审批", "草稿经主管确认 PII 检查后冻结；变更证据将使旧包失效")}<div class="action-bar">${actionButton("APPROVE_PACKAGE", "终审并冻结", { primary: true })}${actionButton("SUBMIT", "确认向上游提交（Mock）")}</div>${
+    }${section("证据包与最终审批", "草稿经风控经理确认 PII 检查后冻结；变更证据将使旧包失效")}<div class="action-bar">${actionButton("APPROVE_PACKAGE", "终审并冻结", { primary: true })}${actionButton("SUBMIT", "确认向上游提交（Mock）")}</div>${
       list(c.packages)
         .map(
           (pkg) =>
@@ -973,7 +938,7 @@
         .join(
           "",
         )}</tbody></table></div></div><div class="governance-card"><h2>角色权限</h2><p class="section-note">岗位与案件权限由服务端账号会话确定。</p>${Object.entries(
-        g.permissions || rolePermissions,
+        g.permissions || {},
       )
         .map(
           ([role, actions]) =>
@@ -1031,7 +996,7 @@
   }
   function collaborationActor(role) {
     if (role === "MERCHANT") return "商户";
-    if (["OPERATOR", "RISK_OFFICER", "SUPERVISOR"].includes(role))
+    if (["OPERATOR", "RISK_OFFICER", "SUPERVISOR", "ADMIN"].includes(role))
       return "OceanPayment";
     if (role === "AGENT") return "OceanPilot";
     return label(role || "协作人");
@@ -1052,7 +1017,7 @@
         SUBMIT_EVIDENCE: "商户证据已送审",
         REVIEW: "收到 OP 审核结果",
         BUILD_PACKAGE: "证据包草稿已生成",
-        APPROVE_PACKAGE: "主管已终审冻结",
+        APPROVE_PACKAGE: "风控经理已终审冻结",
         SUBMIT: "已取得 Mock 提交回执",
         RECORD_OUTCOME: "收到上游结果",
         RECORD_FINANCIAL: "有新资金事件",
@@ -1672,6 +1637,18 @@
     const title = error.status === 403 ? "没有此案件的访问权限" : error.status === 404 ? "找不到这个案件" : "暂时无法读取案件";
     return `<div class="empty-state access-error" role="alert"><div class="empty-symbol">${error.status === 403 ? "⊘" : "!"}</div><h2>${title}</h2><p>${esc(error.message)}</p><div class="action-bar">${casePage ? `<a class="button secondary" href="/v2/${surface}">返回我的案件列表</a>` : ""}${![403,404].includes(error.status) ? '<button class="button primary" data-reload>重新读取</button>' : ""}</div></div>`;
   }
+  function renderTeamProgress(progress) {
+    const host = $("teamProgress");
+    if (!host) return;
+    host.hidden = !["SUPERVISOR", "ADMIN"].includes(S.role) || !Array.isArray(progress) || S.isCasePage || surface !== "operations";
+    if (host.hidden) return;
+    host.innerHTML = `<h2>团队进度</h2><p class="section-note">全部案件汇总 · 待办为未完成任务数 · 不受当前分页和筛选影响</p><div class="table-scroll"><table class="rule-table"><thead><tr><th>负责人</th><th>案件总数</th><th>待办</th><th>临期 / 风险</th><th>审核中</th><th>已关闭</th></tr></thead><tbody>${progress.map(p => `<tr><td>${esc(p.display_name)}${p.role ? ` · ${esc(label(p.role))}` : ""}</td>${[p.total,p.pending,p.urgent,p.review,p.closed].map(n => `<td>${esc(n)}</td>`).join("")}</tr>`).join("") || '<tr><td colspan="6">暂无团队案件</td></tr>'}</tbody></table></div>`;
+    const filter = $("assignedFilter");
+    if (filter) {
+      filter.innerHTML = '<option value="">全部案件</option><option value="me">分配给我</option>' + progress.filter(p => p.user_id).map(p => `<option value="${esc(p.user_id)}">${esc(p.display_name)}</option>`).join("");
+      filter.value = S.assignedTo;
+    }
+  }
   async function loadCasePage() {
     const ticket = ++S.listTicket;
     const params = new URLSearchParams({ limit: String(S.limit), offset: String(S.offset), q: S.search, queue: S.queue, assigned_to: S.assignedTo });
@@ -1679,6 +1656,7 @@
     if (ticket !== S.listTicket) return result;
     S.cases = list(result.cases); S.total = Number(result.total ?? S.cases.length);
     S.queueCounts = result.queue_counts || result.counts || null;
+    renderTeamProgress(result.assignee_progress);
     S.listError = null;
     return result;
   }
@@ -1976,7 +1954,7 @@
           '<div class="callout">此次操作只提交至 Mock 上游，并生成可审计模拟回执。</div>'
         );
       case "ASSIGN_CASE":
-        return field("user_id", "获授权的案件负责人", "", "select", { choices: list(c.participants).filter(p => p.role === "OPERATOR").map(p => [p.user_id, p.display_name || p.user_id]) }) + reason();
+        return field("user_id", "获授权的案件负责人", "", "select", { choices: list(c.assignment_candidates || c.participants).filter(p => ["OPERATOR", "SUPERVISOR", "ADMIN"].includes(p.role)).map(p => [p.user_id, p.display_name || p.user_id]) }) + reason();
       case "RESOLVE_RESPONSE":
         return field("resolution", "核实后的处理方式", "", "select", { choices: ["RESTORE_DECISION", "RESTORE_EVIDENCE", "CONFIRM_LOSS", "FOLLOW_UP"] }) + reason() + field("authorization_reference", "授权与核实依据", "") + field("external_deadline", "经确认的有效外部截止时间", "", "datetime-local", { optional: true });
       case "FINAL_REVIEW":
@@ -2073,7 +2051,7 @@
     }
   }
   async function openLibraryTemplate(templateId) {
-    if (!permitted("INTAKE")) { setNotice("请由 OP 运营专员选择模板并确认演练建案。", true); return; }
+    if (!permitted("INTAKE")) { setNotice("请由 OP 风控专员选择模板并确认演练建案。", true); return; }
     try {
       const result = await api(`/case-library/${encodeURIComponent(templateId)}`);
       if (!result.template) throw new Error("该条目仅作来源参考，没有可执行演练模板。");
@@ -2112,7 +2090,7 @@
       return;
     }
     if (action === "DEMO") {
-      setNotice("演练管理仅在独立导演工作空间提供。", true);
+      setNotice("演练管理仅在IT 管理员工作空间提供。", true);
       return;
     }
     const gate = actionContract(action);
@@ -2541,13 +2519,16 @@
       S.role = session.user.role;
       S.merchantId = session.user.merchant_id || list(session.user.merchant_ids)[0] || "";
       const permittedSurface = S.role === "MERCHANT" ? "merchant" : session.surface || "operations";
-      if (surface !== permittedSurface && !(surface === "governance" && ["ADMIN", "SUPERVISOR"].includes(S.role)))
+      if (surface !== permittedSurface && !(["ADMIN", "SUPERVISOR"].includes(S.role) && ["operations", "governance"].includes(surface)))
         throw Object.assign(new Error("此账号不能访问这个工作空间，请返回自己的案件列表。"), { status: 403 });
       $("accountName").textContent = session.user.display_name || session.user.id;
       $("workspaceHome").href = `/v2/${permittedSurface}`;
       $("brandHome").href = `/v2/${permittedSurface}`;
-      $("workspaceName").textContent = S.role === "MERCHANT" ? "我的案件" : "我的工作队列";
+      $("workspaceName").textContent = S.role === "MERCHANT" ? "我的案件" : S.role === "ADMIN" ? "平台治理" : "我的工作队列";
       S.assignedTo = S.role === "OPERATOR" ? "me" : "";
+      if ($("operationsLink")) $("operationsLink").hidden = !["ADMIN", "SUPERVISOR"].includes(S.role);
+      if ($("governanceLink")) $("governanceLink").hidden = !["ADMIN", "SUPERVISOR"].includes(S.role);
+      if ($("adminLink")) $("adminLink").hidden = S.role !== "ADMIN";
     } catch (error) {
       if (error.status === 401) {
         if (!globalThis.OCEAN_V2_NO_BOOT) location.replace(`/v2/login?next=${encodeURIComponent(location.pathname + location.search)}`);
@@ -2667,7 +2648,7 @@
       globalThis.OceanV2Library.mount({ api, openTemplate: undefined });
     }
     bindEvents();
-    if (surface === "operations" && S.role === "OPERATOR" && globalThis.OceanV21Intake) {
+    if (surface === "operations" && ["OPERATOR", "SUPERVISOR", "ADMIN"].includes(S.role) && globalThis.OceanV21Intake) {
       let host = null;
       if (!S.isCasePage && !S.isLibraryPage) { host = document.createElement("section"); host.id = "intakeEvents"; $("workspaceGrid").before(host); }
       globalThis.OceanV21Intake.mount({ host, api, onCaseOpen: (id) => location.assign(caseHref(id)) });

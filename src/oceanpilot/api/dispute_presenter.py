@@ -49,10 +49,10 @@ def owner_for(case: dict, role: str | None, identity: dict, policy=None) -> dict
         person = next((person for person in participants if person["role"] == role), None)
     labels = {
         "MERCHANT": "商户协作人",
-        "OPERATOR": "运营人员",
-        "RISK_OFFICER": "风控审核员",
-        "SUPERVISOR": "主管",
-        "ADMIN": "知识管理员",
+        "OPERATOR": "风控专员",
+        "RISK_OFFICER": "历史风控专员",
+        "SUPERVISOR": "风控经理",
+        "ADMIN": "IT 管理员",
     }
     return (
         deepcopy(person)
@@ -96,6 +96,8 @@ def available_actions(case: dict, identity: dict, service) -> list[dict]:
 
 def present_case(case: dict, identity: dict, service) -> dict:
     result = case_view(case, identity, service.access_policy)
+    if identity["role"] in {"SUPERVISOR", "ADMIN"} and service.access_policy:
+        result["assignment_candidates"] = service.access_policy.assignment_candidates(case)
     collaboration = getattr(service, "collaboration", None)
     if collaboration is not None and collaboration.open_handoffs(case["id"]):
         result["close_gate"]["enabled"] = False

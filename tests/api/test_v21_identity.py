@@ -39,8 +39,8 @@ def accounts(client):
         ("merchant-b", "MERCHANT", ["merchant-b"]),
         ("operator-a", "OPERATOR", ["merchant-a"]),
         ("operator-b", "OPERATOR", ["merchant-b"]),
-        ("risk-reviewer", "RISK_OFFICER", ["merchant-a", "merchant-b"]),
-        ("director", "DIRECTOR", []),
+        ("risk-reviewer", "OPERATOR", ["merchant-a", "merchant-b"]),
+        ("director", "ADMIN", []),
     ]
     users, sessions = {}, {}
     for name, role, merchants in specs:
@@ -120,7 +120,7 @@ def test_cookie_is_opaque_and_privileged_header_does_not_change_session(accounts
     )
     assert result.json()["user"]["role"] == "MERCHANT"
     assert result.json()["user"]["merchant_id"] == "merchant-a"
-    assert client.get("/api/v2/director/accounts").status_code == 403
+    assert client.get("/api/v2/admin/accounts").status_code == 403
     assert client.get("/v2/operations", follow_redirects=False).status_code == 403
     assert client.get("/v2/merchant").status_code == 200
     assert "merchant" not in client.cookies["oceanpilot_session"]
@@ -171,9 +171,9 @@ def test_scope_applies_to_list_detail_plan_commands_and_updates(client, accounts
     case_a = intake(sessions["operator-a"])
     case_b = intake(sessions["operator-b"], "merchant-b")
     assert case_a["assigned_op_user_id"] == users["operator-a"]["id"]
-    assert {p["user_id"] for p in case_a["participants"]} == {
-        users[name]["id"] for name in ("merchant-a", "operator-a", "risk-reviewer")
-    }
+    assert {
+        p["user_id"] for p in case_a["participants"] if p["role"] not in {"SUPERVISOR", "ADMIN"}
+    } == {users[name]["id"] for name in ("merchant-a", "operator-a", "risk-reviewer")}
     for name in ("merchant-a", "operator-a"):
         actor = sessions[name]
         listed = actor.get("/api/v2/cases").json()
@@ -184,7 +184,7 @@ def test_scope_applies_to_list_detail_plan_commands_and_updates(client, accounts
     denied = command(sessions["operator-b"], case_a, "PUBLISH_TASK")
     assert denied.status_code == 404
     assert client.app.state.disputes.store.get_case(case_a["id"])["revision"] == case_a["revision"]
-    assert sessions["director"].get("/api/v2/cases").status_code == 403
+    assert sessions["director"].get("/api/v2/cases").json()["total"] == 2
 
 
 def test_participant_removal_revokes_read_write_and_queue(client, accounts):

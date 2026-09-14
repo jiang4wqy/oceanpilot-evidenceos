@@ -37,7 +37,7 @@ def stack(tmp_path_factory):
     app.include_router(business_router)
     sessions = {}
     for name, role, merchant in [
-        ("director", "DIRECTOR", None),
+        ("director", "ADMIN", None),
         ("operator-a", "OPERATOR", "merchant-a"),
         ("operator-b", "OPERATOR", "merchant-b"),
         ("merchant-a", "MERCHANT", "merchant-a"),
@@ -115,16 +115,16 @@ def test_event_forms_publish_the_actual_dto_limits_and_optional_source_fields(st
     assert sessions["merchant-a"].get("/api/v2/intake/events").status_code == 403
 
 
-def test_operator_cannot_provision_transaction_truth_and_director_cannot_run_business_intake(stack):
+def test_officer_cannot_provision_transactions_and_admin_can_receive_events(stack):
     _, sessions = stack
     event = envelope()
     assert (
         sessions["operator-a"]
-        .post("/api/v2/director/transactions", json=registry_payload(event))
+        .post("/api/v2/admin/transactions", json=registry_payload(event))
         .status_code
         == 403
     )
-    assert receive(sessions["director"], event).status_code == 403
+    assert receive(sessions["director"], event).status_code == 200
     assert receive(sessions["merchant-a"], event).status_code == 403
 
 
@@ -133,7 +133,7 @@ def test_director_registry_then_actual_operator_session_creates_template_referen
     event = envelope(case_template_id="CB-CASE-041")
     assert (
         sessions["director"]
-        .post("/api/v2/director/transactions", json=registry_payload(event))
+        .post("/api/v2/admin/transactions", json=registry_payload(event))
         .status_code
         == 200
     )
@@ -157,7 +157,7 @@ def test_director_registry_then_actual_operator_session_creates_template_referen
 def test_alert_and_inquiry_do_not_offer_case_navigation(stack, kind):
     _, sessions = stack
     event = envelope(event_type=kind)
-    sessions["director"].post("/api/v2/director/transactions", json=registry_payload(event))
+    sessions["director"].post("/api/v2/admin/transactions", json=registry_payload(event))
     result = receive(sessions["operator-a"], event)
     assert result.status_code == 200
     assert result.json()["event"]["status"] == "RECORDED" and result.json()["case_id"] is None
@@ -184,7 +184,7 @@ def test_quarantine_retry_uses_original_envelope_after_director_registration(sta
     _, sessions = stack
     event = envelope()
     before = receive(sessions["operator-a"], event).json()
-    sessions["director"].post("/api/v2/director/transactions", json=registry_payload(event))
+    sessions["director"].post("/api/v2/admin/transactions", json=registry_payload(event))
     response = sessions["operator-a"].post(
         "/api/v2/intake/events/" + before["event"]["id"] + "/retry",
         json={"confirmed": True, "reason": "Director registered source facts"},
@@ -210,7 +210,7 @@ def test_event_dto_rejects_invalid_boundary_before_inbox_write(stack, field, val
 def test_withdrawal_http_command_is_safe_human_verification_not_automatic_finality(stack):
     app, sessions = stack
     event = envelope()
-    sessions["director"].post("/api/v2/director/transactions", json=registry_payload(event))
+    sessions["director"].post("/api/v2/admin/transactions", json=registry_payload(event))
     first = receive(sessions["operator-a"], event).json()
     result = receive(
         sessions["operator-a"],
@@ -233,7 +233,7 @@ def test_partial_source_correction_keeps_currency_allocations_and_risk_verificat
     operator = sessions["operator-a"]
     event = envelope()
     registered = sessions["director"].post(
-        "/api/v2/director/transactions", json=registry_payload(event)
+        "/api/v2/admin/transactions", json=registry_payload(event)
     )
     assert registered.status_code == 200
     first = receive(operator, event).json()
@@ -299,7 +299,7 @@ def test_partial_source_correction_keeps_currency_allocations_and_risk_verificat
 def test_new_account_with_only_merchant_grant_cannot_read_existing_case_bound_inbox(stack):
     app, sessions = stack
     event = envelope()
-    sessions["director"].post("/api/v2/director/transactions", json=registry_payload(event))
+    sessions["director"].post("/api/v2/admin/transactions", json=registry_payload(event))
     first = receive(sessions["operator-a"], event).json()
     name = "later-operator-" + uuid4().hex[:6]
     app.state.v21_auth.create_user(
@@ -336,7 +336,7 @@ def test_legacy_command_and_full_demo_routes_cannot_bypass_registry_or_human_rol
     for client, expected in [
         (sessions["operator-a"], 410),
         (sessions["merchant-a"], 403),
-        (sessions["director"], 403),
+        (sessions["director"], 410),
     ]:
         old = client.post("/api/v2/commands", json=payload)
         assert old.status_code == expected, old.text
@@ -345,7 +345,7 @@ def test_legacy_command_and_full_demo_routes_cannot_bypass_registry_or_human_rol
     assert len(app.state.disputes.store.list_cases()) == before
     assert (
         sessions["director"]
-        .post("/api/v2/director/transactions", json=registry_payload(data))
+        .post("/api/v2/admin/transactions", json=registry_payload(data))
         .status_code
         == 200
     )
@@ -358,7 +358,7 @@ def test_shared_normalized_fixture_helper_keeps_actual_session_and_participant_d
     from tests.v21_support import normalized_intake
 
     app, sessions = stack
-    before = {u["id"] for u in app.state.v21_auth.list_users() if u["role"] != "DIRECTOR"}
+    before = {u["id"] for u in app.state.v21_auth.list_users() if u["role"] != "ADMIN"}
     actual = sessions["operator-a"].get("/api/v2/session").json()["user"]["id"]
     event = envelope()
     data = {
@@ -371,5 +371,5 @@ def test_shared_normalized_fixture_helper_keeps_actual_session_and_participant_d
     )
     assert response.status_code == 200, response.text
     assert response.json()["case"]["assigned_op_user_id"] == actual
-    after = {u["id"] for u in app.state.v21_auth.list_users() if u["role"] != "DIRECTOR"}
+    after = {u["id"] for u in app.state.v21_auth.list_users() if u["role"] != "ADMIN"}
     assert before == after

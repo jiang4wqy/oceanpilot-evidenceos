@@ -13,11 +13,8 @@ import time
 from contextlib import closing
 from pathlib import Path
 
-from oceanpilot.domain.dispute import DisputeError, require
+from oceanpilot.domain.dispute import ACCOUNT_ROLES, DisputeError, require
 
-ACCOUNT_ROLES = frozenset(
-    {"MERCHANT", "OPERATOR", "RISK_OFFICER", "SUPERVISOR", "ADMIN", "DIRECTOR"}
-)
 SESSION_COOKIE = "oceanpilot_session"
 PASSWORD_ITERATIONS = 600_000
 
@@ -70,7 +67,22 @@ class SQLiteDisputeIdentity:
                     attempt_key TEXT PRIMARY KEY, failures INTEGER NOT NULL,
                     window_start REAL NOT NULL
                 );
+                CREATE TABLE IF NOT EXISTS v21_account_audit (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    actor_id TEXT NOT NULL, target_id TEXT NOT NULL,
+                    action TEXT NOT NULL, detail TEXT NOT NULL, created_at REAL NOT NULL
+                );
             """)
+            # Preserve credentials/scopes, but require migrated identities to log in again.
+            connection.execute(
+                "DELETE FROM v21_sessions WHERE user_id IN "
+                "(SELECT user_id FROM v21_users WHERE role IN ('RISK_OFFICER','DIRECTOR'))"
+            )
+            connection.execute(
+                "UPDATE v21_users SET role=CASE role "
+                "WHEN 'RISK_OFFICER' THEN 'OPERATOR' ELSE 'ADMIN' END "
+                "WHERE role IN ('RISK_OFFICER','DIRECTOR')"
+            )
             connection.commit()
         # Unknown accounts do equivalent password work without exposing existence.
         self._dummy_hash = _password_hash("unusable-account-password", "00" * 16)
@@ -104,6 +116,7 @@ class SQLiteDisputeIdentity:
         merchant_id: str | None = None,
         merchant_ids: list[str] | None = None,
         user_id: str | None = None,
+        performed_by: str = "local-account-maintenance",
     ) -> dict:
         from uuid import uuid4
 
@@ -140,7 +153,7 @@ class SQLiteDisputeIdentity:
                 "商户账号必须绑定且只能绑定本人商户。",
                 422,
             )
-        elif role != "DIRECTOR":
+        elif role == "OPERATOR":
             require(bool(scope), "INVALID_SCOPE", "请明确该员工获授权的商户范围。", 422)
         identifier = user_id or str(uuid4())
         require(
@@ -167,6 +180,17 @@ class SQLiteDisputeIdentity:
                         self.clock(),
                     ),
                 )
+                connection.execute(
+                    "INSERT INTO v21_account_audit(actor_id,target_id,action,detail,created_at) "
+                    "VALUES (?,?,?,?,?)",
+                    (
+                        performed_by,
+                        identifier,
+                        "CREATE_ACCOUNT",
+                        json.dumps({"role": role, "merchant_ids": scope}),
+                        self.clock(),
+                    ),
+                )
                 connection.commit()
             except sqlite3.IntegrityError as exc:
                 raise DisputeError("ACCOUNT_EXISTS", "该账号已存在。", 409) from exc
@@ -186,7 +210,9 @@ class SQLiteDisputeIdentity:
                 for row in connection.execute("SELECT * FROM v21_users ORDER BY username")
             ]
 
-    def set_disabled(self, user_id: str, disabled: bool) -> None:
+    def set_disabled(
+        self, user_id: str, disabled: bool, *, performed_by: str = "local-account-maintenance"
+    ) -> None:
         with closing(self._connect()) as connection:
             found = connection.execute(
                 "UPDATE v21_users SET disabled=? WHERE user_id=?", (int(disabled), user_id)
@@ -194,6 +220,17 @@ class SQLiteDisputeIdentity:
             require(found.rowcount == 1, "NOT_FOUND", "账号不存在。", 404)
             if disabled:
                 connection.execute("DELETE FROM v21_sessions WHERE user_id=?", (user_id,))
+            connection.execute(
+                "INSERT INTO v21_account_audit(actor_id,target_id,action,detail,created_at) "
+                "VALUES (?,?,?,?,?)",
+                (
+                    performed_by,
+                    user_id,
+                    "ACCOUNT_STATUS",
+                    json.dumps({"disabled": disabled}),
+                    self.clock(),
+                ),
+            )
             connection.commit()
 
     def _attempt_keys(self, username: str, remote: str):
@@ -229,7 +266,12 @@ class SQLiteDisputeIdentity:
             valid = _password_matches(
                 password, account["password_hash"] if account else self._dummy_hash
             )
-            if not valid or account is None or account["disabled"]:
+            if (
+                not valid
+                or account is None
+                or account["disabled"]
+                or account["role"] not in ACCOUNT_ROLES
+            ):
                 for key, _ in keys:
                     connection.execute(
                         "INSERT INTO v21_login_attempts VALUES (?,1,?) ON CONFLICT(attempt_key) "
@@ -268,6 +310,7 @@ class SQLiteDisputeIdentity:
             ).fetchone()
             require(
                 row is not None
+                and row["role"] in ACCOUNT_ROLES
                 and not row["disabled"]
                 and row["expires_at"] > now
                 and row["last_seen_at"] + 3600 > now,

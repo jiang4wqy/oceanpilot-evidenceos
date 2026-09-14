@@ -1,7 +1,7 @@
 """Normalized synthetic upstream intake, with durable validation and command replay.
 
 This inbox is a mock boundary, not an upstream authentication claim. Transactions
-are entered by a distinct director/local seed; operators cannot approve their own
+are entered by a IT administrator/local seed; operators cannot approve their own
 invented transaction facts. The domain command remains the sole business writer.
 """
 
@@ -55,7 +55,7 @@ class DisputeIntakeService:
     def _operator(self, identity, merchant_id=None):
         identity = self.disputes._identity(identity)
         require(
-            identity["role"] == "OPERATOR",
+            identity["role"] in {"OPERATOR", "SUPERVISOR", "ADMIN"},
             "FORBIDDEN",
             "Normalized source intake requires an authorized Operator",
             403,
@@ -74,9 +74,9 @@ class DisputeIntakeService:
 
     def _director(self, identity):
         require(
-            isinstance(identity, dict) and identity.get("role") == "DIRECTOR",
+            isinstance(identity, dict) and identity.get("role") == "ADMIN",
             "FORBIDDEN",
-            "Synthetic registry changes require the separate Director account",
+            "Synthetic registry changes require the IT administrator account",
             403,
         )
         text_field(identity, "actor_id", limit=200)
@@ -84,9 +84,9 @@ class DisputeIntakeService:
         if policy:
             user = policy.directory.get_user(identity["actor_id"])
             require(
-                user and user["role"] == "DIRECTOR" and not user["disabled"],
+                user and user["role"] == "ADMIN" and not user["disabled"],
                 "FORBIDDEN",
-                "Active Director account is required",
+                "Active IT administrator account is required",
                 403,
             )
         return identity
@@ -121,7 +121,7 @@ class DisputeIntakeService:
             amount_minor=minor_units(data.get("amount_minor")),
             currency=currency_code(data.get("currency")),
             reference=text_field(data, "reference", limit=500),
-            source_type="DIRECTOR_SYNTHETIC_REGISTRY",
+            source_type="ADMIN_SYNTHETIC_REGISTRY",
             production_eligible=False,
             created_at=self._now(),
             created_by=identity["actor_id"],

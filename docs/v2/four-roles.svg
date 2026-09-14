@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="540" viewBox="0 0 1100 540" role="img" aria-labelledby="title desc">
+  <title id="title">OceanPilot 四角色分工</title>
+  <desc id="desc">商户处理本人案件，风控专员负责经办与初审，风控经理管理全局进度和终审，IT 管理员拥有全部后台功能。人工操作保留审计并遵守独立复核。</desc>
+  <defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10" fill="none" stroke="#41897f" stroke-width="2"/></marker></defs>
+  <rect width="1100" height="540" fill="#f3f8f7" rx="18"/>
+  <g font-family="PingFang SC, Microsoft YaHei, sans-serif" fill="#183e3d">
+    <text x="44" y="58" font-size="28" font-weight="700">OceanPilot · 四角色分工</text>
+    <text x="44" y="91" font-size="16" fill="#58716f">四类用户，共同围绕同一案件协作</text>
+    <g fill="#fff" stroke="#b9d4cf" stroke-width="1.5"><rect x="44" y="176" width="275" height="200" rx="14"/><rect x="412" y="176" width="275" height="200" rx="14"/><rect x="780" y="176" width="275" height="200" rx="14"/></g>
+    <g font-size="23" font-weight="700"><text x="68" y="214">商户</text><text x="436" y="214">风控专员</text><text x="804" y="214">风控经理</text></g>
+    <g font-size="16"><text x="68" y="257">本人案件 · 接受或抗辩</text><text x="68" y="291">上传材料 · 补充事实</text><text x="68" y="325">查看进度 · 沟通反馈</text><text x="436" y="257">建案 · 规则确认 · 材料初审</text><text x="436" y="291">补证推进 · 生成并提交材料包</text><text x="436" y="325">结果登记 · 通知商户</text><text x="804" y="257">全部案件 · 专员进度</text><text x="804" y="291">分配接管 · 独立终审</text><text x="804" y="325">资金核对 · 异常处置 · 结案</text></g>
+    <g stroke="#41897f" stroke-width="2" marker-start="url(#arrow)" marker-end="url(#arrow)"><path d="M332 276H396"/><path d="M701 276H764"/></g>
+    <rect x="412" y="112" width="643" height="44" rx="10" fill="#dceee9"/><text x="436" y="141" font-size="18" font-weight="600">IT 管理员：全部后台功能 · 账号管理 · 系统治理 · 演示数据</text>
+    <text x="44" y="435" font-size="17" font-weight="600">共同约束：真实账号审计、案件版本校验、不同人复核</text>
+    <text x="44" y="469" font-size="16" fill="#58716f">经办和材料包作者不能自行终审；资金登记人不能核对自己的账务事件。</text>
+    <text x="44" y="504" font-size="16" fill="#58716f">OceanPilot AI 是系统助手：检查、草拟和建议；不计入四类用户，不独立执行人工审批。</text>
+  </g>
+</svg>

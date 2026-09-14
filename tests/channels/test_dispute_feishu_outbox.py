@@ -21,7 +21,9 @@ from oceanpilot.adapters.channels.feishu.v2 import (
     TrustedBindings,
     binding_key,
 )
-from oceanpilot.api.dispute_feishu import initialize_dispute_feishu
+from oceanpilot.api.dispute_feishu import (
+    initialize_legacy_dispute_feishu as initialize_dispute_feishu,
+)
 from oceanpilot.config import Settings
 from oceanpilot.main import create_app
 from tests.feishu.crypto_helpers import encrypted_body
@@ -371,7 +373,7 @@ def api(tmp_path):
         headers, identities = {}, {}
         for name, role, merchant in [
             ("operator", "OPERATOR", "merchant-a"),
-            ("risk", "RISK_OFFICER", "merchant-a"),
+            ("risk", "OPERATOR", "merchant-a"),
             ("merchant", "MERCHANT", "merchant-a"),
             ("outsider", "MERCHANT", "merchant-b"),
         ]:

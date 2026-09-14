@@ -6,7 +6,7 @@ _REASONS = {
         "已提交上游或收到终局结果，不能直接替换规则。"
     ),
     "Closed business records require authorized reopening": (
-        "案件已关闭；须由主管凭授权依据重开后处理。"
+        "案件已关闭；须由风控经理凭授权依据重开后处理。"
     ),
     "Current Contest authority must be confirmed before evidence, review or submission": (
         "请先确认本阶段仍有抗辩权利，并由商户确认抗辩决定。"
@@ -39,7 +39,7 @@ _REASONS = {
         "材料审核和最终审批须由不同人员完成。"
     ),
     "Supervisor must approve and freeze the package": (
-        "请主管完成终审、隐私检查并确认冻结当前材料包。"
+        "请风控经理完成终审、隐私检查并确认冻结当前材料包。"
     ),
     "Confirmed external deadline has passed; verify remaining rights": (
         "已超过确认的上游期限，请先核验剩余权利。"
@@ -50,7 +50,7 @@ _REASONS = {
         "旧材料的本阶段适用性须在提交前完成审核。"
     ),
     "Terminal outcomes require authorized reopening before correction": (
-        "已有终局结果；更正前须由主管凭依据授权重开。"
+        "已有终局结果；更正前须由风控经理凭依据授权重开。"
     ),
 }
 

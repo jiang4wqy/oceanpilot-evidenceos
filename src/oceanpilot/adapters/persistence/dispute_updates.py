@@ -37,7 +37,9 @@ class SQLiteDisputeUpdateReader:
                 if self.access_policy and not self.access_policy._system(identity):
                     user = self.access_policy._user(identity)
                     grants = user["merchant_ids"] if user else []
-                    if not grants:
+                    if user and user["role"] in {"SUPERVISOR", "ADMIN"}:
+                        pass
+                    elif not grants:
                         clauses.append("0=1")
                     else:
                         placeholders = ",".join("?" for _ in grants)

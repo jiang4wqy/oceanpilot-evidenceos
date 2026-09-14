@@ -78,27 +78,30 @@ class FinancialStatus(StrEnum):
     DISCREPANCY = "DISCREPANCY"
 
 
-# Administrative privileges deliberately do not imply business approval rights.
+# Account permissions are inherited; business invariants still apply to every actor.
+ACCOUNT_ROLES = frozenset({"MERCHANT", "OPERATOR", "SUPERVISOR", "ADMIN"})
+STAFF_ROLES = frozenset({"OPERATOR", "SUPERVISOR", "ADMIN"})
+MANAGEMENT_ROLES = frozenset({"SUPERVISOR", "ADMIN"})
 ACTION_ROLES = {
     "INTAKE": {"OPERATOR"},
-    "CONFIRM_RULE": {"RISK_OFFICER"},
+    "CONFIRM_RULE": {"OPERATOR"},
     "PUBLISH_TASK": {"OPERATOR"},
     "MERCHANT_DECISION": {"MERCHANT", "OPERATOR"},
     "REGISTER_EVIDENCE": {"MERCHANT", "OPERATOR"},
-    "REVIEW_EVIDENCE_CONTENT": {"RISK_OFFICER"},
+    "REVIEW_EVIDENCE_CONTENT": {"OPERATOR"},
     "WITHDRAW_EVIDENCE": {"MERCHANT", "OPERATOR"},
     "SUBMIT_EVIDENCE": {"MERCHANT", "OPERATOR"},
-    "REVIEW": {"RISK_OFFICER"},
+    "REVIEW": {"OPERATOR"},
     "BUILD_PACKAGE": {"OPERATOR", "AGENT"},
     "APPROVE_PACKAGE": {"SUPERVISOR"},
     "SUBMIT": {"OPERATOR"},
     "RECORD_OUTCOME": {"OPERATOR"},
     "NEXT_STAGE": {"OPERATOR"},
-    "RESOLVE_RESPONSE": {"RISK_OFFICER"},
+    "RESOLVE_RESPONSE": {"OPERATOR"},
     "FINAL_REVIEW": {"SUPERVISOR"},
-    "VERIFY_OUTCOME": {"RISK_OFFICER"},
+    "VERIFY_OUTCOME": {"OPERATOR"},
     "REOPEN_CASE": {"SUPERVISOR"},
-    "REUSE_EVIDENCE": {"RISK_OFFICER"},
+    "REUSE_EVIDENCE": {"OPERATOR"},
     "PROCESS_ACCEPT": {"OPERATOR"},
     "QUERY_SUBMISSION": {"OPERATOR"},
     "RESOLVE_TASK": {"SUPERVISOR"},
@@ -107,13 +110,42 @@ ACTION_ROLES = {
     "RECONCILE": {"SUPERVISOR"},
     "NOTIFY_MERCHANT": {"OPERATOR"},
     "CLOSE": {"SUPERVISOR"},
-    "COMMENT": {"OPERATOR", "MERCHANT", "RISK_OFFICER", "SUPERVISOR", "AGENT"},
-    "MONITOR_SLA": {"OPERATOR", "AGENT", "RISK_OFFICER", "SUPERVISOR"},
+    "COMMENT": {"OPERATOR", "MERCHANT", "SUPERVISOR", "AGENT"},
+    "MONITOR_SLA": {"OPERATOR", "AGENT", "SUPERVISOR"},
     "KNOWLEDGE_CANDIDATE": {"OPERATOR", "AGENT"},
     "APPROVE_KNOWLEDGE": {"ADMIN"},
 }
-ROLES = frozenset().union(*ACTION_ROLES.values())
+for _roles in ACTION_ROLES.values():
+    if "OPERATOR" in _roles:
+        _roles.add("SUPERVISOR")
+    _roles.add("ADMIN")
+ROLES = ACCOUNT_ROLES | {"AGENT"}
 LOW_RISK_ACTIONS = {"COMMENT", "MONITOR_SLA", "BUILD_PACKAGE", "KNOWLEDGE_CANDIDATE"}
+
+
+def package_preparers(case: dict) -> set[str]:
+    """Changing the current assignee cannot erase a human's preparation history."""
+    actions = {
+        "INTAKE",
+        "PUBLISH_TASK",
+        "REGISTER_EVIDENCE",
+        "WITHDRAW_EVIDENCE",
+        "SUBMIT_EVIDENCE",
+        "REVIEW_EVIDENCE_CONTENT",
+        "REVIEW",
+        "BUILD_PACKAGE",
+    }
+    actors = {
+        event.get("actor_id") for event in case.get("audit", []) if event.get("action") in actions
+    }
+    actors.add(case.get("assigned_op_user_id"))
+    actors.update(package.get("created_by") for package in case.get("packages", []))
+    actors.update(
+        review.get("reviewer")
+        for review in case.get("reviews", [])
+        if review.get("type") == "EVIDENCE"
+    )
+    return {actor for actor in actors if actor}
 
 
 def require(condition: bool, code: str, message: str, status: int = 409) -> None:

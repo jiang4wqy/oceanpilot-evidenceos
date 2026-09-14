@@ -424,7 +424,7 @@ def test_http_long_custom_rule_publishes_saved_proposal_without_losing_checklist
         assert all(len(code) == 40 for code in evidence_codes)
         response = client.post(
             "/api/v2/commands",
-            headers=headers("RISK_OFFICER"),
+            headers=headers("OPERATOR"),
             json={
                 "command_id": str(uuid4()),
                 "case_id": case["id"],
@@ -510,7 +510,7 @@ def test_long_evidence_draft_fits_http_contract_and_package_retains_every_item(s
         case,
         "REVIEW",
         review.model_dump(),
-        {"role": "RISK_OFFICER", "actor_id": "independent-risk"},
+        {"role": "OPERATOR", "actor_id": "independent-risk"},
     )
     run = agent.observe(case, "REVIEW")
     proposal = next(p for p in run["proposals"] if p["action"] == "BUILD_PACKAGE")
@@ -542,7 +542,7 @@ def test_case_and_audience_isolate_conversations_in_both_directions_after_restar
             assert item["message"] == f"{marker}-{audience}-PRIVATE"
             assert item["scope"] == activity["scope"]
             assert item["source"] == "DETERMINISTIC"
-    risk = {"role": "RISK_OFFICER", "actor_id": "risk-user"}
+    risk = {"role": "OPERATOR", "actor_id": "risk-user"}
     assert restarted.get_activity(first["id"], risk)["conversations"][0]["actor_role"] == "OPERATOR"
 
 
@@ -744,7 +744,7 @@ def test_merchant_review_feedback_uses_actual_review_and_submission_explains_mis
         case,
         "REVIEW",
         {"decision": "REVISION", "reason": "签收凭证无法对应本案订单，请补充订单与签收对应关系"},
-        {"role": "RISK_OFFICER", "actor_id": "risk-user"},
+        {"role": "OPERATOR", "actor_id": "risk-user"},
     )
     feedback = agent.converse(case["id"], MERCHANT, "我为什么被退回", case["revision"])
     assert feedback["intent"] == "REVIEW_FEEDBACK"

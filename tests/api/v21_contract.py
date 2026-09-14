@@ -5,9 +5,9 @@ V21_PATHS = {
     "/api/v2/session/login",
     "/api/v2/session/logout",
     "/api/v2/runtime",
-    "/api/v2/director/accounts",
-    "/api/v2/director/accounts/{user_id}/status",
-    "/api/v2/director/transactions",
+    "/api/v2/admin/accounts",
+    "/api/v2/admin/accounts/{user_id}/status",
+    "/api/v2/admin/transactions",
     "/api/v2/intake/events",
     "/api/v2/intake/events/{event_id}/retry",
     "/api/v2/command-schemas",
@@ -28,8 +28,8 @@ V21_METHODS = {
         {"get", "post"}
         if path
         in {
-            "/api/v2/director/accounts",
-            "/api/v2/director/transactions",
+            "/api/v2/admin/accounts",
+            "/api/v2/admin/transactions",
             "/api/v2/intake/events",
             "/api/v2/integrations/feishu/outbox",
         }

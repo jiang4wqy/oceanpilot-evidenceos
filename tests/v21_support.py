@@ -9,7 +9,7 @@ from uuid import uuid4
 from oceanpilot.application.disputes import DisputeService
 
 PASSWORD = "local-regression-only-password"
-ROLES = ("OPERATOR", "MERCHANT", "RISK_OFFICER", "SUPERVISOR", "ADMIN", "DIRECTOR")
+ROLES = ("OPERATOR", "MERCHANT", "SUPERVISOR", "ADMIN")
 
 
 def session_headers(client, role="OPERATOR", merchant="synthetic-merchant-001"):
@@ -18,7 +18,7 @@ def session_headers(client, role="OPERATOR", merchant="synthetic-merchant-001"):
     auth = client.app.state.v21_auth
     directory = {user["username"]: user for user in auth.list_users()}
     # Provision all decision makers before intake snapshots save participants.
-    members = ("DIRECTOR",) if role == "DIRECTOR" else tuple(r for r in ROLES if r != "DIRECTOR")
+    members = ("ADMIN",) if role == "ADMIN" else ROLES
     for member_role in members:
         name = f"{merchant[:45]}-{member_role.lower()}"
         if name not in directory:
@@ -106,8 +106,8 @@ def normalized_intake(client, payload, merchant=None, *, role="OPERATOR", reques
         pass
     else:
         registered = client.post(
-            "/api/v2/director/transactions",
-            headers=session_headers(client, "DIRECTOR", merchant),
+            "/api/v2/admin/transactions",
+            headers=session_headers(client, "ADMIN", merchant),
             json=registry,
         )
         assert registered.status_code in {200, 409}, registered.text

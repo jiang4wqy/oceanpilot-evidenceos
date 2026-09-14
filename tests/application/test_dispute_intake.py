@@ -14,7 +14,7 @@ from oceanpilot.application.dispute_intake import DisputeIntakeService
 from oceanpilot.application.disputes import DisputeError, DisputeService
 from tests.workflow.test_dispute_engine import NOW, OP, RISK, run
 
-DIRECTOR = {"role": "DIRECTOR", "actor_id": "director"}
+ADMIN = {"role": "ADMIN", "actor_id": "director"}
 
 
 def envelope(**changes):
@@ -50,7 +50,7 @@ def register(service, event):
             )
         }
         | {"reference": "explicit-synthetic-source"},
-        DIRECTOR,
+        ADMIN,
     )
 
 
@@ -109,10 +109,8 @@ def test_unknown_registry_event_can_be_revalidated_without_rewriting_original(se
     assert [a["status"] for a in result["event"]["attempts"]] == ["QUARANTINED", "PROCESSED"]
 
 
-@pytest.mark.parametrize(
-    "role", ["OPERATOR", "RISK_OFFICER", "SUPERVISOR", "MERCHANT", "ADMIN", "AGENT"]
-)
-def test_only_director_can_create_registry_facts(service, role):
+@pytest.mark.parametrize("role", ["OPERATOR", "SUPERVISOR", "MERCHANT", "AGENT"])
+def test_only_admin_can_create_registry_facts(service, role):
     data = envelope()
     payload = {
         k: data[k]
@@ -210,7 +208,7 @@ def test_unknown_target_and_closed_correction_remain_quarantined(service):
 
 
 def test_registry_reference_is_immutable_and_no_implicit_sample_is_seeded(service):
-    assert not service.list_transactions(DIRECTOR)
+    assert not service.list_transactions(ADMIN)
     event = envelope()
     first = register(service, event)
     assert register(service, event) == first

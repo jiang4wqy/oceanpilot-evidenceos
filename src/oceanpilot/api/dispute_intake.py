@@ -7,7 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictInt, Strict
 
 from oceanpilot.adapters.persistence.dispute_intake import SQLiteDisputeIntakeStore
 from oceanpilot.api.cases import COMMON_PROBLEMS, PROBLEM_RESPONSE
-from oceanpilot.api.dispute_identity import _director
+from oceanpilot.api.dispute_identity import _administrator
 from oceanpilot.api.disputes import Identity
 from oceanpilot.application.dispute_intake import DisputeIntakeService
 
@@ -160,16 +160,16 @@ def _present_result(result, request, identity):
     return result
 
 
-@router.get("/api/v2/director/transactions")
+@router.get("/api/v2/admin/transactions")
 def transactions(request: Request):
     return {
-        "transactions": request.app.state.dispute_intake.list_transactions(_director(request)),
+        "transactions": request.app.state.dispute_intake.list_transactions(_administrator(request)),
         "production_eligible": False,
     }
 
 
-@router.post("/api/v2/director/transactions")
+@router.post("/api/v2/admin/transactions")
 def register_transaction(payload: TransactionData, request: Request):
     return request.app.state.dispute_intake.register_transaction(
-        payload.model_dump(), _director(request)
+        payload.model_dump(), _administrator(request)
     )

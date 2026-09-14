@@ -238,6 +238,44 @@ def test_update_card_uses_patch_and_does_not_invent_provider_idempotency_paramet
     assert receipt.message_id == "om_existing"
 
 
+@pytest.mark.parametrize("method", ["send", "reply"])
+@pytest.mark.parametrize("length", [50, 51, 64])
+def test_provider_uuid_limit_preserves_stable_local_identity(method, length):
+    key = "a" * length
+    transport = _ScriptedTransport(
+        [
+            _response({"code": 0, "tenant_access_token": TOKEN}),
+            _response({"code": 0, "data": {"message_id": "om_reply"}}),
+            _response({"code": 0, "tenant_access_token": TOKEN}),
+            _response({"code": 0, "data": {"message_id": "om_reply"}}),
+        ]
+    )
+    for _ in range(2):
+        client = _client(transport)  # Same wire key after process/client recreation.
+        if method == "send":
+            receipt = client.send_interactive_card(
+                receive_id="oc_test",
+                receive_id_type=FeishuReceiveIdType.CHAT_ID,
+                card={},
+                idempotency_key=key,
+            )
+        else:
+            receipt = client.reply_interactive_card(
+                message_id="om_parent",
+                card={},
+                idempotency_key=key,
+                reply_in_thread=False,
+            )
+        assert receipt.idempotency_key == key
+    first, second = [json.loads(transport.requests[i].body) for i in (1, 3)]
+    assert first["uuid"] == second["uuid"]
+    assert len(first["uuid"]) <= 50
+    if length == 50:
+        assert first["uuid"] == key
+    if method == "reply":
+        assert first["reply_in_thread"] is False
+
+
 @pytest.mark.parametrize("method", ["reply_interactive_card", "update_interactive_card"])
 @pytest.mark.parametrize("message_id", ["../other", "om_id?foo=bar", "", "om_id/unsafe"])
 def test_reply_and_patch_reject_unsafe_message_paths_without_network(method, message_id):
