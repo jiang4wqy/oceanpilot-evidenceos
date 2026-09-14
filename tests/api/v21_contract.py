@@ -10,6 +10,8 @@ V21_PATHS = {
     "/api/v2/admin/transactions",
     "/api/v2/intake/events",
     "/api/v2/intake/events/{event_id}/retry",
+    "/api/v2/intake/simulations/preview",
+    "/api/v2/intake/simulations",
     "/api/v2/command-schemas",
     "/api/v2/cases/{case_id}/collaboration",
     "/api/v2/cases/{case_id}/collaboration/messages",
