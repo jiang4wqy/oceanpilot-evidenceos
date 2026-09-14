@@ -38,7 +38,7 @@ PYTHONPATH=src .venv/bin/python -m oceanpilot.v21_accounts \
 | `/v2/merchant` | 商户自己的案件列表与待办 |
 | `/v2/merchant/cases/{id}` | 商户独立案件页、补证决定与本案共享沟通 |
 | `/v2/operations/cases/{id}` | 运营独立案件页、审核提交、共享沟通与明确隔离的内部讨论 |
-| `/v2/operations/library` | 62 条指南参考、28 个模板；26 个适用当前双卡演练建案 |
+| `/v2/operations/library` | 62 条指南参考均可创建独立合成演练；仅匹配现有 Mock 规则的入口自动发布待办，其余需先人工确认规则 |
 | `/v2/governance` | 规则来源、角色权限、集成状态、人工审核知识 |
 | `/v2/admin` | IT 管理员：创建/启停账号、登记合成交易；可进入风控工作台与治理页 |
 | `/docs` | V2 严格命令 HTTP 合同及兼容 V1 API |

@@ -40,6 +40,7 @@ ENVELOPE_FIELDS = set(MATCH_FIELDS) | {
     "mapped_outcome",
     "authorization_reference",
     "case_template_id",
+    "simulation_reference_id",
 }
 
 
@@ -329,6 +330,8 @@ class DisputeIntakeService:
                     "upstream_case_id": event.get("upstream_case_id", event["source_event_id"]),
                 },
             )
+            if event.get("simulation_reference_id"):
+                result["data"]["simulation_reference_id"] = event["simulation_reference_id"]
             if event.get("case_template_id"):
                 result["data"]["case_template_id"] = event["case_template_id"]
         else:

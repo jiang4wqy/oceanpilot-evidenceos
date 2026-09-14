@@ -433,28 +433,44 @@ class DisputeService:
         transaction_id = text_field(data, "transaction_id", limit=200)
         currency = currency_code(data.get("currency"))
         library_reference = None
-        if data.get("case_template_id") is not None:
-            template_id = text_field(data, "case_template_id", limit=100)
+        if (
+            data.get("case_template_id") is not None
+            or data.get("simulation_reference_id") is not None
+        ):
+            reference_only = data.get("simulation_reference_id") is not None
+            template_id = text_field(
+                data, "simulation_reference_id" if reference_only else "case_template_id", limit=100
+            )
             require(
                 self.case_library is not None,
                 "LIBRARY_UNAVAILABLE",
                 "Case library unavailable",
                 503,
             )
-            preview = self.case_library.get_template(template_id)
+            preview = (
+                {"reference": self.case_library.get_reference(template_id)}
+                if reference_only
+                else self.case_library.get_template(template_id)
+            )
+            require(
+                preview is not None and preview.get("reference") is not None,
+                "TEMPLATE_NOT_FOUND",
+                "Case reference not found",
+                404,
+            )
             require(preview is not None, "TEMPLATE_NOT_FOUND", "Sandbox template not found", 404)
             require(
                 channel == "MOCK", "INVALID_TEMPLATE_CHANNEL", "Templates use the Mock channel", 422
             )
             require(
-                scheme in {"VISA", "MASTERCARD"},
+                reference_only or scheme in {"VISA", "MASTERCARD"},
                 "UNSUPPORTED_TEMPLATE_SCHEME",
                 "This rehearsal flow supports Visa and Mastercard templates",
                 422,
             )
             matches = self.case_library.search(scheme=scheme, reason_code=reason, limit=100)
             require(
-                any(item["template_id"] == template_id for item in matches),
+                reference_only or any(item["template_id"] == template_id for item in matches),
                 "TEMPLATE_SCOPE_MISMATCH",
                 "Scheme and reason must match the chosen template",
                 422,

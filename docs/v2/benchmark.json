@@ -1,7 +1,7 @@
 {
   "source_type": "SYNTHETIC_DEMO",
   "production_eligible": false,
-  "generated_at": "2026-09-08T11:44:28.950037+00:00",
+  "generated_at": "2026-09-14T15:17:08.372095+00:00",
   "metrics": {
     "rule_retrieval": {
       "passed": 6,
@@ -227,7 +227,7 @@
     {
       "metric": "unsafe_action_block",
       "passed": true,
-      "detail": "ADMIN:CLOSE"
+      "detail": "AGENT:CLOSE"
     },
     {
       "metric": "revision_safety",

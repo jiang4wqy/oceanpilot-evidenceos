@@ -46,7 +46,7 @@
     FINANCIAL_RECONCILIATION: "资金核对中",
     CLOSED: "已关闭",
     NONE: "尚未决定",
-    ACCEPT: "接受责任",
+    ACCEPT: "接受拒付",
     CONTEST: "提出抗辩",
     NO_RESPONSE: "商户未响应",
     AUTHORIZED_WAIVER: "授权放弃",
@@ -870,6 +870,14 @@
         .join("") || empty("暂无审计记录。")
     }`;
   }
+  function renderMerchantNextMaterials(c, p) {
+    if (c.merchant_decision !== "CONTEST" || !["EVIDENCE_COLLECTING", "MERCHANT_REVISION_REQUIRED"].includes(c.work_status)) return "";
+    if (!p || p.revision !== c.revision) return "";
+    const unresolved = list(p.checklist).filter(item=>!item.present);
+    const missing = unresolved.filter(item=>["MERCHANT_UPLOAD", "OCR_THEN_REVIEW"].includes(item.expected_source));
+    const team = unresolved.filter(item=>!["MERCHANT_UPLOAD", "OCR_THEN_REVIEW"].includes(item.expected_source));
+    return `<section class="info-card" style="margin:16px 24px" aria-label="OceanPilot 材料指引"><h3>OceanPilot · ${missing.length ? "接下来请准备这些材料" : team.length ? "你的材料已补齐，等待处理团队补充" : "材料已齐，请提交审核"}</h3>${missing.length ? `<ul>${missing.map(item=>`<li>${esc(item.label)}${item.upload_status === "NEEDS_MANUAL" ? "（已上传，待人工核验）" : item.upload_status === "INSUFFICIENT" ? "（请补充或替换）" : ""}</li>`).join("")}</ul>` : ""}${team.length ? `<p>由 OceanPayment 补充或核对：${team.map(item=>esc(item.label)).join("、")}</p>` : ""}<p>上传后由 OceanPayment 核验，是否采纳抗辩仍待上游结果。</p><button class="button primary" type="button" data-tab="evidence">查看清单并上传材料</button></section>`;
+  }
   function renderDetail() {
     const target = $("caseDetail"), c = S.current;
     target.hidden = !S.isCasePage;
@@ -885,7 +893,7 @@
     const visibleTabs = merchant ? [["overview", "案件概况"], ["tasks", "我的待办"], ["evidence", "抗辩材料"], ["collaboration", "与运营沟通"], ["outcome", "结果与资金"]] : tabs;
     const activeTab = visibleTabs.some(([key]) => key === S.tab) ? S.tab : "overview";
     const dimensions = merchant ? [["当前进度", c.work_status], ["我的决定", c.merchant_decision]] : [["争议阶段", c.stage], ["工作状态", c.work_status], ["商户决定", c.merchant_decision], ["业务结果", c.business_outcome], ["终局状态", c.finality], ["资金状态", c.financial_status]];
-    target.innerHTML = `<div class="detail-header"><div class="detail-topline"><span class="case-id">${esc(c.id)}</span><span>v${esc(c.revision)} · 合成演示</span></div><div class="detail-title"><div><h2>${merchant ? "交易争议" : esc(c.merchant_id)}</h2><p>${merchant ? esc(c.transaction_id || "交易编号待提供") : `${esc(c.scheme)} · 原因码 ${esc(c.reason_code)}`}</p></div><div class="detail-amount">${esc(money(c.amount_minor, c.currency))}</div></div><div class="case-facts">${merchant ? `<span>${esc(c.scheme)} · ${esc(c.reason_code)}</span><span>处理团队 <strong>OceanPayment</strong></span>` : `<span>交易 <strong>${esc(c.transaction_id || "—")}</strong></span><span>渠道 <strong>${esc(c.channel)}</strong></span><span>负责人 <strong>${esc(caseOwner(c))}</strong></span>`}</div>${merchant ? `<p class="case-reason-summary">${esc(merchantReason(c))}</p>` : ""}</div><div class="dimension-strip">${dimensions.map(([key, value]) => `<div class="dimension"><label>${key}</label>${badge(value)}</div>`).join("")}</div>${merchant ? renderMerchantJourney(c) : ""}${renderPrimaryTask(c)}<nav class="detail-tabs" aria-label="${merchant ? "我的案件" : "案件详情"}">${visibleTabs.map(([key, title]) => `<button class="detail-tab ${activeTab === key ? "active" : ""}" data-tab="${key}" aria-current="${activeTab === key ? "page" : "false"}">${title}</button>`).join("")}</nav><div class="detail-content">${renderers[activeTab]()}${renderCaseReference(c)}</div>`;
+    target.innerHTML = `<div class="detail-header"><div class="detail-topline"><span class="case-id">${esc(c.id)}</span><span>v${esc(c.revision)} · 合成演示</span></div><div class="detail-title"><div><h2>${merchant ? "交易争议" : esc(c.merchant_id)}</h2><p>${merchant ? esc(c.transaction_id || "交易编号待提供") : `${esc(c.scheme)} · 原因码 ${esc(c.reason_code)}`}</p></div><div class="detail-amount">${esc(money(c.amount_minor, c.currency))}</div></div><div class="case-facts">${merchant ? `<span>${esc(c.scheme)} · ${esc(c.reason_code)}</span><span>处理团队 <strong>OceanPayment</strong></span>` : `<span>交易 <strong>${esc(c.transaction_id || "—")}</strong></span><span>渠道 <strong>${esc(c.channel)}</strong></span><span>负责人 <strong>${esc(caseOwner(c))}</strong></span>`}</div>${merchant ? `<p class="case-reason-summary">${esc(merchantReason(c))}</p>` : ""}</div><div class="dimension-strip">${dimensions.map(([key, value]) => `<div class="dimension"><label>${key}</label>${badge(value)}</div>`).join("")}</div>${merchant ? renderMerchantJourney(c) : ""}${renderPrimaryTask(c)}${merchant ? renderMerchantNextMaterials(c, p) : ""}<nav class="detail-tabs" aria-label="${merchant ? "我的案件" : "案件详情"}">${visibleTabs.map(([key, title]) => `<button class="detail-tab ${activeTab === key ? "active" : ""}" data-tab="${key}" aria-current="${activeTab === key ? "page" : "false"}">${title}</button>`).join("")}</nav><div class="detail-content">${renderers[activeTab]()}${renderCaseReference(c)}</div>`;
   }
   function renderGovernance() {
     const g = S.governance;
@@ -2051,23 +2059,11 @@
     }
   }
   async function openLibraryTemplate(templateId) {
-    if (!permitted("INTAKE")) { setNotice("请由 OP 风控专员选择模板并确认演练建案。", true); return; }
     try {
-      const result = await api(`/case-library/${encodeURIComponent(templateId)}`);
-      if (!result.template) throw new Error("该条目仅作来源参考，没有可执行演练模板。");
-      const reference = result.reference;
-      const original = result.template.template || {};
-      const scheme = String(original.scheme || reference.scheme).toUpperCase();
-      if (!["VISA", "MASTERCARD", "MC"].includes(scheme))
-        throw new Error("此模板保留为参考或专项测试，当前 Visa / Mastercard 双卡流程不创建该类型案件。");
-      const reasons = String(original.reason_code || reference.reason_code).split(/\s*\/\s*/).filter(Boolean);
-      openDialog("INTAKE", { case_template_id: templateId, scheme: scheme === "MC" ? "MASTERCARD" : scheme, reason_code: reasons[0], reason_codes: reasons });
-      if (S.dialog?.action !== "INTAKE") return;
-      $("dialogTitle").textContent = "从指南模板创建演练案件";
-      $("dialogContext").innerHTML = `<strong>${esc(templateId)} · ${esc(reference.title)}</strong><br>原始来源、核验状态与缺失字段保留为参考。下方交易编号和事件编号为本次演练新生成，请填写演练金额、币种并核对卡组织和原因码。创建后先由风控确认适用权利、证据要求与期限，不自动继承 Mock 期限。`;
-      $("submitDialog").textContent = "确认创建演练案件";
-    } catch (error) { setNotice(error.message, true); }
+      await globalThis.OceanSimulation.open({api, templateId, merchantId:S.session?.user?.merchant_ids?.[0], actorId:S.session?.user?.id});
+    } catch(error) {setNotice(error.message, true);}
   }
+
   function renderCaseReference(c) {
     const r = c?.library_reference;
     if (!r) return "";
@@ -2234,6 +2230,7 @@
         location.assign(caseHref(c.id));
         return;
       }
+      if (surface === "merchant" && pending.payload.action === "MERCHANT_DECISION" && pending.payload.data.decision === "CONTEST") S.tab = "evidence";
       await refresh();
     } catch (error) {
       if (error.uncertain) {
@@ -2485,7 +2482,7 @@
       }
     });
     $("refreshButton").addEventListener("click", () => S.isLibraryPage
-      ? globalThis.OceanV2Library.mount({ api, openTemplate: undefined }) : Promise.allSettled([refresh(), globalThis.OceanV21Intake?.refresh()]));
+      ? globalThis.OceanV2Library.mount({ api, openTemplate: ["OPERATOR", "SUPERVISOR", "ADMIN"].includes(S.role) ? openLibraryTemplate : undefined }) : Promise.allSettled([refresh(), globalThis.OceanV21Intake?.refresh()]));
     $("logoutButton").addEventListener("click", logout);
     $("intakeButton").addEventListener("click", () => globalThis.OceanV21Intake?.open());
     $("caseSearch").addEventListener("input", (event) => {
@@ -2645,7 +2642,7 @@
       $("workspaceGrid").before(host);
       $("workspaceGrid").hidden = true; $("metrics").hidden = true;
       $("collaborationRoles").hidden = true;
-      globalThis.OceanV2Library.mount({ api, openTemplate: undefined });
+      globalThis.OceanV2Library.mount({ api, openTemplate: ["OPERATOR", "SUPERVISOR", "ADMIN"].includes(S.role) ? openLibraryTemplate : undefined });
     }
     bindEvents();
     if (surface === "operations" && ["OPERATOR", "SUPERVISOR", "ADMIN"].includes(S.role) && globalThis.OceanV21Intake) {

@@ -193,3 +193,18 @@ def test_packaged_hash_drift_is_rejected(tmp_path, library, monkeypatch):
     monkeypatch.setattr(adapter, "_DEFAULT_DIRECTORY", tmp_path)
     with pytest.raises(CaseLibraryError, match="source manifest"):
         adapter.DisputeCaseLibrary()
+
+
+def test_packaged_manifest_hash_is_stable_after_windows_line_ending_checkout(tmp_path, monkeypatch):
+    import oceanpilot.adapters.knowledge.dispute_case_library as adapter
+
+    packaged = files("oceanpilot.data.chargeback_case_library")
+    for name in ("03_case_library.json", "06_seed_cases.json"):
+        content = (packaged / name).read_bytes().replace(b"\r\n", b"\n")
+        (tmp_path / name).write_bytes(content.replace(b"\n", b"\r\n"))
+    (tmp_path / "manifest.json").write_bytes((packaged / "manifest.json").read_bytes())
+
+    monkeypatch.setattr(adapter, "_DEFAULT_DIRECTORY", tmp_path)
+    library = adapter.DisputeCaseLibrary()
+
+    assert library.manifest()["files"] == library.manifest()["source_manifest"]["files"]

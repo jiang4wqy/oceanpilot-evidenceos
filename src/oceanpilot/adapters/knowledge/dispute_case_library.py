@@ -34,12 +34,13 @@ class CaseLibraryError(ValueError):
 def _load(path: Traversable) -> tuple[dict, str]:
     try:
         content = path.read_bytes()
-        data = json.loads(content)
+        canonical_content = content.replace(b"\r\n", b"\n").replace(b"\r", b"\n")
+        data = json.loads(canonical_content)
     except (OSError, UnicodeError, json.JSONDecodeError) as exc:
         raise CaseLibraryError(f"Cannot load case library file: {path.name}") from exc
     if not isinstance(data, dict) or data.get("schema_version") not in {"1.0", "1.1"}:
         raise CaseLibraryError(f"Unsupported case library schema: {path.name}")
-    return data, hashlib.sha256(content).hexdigest()
+    return data, hashlib.sha256(canonical_content).hexdigest()
 
 
 def _scheme(value: str) -> str:
