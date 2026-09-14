@@ -110,6 +110,9 @@ class RetryData(StrictDTO):
 def initialize_dispute_intake(app, db_path):
     service = DisputeIntakeService(SQLiteDisputeIntakeStore(db_path), app.state.disputes)
     app.state.dispute_intake = service
+    from oceanpilot.application.dispute_simulation import DisputeSimulation
+
+    app.state.dispute_simulation = DisputeSimulation(service)
     return service
 
 
@@ -173,3 +176,46 @@ def register_transaction(payload: TransactionData, request: Request):
     return request.app.state.dispute_intake.register_transaction(
         payload.model_dump(), _administrator(request)
     )
+
+
+class SimulationInput(StrictDTO):
+    case_template_id: StrictStr = Field(min_length=1, max_length=100)
+    merchant_id: StrictStr = Field(min_length=1, max_length=100)
+    scheme: Literal["VISA", "MASTERCARD", "AMEX", "DISCOVER", "OTHER"]
+    reason_code: StrictStr = Field(min_length=1, max_length=100)
+    amount_minor: StrictInt = Field(gt=0, le=10**12)
+    currency: StrictStr = Field(pattern=r"^[A-Z]{3}$")
+    received_at: StrictStr = Field(min_length=10, max_length=60)
+
+
+class SimulationCreate(StrictDTO):
+    input: SimulationInput
+    confirmed: StrictBool
+    request_id: StrictStr = Field(min_length=8, max_length=100)
+    confirmation_token: StrictStr = Field(min_length=64, max_length=64)
+
+
+@router.post("/api/v2/intake/simulations/preview")
+def preview_simulation(payload: SimulationInput, request: Request, identity: Identity):
+    from oceanpilot.domain.dispute import timestamp
+
+    timestamp(payload.received_at)
+    return request.app.state.dispute_simulation.preview(payload.model_dump(), identity)
+
+
+@router.post("/api/v2/intake/simulations")
+def create_simulation(payload: SimulationCreate, request: Request, identity: Identity):
+    from oceanpilot.api.dispute_presenter import present_case
+    from oceanpilot.domain.dispute import timestamp
+
+    timestamp(payload.input.received_at)
+    result = request.app.state.dispute_simulation.create(
+        payload.input.model_dump(),
+        identity,
+        confirmed=payload.confirmed,
+        confirmation_token=payload.confirmation_token,
+        request_id=payload.request_id,
+    )
+    if result.get("case"):
+        result["case"] = present_case(result["case"], identity, request.app.state.disputes)
+    return result

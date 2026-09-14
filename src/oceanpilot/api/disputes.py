@@ -30,6 +30,7 @@ class StrictDTO(BaseModel):
 
 
 class IntakeData(StrictDTO):
+    simulation_reference_id: StrictStr | None = Field(default=None, min_length=1, max_length=100)
     merchant_id: StrictStr = Field(min_length=1, max_length=100)
     transaction_id: StrictStr = Field(min_length=1, max_length=100)
     scheme: StrictStr = Field(min_length=1, max_length=30)
