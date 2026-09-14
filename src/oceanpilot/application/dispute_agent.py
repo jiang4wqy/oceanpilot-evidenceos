@@ -844,16 +844,18 @@ class DisputeAgentService:
                 else {"approved_pattern_count": len(approved)}
             )
             # The case, not arbitrary question text, supplies the scope of the search.
-            references = (
-                deepcopy(
+            from oceanpilot.application.dispute_agent_ports import runtime_reference
+
+            references = [
+                runtime_reference(item)
+                for item in (
                     self.knowledge_provider.search(
                         scheme=case["scheme"], reason_code=case["reason_code"], limit=5
                     )
                     if self.knowledge_provider
                     else []
                 )
-                + approved
-            )
+            ] + approved
             for reference in references:
                 reference["scope"] = "REFERENCE_KNOWLEDGE"
                 reference["production_eligible"] = False

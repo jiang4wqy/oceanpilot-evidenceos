@@ -1,8 +1,41 @@
 """Durable observation and conversation storage for the V2 workflow agent."""
 
+from copy import deepcopy
 from typing import Protocol
 
 AUDIENCES = {"MERCHANT", "OPERATIONS", "SHARED", "OP_INTERNAL"}
+
+_RUNTIME_REFERENCE_FIELDS = (
+    "template_id",
+    "title",
+    "summary",
+    "scheme",
+    "source_scheme",
+    "reason_code",
+    "reason_codes",
+    "evidence_level",
+    "verification_status",
+    "source_type",
+    "source_content_type",
+    "source_ids",
+    "source_locators",
+    "rule_versions",
+    "effective_date",
+    "conflict_ids",
+    "conflict_status",
+    "citations",
+    "required_evidence",
+    "deadline_policy",
+    "derived_from_rule_ids",
+    "production_eligible",
+    "requires_human_confirmation",
+    "scope",
+)
+
+
+def runtime_reference(reference: dict) -> dict:
+    """Project source knowledge into an active-case-safe rule candidate."""
+    return deepcopy({key: reference[key] for key in _RUNTIME_REFERENCE_FIELDS if key in reference})
 
 
 def audience_for_role(role: str | None) -> str:

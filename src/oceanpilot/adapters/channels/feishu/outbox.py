@@ -101,6 +101,16 @@ class FeishuDisputeOutbox:
             raise FeishuV2Error("FEISHU_TEST_TARGET_NOT_AUTHORIZED", 403)
         return target
 
+    def _target_for_identity(self, ref, identity):
+        target = self.targets.get(ref)
+        if (
+            target is None
+            or target.merchant_id != identity.get("merchant_id")
+            or self.adapter.bindings.chats.get(ref) != target.merchant_id
+        ):
+            raise FeishuV2Error("FEISHU_TEST_TARGET_NOT_AUTHORIZED", 403)
+        return target
+
     def _read(self, outbox_id):
         with self.store._connection() as db:
             row = db.execute(
@@ -254,10 +264,74 @@ class FeishuDisputeOutbox:
             True,
         )
 
+    def static_callback(self, *, event_ref, identity, target_ref, message_id, card, kind="HELP"):
+        """Queue an idempotent help/list reply without attaching it to a case."""
+        target = self._target_for_identity(target_ref, identity)
+        if not isinstance(message_id, str) or not message_id:
+            return {"state": "NOT_QUEUED", "reason": "NO_VERIFIED_MESSAGE_ID"}
+        if kind not in {"HELP", "CASE_LIST"} or not isinstance(card, dict):
+            raise FeishuV2Error("INVALID_CALLBACK")
+        command_id = "callback-static-" + event_ref
+        fingerprint = hashlib.sha256(
+            _json([command_id, _identity(identity), target_ref, kind, message_id, card]).encode()
+        ).hexdigest()
+        auto_send = target.allow_callback_replies and self.enabled
+        row = {
+            "id": "fout-" + uuid.uuid4().hex,
+            "command_id": command_id,
+            "case_id": "",
+            "case_revision": 0,
+            "target_ref": target_ref,
+            "authorization_reference": target.authorization_reference,
+            "identity": _identity(identity),
+            "operation": "REPLY",
+            "reply_to": message_id,
+            "kind": kind,
+            "card": card,
+            "state": "PENDING" if auto_send else "PREVIEW",
+            "auto_send": bool(auto_send),
+            "delivery_status": "NOT_SENT",
+            "attempts": 0,
+            "message_id": None,
+            "idempotency_key": str(uuid.uuid4()),
+            "created_at": self.now(),
+            "updated_at": self.now(),
+        }
+        new_id = row["id"]
+        with self.store._connection() as db:
+            db.execute(
+                "INSERT OR IGNORE INTO v21_feishu_outbox VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)",
+                (
+                    row["id"],
+                    command_id,
+                    fingerprint,
+                    "",
+                    target_ref,
+                    row["state"],
+                    int(auto_send),
+                    row["updated_at"],
+                    _json(row),
+                ),
+            )
+            saved = db.execute(
+                "SELECT fingerprint,snapshot FROM v21_feishu_outbox WHERE command_id=?",
+                (command_id,),
+            ).fetchone()
+            if saved["fingerprint"] != fingerprint:
+                raise FeishuV2Error("IDEMPOTENCY_CONFLICT", 409)
+            row = json.loads(saved["snapshot"])
+        if auto_send:
+            self._wake.set()
+        return {**self._public(row), "replayed": row["id"] != new_id}
+
     def send(self, outbox_id, identity, *, confirmed=False, automatic=False):
         row = self._read(outbox_id)
-        case = self.adapter.service.get_case(row["case_id"], identity)
-        target = self._target(row["target_ref"], case)
+        case = None
+        if row["case_id"]:
+            case = self.adapter.service.get_case(row["case_id"], identity)
+            target = self._target(row["target_ref"], case)
+        else:
+            target = self._target_for_identity(row["target_ref"], identity)
         if automatic:
             if (
                 not row["auto_send"]
@@ -271,14 +345,19 @@ class FeishuDisputeOutbox:
             return {**self._public(row), "replayed": True}
         if not self.enabled:
             raise FeishuV2Error("FEISHU_OUTBOUND_DISABLED", 503)
-        if row["operation"] == "UPDATE" and row["case_revision"] != case["revision"]:
+        if (
+            case is not None
+            and row["operation"] == "UPDATE"
+            and row["case_revision"] != case["revision"]
+        ):
             # PATCH has no provider UUID: retrying an old patch must never overwrite
             # a newer case card, even when the old network response was lost.
             raise FeishuV2Error("FEISHU_PREVIEW_STALE", 409)
         # Never silently refresh a reviewed card. After a lost receipt, its immutable UUID/content
         # must instead be retried as-is; changing business version cannot mint a second delivery.
         if row["state"] not in {"UNCERTAIN", "SENDING"} and (
-            row["case_revision"] != case["revision"] or self.now() - row["created_at"] >= 3600
+            (case is not None and row["case_revision"] != case["revision"])
+            or self.now() - row["created_at"] >= 3600
         ):
             raise FeishuV2Error("FEISHU_PREVIEW_STALE", 409)
         with self.store._connection() as db:

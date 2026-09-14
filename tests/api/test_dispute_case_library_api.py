@@ -155,12 +155,42 @@ def test_library_get_reports_actual_uploaded_inventory_without_creating_cases(st
     assert model.requests == []
 
 
+def test_case_plan_exposes_source_candidates_without_leaking_reference_outcome(stack):
+    client, _ = stack
+    case = require_success(post(client, intake_payload("CB-CASE-041")))
+    response = client.get(f"/api/v2/cases/{case['id']}/plan", headers=headers(client))
+    assert response.status_code == 200, response.text
+    candidates = response.json()["rule_candidates"]
+    assert candidates
+    assert candidates[0]["template_id"] == "CB-CASE-041"
+    assert all(candidate["scope"] == "REFERENCE_KNOWLEDGE" for candidate in candidates)
+    assert all(candidate["production_eligible"] is False for candidate in candidates)
+    assert all(candidate["requires_human_confirmation"] is True for candidate in candidates)
+    assert all("source_outcome" not in candidate for candidate in candidates)
+    merchant = client.get(f"/api/v2/cases/{case['id']}/plan", headers=headers(client, "MERCHANT"))
+    assert merchant.status_code == 200
+    assert "rule_candidates" not in merchant.json()
+
+
 def test_detail_distinguishes_original_example_from_sandbox_preview_and_unknown_id(stack):
     client, _ = stack
     original = client.get("/api/v2/case-library/CB-CASE-001", headers=headers(client))
     assert original.status_code == 200, original.text
     assert original.json()["reference"]["evidence_level"] == "SOURCE_EXPLICIT"
     assert original.json()["template"] is None
+    detail = original.json()["detail"]
+    assert detail["template_id"] == "CB-CASE-001"
+    assert detail["source_excerpt"]
+    assert detail["parties"]
+    assert detail["fund_flow"]
+    assert detail["transaction_facts"]
+    assert detail["dispute_facts"]
+    assert detail["process_flow"]
+    assert detail["outcome"]
+    assert detail["oceanpilot_mapping"]
+    assert detail["production_eligible"] is False
+    assert "allowed_actions" not in detail
+    assert "deadlines" not in detail
     response = client.get("/api/v2/case-library/CB-CASE-041", headers=headers(client))
     assert response.status_code == 200, response.text
     preview = response.json()["template"]
@@ -171,6 +201,14 @@ def test_detail_distinguishes_original_example_from_sandbox_preview_and_unknown_
     missing = client.get("/api/v2/case-library/CB-CASE-035", headers=headers(client))
     assert missing.status_code == 404
     assert missing.headers["content-type"].startswith("application/problem+json")
+
+
+def test_library_collection_does_not_duplicate_full_detail_payload(stack):
+    client, _ = stack
+    response = client.get("/api/v2/case-library", headers=headers(client))
+    assert response.status_code == 200
+    assert all("transaction_facts" not in item for item in response.json()["references"])
+    assert all("case_detail" not in item for item in response.json()["references"])
 
 
 @pytest.mark.parametrize("role", ["MERCHANT", "AGENT", "ADMIN", "RISK_OFFICER", "SUPERVISOR"])

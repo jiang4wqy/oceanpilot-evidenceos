@@ -14,6 +14,7 @@ from tests.workflow.test_dispute_engine import (
     OP,
     RISK,
     SUPERVISOR,
+    command,
     contest,
     frozen,
     intake,
@@ -43,6 +44,108 @@ def rule_data(**changes):
         )
         | changes
     )
+
+
+def test_confirm_rule_preserves_candidate_critical_subset_without_escalating_ordinary_gaps(
+    service,
+):
+    case = intake(service)
+    candidate = case["rule_snapshot"]
+    critical = sorted(candidate["critical_evidence"])
+    ordinary = sorted(set(candidate["required_evidence"]) - set(critical))
+    assert critical and ordinary
+
+    case = run(
+        service,
+        case,
+        "CONFIRM_RULE",
+        rule_data(required_evidence=list(reversed(candidate["required_evidence"])) + critical),
+        RISK,
+    )
+    assert case["rule_snapshot"]["required_evidence"] == sorted(set(candidate["required_evidence"]))
+    assert case["rule_snapshot"]["critical_evidence"] == critical
+
+    case = run(service, case, "PUBLISH_TASK")
+    case = run(
+        service,
+        case,
+        "MERCHANT_DECISION",
+        {"decision": "CONTEST", "reason": "Have critical evidence"},
+        MERCHANT,
+    )
+    for code in critical:
+        case = run(
+            service,
+            case,
+            "REGISTER_EVIDENCE",
+            {"code": code, "title": code, "reference": "synthetic://critical"},
+            MERCHANT,
+        )
+    plan = case_plan(case, now=NOW)
+    assert plan["missing_required"] == ordinary
+    assert plan["missing_critical"] == []
+    assert plan["escalation_required"] is False
+
+
+def test_confirm_rule_accepts_only_an_explicit_sorted_critical_subset(service):
+    case = intake(service, reason_code="unknown")
+    data = rule_data(
+        required_evidence=["ordinary", "critical", "ordinary"],
+        critical_evidence=["critical", "critical"],
+    )
+    case = run(service, case, "CONFIRM_RULE", data, RISK)
+    assert case["rule_snapshot"]["required_evidence"] == ["critical", "ordinary"]
+    assert case["rule_snapshot"]["critical_evidence"] == ["critical"]
+
+    before = case
+    with pytest.raises(DisputeError) as error:
+        run(
+            service,
+            case,
+            "CONFIRM_RULE",
+            rule_data(
+                required_evidence=["ordinary"],
+                critical_evidence=["not-required"],
+            ),
+            RISK,
+        )
+    assert error.value.code == "INVALID_EVIDENCE_RULE"
+    assert service.get_case(case["id"], OP)["revision"] == before["revision"]
+
+
+def test_confirm_rule_critical_grading_survives_replay_and_service_restart(tmp_path):
+    database = tmp_path / "critical-replay.db"
+    service = DisputeService(SQLiteDisputeStore(database), clock=lambda: NOW)
+    case = intake(service, reason_code="unknown")
+    command_id = uuid4().hex
+    data = rule_data(
+        required_evidence=["ordinary", "critical"],
+        critical_evidence=["critical"],
+    )
+    request = command(case, "CONFIRM_RULE", data, command_id=command_id)
+    first = service.execute(request, RISK)
+    replay = service.execute(request, RISK)
+    restarted = DisputeService(SQLiteDisputeStore(database), clock=lambda: NOW)
+    saved = restarted.get_case(case["id"], OP)
+
+    assert replay["replayed"] is True
+    assert first["case"]["rule_snapshot"]["critical_evidence"] == ["critical"]
+    assert replay["case"]["rule_snapshot"]["critical_evidence"] == ["critical"]
+    assert saved["rule_snapshot"]["critical_evidence"] == ["critical"]
+    assert saved["revision"] == first["case"]["revision"]
+
+
+def test_legacy_snapshot_without_critical_metadata_defaults_to_no_critical_escalation(service):
+    case = intake(service)
+    case["rule_snapshot"].pop("critical_evidence")
+
+    service._upgrade_case(case)
+    plan = case_plan(case, now=NOW)
+
+    assert case["rule_snapshot"]["critical_evidence"] == []
+    assert plan["missing_required"]
+    assert plan["missing_critical"] == []
+    assert plan["escalation_required"] is False
 
 
 def fill(service, case):

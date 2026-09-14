@@ -160,3 +160,25 @@ def download(case_id: str, object_id: str, request: Request, identity: Identity)
             "Cache-Control": "private, no-store",
         },
     )
+
+
+@router.get(_PREFIX + "/samples/{code}")
+def sample(
+    case_id: str,
+    code: str,
+    request: Request,
+    identity: Identity,
+    variant: Literal["sufficient", "missing_field", "wrong_transaction"] = "sufficient",
+):
+    result = request.app.state.dispute_collaboration.sample_file(case_id, code, variant, identity)
+    return Response(
+        result["content"],
+        media_type=result["mime_type"],
+        headers={
+            "Content-Disposition": "attachment; filename*=UTF-8''" + quote(result["filename"]),
+            "X-Content-Type-Options": "nosniff",
+            "Content-Security-Policy": "sandbox",
+            "Cache-Control": "private, no-store",
+            "X-OceanPilot-Evidence-Code": code,
+        },
+    )

@@ -55,6 +55,33 @@ def test_preserves_source_provenance_without_promoting_extraction_to_runtime_rul
     assert "allowed_actions" not in reference
 
 
+def test_detail_read_preserves_full_case_narrative_without_runtime_authority(library):
+    detail = library.get_detail("CB-CASE-001")
+    assert detail["template_id"] == "CB-CASE-001"
+    assert detail["source_excerpt"].startswith("a cardholder contracts")
+    assert detail["parties"]["merchant"] == "油漆工/家装商户"
+    assert detail["fund_flow"]["who_paid_whom"]
+    assert detail["transaction_facts"]["amount"] == "USD 500（合同）；USD 300（损坏）"
+    assert detail["dispute_facts"]["cardholder_claim"]
+    assert detail["process_flow"]["first_see"]
+    assert detail["outcome"]["result"] == "NOT_STATED"
+    assert detail["oceanpilot_mapping"]["required_product_modules"]
+    assert detail["scope"] == "REFERENCE_CASE_DETAIL"
+    assert detail["production_eligible"] is False
+    assert detail["requires_confirmation"] is True
+    assert "allowed_actions" not in detail
+    assert "deadlines" not in detail
+    assert "command" not in detail
+    assert library.get_detail("CB-CASE-035") is None
+
+
+def test_detail_read_is_detached_and_summary_lists_stay_compact(library):
+    detail = library.get_detail("CB-CASE-001")
+    detail["parties"]["merchant"] = "changed"
+    assert library.get_detail("CB-CASE-001")["parties"]["merchant"] == "油漆工/家装商户"
+    assert all("transaction_facts" not in item for item in library.list_references(limit=100))
+
+
 def test_conflicting_rule_retains_missing_deadlines_and_conflict_references(library):
     reference = library.get_reference("CB-CASE-040")
     assert reference["verification_status"] == "CONFLICTING_SOURCES"

@@ -52,6 +52,8 @@ PYTHONPATH=src .venv/bin/python -m oceanpilot.v21_accounts \
 
 [V2.1 双端操作指南](docs/v2/dual-workspace-guide-v21.md) · [V2.1 验证进度](docs/v2/v21-validation.md) · [旧 V2 验收记录](docs/v2/dual-surface-acceptance.md) · [来源资料](docs/chargeback-case-library/03_case_library.json)
 
+[数据取源与案件起点](docs/v2/data-wiring-v21.md) 记录 03/06、合成交易、标准化事件、运行案件和规则快照的实际读写边界。[Stage 2 双端与案件隔离审核](docs/v2/stage2-session-isolation-review.md) 记录独立会话、跨租户直访和案件上下文验证。[Stage 3 任务与材料体验审核](docs/v2/stage3-task-material-review.md) 记录任务卡、材料样例、真实上传检查和补件闭环。
+
 ## 四个 Golden Demo
 
 | 场景 | 初始状态 | 演示重点 |

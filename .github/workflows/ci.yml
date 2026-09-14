@@ -35,6 +35,13 @@ jobs:
       - name: Byte-compile
         run: python -m compileall -q src tests
 
+      - name: Validate server update workflow
+        run: |
+          cp .env.example .env
+          sh -n scripts/update_server.sh
+          sh scripts/update_server.sh --check
+          rm .env
+
       - name: Pytest
         run: python -m pytest -p no:cacheprovider -q
 

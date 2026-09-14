@@ -181,6 +181,37 @@ class DisputeCaseLibrary:
             }
         )
 
+    def diagnostics(self) -> dict:
+        """Report the successfully loaded corpus without changing runtime state."""
+        manifest = self.manifest()
+        return {
+            "status": "LOADED",
+            "validation_status": "PASSED",
+            "load_errors": [],
+            "scope": manifest["scope"],
+            "production_eligible": False,
+            "files": [
+                {
+                    "role": "REFERENCE_LIBRARY",
+                    "path": str(self._library_path),
+                    "schema_version": self._library["schema_version"],
+                    "sha256": self._library_sha,
+                    "record_count": len(self._cases),
+                },
+                {
+                    "role": "SANDBOX_TEMPLATES",
+                    "path": str(self._seed_path),
+                    "schema_version": self._seeds["schema_version"],
+                    "sha256": self._seed_sha,
+                    "record_count": len(self._templates),
+                },
+            ],
+            "evidence_levels": manifest["evidence_levels"],
+            "verification_statuses": manifest["verification_statuses"],
+            "conflict_count": manifest["conflict_count"],
+            "data_gap_count": manifest["data_gap_count"],
+        }
+
     def _reference(self, case: dict) -> dict:
         provenance = case["provenance"]
         citations = []
@@ -240,6 +271,42 @@ class DisputeCaseLibrary:
     def get_reference(self, template_id: str) -> dict | None:
         case = self._cases.get(template_id)
         return self._reference(case) if case else None
+
+    def get_detail(self, template_id: str) -> dict | None:
+        """Return the source case narrative for an explicit detail read.
+
+        List/search results intentionally stay compact.  The detail payload is
+        reference knowledge only: it contains no executable command, runtime
+        deadline, or permission to copy the source outcome into a live case.
+        """
+        case = self._cases.get(template_id)
+        if case is None:
+            return None
+        return deepcopy(
+            {
+                "template_id": case["case_template_id"],
+                "source_excerpt": case["source_excerpt_short"],
+                "extraction_confidence": case["extraction_confidence"],
+                "requires_human_review": case["requires_human_review"],
+                "industry": case["industry"],
+                "channel": case["channel"],
+                "transaction_type": case["transaction_type"],
+                "parties": case["parties"],
+                "fund_flow": case["fund_flow"],
+                "transaction_facts": case["transaction_facts"],
+                "dispute_facts": case["dispute_facts"],
+                "process_flow": case["process_flow"],
+                "outcome": case["outcome"],
+                "oceanpilot_mapping": case["oceanpilot_mapping"],
+                "duplicate_group_id": case.get("duplicate_group_id"),
+                "related_case_ids": case.get("related_case_ids", []),
+                "core": case.get("core", False),
+                "core_reason": case.get("core_reason"),
+                "scope": "REFERENCE_CASE_DETAIL",
+                "production_eligible": False,
+                "requires_confirmation": True,
+            }
+        )
 
     def list_references(
         self,

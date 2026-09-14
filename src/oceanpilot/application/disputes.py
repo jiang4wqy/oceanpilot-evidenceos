@@ -88,6 +88,8 @@ class DisputeService:
         cases = self.store.list_cases(
             identity["merchant_id"] if identity["role"] == "MERCHANT" else None,
         )
+        for case in cases:
+            self._normalize_rule_evidence(case.get("rule_snapshot"))
         return [
             case
             for case in cases
@@ -99,6 +101,7 @@ class DisputeService:
         require(isinstance(case_id, str), "INVALID_INPUT", "case_id must be text", 422)
         case = self.store.get_case(case_id)
         require(case is not None, "NOT_FOUND", "Case not found", 404)
+        self._normalize_rule_evidence(case.get("rule_snapshot"))
         if self.access_policy is not None:
             self.access_policy.require_case(case, identity)
         if identity["role"] == "MERCHANT":
@@ -288,8 +291,27 @@ class DisputeService:
         return case
 
     @staticmethod
+    def _normalize_rule_evidence(rule):
+        """Conservatively upgrade legacy snapshots without inventing criticality."""
+        if not isinstance(rule, dict):
+            return
+        required = rule.get("required_evidence", [])
+        required_codes = (
+            {code for code in required if isinstance(code, str)}
+            if isinstance(required, list)
+            else set()
+        )
+        critical = rule.get("critical_evidence", [])
+        rule["critical_evidence"] = (
+            sorted({code for code in critical if isinstance(code, str) and code in required_codes})
+            if isinstance(critical, list)
+            else []
+        )
+
+    @staticmethod
     def _upgrade_case(case):
         # Lazy additive migration inside the existing CAS transaction; no historical rewrite.
+        DisputeService._normalize_rule_evidence(case.get("rule_snapshot"))
         defaults = {
             "schema_version": "2.1",
             "decision_response_status": "RESPONDED"
@@ -757,6 +779,29 @@ class DisputeService:
             "Explicit required_evidence codes are required",
             422,
         )
+        required = sorted(set(required))
+        if "critical_evidence" in data:
+            critical = data["critical_evidence"]
+            require(
+                isinstance(critical, list)
+                and len(critical) <= 30
+                and all(isinstance(code, str) and 0 < len(code) <= 100 for code in critical),
+                "INVALID_EVIDENCE_RULE",
+                "critical_evidence must contain explicit evidence codes",
+                422,
+            )
+            critical = sorted(set(critical))
+            require(
+                set(critical).issubset(required),
+                "INVALID_EVIDENCE_RULE",
+                "critical_evidence must be a subset of required_evidence",
+                422,
+            )
+        else:
+            # Older commands did not carry critical metadata. Preserve only the
+            # subset already stated by the candidate/snapshot; absence means none.
+            previous_critical = case["rule_snapshot"].get("critical_evidence", [])
+            critical = sorted(set(previous_critical).intersection(required))
         allowed = data.get("allowed_actions")
         require(
             isinstance(allowed, list)
@@ -790,8 +835,8 @@ class DisputeService:
                 "conflict_status": "VERIFIED",
                 "production_eligible": False,
                 "source_type": "HUMAN_CONFIRMED_DEMO",
-                "required_evidence": sorted(set(required)),
-                "critical_evidence": sorted(set(required)),
+                "required_evidence": required,
+                "critical_evidence": critical,
                 "allowed_actions": sorted(set(allowed)),
                 "confirmed_by": identity["actor_id"],
                 "confirmed_at": now,

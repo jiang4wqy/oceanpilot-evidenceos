@@ -1,5 +1,6 @@
 """Strict HTTP boundary for the synthetic OceanPayment-first V2 workflow."""
 
+from pathlib import Path
 from typing import Annotated, Any, Literal
 from uuid import uuid4
 
@@ -308,6 +309,15 @@ def command(payload: DisputeCommand, request: Request, identity: Identity) -> di
 def plan(case_id: str, request: Request, identity: Identity) -> dict:
     case = request.app.state.disputes.get_case(case_id, identity)
     result = case_plan(case)
+    if identity["role"] != "MERCHANT":
+        from oceanpilot.application.dispute_agent_ports import runtime_reference
+
+        result["rule_candidates"] = [
+            runtime_reference(item)
+            for item in request.app.state.dispute_case_library.search(
+                scheme=case["scheme"], reason_code=case["reason_code"], limit=5
+            )
+        ]
     # Only approved, redacted patterns are eligible for reuse. Do not return
     # merchant identifiers, evidence references or free-form conversation history.
     if identity["role"] != "MERCHANT":
@@ -506,6 +516,19 @@ def governance(request: Request, identity: Identity) -> dict:
     cases = request.app.state.disputes.list_cases(identity)
     from oceanpilot.domain.dispute import ACTION_ROLES
 
+    settings = request.app.state.settings
+
+    def store_source(role: str, path: Path, schema: str) -> dict:
+        resolved = path.resolve()
+        return {
+            "role": role,
+            "path": str(resolved),
+            "storage": "SQLITE",
+            "schema": schema,
+            "status": "AVAILABLE" if resolved.is_file() else "MISSING",
+            "size_bytes": resolved.stat().st_size if resolved.is_file() else None,
+        }
+
     return {
         "integrations": {
             "upstream": "MOCK / DISABLED — 无生产发送",
@@ -525,6 +548,25 @@ def governance(request: Request, identity: Identity) -> dict:
             "closed": sum(c["work_status"] == "CLOSED" for c in cases),
             "pending_financial": sum(
                 c["financial_status"] in ("PENDING", "DISCREPANCY") for c in cases
+            ),
+        },
+        "data_sources": {
+            "case_library": request.app.state.dispute_case_library.diagnostics(),
+            "runtime_stores": [
+                store_source("CORE_CASES", settings.db_path, "EVIDENCE_OS_V1"),
+                store_source(
+                    "DISPUTE_CASES",
+                    settings.resolved_chargeback_db_path(),
+                    "OCEANPILOT_V2_1",
+                ),
+                store_source(
+                    "RULE_CATALOG",
+                    settings.resolved_rules_db_path(),
+                    "RULE_REPOSITORY",
+                ),
+            ],
+            "boundary": (
+                "案例知识、演练模板与运行案件分开加载；来源案例不会直接写入运行案件状态。"
             ),
         },
         "permissions": {
@@ -601,7 +643,11 @@ def case_library_reference(template_id: str, request: Request, identity: Identit
     library = request.app.state.dispute_case_library
     reference = library.get_reference(template_id)
     require(reference is not None, "NOT_FOUND", "Case reference not found", 404)
-    return {"reference": reference, "template": library.get_template(template_id)}
+    return {
+        "reference": reference,
+        "detail": library.get_detail(template_id),
+        "template": library.get_template(template_id),
+    }
 
 
 @router.get("/v2/operations", response_class=HTMLResponse, include_in_schema=False)

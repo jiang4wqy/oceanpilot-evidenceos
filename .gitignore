@@ -14,6 +14,7 @@ htmlcov/
 .env.*
 !.env.example
 work/
+backups/
 dist/
 build/
 *.egg-info/

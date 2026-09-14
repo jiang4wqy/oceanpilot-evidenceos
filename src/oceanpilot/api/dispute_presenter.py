@@ -109,33 +109,6 @@ def present_case(case: dict, identity: dict, service) -> dict:
     next_action = plan.get("next_action", {})
     wanted = next_action.get("action")
     primary = next((item for item in actions if item["action"] == wanted and item["enabled"]), None)
-    if primary is None:
-        preferred = (
-            "RESOLVE_RESPONSE",
-            "VERIFY_OUTCOME",
-            "PROCESS_ACCEPT",
-            "FINAL_REVIEW",
-            "REVIEW",
-            "SUBMIT_EVIDENCE",
-            "REGISTER_EVIDENCE",
-            "PUBLISH_TASK",
-            "CONFIRM_RULE",
-            "MERCHANT_DECISION",
-            "BUILD_PACKAGE",
-            "SUBMIT",
-            "RECONCILE",
-            "NOTIFY_MERCHANT",
-            "CLOSE",
-        )
-        primary = next(
-            (
-                item
-                for name in preferred
-                for item in actions
-                if item["action"] == name and item["enabled"]
-            ),
-            None,
-        )
     result["primary_action"] = primary
     result["current_task"] = {
         "action": wanted,

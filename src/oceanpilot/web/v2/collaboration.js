@@ -104,7 +104,8 @@
     try {
       const bytes = new Uint8Array(await file.arrayBuffer()); let binary = "";
       for (let offset=0;offset<bytes.length;offset+=8192) binary += String.fromCharCode(...bytes.subarray(offset,offset+8192));
-      const payload = state.uploadPending || {command_id:uuid(),expected_revision:state.revision,code:form.elements.code.value.trim(),title:form.elements.title.value.trim(),filename:file.name,content_base64:btoa(binary),mime_type:file.type || "application/octet-stream"};
+      const selected = form.elements.material.selectedOptions[0];
+      const payload = state.uploadPending || {command_id:uuid(),expected_revision:state.revision,code:selected.value,title:selected.dataset.title,filename:file.name,content_base64:btoa(binary),mime_type:file.type || "application/octet-stream"};
       if (state.uploadPending && (payload.filename !== file.name || payload.content_base64 !== btoa(binary))) throw new Error("上一份文件的保存结果待确认，请先使用原文件重试。");
       state.uploadPending = payload;
       await state.api(path(state, "/files"), {method:"POST",body:JSON.stringify(payload)});
@@ -117,7 +118,15 @@
     }
     finally { state.uploading = false; if (same(state)) form.querySelector("button[type=submit]").disabled = false; }
   }
-  function uploadMarkup(c) { return list(c.available_actions).some(a=>a.action === "REGISTER_EVIDENCE" && a.enabled) ? '<form class="thread-upload"><label>对应清单代码<input name="code" maxlength="100" required></label><label>材料标题<input name="title" maxlength="200" required></label><label>选择实际文件<input type="file" name="file" required accept=".txt,.csv,.json"></label><p>支持 UTF-8 文本、JSON、CSV，最大 2 MiB。文件供本案参与者核对，内容不足不会被当作材料已齐。</p><button class="button secondary" type="submit">上传并登记材料</button></form>' : '<p class="section-note">当前阶段不接受直接修改材料。请按本案任务或向负责人提出修订要求。</p>'; }
+  function uploadChoices(checklist) {
+    return list(checklist).filter(item => ["MERCHANT_UPLOAD", "OCR_THEN_REVIEW"].includes(item.expected_source));
+  }
+  function uploadMarkup(c, checklist) {
+    if (!list(c.available_actions).some(a=>a.action === "REGISTER_EVIDENCE" && a.enabled)) return '<p class="section-note">当前阶段不接受直接修改材料。请按本案任务或向负责人提出修订要求。</p>';
+    const choices = uploadChoices(checklist);
+    if (!choices.length) return '<p class="section-note">当前清单没有需要商户上传的文件。系统记录与条件材料由 OceanPayment 核对，请勿自行填写内部代码。</p>';
+    return `<form class="thread-upload"><label>这份文件对应哪项材料<select name="material" required>${choices.map(item=>`<option value="${esc(item.code)}" data-title="${esc(item.label || "案件材料")}">${esc(item.label || "案件材料")}${item.present ? " · 已有文件，可上传修订版" : " · 待补充"}</option>`).join("")}</select></label><label>选择实际文件<input type="file" name="file" required accept=".txt,.csv,.json"></label><p>无需填写内部代码。支持 UTF-8 文本、JSON、CSV，最大 2 MiB；上传后会真实保存、哈希、解析并检查，已上传不等于审核通过。</p><button class="button secondary" type="submit">上传并检查这份材料</button></form>`;
+  }
   function mount(options) {
     const {host, c, session} = options;
     if (!host) return;
@@ -127,18 +136,20 @@
     }
     const key = `${session.user.id}:${c.id}`;
     if (active?.key === key && active.host === host) {
-      active.revision = c.revision; active.c = c;
+      active.revision = c.revision; active.c = c; active.checklist = list(options.plan?.checklist);
       const canUpload = list(c.available_actions).some(a=>a.action === "REGISTER_EVIDENCE" && a.enabled);
-      if (active.canUpload !== canUpload) { active.canUpload = canUpload; host.querySelector(".thread-upload-host").innerHTML = uploadMarkup(c); }
+      const checklistKey = JSON.stringify(active.checklist.map(item=>[item.code,item.present,item.upload_status]));
+      if (active.canUpload !== canUpload || active.checklistKey !== checklistKey) { active.canUpload = canUpload; active.checklistKey = checklistKey; host.querySelector(".thread-upload-host").innerHTML = uploadMarkup(c, active.checklist); }
       active.renderTools?.(); return;
     }
     if (active?.timer) clearInterval(active.timer);
-    const state = active = {...options,key,caseId:c.id,revision:c.revision,scope:"SHARED",loaded:false,pending:null,canUpload:list(c.available_actions).some(a=>a.action === "REGISTER_EVIDENCE" && a.enabled)};
+    const checklist = list(options.plan?.checklist);
+    const state = active = {...options,key,caseId:c.id,revision:c.revision,scope:"SHARED",loaded:false,pending:null,checklist,checklistKey:JSON.stringify(checklist.map(item=>[item.code,item.present,item.upload_status])),canUpload:list(c.available_actions).some(a=>a.action === "REGISTER_EVIDENCE" && a.enabled)};
     try { state.pending = JSON.parse(storage.get(pendingKey(state)) || "null"); } catch { state.pending = null; }
     const merchant = session.user.role === "MERCHANT";
     if (state.pending && (!["SHARED", "OP_INTERNAL"].includes(state.pending.scope) || (merchant && state.pending.scope === "OP_INTERNAL"))) { state.pending = null; storage.remove(pendingKey(state)); }
     if (state.pending) state.scope = state.pending.scope;
-    host.innerHTML = `<header class="thread-heading"><div><span class="thread-symbol">✧</span><h2>本案共享沟通</h2><p>商户 · OceanPayment · OceanPilot</p></div><span class="badge green">同一案件</span></header>${!merchant ? '<nav class="thread-scopes" aria-label="消息范围"><button class="active" data-thread-scope="SHARED">共享沟通</button><button data-thread-scope="OP_INTERNAL">OP 内部</button></nav>' : ""}<p class="thread-visibility">商户、获授权的 OP 人员与 OceanPilot 可见</p><div class="thread-handoffs"></div><div class="thread-messages" role="log" aria-label="案件消息" aria-live="polite"><div class="thread-empty">正在读取共享记录…</div></div><div class="thread-notice notice" role="status" hidden></div><form class="thread-composer"><div class="thread-prompts">${(merchant ? ["为什么需要这些材料？", "我已经补充材料，请核对", "请本案负责人协助"] : ["总结商户最新回应", "请说明当前阻断与负责人", "起草清楚的补证要求"]).map(prompt => `<button type="button" data-thread-prompt="${esc(prompt)}">${esc(prompt)}</button>`).join("")}</div><label class="sr-only" for="sharedMessage">发送本案消息</label><textarea class="thread-input" id="sharedMessage" maxlength="4000" rows="3" placeholder="向本案参与者说明情况或提问…" required></textarea><div class="thread-compose-actions"><label><input class="thread-ask" type="checkbox">请 OceanPilot 一起回答</label><button class="button primary thread-send" type="submit">发送消息</button></div></form><details class="thread-human"><summary>请人工接手一个具体问题</summary><form class="thread-handoff-form"><label>需要协助的事项<textarea name="reason" rows="2" maxlength="2000" required></textarea></label><button class="button secondary" type="submit">提交人工跟进请求</button></form></details><details class="thread-files"><summary>本案文件与材料</summary><div class="thread-files-list"></div><div class="thread-upload-host">${uploadMarkup(c)}</div></details><details class="thread-tools"><summary>OceanPilot 检查、提案与原私有历史</summary><div id="agentToolsPanel"></div></details>`;
+    host.innerHTML = `<header class="thread-heading"><div><span class="thread-symbol">✧</span><h2>本案共享沟通</h2><p>商户 · OceanPayment · OceanPilot</p></div><span class="badge green">同一案件</span></header>${!merchant ? '<nav class="thread-scopes" aria-label="消息范围"><button class="active" data-thread-scope="SHARED">共享沟通</button><button data-thread-scope="OP_INTERNAL">OP 内部</button></nav>' : ""}<p class="thread-visibility">商户、获授权的 OP 人员与 OceanPilot 可见</p><div class="thread-handoffs"></div><div class="thread-messages" role="log" aria-label="案件消息" aria-live="polite"><div class="thread-empty">正在读取共享记录…</div></div><div class="thread-notice notice" role="status" hidden></div><form class="thread-composer"><div class="thread-prompts">${(merchant ? ["为什么需要这些材料？", "我已经补充材料，请核对", "请本案负责人协助"] : ["总结商户最新回应", "请说明当前阻断与负责人", "起草清楚的补证要求"]).map(prompt => `<button type="button" data-thread-prompt="${esc(prompt)}">${esc(prompt)}</button>`).join("")}</div><label class="sr-only" for="sharedMessage">发送本案消息</label><textarea class="thread-input" id="sharedMessage" maxlength="4000" rows="3" placeholder="向本案参与者说明情况或提问…" required></textarea><div class="thread-compose-actions"><label><input class="thread-ask" type="checkbox">请 OceanPilot 一起回答</label><button class="button primary thread-send" type="submit">发送消息</button></div></form><details class="thread-human"><summary>请人工接手一个具体问题</summary><form class="thread-handoff-form"><label>需要协助的事项<textarea name="reason" rows="2" maxlength="2000" required></textarea></label><button class="button secondary" type="submit">提交人工跟进请求</button></form></details><details class="thread-files"><summary>本案文件与材料</summary><div class="thread-files-list"></div><div class="thread-upload-host">${uploadMarkup(c, checklist)}</div></details><details class="thread-tools"><summary>OceanPilot 检查、提案与原私有历史</summary><div id="agentToolsPanel"></div></details>`;
     updateScope(state);
     host.querySelector(".thread-input").value = state.pending?.message || storage.get(draftKey(state)) || "";
     if (state.pending) { host.querySelector(".thread-ask").checked = state.pending.ask_agent; notice(state, "已恢复原范围待确认消息。再次发送将用原消息 ID 核对结果。", true); }
@@ -186,6 +197,6 @@
   }
   globalThis.OceanV21Collaboration={mount,refresh,openFiles(data={}) {
     if(!active)return;const details=active.host.querySelector(".thread-files");details.open=true;details.scrollIntoView({block:"center",behavior:"smooth"});
-    const form=details.querySelector(".thread-upload");if(form){if(data.code)form.elements.code.value=data.code;if(data.title)form.elements.title.value=data.title;form.elements.file.focus();}
+    const form=details.querySelector(".thread-upload");if(form){if(data.code)form.elements.material.value=data.code;form.elements.file.focus();}
   }};
 })();

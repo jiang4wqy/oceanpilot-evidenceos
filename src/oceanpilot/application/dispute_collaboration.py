@@ -15,28 +15,14 @@ from threading import Event, Thread
 from uuid import uuid4
 
 from oceanpilot.domain.dispute import DisputeError, fingerprint, require, text_field, timestamp
+from oceanpilot.domain.dispute_rules import case_plan
+from oceanpilot.domain.evidence_catalog import EVIDENCE_CONTENT_FIELDS
 
 SCOPES = {"SHARED", "OP_INTERNAL"}
 _INTERNAL_ROLES = {"OPERATOR", "RISK_OFFICER", "SUPERVISOR", "AGENT"}
 _SYSTEM = {"role": "AGENT", "actor_id": "oceanpilot-workflow-agent"}
 _FILE_TYPES = {".txt": "text/plain", ".json": "application/json", ".csv": "text/csv"}
-_FACTS = {
-    "transaction.receipt": ("ordered_at", "item_description"),
-    "fulfillment.tracking": ("tracking_number", "shipped_at"),
-    "fulfillment.proof_of_delivery": ("delivered_at", "recipient_confirmation"),
-    "fulfillment.address_match": ("address_match_result",),
-    "comms.customer": ("communicated_at", "customer_message", "merchant_reply"),
-    "billing.refund_record": ("refunded_at", "refund_amount_minor"),
-    "product.description": ("item_description",),
-    "policy.terms_refund": ("policy_text", "accepted_at"),
-    "subscription.cancellation_record": ("cancellation_status", "requested_at"),
-    "history.prior_transactions": ("prior_transaction_count",),
-    "billing.duplicate_check": ("comparison_result",),
-    "auth.avs_result": ("verification_result",),
-    "auth.cvv_result": ("verification_result",),
-    "auth.threeds": ("authentication_result",),
-    "auth.device_ip_match": ("device_match_result",),
-}
+_FACTS = EVIDENCE_CONTENT_FIELDS
 
 
 class DisputeCollaborationService:
@@ -548,6 +534,66 @@ class DisputeCollaborationService:
             "boundary": "已检查内容字段及本案关联，不代表文件真实性或人工审核通过。",
         }
 
+    def sample_file(self, case_id, code, variant, identity):
+        """Build an explicitly synthetic file that must still use the real upload path."""
+        case, _ = self._access(case_id, identity)
+        require(
+            case.get("channel") == "MOCK"
+            and case.get("rule_snapshot", {}).get("production_eligible") is False,
+            "NOT_FOUND",
+            "Synthetic material sample not found",
+            404,
+        )
+        require(
+            code in case.get("rule_snapshot", {}).get("required_evidence", []),
+            "NOT_FOUND",
+            "Evidence sample not found for this case",
+            404,
+        )
+        required = _FACTS.get(code)
+        require(required is not None, "NOT_FOUND", "No structured sample for this evidence", 404)
+        example_values = {
+            "ordered_at": "2026-09-01T08:00:00Z",
+            "item_description": "Synthetic test order item",
+            "tracking_number": "SYNTHETIC-TRACKING-001",
+            "shipped_at": "2026-09-02T08:00:00Z",
+            "delivered_at": "2026-09-04T10:30:00Z",
+            "recipient_confirmation": "Synthetic recipient confirmation",
+            "address_match_result": "SYNTHETIC_MATCH",
+            "communicated_at": "2026-09-05T09:00:00Z",
+            "customer_message": "Synthetic customer message for workflow testing",
+            "merchant_reply": "Synthetic merchant response for workflow testing",
+            "refunded_at": "2026-09-06T09:00:00Z",
+            "refund_amount_minor": case["amount_minor"],
+            "policy_text": "Synthetic refund policy accepted for workflow testing",
+            "accepted_at": "2026-09-01T07:59:00Z",
+            "cancellation_status": "SYNTHETIC_NOT_CANCELLED",
+            "requested_at": "2026-09-05T12:00:00Z",
+            "prior_transaction_count": 2,
+            "comparison_result": "SYNTHETIC_NOT_DUPLICATE",
+            "verification_result": "SYNTHETIC_MATCH",
+            "authentication_result": "SYNTHETIC_AUTHENTICATED",
+            "device_match_result": "SYNTHETIC_MATCH",
+        }
+        values = {
+            "notice": "测试材料 / 合成数据；仅用于 OceanPilot 本地演练",
+            "evidence_code": code,
+            "transaction_id": case["transaction_id"],
+            "currency": case["currency"],
+            "amount_minor": case["amount_minor"],
+            **{field: example_values[field] for field in required},
+        }
+        if variant == "missing_field":
+            values.pop(required[0] if required else "currency")
+        elif variant == "wrong_transaction":
+            values["transaction_id"] = "synthetic-unrelated-transaction"
+        filename = f"synthetic-{code.replace('.', '-')}-{variant}.json"
+        return {
+            "filename": filename,
+            "mime_type": "application/json",
+            "content": json.dumps(values, ensure_ascii=False, indent=2).encode(),
+        }
+
     def upload_file(
         self,
         case_id,
@@ -753,69 +799,77 @@ class DisputeCollaborationService:
                         {"key": key},
                         lambda db, e=event: {"handoff": self.store.append(db, e)},
                     )
-            active = [t for t in case["tasks"] if t["status"] == "OPEN"]
-            for deadline_type in ("merchant", "internal", "external"):
-                tasks = [
-                    t
-                    for t in active
-                    if (t["type"] in {"DECISION", "EVIDENCE", "REVISION"})
-                    == (deadline_type == "merchant")
+            sla = case_plan(case, now=now)["sla"]
+            deadline_type = sla["deadline_kind"]
+            deadline = sla["deadline"]
+            reminder_band = sla["reminder_band"]
+            if not deadline_type or not deadline or not reminder_band:
+                continue
+            scope = "SHARED" if deadline_type == "merchant" else "OP_INTERNAL"
+            key = fingerprint(
+                [
+                    case["id"],
+                    sla["stage_number"],
+                    deadline_type,
+                    reminder_band,
+                    sla["task_ids"],
                 ]
-                if deadline_type == "external" and case["finality"] == "FINAL_CONFIRMED":
-                    continue
-                if deadline_type != "external" and not tasks:
-                    continue
-                deadline = case["deadlines"].get(deadline_type)
-                if not deadline or timestamp(deadline) > now:
-                    continue
-                scope = "SHARED" if deadline_type == "merchant" else "OP_INTERNAL"
-                key = fingerprint(
-                    [
-                        case["id"],
-                        case.get("stage_number", case["stage"]),
-                        deadline_type,
-                        deadline,
-                        "DUE",
-                    ]
-                )
-                event = self._event(
+            )
+            overdue = reminder_band == "DUE"
+            subject = {
+                "merchant": "商户当前任务",
+                "internal": "OceanPayment 当前审核任务",
+                "external": "上游跟进任务",
+            }[deadline_type]
+            message = (
+                f"{subject}已超过当前记录的期限，请人工核实剩余权利并安排跟进；"
+                "逾期不代表接受争议或正式失权。"
+                if overdue
+                else f"{subject}进入 {reminder_band} 提醒档位，请责任人按当前任务跟进。"
+            )
+            event = self._event(
+                case["id"],
+                _SYSTEM,
+                scope,
+                "REMINDER",
+                actor_type="SYSTEM",
+                message=message,
+                deadline_type=deadline_type,
+                deadline=deadline,
+                reminder_band=reminder_band,
+                escalation_level=1 if overdue else 0,
+                task_ids=sla["task_ids"],
+                task_types=sla["task_types"],
+                owner=sla["owner"],
+                assignee_id=sla["assignee_ids"][0] if sla["assignee_ids"] else None,
+                assignee_ids=sla["assignee_ids"],
+                source="TIME_TICK",
+                case_revision=case["revision"],
+                boundary=sla["boundary"],
+            )
+            result = self._write(
+                "deadline-" + key,
+                _SYSTEM,
+                {
+                    "case_id": case["id"],
+                    "stage_number": sla["stage_number"],
+                    "deadline_type": deadline_type,
+                    "reminder_band": reminder_band,
+                    "task_ids": sla["task_ids"],
+                },
+                lambda db, e=event: {"event": self.store.append(db, e)},
+            )
+            if not result["replayed"]:
+                emitted.append(result["event"])
+            if deadline_type == "external" and overdue:
+                self.create_handoff(
                     case["id"],
                     _SYSTEM,
-                    scope,
-                    "REMINDER",
-                    actor_type="SYSTEM",
-                    message=(
-                        "商户材料/决定任务已到期，请确认当前缺口或请求协助。"
-                        if deadline_type == "merchant"
-                        else "OceanPayment 当前任务或渠道期限已到期，请核实剩余权利并安排跟进。"
-                    ),
-                    deadline_type=deadline_type,
-                    deadline=deadline,
-                    task_ids=[t["id"] for t in tasks],
-                    source="TIME_TICK",
-                    assignee_id=(
-                        case["merchant_id"]
-                        if deadline_type == "merchant"
-                        else case.get("assigned_op_user_id")
-                    ),
-                    case_revision=case["revision"],
+                    "deadline-handoff-" + key,
+                    "外部期限已到，请人工核实剩余权利及后续处理。",
+                    "OP_INTERNAL",
+                    assignee_id=(sla["assignee_ids"][0] if sla["assignee_ids"] else None),
                 )
-                result = self._write(
-                    "deadline-" + key,
-                    _SYSTEM,
-                    {"key": key},
-                    lambda db, e=event: {"event": self.store.append(db, e)},
-                )
-                if not result["replayed"]:
-                    emitted.append(result["event"])
-                if deadline_type == "external":
-                    self.create_handoff(
-                        case["id"],
-                        _SYSTEM,
-                        "deadline-handoff-" + key,
-                        "外部期限已到，请核实剩余权利及后续处理。",
-                        "OP_INTERNAL",
-                    )
         return {"observed_at": self._now(), "emitted": emitted}
 
 

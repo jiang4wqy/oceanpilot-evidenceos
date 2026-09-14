@@ -98,6 +98,7 @@ def test_actual_corpus_has_62_references_and_28_templates_and_new_run_records_re
         for item in retrieval["references"]
     )
     assert all(not item["production_eligible"] for item in retrieval["references"])
+    assert all("source_outcome" not in item for item in retrieval["references"])
     step = run["steps"][3]
     assert step["output"]["reference_knowledge"] == retrieval
     assert step["output"]["matches"][0]["case_id"] == same["id"]
@@ -130,6 +131,9 @@ def test_both_readers_get_case_specific_reference_text_and_model_sources_without
     assert context["reference_knowledge"]["references"][0]["template_id"] in result["answer"]
     assert context["reference_knowledge"]["references"][0]["source_ids"][0] in result["answer"]
     assert context["reference_knowledge"]["references"][0]["rule_versions"]
+    assert all(
+        "source_outcome" not in item for item in context["reference_knowledge"]["references"]
+    )
     assert context["rule_status"] == case["rule_snapshot"]["conflict_status"]
     if identity["role"] == "MERCHANT":
         assert set(context["deadlines"]) == {"merchant"}

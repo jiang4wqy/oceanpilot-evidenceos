@@ -19,6 +19,51 @@ from oceanpilot.domain.chargeback import ChargebackEvidenceCode
 
 _C = ChargebackEvidenceCode
 
+# The structured-file checker and the merchant checklist share this contract.
+# Keeping it in the domain catalog prevents the upload UI from inventing fields
+# that the server does not actually validate.
+EVIDENCE_CONTENT_FIELDS: dict[str, tuple[str, ...]] = {
+    "transaction.receipt": ("ordered_at", "item_description"),
+    "fulfillment.tracking": ("tracking_number", "shipped_at"),
+    "fulfillment.proof_of_delivery": ("delivered_at", "recipient_confirmation"),
+    "fulfillment.address_match": ("address_match_result",),
+    "comms.customer": ("communicated_at", "customer_message", "merchant_reply"),
+    "billing.refund_record": ("refunded_at", "refund_amount_minor"),
+    "product.description": ("item_description",),
+    "policy.terms_refund": ("policy_text", "accepted_at"),
+    "subscription.cancellation_record": ("cancellation_status", "requested_at"),
+    "history.prior_transactions": ("prior_transaction_count",),
+    "billing.duplicate_check": ("comparison_result",),
+    "auth.avs_result": ("verification_result",),
+    "auth.cvv_result": ("verification_result",),
+    "auth.threeds": ("authentication_result",),
+    "auth.device_ip_match": ("device_match_result",),
+}
+
+_SYSTEM_EVIDENCE = {
+    "auth.avs_result",
+    "auth.cvv_result",
+    "auth.threeds",
+    "auth.device_ip_match",
+    "fulfillment.address_match",
+    "history.prior_transactions",
+    "billing.duplicate_check",
+}
+_OCR_EVIDENCE = {"fulfillment.proof_of_delivery"}
+_CONDITIONAL_EVIDENCE = {"billing.refund_record", "subscription.cancellation_record"}
+
+
+def expected_source_of(code: str) -> str:
+    """Return the collection path shown to users for a checklist code."""
+    if code in _SYSTEM_EVIDENCE:
+        return "SYSTEM_OF_RECORD"
+    if code in _OCR_EVIDENCE:
+        return "OCR_THEN_REVIEW"
+    if code in _CONDITIONAL_EVIDENCE:
+        return "CONDITIONAL"
+    return "MERCHANT_UPLOAD"
+
+
 MATERIAL_REGISTRATION_BOUNDARY = (
     "仅登记合成材料元数据；未读取或核验真实文件正文。"
     "材料就绪度仅表示内部清单登记情况，内容、真实性与适用性仍待人工核验。"

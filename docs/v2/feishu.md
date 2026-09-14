@@ -1,6 +1,6 @@
 # V2.1 飞书协作与授权测试群 Outbox（X01）
 
-已实现签名回调、可信账号与群绑定、案件共享消息、卡片预览、持久投递队列、显式发送、真实消息接口适配及回执重试。默认关闭外发。**本次没有真实飞书租户 smoke，没有发送任何外部消息；Gate 5 的真实飞书验收尚未完成。** 本地测试中的消息回执来自显式注入的 mock transport，不能作为线上已投递证据。上游案件提交仍是 Mock。
+已实现签名回调、可信账号与群绑定、案件共享消息、角色化命令、卡片预览、持久投递队列、显式发送、真实消息接口适配及回执重试。默认关闭外发。2026-09-13 已在真实企业自建应用完成发布，并分别通过事件 URL 与卡片 URL 的 challenge；这证明公网回调和加密配置可达，**尚不等于真实业务消息、卡片投递或点击回流已经验收**。本地测试中的消息回执来自显式注入的 mock transport。上游案件提交仍是 Mock。
 
 ## 接口与生命周期
 
@@ -54,6 +54,8 @@ bindings = {
 允许绑定角色为 `MERCHANT`、`OPERATOR`、`RISK_OFFICER`、`SUPERVISOR`；不允许外部 actor 使用保留的内核 `AGENT` 角色。`actor_id` 必须对应当前启用的服务端账号，角色匹配、商户授权和案件 participants 仍由 access policy 逐次校验。即使回调响应已持久化，账号撤销或案件访问撤销后也不能读取其回放。治理 `ADMIN` 不自动获得业务权限。
 
 不能从卡片 value、消息文字或 URL 中获取可信 role、merchant、revision。未知租户、actor、chat 或商户不匹配均拒绝。每次业务操作还调用 `disputes.get_case(case_id, identity)`；同一个商户群内有多案时，消息必须显式指定案件。
+
+未知但签名有效的用户／会话会进入 `dispute_feishu_binding_candidates`，保存域分离 actor/chat 哈希、首次／最近出现时间和次数。用于真实回复的 tenant/open_id/chat_id 只以 AES-GCM 密文保存，密钥由 Encrypt Key 做域分离派生；明文和 Encrypt Key 均不写入数据库。可用 `scripts/list_feishu_binding_candidates.py` 查看候选并生成绑定模板，加 `--target` 可在服务器本机解密并生成出站目标模板。未经部署人员把候选映射到已有 OceanPilot 账号和商户前，事件仍返回 `UNTRUSTED_BINDING`，不会自动信任第一个发消息的人。
 
 ## 出站的本机授权开关
 
@@ -119,6 +121,18 @@ bindings = {
 
 `@OceanPilot CASE_ID 还缺什么？` 和飞书渲染的 `@_user_1 CASE_ID ...` 被识别。文字经敏感数据检查，可信 identity 与 case 校验后，V2.1 保存为 `COLLABORATION_MESSAGE`，进入本案 `SHARED` journal；带 `channel=FEISHU`、哈希 event/thread 引用及真实操作者。普通聊天、Agent 回复和投递状态不增加案件业务 revision，不使待批准业务动作失效。
 
+单聊可用 `案件 CASE_ID ...`，群聊必须 `@OceanPilot CASE_ID ...`。以下命令由服务端绑定角色决定权限，消息正文不能自报或提升角色：
+
+- 所有角色：`帮助`、`案件列表`、指定案件提问；帮助与列表是只读查询，不增加案件 revision。
+- 商户：`确认接受责任`、`确认提出抗辩`、`确认提交证据`。
+- 运营：`检查时限`、`构建材料包`、`确认发布商户任务`。
+- 风控：`确认审核通过：理由`、`确认退回补件：理由`。
+- 主管：`确认已完成PII检查并批准材料包：理由`。
+
+高风险业务命令必须包含精确“确认”短语，随后仍由领域层再次检查当前版本、状态、规则、截止日、材料完整性、角色分离和 PII 复核条件。没有材料的“确认提交证据”仍返回 `MISSING_EVIDENCE`，不会因为来自飞书而绕过业务门禁。未匹配为该角色命令的文字只按普通协作消息处理。
+
+`帮助` 与 `案件列表` 的回复也进入持久 outbox，使用固定 provider UUID 幂等回复。案件列表通过 `service.list_cases(identity)` 逐次套用账号目录、商户和参与者访问策略，最多显示十条，并只提供商户工作台深链。
+
 当前飞书回调回答使用确定性 `case_plan`，明确标记 `source=DETERMINISTIC, provider=DETERMINISTIC, model=case-plan`。它把有版本和来源的摘要同时写入共享线程，并在获准自动回复时排入线程 reply 队列；不会伪称调用外部模型。正式模型讨论仍可在共享网页线程进行。回执写入中断时使用首个已验证事件冻结的答案重放；后来的业务变化不会偷偷改写旧回复。旧版本已经记住的 COMMENT 命令保持原命令语义和幂等回放，新聊天不再走该业务命令。
 
 卡片 Accept/Contest 只显示规则已核验、`allowed_actions` 明确允许的动作；未知／空权限卡只保留查看案件。按钮含 Feishu confirmation dialog 与严格 boolean `confirmed`。opaque `card_ref` 在服务端绑定案件、版本、商户、chat、卡片种类及一小时有效期；过期、跨案、跨群、错误角色、过时版本均不能执行。决定仍是单一 `MERCHANT_DECISION` 事务，领域层原子写入业务状态、collaboration 和 audit；业务观察者将公开决定桥接到 SHARED。不会再补第二个非原子的 COMMENT。
@@ -143,6 +157,8 @@ PYTHONPATH=src .venv/bin/pytest -q \
 
 2026-09-09 补充协议检查发现原 verifier 缺少加密正文和无签名 URL 握手支持，已先复现失败再修复。新增独立 OpenSSL 密文向量、畸形密文／填充、解密前验签、握手不得分发业务、加密卡片回放，以及真实本地账号下的加密共享消息／商户决定／Mock 回复更新测试。`tests/feishu` 与两组 V2 回调／outbox 测试合计 **198 passed**。原有出站授权条件不变；这些结果仍只是本地协议验收。
 
-真实 Gate 5 尚需用户明确授权的测试空间、管理员配置及可达 HTTPS callback URL，按实际 tenant 的签名／确认 payload 验证商户操作、真实 reply/update、回执和跨端可见性。没有真实回执之前不能将 Gate 5 标记通过。
+真实应用发布、消息事件、两条开发者服务器 URL、Encrypt Key/Verification Token 和 URL challenge 已完成。Gate 5 剩余项是：目标用户发送一条真实消息、将候选绑定到现有账号、明确授权出站目标并验证真实 reply/update、卡片点击、回执和跨端可见性。没有真实业务回执之前不能将 Gate 5 标记通过。
+
+服务器部署、固定域名、数据卷、备份与升级步骤见 [飞书生产部署与迭代](feishu-production-deployment.md)。
 
 接口依据是飞书官方的[发送消息](https://open.feishu.cn/document/server-docs/im-v1/message/create)、[回复消息](https://open.feishu.cn/document/server-docs/im-v1/message/reply)与[更新应用发送的消息卡片](https://open.feishu.cn/document/server-docs/im-v1/message-card/patch)。字段和 HTTP 方法另核对官方 Python SDK 的 [`reply_message_request_body.py`](https://github.com/larksuite/oapi-sdk-python/blob/v2_main/lark_oapi/api/im/v1/model/reply_message_request_body.py)、[`reply_message_request.py`](https://github.com/larksuite/oapi-sdk-python/blob/v2_main/lark_oapi/api/im/v1/model/reply_message_request.py)、[`patch_message_request_body.py`](https://github.com/larksuite/oapi-sdk-python/blob/v2_main/lark_oapi/api/im/v1/model/patch_message_request_body.py) 和 [`patch_message_request.py`](https://github.com/larksuite/oapi-sdk-python/blob/v2_main/lark_oapi/api/im/v1/model/patch_message_request.py)：reply 为 POST、包含 `content/msg_type/reply_in_thread/uuid`，patch 为 PATCH、仅 `content`。

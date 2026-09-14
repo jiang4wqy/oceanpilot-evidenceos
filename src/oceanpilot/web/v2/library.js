@@ -13,6 +13,14 @@
     product_or_service: "商品或服务", payment_channel: "支付渠道", authentication_method: "认证方式", delivery_or_service_status: "履约状态",
     refund_status: "退款状态", customer_contact_status: "客户沟通状态", dispute_received_at: "收到争议时间", response_deadline: "回应截止时间",
     merchant_position: "商户立场", issuer_notice: "上游通知", initial_case_status: "初始案件状态", should_accept_or_contest: "接受或抗辩决定",
+    cardholder: "持卡人", issuer: "发卡行", acquirer: "收单行", merchant: "商户", psp: "支付服务商", platform: "平台",
+    who_paid_whom: "资金关系", who_initiated: "发起方", who_received_notice: "通知接收方", who_bears_risk: "风险承担方",
+    dispute_trigger: "争议触发", cardholder_claim: "持卡人主张", recommendation_basis: "判断依据", first_see: "首次处理",
+    auto: "系统处理", ops: "运营处理", agent: "Agent 协助", human: "人工确认", reviewer: "审核要求", submit_condition: "提交条件",
+    upstream_result: "上游结果", final_status: "最终状态", result: "结果", result_basis: "结果依据", success_factors: "成功因素",
+    failure_factors: "失败因素", preventable_or_not: "可预防性", merchant_improvement: "商户改进", unresolved_questions: "待确认问题",
+    required_product_modules: "需要的产品模块", recommended_demo_steps: "建议演练步骤", expected_agent_questions: "预期 Agent 问题",
+    expected_agent_actions: "预期 Agent 动作", expected_system_blockers: "系统阻断", acceptance_assertions: "验收断言",
   };
   const label = (value) => labels[value] || describe(value);
   const idOf = (entry) => entry?.template_id || entry?.case_template_id || entry?.id || "";
@@ -62,6 +70,16 @@
     if (typeof policy !== "object") return `<p class="library-body-copy">${escape(policy)}</p>`;
     return `<dl>${Object.entries(policy).map(([key, value]) => row(label(key), value)).join("")}</dl>`;
   }
+  function factGroup(title, values) {
+    if (!values || typeof values !== "object" || Array.isArray(values)) return "";
+    const entries = Object.entries(values);
+    if (!entries.length) return "";
+    return `<section class="library-detail-section"><h3>${escape(title)}</h3><dl>${entries.map(([key, value]) => row(label(key), Array.isArray(value) ? value.join("、") : value)).join("")}</dl></section>`;
+  }
+  function caseNarrativeMarkup(detail) {
+    if (!detail || typeof detail !== "object") return "";
+    return `<div class="library-full-case-detail"><section class="library-detail-section"><h3>案例原文摘录</h3><p class="library-body-copy">${escape(detail.source_excerpt || "原文摘录未提供。")}</p><p class="library-section-note">提取置信度：${escape(detail.extraction_confidence || "未标注")}；此内容是参考资料，不是当前运行案件事实。</p></section>${factGroup("参与方", detail.parties)}${factGroup("资金流与风险", detail.fund_flow)}${factGroup("交易事实", detail.transaction_facts)}${factGroup("争议事实", detail.dispute_facts)}${factGroup("处理流程", detail.process_flow)}${factGroup("案例结果", detail.outcome)}${factGroup("OceanPilot 使用映射", detail.oceanpilot_mapping)}</div>`;
+  }
   let currentMount = null;
   async function mount({ api, openTemplate, onCaseOpen } = {}) {
     const host = document.getElementById("libraryView");
@@ -104,7 +122,10 @@
     }
     function renderDetail() {
       if (!isCurrent()) return;
-      host.querySelector(".library-reference-detail").innerHTML = detailMarkup();
+      const target = host.querySelector(".library-reference-detail");
+      target.innerHTML = detailMarkup();
+      if (!state.detailLoading && !state.detailError)
+        target.insertAdjacentHTML("beforeend", caseNarrativeMarkup(state.detail?.detail));
     }
     async function select(id, scroll = false) {
       const selected = state.references.find((ref) => idOf(ref) === id);

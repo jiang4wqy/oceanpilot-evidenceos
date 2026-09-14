@@ -13,7 +13,12 @@ from oceanpilot.domain.chargeback import (
     DisputeReasonCode,
     assess_chargeback,
 )
-from oceanpilot.domain.evidence_catalog import MATERIAL_REGISTRATION_BOUNDARY, describe
+from oceanpilot.domain.evidence_catalog import (
+    EVIDENCE_CONTENT_FIELDS,
+    MATERIAL_REGISTRATION_BOUNDARY,
+    describe,
+    expected_source_of,
+)
 
 RULE_VERSION = "synthetic-v2-2026-09-08"
 _MAPPINGS = (
@@ -173,6 +178,109 @@ _NEXT = {
     "CLOSED": ("KNOWLEDGE_CANDIDATE", "OPERATOR", "提取脱敏案例模式，交由知识管理员审核"),
 }
 
+_SLA_DEADLINE_BY_OWNER = {
+    "MERCHANT": "merchant",
+    "RISK_OFFICER": "internal",
+    "SUPERVISOR": "internal",
+    "OPERATOR": "external",
+}
+_SLA_REMINDER_BANDS = (
+    ("T_MINUS_7D", timedelta(days=7)),
+    ("T_MINUS_3D", timedelta(days=3)),
+    ("T_MINUS_24H", timedelta(hours=24)),
+)
+
+
+def current_sla(
+    case: dict[str, Any],
+    *,
+    owner: str,
+    action: str,
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    """Describe deadline risk for the current stage's open responsibility.
+
+    The result is advisory only. In particular, an overdue deadline does not
+    change the case, accept a dispute, or establish that any right was lost.
+    """
+    current = (now or datetime.now(UTC)).astimezone(UTC)
+    stage_number = case.get("stage_number", 1)
+    tasks = [
+        task
+        for task in case.get("tasks", [])
+        if task.get("status") in {"OPEN", "IN_PROGRESS"}
+        and task.get("stage_number", 1) == stage_number
+        and task.get("owner") == owner
+    ]
+    # Accepted submissions wait on an upstream result without creating a
+    # business task. Represent that read-only responsibility explicitly so the
+    # external clock remains monitorable without mutating the case revision.
+    if not tasks and case.get("work_status") == "WAITING_UPSTREAM" and owner == "OPERATOR":
+        tasks = [
+            {
+                "id": f"workflow:{stage_number}:{action}",
+                "type": action,
+                "status": "OPEN",
+                "owner": owner,
+                "assignee": case.get("assigned_op_user_id"),
+                "stage_number": stage_number,
+                "created_at": case.get("updated_at") or case.get("received_at"),
+            }
+        ]
+    deadline_kind = _SLA_DEADLINE_BY_OWNER.get(owner) if tasks else None
+    deadlines = case.get("deadlines") or case.get("rule_snapshot", {}).get("deadlines") or {}
+    deadline_value = deadlines.get(deadline_kind) if deadline_kind else None
+    deadline = _time(deadline_value) if deadline_value else None
+    remaining_hours = (deadline - current).total_seconds() / 3600 if deadline is not None else None
+    risk = "NEEDS_CONFIRMATION"
+    reminder_band = None
+    if tasks and deadline is not None and deadlines.get("status") == "CONFIRMED":
+        if remaining_hours <= 0:
+            risk, reminder_band = "OVERDUE", "DUE"
+        else:
+            risk = "AT_RISK" if remaining_hours <= 24 else "ON_TRACK"
+            created_values = [
+                _time(task["created_at"]) for task in tasks if task.get("created_at") is not None
+            ]
+            available = deadline - min(created_values) if created_values else deadline - current
+            crossed = [
+                (name, window)
+                for name, window in _SLA_REMINDER_BANDS
+                if window < available and deadline - current <= window
+            ]
+            if crossed:
+                reminder_band = crossed[-1][0]
+    assignee_ids = sorted(
+        {
+            assignee
+            for task in tasks
+            if (assignee := task.get("assignee_id") or task.get("assignee"))
+        }
+    )
+    if not assignee_ids:
+        fallback = (
+            case.get("merchant_id")
+            if owner == "MERCHANT"
+            else case.get("assigned_op_user_id")
+            if owner == "OPERATOR"
+            else None
+        )
+        if fallback:
+            assignee_ids = [fallback]
+    return {
+        "risk": risk,
+        "deadline_kind": deadline_kind,
+        "deadline": deadline_value,
+        "remaining_hours": remaining_hours,
+        "reminder_band": reminder_band,
+        "stage_number": stage_number,
+        "task_ids": [task["id"] for task in tasks],
+        "task_types": [task.get("type") for task in tasks],
+        "owner": owner if tasks else None,
+        "assignee_ids": assignee_ids,
+        "boundary": "SLA 仅用于提醒与人工升级；逾期不代表接受争议或正式失权。",
+    }
+
 
 def case_plan(case: dict[str, Any], *, now: datetime | None = None) -> dict[str, Any]:
     rule = case.get("rule_snapshot") or {}
@@ -183,19 +291,36 @@ def case_plan(case: dict[str, Any], *, now: datetime | None = None) -> dict[str,
     present = evidence_codes(case)
     checklist = []
     for code in required:
+        current_evidence = next(
+            (
+                item
+                for item in reversed(case.get("evidence", []))
+                if item.get("code") == code and item.get("active") is not False
+            ),
+            None,
+        )
+        content_status = (current_evidence or {}).get("content_check", {}).get("status")
         try:
             detail = describe(ChargebackEvidenceCode(code))
             label, why = detail.label, detail.why
+            description, examples = detail.description, list(detail.examples)
         except ValueError:
             label, why = code, "OP 人工确认的材料项；内容仍需人工核验。"
+            description, examples = "由 OceanPayment 人工确认本项材料内容。", []
         checklist.append(
             {
                 "code": code,
                 "label": label,
+                "description": description,
                 "why": why,
+                "expected_fields": list(EVIDENCE_CONTENT_FIELDS.get(code, ())),
+                "examples": examples,
+                "expected_source": expected_source_of(code),
                 "required": True,
                 "critical": code in critical,
                 "present": code in present,
+                "upload_status": content_status
+                or ("REGISTERED" if current_evidence else "MISSING"),
             }
         )
     missing = [code for code in required if code not in present]
@@ -288,12 +413,8 @@ def case_plan(case: dict[str, Any], *, now: datetime | None = None) -> dict[str,
             "核实上游来源与终局依据后再处理结果",
         )
     deadlines = deepcopy(case.get("deadlines") or rule.get("deadlines") or {})
-    current = now or datetime.now(UTC)
-    sla_risk = "NEEDS_CONFIRMATION"
-    target = deadlines.get("merchant")
-    if target:
-        hours = (_time(target) - current).total_seconds() / 3600
-        sla_risk = "OVERDUE" if hours < 0 else "AT_RISK" if hours <= 24 else "ON_TRACK"
+    sla = current_sla(case, owner=owner, action=action, now=now)
+    sla_risk = sla["risk"]
     citations = [{k: rule.get(k) for k in ("source_id", "source_locator", "rule_version")}]
     if not rule.get("source_id"):
         citations = []
@@ -317,6 +438,7 @@ def case_plan(case: dict[str, Any], *, now: datetime | None = None) -> dict[str,
         "next_action": {"action": action, "owner": owner, "reason": reason},
         "blockers": blockers,
         "deadlines": deadlines,
+        "sla": sla,
         "sla_risk": sla_risk,
         "escalation_required": rule_status not in ("VERIFIED", "HUMAN_CONFIRMED")
         or sla_risk in ("OVERDUE", "AT_RISK")

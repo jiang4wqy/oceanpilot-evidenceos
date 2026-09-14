@@ -3622,6 +3622,13 @@ body { background: var(--canvas); color: var(--ink); }
 .customer-latest p { font-size: 12px; line-height: 1.9; color: #8aabb9; white-space: pre-wrap; }
 .customer-task-deadline { display: flex; justify-content: space-between; gap: 14px; padding: 16px 0; color: #8babb9; font-size: 11px; }
 .customer-task-deadline strong { font-weight: 500; color: #6997a8; }
+.accept-recommendation { margin-bottom: 22px; padding: 18px; border: 1px solid #eadfbd; border-radius: 8px; background: #fffaf0; overflow-wrap: anywhere; }
+.accept-recommendation-heading { display: flex; align-items: center; flex-wrap: wrap; gap: 9px; margin-bottom: 15px; }
+.accept-recommendation-heading h3 { margin: 0; color: #67582f; font-size: 15px; }
+.accept-recommendation dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin: 0; }
+.accept-recommendation dl > div:last-child { grid-column: 1 / -1; }
+.accept-recommendation dt { margin-bottom: 6px; color: #806f3d; font-size: 11px; font-weight: 650; }
+.accept-recommendation dd { margin: 0; color: #675f48; font-size: 12px; line-height: 1.8; white-space: pre-wrap; }
 .customer-process-note { font-size: 11px; line-height: 1.8; color: #9cb6c3; border-top: 1px solid #e5eff3; padding-top: 18px; margin-top: 22px; }
 .evidence-mode-note { font-size: 10px; color: #9cb5c1; line-height: 1.7; }
 .customer-submit { display: flex; align-items: center; flex-wrap: wrap; gap: 13px; justify-content: space-between; padding: 17px; background: #f4f9fa; border: 1px solid #e0edf0; border-radius: 8px; margin: 22px 0 29px; }
@@ -3808,6 +3815,8 @@ body { background: var(--canvas); color: var(--ink); }
   .customer-latest .section-heading { flex-wrap: wrap; }
   .customer-submit .button { width: 100%; }
   .customer-task-deadline { flex-wrap: wrap; }
+  .accept-recommendation dl { grid-template-columns: minmax(0, 1fr); }
+  .accept-recommendation dl > div:last-child { grid-column: auto; }
   .row-actions { flex-direction: column; }
   .pilot-heading { padding: 17px; }
   .pilot-identity h2, .merchant-layout .pilot-identity h2 { font-size: 21px; }
@@ -3899,6 +3908,20 @@ body { background: var(--canvas); color: var(--ink); }
 .current-task-footer { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 14px; }
 .current-task-footer > span { font-size: 12px; color: #59727b; }
 .current-task-footer strong { display: block; margin-top: 4px; color: #2c4b55; font-size: 14px; }
+.material-card { align-items: flex-start; }
+.material-card .row-subtitle { margin-top: 5px; line-height: 1.55; }
+.material-samples { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 9px; font-size: 12px; color: #59727b; }
+.material-samples a { color: #176d69; text-decoration: underline; text-underline-offset: 2px; }
+.thread-upload select { width: 100%; margin-top: 7px; }
+.merchant-journey { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; margin: 18px 22px 0; }
+.merchant-journey-step { display: flex; align-items: center; gap: 7px; min-width: 0; color: #7a9097; font-size: 12px; }
+.merchant-journey-step::after { content: ""; height: 1px; flex: 1; background: #d8e3e5; }
+.merchant-journey-step:last-child::after { display: none; }
+.merchant-journey-step span { display: grid; place-items: center; flex: 0 0 22px; height: 22px; border-radius: 50%; background: #edf2f3; font-size: 11px; }
+.merchant-journey-step strong { font-weight: 600; white-space: nowrap; }
+.merchant-journey-step.done, .merchant-journey-step.current { color: #176d69; }
+.merchant-journey-step.done span, .merchant-journey-step.current span { background: #d9efed; }
+.merchant-journey-step.current strong { font-weight: 750; }
 .secondary-actions { margin-top: 16px; border-top: 1px solid #d7e9e8; padding-top: 12px; }
 .secondary-actions summary { cursor: pointer; font-size: 12px; color: #57716e; }
 .secondary-actions .action-bar { align-items: flex-start; }
@@ -3969,6 +3992,9 @@ body { background: var(--canvas); color: var(--ink); }
   .current-task h3 { font-size: 19px; }
   .current-task-kicker { flex-direction: column; gap: 5px; }
   .current-task-footer { align-items: stretch; }
+  .merchant-journey { grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 14px; gap: 9px; }
+  .merchant-journey-step::after { display: none; }
+  .merchant-journey-step strong { white-space: normal; }
   .thread-heading { padding: 18px 14px 12px; }
   .thread-messages { padding: 10px 12px; min-height: 240px; max-height: 390px; }
   .thread-composer { padding: 12px; }

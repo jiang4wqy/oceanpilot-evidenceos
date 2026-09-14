@@ -2,6 +2,7 @@ import asyncio
 import base64
 import json
 import sqlite3
+from copy import deepcopy
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
@@ -17,8 +18,11 @@ from oceanpilot.application.dispute_updates import DisputeUpdatesService
 from oceanpilot.application.disputes import DisputeService
 from oceanpilot.application.model_provider import ModelResult
 from oceanpilot.domain.dispute import DisputeError
+from oceanpilot.domain.dispute_rules import current_sla
 
 OP = {"role": "OPERATOR", "actor_id": "operator"}
+RISK = {"role": "RISK_OFFICER", "actor_id": "risk"}
+SUPERVISOR = {"role": "SUPERVISOR", "actor_id": "supervisor"}
 MERCHANT = {"role": "MERCHANT", "actor_id": "merchant", "merchant_id": "merchant-a"}
 OTHER = {"role": "MERCHANT", "actor_id": "other", "merchant_id": "merchant-b"}
 NOW = datetime(2026, 9, 9, 8, tzinfo=UTC)
@@ -98,6 +102,46 @@ def collecting(stack):
         {"decision": "CONTEST", "reason": "真实合成材料将支持抗辩"},
         MERCHANT,
     )
+
+
+def submitted_evidence(stack):
+    disputes, _, collab, _, _, _ = stack
+    case = collecting(stack)
+    for code in case["rule_snapshot"]["required_evidence"]:
+        sample = collab.sample_file(case["id"], code, "complete", MERCHANT)
+        case = collab.upload_file(
+            case["id"],
+            MERCHANT,
+            command_id=str(uuid4()),
+            expected_revision=case["revision"],
+            code=code,
+            title=code,
+            filename=sample["filename"],
+            mime_type=sample["mime_type"],
+            content_base64=base64.b64encode(sample["content"]).decode(),
+        )["case"]
+    return command(disputes, case, "SUBMIT_EVIDENCE", identity=MERCHANT)
+
+
+def waiting_upstream(stack):
+    disputes, _, _, _, _, _ = stack
+    case = submitted_evidence(stack)
+    case = command(
+        disputes,
+        case,
+        "REVIEW",
+        {"decision": "PASS", "reason": "Human content review"},
+        RISK,
+    )
+    case = command(disputes, case, "BUILD_PACKAGE")
+    case = command(
+        disputes,
+        case,
+        "APPROVE_PACKAGE",
+        {"reason": "Independent final review", "pii_checked": True},
+        SUPERVISOR,
+    )
+    return command(disputes, case, "SUBMIT")
 
 
 def file_payload(case, **overrides):
@@ -355,6 +399,104 @@ def test_only_clock_progress_produces_durable_deduplicated_reminders(stack):
         SQLiteDisputeCollaborationStore(collab.store.db_path), disputes, clock=lambda: clock[0]
     )
     assert not restarted.tick()["emitted"]
+
+
+def test_merchant_reminder_bands_are_progressive_idempotent_and_read_only(stack):
+    disputes, _, collab, _, _, clock = stack
+    case = collecting(stack)
+    revision = case["revision"]
+
+    clock[0] += timedelta(seconds=1)
+    assert not collab.tick()["emitted"]
+
+    clock[0] += timedelta(days=2)
+    near = collab.tick()["emitted"]
+    assert [event["reminder_band"] for event in near] == ["T_MINUS_24H"]
+    assert near[0]["deadline_type"] == "merchant"
+    assert near[0]["owner"] == "MERCHANT"
+    assert near[0]["task_ids"]
+
+    clock[0] += timedelta(days=1)
+    due = collab.tick()["emitted"]
+    assert [event["reminder_band"] for event in due] == ["DUE"]
+    assert due[0]["escalation_level"] == 1
+    assert disputes.get_case(case["id"], OP)["revision"] == revision
+
+    restarted = DisputeCollaborationService(
+        SQLiteDisputeCollaborationStore(collab.store.db_path), disputes, clock=lambda: clock[0]
+    )
+    assert not restarted.tick()["emitted"]
+
+
+def test_long_deadline_exposes_t_minus_7d_and_resolved_task_has_no_sla(stack):
+    case = deepcopy(collecting(stack))
+    case["deadlines"]["merchant"] = (NOW + timedelta(days=10)).isoformat()
+    case["tasks"][-1]["created_at"] = NOW.isoformat()
+
+    sla = current_sla(
+        case,
+        owner="MERCHANT",
+        action="REGISTER_EVIDENCE",
+        now=NOW + timedelta(days=3),
+    )
+    assert sla["reminder_band"] == "T_MINUS_7D"
+
+    sla = current_sla(
+        case,
+        owner="MERCHANT",
+        action="REGISTER_EVIDENCE",
+        now=NOW + timedelta(days=7),
+    )
+    assert sla["reminder_band"] == "T_MINUS_3D"
+
+    case["tasks"][-1]["status"] = "COMPLETED"
+    resolved = current_sla(
+        case,
+        owner="MERCHANT",
+        action="REGISTER_EVIDENCE",
+        now=NOW + timedelta(days=9),
+    )
+    assert resolved["deadline_kind"] is None
+    assert resolved["reminder_band"] is None
+
+
+def test_submitted_material_switches_to_only_current_internal_task(stack):
+    disputes, _, collab, _, _, clock = stack
+    case = submitted_evidence(stack)
+    revision = case["revision"]
+
+    clock[0] += timedelta(hours=72, seconds=1)
+    events = collab.tick()["emitted"]
+
+    assert len(events) == 1
+    assert events[0]["deadline_type"] == "internal"
+    assert events[0]["reminder_band"] == "T_MINUS_24H"
+    assert events[0]["owner"] == "RISK_OFFICER"
+    assert events[0]["task_types"] == ["OP_REVIEW"]
+    assert not collab.activity(case["id"], MERCHANT)["messages"]
+    assert disputes.get_case(case["id"], OP)["revision"] == revision
+
+
+def test_waiting_upstream_uses_external_deadline_without_inferring_business_result(stack):
+    disputes, _, collab, _, _, clock = stack
+    case = waiting_upstream(stack)
+    revision = case["revision"]
+
+    clock[0] += timedelta(hours=96, seconds=1)
+    near = collab.tick()["emitted"]
+    assert len(near) == 1
+    assert near[0]["deadline_type"] == "external"
+    assert near[0]["task_types"] == ["RECORD_OUTCOME"]
+    assert near[0]["reminder_band"] == "T_MINUS_24H"
+
+    clock[0] += timedelta(hours=24)
+    due = collab.tick()["emitted"]
+    assert len(due) == 1 and due[0]["reminder_band"] == "DUE"
+    saved = disputes.get_case(case["id"], OP)
+    assert saved["revision"] == revision
+    assert saved["work_status"] == "WAITING_UPSTREAM"
+    assert saved["finality"] == "NOT_FINAL"
+    assert saved["merchant_decision"] == "CONTEST"
 
 
 def test_shared_events_wake_both_update_streams_without_changing_business_revision(stack):

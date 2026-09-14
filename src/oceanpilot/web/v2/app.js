@@ -105,6 +105,7 @@
     CONFIRM_RULE: "人工确认规则",
     PUBLISH_TASK: "发布商户任务",
     MERCHANT_DECISION: "提交商户决定",
+    ACCEPT_DECISION: "核对接受责任建议",
     REGISTER_EVIDENCE: "补充案件材料",
     WITHDRAW_EVIDENCE: "撤回证据",
     REVIEW_EVIDENCE_CONTENT: "人工核验材料内容",
@@ -568,6 +569,21 @@
     const value = situations[c.work_status] || ["OceanPayment 正在准备处理要求", "处理团队正在核对规则与下一步任务，暂时无需你操作。", "OceanPayment", "查看案件", "overview"];
     return { title: value[0], description: value[1], owner: value[2], action: value[3], tab: value[4] };
   }
+  function renderMerchantJourney(c) {
+    const steps = ["收到争议", "选择处理方式", "准备材料", "OP 审核", "上游处理", "结果跟踪"];
+    const phases = {
+      RECEIVED: 0, TRIAGED: 0,
+      MERCHANT_ACTION_REQUIRED: 1, ACCEPT_RECOMMENDATION: 1,
+      EVIDENCE_COLLECTING: 2, MERCHANT_REVISION_REQUIRED: 2,
+      EVIDENCE_SUBMITTED: 3, OP_REVIEW: 3, READY_TO_SUBMIT: 3,
+      SUBMISSION_PENDING_CONFIRMATION: 3, DOCUMENT_REVISION_REQUIRED: 3, ON_HOLD: 3,
+      ACCEPT_PROCESSING: 4, SUBMITTED: 4, WAITING_UPSTREAM: 4,
+      SUBMISSION_UNCERTAIN: 4, UPSTREAM_ACTION_REQUIRED: 4,
+      OUTCOME_VERIFICATION: 5, FINANCIAL_RECONCILIATION: 5, CLOSED: 5,
+    };
+    const current = phases[c.work_status] ?? 0;
+    return `<div class="merchant-journey" aria-label="案件处理阶段">${steps.map((title,index)=>`<div class="merchant-journey-step ${index < current ? "done" : index === current ? "current" : ""}"${index === current ? ' aria-current="step"' : ""}><span>${index < current ? "✓" : index + 1}</span><strong>${title}</strong></div>`).join("")}</div>`;
+  }
   function caseFollowupText(c) {
     if (c.pending_next_stage) return "待确认后续阶段";
     if (Number(c.stage_number) > 1) return `已进入第 ${Number(c.stage_number)} 轮 · ${label(c.stage)}`;
@@ -596,19 +612,68 @@
     return `<div class="customer-context-grid"><section><h3>为什么发生争议？</h3><p>${esc(merchantReason(c))}</p><small>${esc(c.scheme)} · 原因码 ${esc(c.reason_code)} · 具体材料要求以已确认规则为准</small></section><section><h3>现在由谁处理？</h3><p class="customer-owner">${esc(caseOwner(c))}</p><small>OceanPilot 在本案中帮助你理解要求、整理材料和准备回应。</small></section></div><dl class="customer-facts"><div><dt>你的回应期限</dt><dd>${esc(date(p?.deadlines?.merchant || c.deadlines?.merchant))}</dd></div><div><dt>你的处理决定</dt><dd>${esc(label(c.merchant_decision))}</dd></div><div><dt>已登记材料</dt><dd>${r.total ? `${r.present} / ${r.total} 项` : "等待确认材料要求"}</dd></div><div><dt>交易编号</dt><dd>${esc(c.transaction_id || "尚未提供")}</dd></div></dl>${feedback ? `<div class="customer-latest"><div class="section-heading"><h3>OceanPayment 最新消息</h3><span>${esc(date(feedback.at || feedback.created_at))}</span></div><p>${esc(feedback.message || feedback.reason)}</p><button class="button secondary small" data-tab="collaboration">查看往来与回复 →</button></div>` : ""}`;
   }
   function renderMerchantTaskPage(c, p) {
-    const tasks = list(c.tasks).filter((t) => ["DECISION", "EVIDENCE", "REVISION"].includes(t.type));
+    const tasks = list(c.tasks)
+      .filter((t) => ["DECISION", "EVIDENCE", "REVISION", "ACCEPT_DECISION"].includes(t.type))
+      .sort((left, right) => Number(right.type === "ACCEPT_DECISION" && right.status === "OPEN") - Number(left.type === "ACCEPT_DECISION" && left.status === "OPEN"));
     const review = list(c.public_feedback || c.reviews).filter((r) => r.decision === "REVISION" || r.kind === "REVISION" || r.type === "REVISION").at(-1);
+    const acceptTask = tasks.find((t) => t.type === "ACCEPT_DECISION" && t.status === "OPEN");
+    const acceptReview = list(c.public_feedback || c.reviews).filter((r) => ["ACCEPT", "RECOMMEND_ACCEPT"].includes(r.decision)).at(-1);
+    const recommendationReason = acceptReview?.reason || acceptTask?.message || "OceanPayment 核对本案材料后，建议你考虑接受责任。";
+    const recommendation = c.work_status === "ACCEPT_RECOMMENDATION"
+      ? `<section class="accept-recommendation" aria-label="接受责任建议"><div class="accept-recommendation-heading"><span class="badge amber">待你决定</span><h3>OceanPayment 建议核对</h3></div><dl><div><dt>建议理由</dt><dd>${esc(recommendationReason)}</dd></div><div><dt>可能影响</dt><dd>如你确认接受责任，本案将进入接受处理；争议金额 ${esc(money(c.amount_minor, c.currency))} 的最终资金影响仍以上游结果和资金核对为准。你也可以选择继续抗辩。</dd></div><div><dt>下一步</dt><dd>打开处理决定，核对 Accept 或 Contest 后再确认提交。只有有权商户在确认窗口中完成确认后才会记录决定；本建议不会自动执行 Accept。</dd></div></dl></section>`
+      : "";
     const situation = merchantSituation(c);
-    return `${section("我的待办", situation.description)}${review && c.work_status === "MERCHANT_REVISION_REQUIRED" ? `<div class="callout"><strong>OceanPayment 的补证要求</strong>${esc(review.reason || review.message || "请按任务清单补充材料。")}</div>` : ""}<div class="customer-task-list">${tasks.map((t) => `<div class="task-row"><span class="check-mark ${t.status === "COMPLETED" ? "done" : ""}">${t.status === "COMPLETED" ? "✓" : "○"}</span><div class="row-content"><div class="row-title">${esc(label(t.type))}</div><div class="row-subtitle">${esc(t.message || (t.type === "DECISION" ? "确认你是否继续抗辩。" : "按本案清单准备相关材料。"))}</div></div>${badge(t.status)}</div>`).join("") || empty("当前没有需要你完成的任务。收到新要求后会自动更新。")}</div><div class="customer-task-deadline">你的回应期限 <strong>${esc(date(p?.deadlines?.merchant || c.deadlines?.merchant))}</strong></div><div class="action-bar">${merchantCanRespond(c) ? actionButton("MERCHANT_DECISION", c.merchant_decision === "NONE" ? "确认我的处理决定" : "查看或调整处理决定", { primary: c.merchant_decision === "NONE" }) : ""}${merchantCanRespond(c) && c.merchant_decision === "CONTEST" ? '<button class="button primary" data-tab="evidence">准备并提交材料 →</button>' : ""}${actionButton("COMMENT", "向 OceanPayment 补充说明")}</div><div class="customer-process-note">你负责决定与事实材料；OceanPayment 负责审核和向上游提交。OceanPilot 会根据本案变化更新建议。</div>`;
+    const decisionVisible = actionContract("MERCHANT_DECISION", c)?.visible === true;
+    const evidenceIsCurrent = ["EVIDENCE_COLLECTING", "MERCHANT_REVISION_REQUIRED"].includes(c.work_status);
+    return `${section("我的待办", situation.description)}${recommendation}${review && c.work_status === "MERCHANT_REVISION_REQUIRED" ? `<div class="callout"><strong>OceanPayment 的补证要求</strong>${esc(review.reason || review.message || "请按任务清单补充材料。")}</div>` : ""}<div class="customer-task-list">${tasks.map((t) => `<div class="task-row"><span class="check-mark ${t.status === "COMPLETED" ? "done" : ""}">${t.status === "COMPLETED" ? "✓" : "○"}</span><div class="row-content"><div class="row-title">${esc(label(t.type))}</div><div class="row-subtitle">${esc(t.message || (t.type === "DECISION" ? "确认你是否继续抗辩。" : t.type === "ACCEPT_DECISION" ? "核对处理团队的建议后，明确选择接受责任或继续抗辩。" : "按本案清单准备相关材料。"))}</div></div>${badge(t.status)}</div>`).join("") || empty("当前没有需要你完成的任务。收到新要求后会自动更新。")}</div><div class="customer-task-deadline">你的回应期限 <strong>${esc(date(p?.deadlines?.merchant || c.deadlines?.merchant))}</strong></div><div class="action-bar">${decisionVisible ? actionButton("MERCHANT_DECISION", c.work_status === "ACCEPT_RECOMMENDATION" ? "核对建议并确认处理决定" : c.merchant_decision === "NONE" ? "确认我的处理决定" : "查看或调整处理决定", { primary: c.merchant_decision === "NONE" || c.work_status === "ACCEPT_RECOMMENDATION" }) : ""}${evidenceIsCurrent && merchantCanRespond(c) && c.merchant_decision === "CONTEST" ? '<button class="button primary" data-tab="evidence">准备并提交材料 →</button>' : ""}${actionButton("COMMENT", "向 OceanPayment 补充说明")}</div><div class="customer-process-note">你负责决定与事实材料；OceanPayment 负责审核和向上游提交。OceanPilot 会根据本案变化更新建议。</div>`;
+  }
+  function materialSourceLabel(value) {
+    return {
+      MERCHANT_UPLOAD: "由你上传",
+      OCR_THEN_REVIEW: "上传后需人工核对",
+      SYSTEM_OF_RECORD: "由 OceanPayment 从系统记录核对",
+      CONDITIONAL: "仅在本案确有该事实时提供",
+    }[value] || "由 OceanPayment 确认来源";
+  }
+  function materialFieldLabel(value) {
+    return {
+      ordered_at: "下单时间", item_description: "商品或服务说明",
+      tracking_number: "物流单号", shipped_at: "发货时间",
+      delivered_at: "送达时间", recipient_confirmation: "签收确认",
+      address_match_result: "地址比对结果", communicated_at: "沟通时间",
+      customer_message: "客户说明", merchant_reply: "商户回复",
+      refunded_at: "退款时间", refund_amount_minor: "退款金额",
+      policy_text: "适用条款内容", accepted_at: "条款接受时间",
+      cancellation_status: "取消状态", requested_at: "请求时间",
+      prior_transaction_count: "历史交易数量", comparison_result: "重复交易比对结果",
+      verification_result: "验证结果", authentication_result: "认证结果",
+      device_match_result: "设备或 IP 比对结果",
+    }[value] || value;
+  }
+  function materialStatus(item) {
+    if (item.upload_status === "INSUFFICIENT") return ["INSUFFICIENT", "内容不足，需修订"];
+    if (item.upload_status === "NEEDS_MANUAL") return ["PENDING_REVIEW", "已上传，待人工核对"];
+    if (item.upload_status === "SUPPORTED" || item.present) return ["PENDING_REVIEW", "已上传，待整包审核"];
+    return ["OPEN", "待补充"];
+  }
+  function materialSampleLinks(c, item) {
+    if (!["MERCHANT_UPLOAD", "OCR_THEN_REVIEW"].includes(item.expected_source)) return "";
+    const root = `/api/v2/cases/${encodeURIComponent(c.id)}/collaboration/samples/${encodeURIComponent(item.code)}`;
+    return `<div class="material-samples"><span>合成示例：</span><a href="${root}?variant=sufficient" download>足够版</a><a href="${root}?variant=missing_field" download>缺字段版</a><a href="${root}?variant=wrong_transaction" download>错交易版</a></div>`;
   }
   function renderMerchantEvidencePage(c, p) {
     const checklist = list(p?.checklist);
     const evidence = list(c.evidence);
     const canEdit = actionContract("REGISTER_EVIDENCE", c)?.enabled === true;
     const missing = checklist.filter((i) => (i.required || i.critical) && !i.present);
-    const ready = canEdit && checklist.length && !missing.length;
     const submit = actionButton("SUBMIT_EVIDENCE", "提交材料给 OceanPayment");
-    return `${section("准备抗辩材料", "每项材料对应本案的一项要求。上传文件后，OceanPilot 会结合内容检查清单；不明确之处交由人工判断。", canEdit ? actionButton("REGISTER_EVIDENCE", "＋ 上传案件材料", { small: true }) : "")}<p class="evidence-mode-note">在“本案文件与材料”上传文本、JSON、CSV，并查看已解析内容与核查反馈。历史引用保留供核对。</p>${checklist.map((item) => `<div class="evidence-row"><span class="check-mark ${item.present ? "done" : ""}">${item.present ? "✓" : "○"}</span><div class="row-content"><div class="row-title">${esc(item.label || item.code)} ${item.critical ? '<span class="badge amber">关键材料</span>' : ""}</div><div class="row-subtitle">${esc(item.why || "请提供能说明本案交易事实的相关记录。")}</div></div><div class="row-actions">${item.present ? badge("COMPLETED", "已登记") : badge("OPEN", "待补充")}${!item.present && canEdit ? actionButton("REGISTER_EVIDENCE", "补充", { small: true, data: { code: item.code, title: item.label || item.code } }) : ""}</div></div>`).join("") || empty("OceanPayment 尚未确认本案材料要求，请等待处理团队反馈。")}${canEdit ? `<div class="customer-submit"><div><strong>${missing.length ? `还需补充 ${missing.length} 项必要材料` : checklist.length ? "清单材料已登记，可提交团队审核" : "材料要求尚未确认"}</strong><p>提交后由 OceanPayment 审核；此操作不会向上游正式提交抗辩。</p></div>${submit}</div>` : `<div class="callout">${c.merchant_decision !== "CONTEST" ? "请先在我的待办中确认处理决定。" : "材料已交由 OceanPayment 处理。若收到补证要求，你可以继续补充。"}</div>`}${section("你已登记的材料", `${evidence.filter((e) => e.active !== false).length} 项有效材料；撤回会保留记录`)}${evidence.map((e) => `<div class="evidence-row"><span class="row-icon">▧</span><div class="row-content"><div class="row-title">${esc(e.title || e.code)} ${e.active === false ? badge("INVALIDATED", "已撤回") : ""}</div><div class="row-subtitle">${esc(e.reference)}<br>${esc(date(e.registered_at))}${e.notes ? `<br>${esc(e.notes)}` : ""}</div></div>${canEdit && e.active !== false ? actionButton("WITHDRAW_EVIDENCE", "撤回", { small: true, data: { evidence_id: e.id } }) : ""}</div>`).join("") || empty("还没有登记材料。")}`;
+    const awaitingReview = ["EVIDENCE_SUBMITTED", "OP_REVIEW"].includes(c.work_status);
+    const submitState = awaitingReview
+      ? '<div class="customer-submit"><div><strong>材料已提交，等待 OceanPayment 审核</strong><p>当前无需重复提交；如需补充，可上传修订版并等待重新核对。</p></div><button class="button secondary" data-tab="tasks">查看审核进度</button></div>'
+      : canEdit
+        ? `<div class="customer-submit"><div><strong>${missing.length ? `还需解决 ${missing.length} 项必要材料` : checklist.length ? "清单材料内容已满足自动检查，可提交团队审核" : "材料要求尚未确认"}</strong><p>提交后由 OceanPayment 审核；此操作不会向上游正式提交抗辩。</p></div>${submit}</div>`
+        : `<div class="callout">${c.merchant_decision !== "CONTEST" ? "请先在我的待办中确认处理决定。" : "材料已交由 OceanPayment 处理。若收到补证要求，你可以继续补充。"}</div>`;
+    return `${section("准备抗辩材料", "每项材料说明用途、应包含的信息和当前核查状态。示例文件必须下载后重新上传，仍会走保存、哈希、解析、检查和审计链路。", canEdit ? actionButton("REGISTER_EVIDENCE", "＋ 上传清单材料", { small: true }) : "")}<p class="evidence-mode-note">你只需从当前清单选择材料名称，不需要填写内部代码。已上传不等于内容充分、真实有效或审核通过。</p>${checklist.map((item) => { const status=materialStatus(item), canUpload=canEdit && ["MERCHANT_UPLOAD","OCR_THEN_REVIEW"].includes(item.expected_source); return `<div class="evidence-row material-card"><span class="check-mark ${item.present ? "done" : ""}">${item.present ? "✓" : "○"}</span><div class="row-content"><div class="row-title">${esc(item.label || "案件材料")} ${item.critical ? '<span class="badge amber">关键材料</span>' : ""}</div><div class="row-subtitle"><strong>为什么需要：</strong>${esc(item.why || "用于核对本案交易事实。")}</div><div class="row-subtitle"><strong>应包含：</strong>${esc(list(item.expected_fields).map(materialFieldLabel).join("、") || item.description || "由处理团队人工确认")}</div><div class="row-subtitle"><strong>获取方式：</strong>${esc(materialSourceLabel(item.expected_source))}</div>${list(item.examples).length ? `<div class="row-subtitle"><strong>常见示例：</strong>${esc(list(item.examples).join("、"))}</div>` : ""}${materialSampleLinks(c,item)}</div><div class="row-actions">${badge(status[0], status[1])}${canUpload ? actionButton("REGISTER_EVIDENCE", item.present ? "上传修订版" : "选择文件", { small: true, data: { code: item.code } }) : ""}</div></div>`; }).join("") || empty("OceanPayment 尚未确认本案材料要求，请等待处理团队反馈。")}${submitState}${section("你已上传的文件", `${evidence.filter((e) => e.active !== false).length} 项有效文件；撤回会保留审计记录`)}${evidence.map((e) => { const status=materialStatus({present:false,upload_status:e.content_check?.status || e.content_status}); return `<div class="evidence-row"><span class="row-icon">▧</span><div class="row-content"><div class="row-title">${esc(e.title || "案件材料")} ${e.active === false ? badge("INVALIDATED", "已撤回") : badge(status[0],status[1])}</div><div class="row-subtitle">${esc(e.filename || "已通过本案门户保存")} · ${esc(date(e.registered_at || e.created_at))}</div>${list(e.content_check?.findings).length ? `<div class="row-subtitle"><strong>核查反馈：</strong>${esc(list(e.content_check.findings).join("；"))}</div>` : ""}</div>${canEdit && e.active !== false ? actionButton("WITHDRAW_EVIDENCE", "撤回", { small: true, data: { evidence_id: e.id } }) : ""}</div>`; }).join("") || empty("还没有上传文件。")}`;
   }
   function renderMerchantFeedbackPage(c) {
     const messages = list(c.collaboration).slice().reverse();
@@ -686,6 +751,11 @@
           .join("")}</div>`
       : empty("暂无可引用来源。规则不明确时需要人工确认。");
   }
+  function ruleCandidates(items) {
+    return list(items).length
+      ? `<div class="info-card" style="margin-top:15px"><h4>结构化规则候选</h4><p class="section-note">候选仅用于人工核对，不会自动改写本案规则、时限或预期结果。</p>${list(items).map((item) => `<div class="fact-row"><span>${esc(item.template_id)} · ${esc(item.title)}</span><span>${badge(item.verification_status || item.conflict_status)}<br>${esc(list(item.rule_versions).join("、") || "版本未写明")}</span></div>`).join("")}</div>`
+      : `<div class="info-card" style="margin-top:15px"><h4>结构化规则候选</h4><p class="section-note">未找到同卡组织及原因码的候选；保持待人工确认。</p></div>`;
+  }
   function renderOverview(c, p) {
     const next = p?.next_action;
     const percent = Math.min(
@@ -711,7 +781,7 @@
     const preparation = acceptPath
       ? '<div class="callout"><strong>接受 / 授权放弃路径</strong>本路径跳过抗辩材料收集和材料包终审，仍需核对渠道处理、上游结果及资金。</div>'
       : `${section("证据准备度", "登记清单完整度，不代表证据真实性或胜诉概率")}<div class="progress-row"><span>已满足 ${esc(p?.readiness?.submitted ?? completeness(c).present)} / ${esc(p?.readiness?.required ?? completeness(c).total)} 项要求</span><strong>${percent}%</strong></div><div class="progress-track"><div class="progress-fill" style="width:${percent}%"></div></div>`;
-    return `<div class="agent-summary"><div class="agent-summary-header"><span class="agent-symbol">✧</span>案件推进建议 <span class="badge green">确定性 Agent</span></div><p>${esc(p?.summary || "正在读取案件计划。所有操作均经过权限、规则与版本校验。")}</p><div class="agent-summary-footer"><span>基于案件 v${esc(c.revision)} · 规则与证据可追溯</span></div></div>${preparation}${next ? `<div class="callout ${p?.blockers?.length ? "" : "green"}"><strong>下一步 · ${esc(label(next.action))}</strong>${esc(next.reason || "")}<br>${esc(roleHint(next.action))}</div>` : ""}<div class="two-column"><div class="info-card"><h4>规则与来源</h4>${fact("规则状态", label(rule.conflict_status || p?.rule_status || "NEEDS_CONFIRMATION"))}${fact("版本", rule.rule_version || "尚未匹配")}${fact("来源", rule.source_id || "尚未确认")}${fact("适用阶段", label(c.stage))}${actionButton("CONFIRM_RULE", "查看并确认规则", { small: true })}</div><div class="info-card"><h4>案件时间窗</h4>${fact("商户目标", date(deadlines.merchant || deadlines.merchant_deadline))}${fact("OP 内部", date(deadlines.internal || deadlines.internal_deadline))}${fact("外部截止", date(deadlines.external || deadlines.external_deadline))}${fact("时限来源", deadlines.source || "尚未确认")}</div></div><div class="info-card" style="margin-top:15px"><h4>生命周期</h4><p class="section-note">当前环节：${esc(label(c.work_status))}。环节定位不代表前序材料或审批均已完成。</p><div class="timeline-mini">${lifecycle.map(([step,title]) => `<div class="timeline-step ${step === currentPhase ? "current" : ""}" data-lifecycle-step="${step}"${step === currentPhase ? ' aria-current="step"' : ""}>${title}</div>`).join("")}</div></div>`;
+    return `<div class="agent-summary"><div class="agent-summary-header"><span class="agent-symbol">✧</span>案件推进建议 <span class="badge green">确定性 Agent</span></div><p>${esc(p?.summary || "正在读取案件计划。所有操作均经过权限、规则与版本校验。")}</p><div class="agent-summary-footer"><span>基于案件 v${esc(c.revision)} · 规则与证据可追溯</span></div></div>${preparation}${next ? `<div class="callout ${p?.blockers?.length ? "" : "green"}"><strong>下一步 · ${esc(label(next.action))}</strong>${esc(next.reason || "")}<br>${esc(roleHint(next.action))}</div>` : ""}<div class="two-column"><div class="info-card"><h4>规则与来源</h4>${fact("规则状态", label(rule.conflict_status || p?.rule_status || "NEEDS_CONFIRMATION"))}${fact("版本", rule.rule_version || "尚未匹配")}${fact("来源", rule.source_id || "尚未确认")}${fact("适用阶段", label(c.stage))}${actionButton("CONFIRM_RULE", "查看并确认规则", { small: true })}</div><div class="info-card"><h4>案件时间窗</h4>${fact("商户目标", date(deadlines.merchant || deadlines.merchant_deadline))}${fact("OP 内部", date(deadlines.internal || deadlines.internal_deadline))}${fact("外部截止", date(deadlines.external || deadlines.external_deadline))}${fact("时限来源", deadlines.source || "尚未确认")}</div></div>${ruleCandidates(p?.rule_candidates)}<div class="info-card" style="margin-top:15px"><h4>生命周期</h4><p class="section-note">当前环节：${esc(label(c.work_status))}。环节定位不代表前序材料或审批均已完成。</p><div class="timeline-mini">${lifecycle.map(([step,title]) => `<div class="timeline-step ${step === currentPhase ? "current" : ""}" data-lifecycle-step="${step}"${step === currentPhase ? ' aria-current="step"' : ""}>${title}</div>`).join("")}</div></div>`;
   }
   function renderTasks(c) {
     return `${section("商户协作任务", "由 OP 发布；商户完成决定与证据响应", actionButton("PUBLISH_TASK", "＋ 发布任务", { small: true }))}${c.merchant_decision === "NONE" ? '<div class="callout">商户需明确选择接受责任或提出抗辩。无回复不会自动视为接受责任。</div>' : `<div class="callout green">当前商户决定：<strong>${esc(label(c.merchant_decision))}</strong></div>`}${
@@ -845,7 +915,7 @@
     const visibleTabs = merchant ? [["overview", "案件概况"], ["tasks", "我的待办"], ["evidence", "抗辩材料"], ["collaboration", "与运营沟通"], ["outcome", "结果与资金"]] : tabs;
     const activeTab = visibleTabs.some(([key]) => key === S.tab) ? S.tab : "overview";
     const dimensions = merchant ? [["当前进度", c.work_status], ["我的决定", c.merchant_decision]] : [["争议阶段", c.stage], ["工作状态", c.work_status], ["商户决定", c.merchant_decision], ["业务结果", c.business_outcome], ["终局状态", c.finality], ["资金状态", c.financial_status]];
-    target.innerHTML = `<div class="detail-header"><div class="detail-topline"><span class="case-id">${esc(c.id)}</span><span>v${esc(c.revision)} · 合成演示</span></div><div class="detail-title"><div><h2>${merchant ? "交易争议" : esc(c.merchant_id)}</h2><p>${merchant ? esc(c.transaction_id || "交易编号待提供") : `${esc(c.scheme)} · 原因码 ${esc(c.reason_code)}`}</p></div><div class="detail-amount">${esc(money(c.amount_minor, c.currency))}</div></div><div class="case-facts">${merchant ? `<span>${esc(c.scheme)} · ${esc(c.reason_code)}</span><span>处理团队 <strong>OceanPayment</strong></span>` : `<span>交易 <strong>${esc(c.transaction_id || "—")}</strong></span><span>渠道 <strong>${esc(c.channel)}</strong></span><span>负责人 <strong>${esc(caseOwner(c))}</strong></span>`}</div>${merchant ? `<p class="case-reason-summary">${esc(merchantReason(c))}</p>` : ""}</div><div class="dimension-strip">${dimensions.map(([key, value]) => `<div class="dimension"><label>${key}</label>${badge(value)}</div>`).join("")}</div>${renderPrimaryTask(c)}<nav class="detail-tabs" aria-label="${merchant ? "我的案件" : "案件详情"}">${visibleTabs.map(([key, title]) => `<button class="detail-tab ${activeTab === key ? "active" : ""}" data-tab="${key}" aria-current="${activeTab === key ? "page" : "false"}">${title}</button>`).join("")}</nav><div class="detail-content">${renderers[activeTab]()}${renderCaseReference(c)}</div>`;
+    target.innerHTML = `<div class="detail-header"><div class="detail-topline"><span class="case-id">${esc(c.id)}</span><span>v${esc(c.revision)} · 合成演示</span></div><div class="detail-title"><div><h2>${merchant ? "交易争议" : esc(c.merchant_id)}</h2><p>${merchant ? esc(c.transaction_id || "交易编号待提供") : `${esc(c.scheme)} · 原因码 ${esc(c.reason_code)}`}</p></div><div class="detail-amount">${esc(money(c.amount_minor, c.currency))}</div></div><div class="case-facts">${merchant ? `<span>${esc(c.scheme)} · ${esc(c.reason_code)}</span><span>处理团队 <strong>OceanPayment</strong></span>` : `<span>交易 <strong>${esc(c.transaction_id || "—")}</strong></span><span>渠道 <strong>${esc(c.channel)}</strong></span><span>负责人 <strong>${esc(caseOwner(c))}</strong></span>`}</div>${merchant ? `<p class="case-reason-summary">${esc(merchantReason(c))}</p>` : ""}</div><div class="dimension-strip">${dimensions.map(([key, value]) => `<div class="dimension"><label>${key}</label>${badge(value)}</div>`).join("")}</div>${merchant ? renderMerchantJourney(c) : ""}${renderPrimaryTask(c)}<nav class="detail-tabs" aria-label="${merchant ? "我的案件" : "案件详情"}">${visibleTabs.map(([key, title]) => `<button class="detail-tab ${activeTab === key ? "active" : ""}" data-tab="${key}" aria-current="${activeTab === key ? "page" : "false"}">${title}</button>`).join("")}</nav><div class="detail-content">${renderers[activeTab]()}${renderCaseReference(c)}</div>`;
   }
   function renderGovernance() {
     const g = S.governance;
@@ -864,6 +934,10 @@
       portal: "商户门户",
     };
     const integrations = Object.entries(g.integrations || {});
+    const sourceDiagnostics = g.data_sources?.case_library || {};
+    const sourceFiles = list(sourceDiagnostics.files);
+    const runtimeStores = list(g.data_sources?.runtime_stores);
+    const dataSourceCard = `<div class="governance-card wide"><h2>数据取源与加载状态</h2><p class="section-note">${esc(g.data_sources?.boundary || "案例知识、演练模板与运行案件分开加载。")}</p><div class="table-scroll"><table class="rule-table"><thead><tr><th>用途</th><th>路径</th><th>Schema / 哈希</th><th>状态</th></tr></thead><tbody>${sourceFiles.map((item) => `<tr><td>${esc(item.role)}<br><span class="row-subtitle">${esc(item.record_count)} 条</span></td><td class="mono">${esc(item.path)}</td><td>${esc(item.schema_version)}<br><span class="mono">${esc(item.sha256)}</span></td><td>${badge(sourceDiagnostics.status || "LOADED")}<br>${badge(sourceDiagnostics.validation_status || "PASSED")}</td></tr>`).join("")}${runtimeStores.map((item) => `<tr><td>${esc(item.role)}</td><td class="mono">${esc(item.path)}</td><td>${esc(item.storage)} · ${esc(item.schema)}<br><span class="row-subtitle">${esc(item.size_bytes ?? "—")} bytes</span></td><td>${badge(item.status)}</td></tr>`).join("")}</tbody></table></div><p class="section-note">加载错误：${list(sourceDiagnostics.load_errors).length ? esc(list(sourceDiagnostics.load_errors).join("；")) : "0"}；来源冲突 ${esc(sourceDiagnostics.conflict_count ?? "—")} 项，数据缺口 ${esc(sourceDiagnostics.data_gap_count ?? "—")} 项。</p></div>`;
     $("governanceView").innerHTML =
       `<div class="governance-grid"><div class="governance-card"><h2>集成与运行边界</h2>${integrations
         .map(([key, value]) => {
@@ -878,7 +952,7 @@
         .map((point) => `<li>${esc(text(point))}</li>`)
         .join(
           "",
-        )}</ol></div><div class="governance-card wide"><h2>规则治理与来源快照</h2><p class="section-note">案件冻结规则来源和版本；新规则不静默覆盖旧案。合成规则不能视为正式卡组织 SLA。</p><div class="table-scroll"><table class="rule-table"><thead><tr><th>规则 / 原因码</th><th>来源与版本</th><th>证据要求</th><th>状态</th></tr></thead><tbody>${list(
+        )}</ol></div>${dataSourceCard}<div class="governance-card wide"><h2>规则治理与来源快照</h2><p class="section-note">案件冻结规则来源和版本；新规则不静默覆盖旧案。合成规则不能视为正式卡组织 SLA。</p><div class="table-scroll"><table class="rule-table"><thead><tr><th>规则 / 原因码</th><th>来源与版本</th><th>证据要求</th><th>状态</th></tr></thead><tbody>${list(
         g.rules,
       )
         .map(
@@ -941,6 +1015,10 @@
   }
   function agentAnswerText(value) {
     return esc(value)
+      .replace(/^\s*\|?(?:\s*:?-{3,}:?\s*\|)+\s*$/gm, "")
+      .replace(/^\s*\|(.+)\|\s*$/gm, (_, cells) =>
+        `• ${cells.split("|").map((cell) => cell.trim()).filter(Boolean).join("：")}`,
+      )
       .replace(/\*\*([^*\n]+)\*\*/g, "<strong>$1</strong>")
       .replace(/`([^`\n]+)`/g, "<code>$1</code>")
       .replace(/^#{1,4}\s+(.+)$/gm, "<strong>$1</strong>")
@@ -1054,7 +1132,7 @@
     const panel = $("agentPanel");
     panel.hidden = !S.isCasePage || !S.current;
     if (globalThis.OceanV21Collaboration) globalThis.OceanV21Collaboration.mount({
-      host: panel, c: S.current, session: S.session, api,
+      host: panel, c: S.current, plan: S.plan, session: S.session, api,
       onCaseChanged: () => reconcileUpdates(), renderTools: renderLegacyAgentPanel,
     });
     else if (S.current) panel.innerHTML = '<div class="thread-empty">共享沟通模块暂不可用，请刷新页面。</div>';
@@ -2587,6 +2665,7 @@
     renderAgentPanel,
     renderAgentInbox,
     agentSource,
+    agentAnswerText,
     proposalsFor,
     refreshAgent,
     sendAgentMessage,

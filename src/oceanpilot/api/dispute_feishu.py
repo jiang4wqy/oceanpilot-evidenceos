@@ -59,6 +59,7 @@ def initialize_dispute_feishu(
             FeishuV2Store(db_path),
             base_url=base_url,
             plan=case_plan,
+            binding_vault_key=env["FEISHU_ENCRYPT_KEY"],
         )
         verifier = FeishuRequestVerifier(
             encrypt_key=env["FEISHU_ENCRYPT_KEY"],

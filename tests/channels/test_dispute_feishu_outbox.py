@@ -80,6 +80,9 @@ class Cases:
             raise FeishuV2Error("CASE_NOT_ACCESSIBLE", 403)
         return copy.deepcopy(self.case)
 
+    def list_cases(self, identity):
+        return [self.get_case(self.case["id"], identity)]
+
 
 class Transport:
     def __init__(self, *, lose_first=False, block=False):
@@ -289,6 +292,31 @@ def test_callback_update_requires_a_previously_delivered_same_case_card(tmp_path
     assert [call[0] for call in transport.calls] == ["SEND", "UPDATE"]
 
 
+def test_static_help_reply_is_authorized_persisted_and_sent_once(tmp_path):
+    transport = Transport()
+    box = outbox(tmp_path, client=transport)
+    card = box.adapter.render_help_card()
+    kwargs = {
+        "event_ref": "verified-help-event",
+        "identity": MERCHANT,
+        "target_ref": TARGET,
+        "message_id": "om_inbound",
+        "card": card,
+        "kind": "HELP",
+    }
+
+    first = box.static_callback(**kwargs)
+    second = box.static_callback(**kwargs)
+    assert first["id"] == second["id"]
+    assert first["state"] == "PENDING"
+    box.drain()
+    box.drain()
+    assert len(transport.calls) == 1
+    assert transport.calls[0][0] == "REPLY"
+    assert transport.calls[0][1]["message_id"] == "om_inbound"
+    assert "可用命令" in json.dumps(transport.calls[0][1]["card"], ensure_ascii=False)
+
+
 def test_revoked_callback_identity_is_blocked_without_network(tmp_path):
     transport = Transport()
     box = outbox(tmp_path, client=transport)
@@ -463,6 +491,27 @@ def test_real_trusted_callback_joins_shared_thread_without_business_revision(api
         app.state.disputes.get_case(case["id"], identities["operator"])["revision"]
         == case["revision"]
     )
+
+
+def test_help_callback_replies_without_mutating_a_case(api):
+    client, app, _, identities, case, box, transport = api
+    before = app.state.disputes.get_case(case["id"], identities["merchant"])
+
+    response = signed_post(
+        client,
+        case["id"],
+        event_id="help-event",
+        text="@OceanPilot 帮助",
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["query"] == "HELP"
+    assert response.json()["outbound_delivery"] == "PENDING"
+    assert app.state.disputes.get_case(case["id"], identities["merchant"]) == before
+    box.drain()
+    assert len(transport.calls) == 1
+    assert transport.calls[0][0] == "REPLY"
+    assert "可用命令" in json.dumps(transport.calls[0][1]["card"], ensure_ascii=False)
 
 
 def test_outbox_http_uses_trusted_session_csrf_confirmation_and_actual_receipt(api):

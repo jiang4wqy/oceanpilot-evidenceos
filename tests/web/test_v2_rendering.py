@@ -140,6 +140,20 @@ assert.equal(output.includes('<script>bad'),false);
 """)
 
 
+def test_operations_overview_shows_source_candidates_as_unconfirmed_advice():
+    run_js("""
+const ui=OceanV2;ui.state.isCasePage=true;ui.state.tab='overview';
+ui.state.current={...sample,rule_snapshot:{conflict_status:'NEEDS_CONFIRMATION'}};
+ui.state.plan={revision:2,summary:'待确认规则',readiness:{percent:0},blockers:[],
+ next_action:{action:'CONFIRM_RULE',reason:'人工核对'},rule_candidates:[{
+ template_id:'CB-CASE-041',title:'商品未收到',verification_status:'CONFLICTING_SOURCES',
+ rule_versions:['June 2024'],production_eligible:false}]};
+ui.renderDetail();const output=node('caseDetail').innerHTML;
+assert.match(output,/结构化规则候选/);assert.match(output,/CB-CASE-041/);
+assert.match(output,/候选仅用于人工核对/);assert.match(output,/June 2024/);
+""")
+
+
 def test_queues_keep_financial_outcome_and_work_dimensions_independent():
     run_js("""
 const ui=OceanV2;
@@ -594,6 +608,108 @@ assert.equal(ui.state.dialog,null);
 """)
 
 
+def test_merchant_material_cards_explain_upload_status_without_object_ids():
+    run_js(
+        """
+const ui=OceanV2;ui.state.role='MERCHANT';ui.state.isCasePage=true;ui.state.tab='evidence';
+ui.state.current={...sample,work_status:'OP_REVIEW',primary_action:null,
+ current_task:{action:'REVIEW',reason:'人工审核本次材料版本',owner:{role:'RISK_OFFICER',display_name:'独立风控审核员'}},
+ evidence:[{id:'evidence-id',code:'fulfillment.proof_of_delivery',
+ title:'合成签收证明',reference:'object:private-object-id',filename:'stage3-missing.json',
+ active:true,content_check:{status:'INSUFFICIENT',findings:['未提供签收确认。']}}],
+ available_actions:[{action:'REGISTER_EVIDENCE',visible:true,enabled:true,revision:2},
+ {action:'SUBMIT_EVIDENCE',visible:true,enabled:false,revision:2,blocked_reason:'材料内容不足'}]};
+ui.state.plan={revision:2,checklist:[{code:'fulfillment.proof_of_delivery',label:'签收证明',
+ why:'用于核对商品送达事实。',description:'商品已妥投至持卡人的证明。',
+ expected_fields:['delivered_at','recipient_confirmation'],examples:['签收照片'],
+ expected_source:'OCR_THEN_REVIEW',required:true,critical:true,present:false,
+ upload_status:'INSUFFICIENT'}]};
+ui.renderDetail();const output=node('caseDetail').innerHTML;
+for(const expected of ['为什么需要','应包含','送达时间','签收确认','上传后需人工核对',
+ '内容不足，需修订','缺字段版','错交易版','stage3-missing.json','未提供签收确认'])
+ assert.ok(output.includes(expected),expected);
+assert.ok(output.includes('材料已提交，等待 OceanPayment 审核'));
+assert.ok(output.includes('查看审核进度'));
+assert.ok(output.includes('收到争议'));
+assert.ok(output.includes('OP 审核'));
+assert.equal(output.includes('清单材料内容已满足自动检查，可提交团队审核'),false);
+assert.equal(output.includes('object:private-object-id'),false);
+""",
+        surface="merchant",
+    )
+
+
+def test_merchant_accept_recommendation_is_the_current_decision_task_not_evidence_work():
+    run_js(
+        """
+const ui=OceanV2;ui.state.role='MERCHANT';ui.state.isCasePage=true;ui.state.tab='tasks';
+ui.state.current={...sample,work_status:'ACCEPT_RECOMMENDATION',merchant_decision:'CONTEST',
+ tasks:[
+  {id:'old-evidence',type:'EVIDENCE',status:'COMPLETED',message:'Earlier evidence task'},
+  {id:'accept-now',type:'ACCEPT_DECISION',status:'OPEN',
+   message:'Recommendation only: accept the dispute after manual review.'}],
+ public_feedback:[{decision:'RECOMMEND_ACCEPT',reason:'独立审核发现当前材料不足以支持继续抗辩。'}],
+ available_actions:[
+  {action:'MERCHANT_DECISION',visible:true,enabled:true,revision:2,
+   required_fields:['decision','reason'],choices:{decision:['ACCEPT','CONTEST']}},
+  {action:'REGISTER_EVIDENCE',visible:true,enabled:true,revision:2},
+  {action:'COMMENT',visible:true,enabled:true,revision:2}]};
+ui.state.plan={revision:2,deadlines:{merchant:'2030-01-01T00:00:00Z'}};
+ui.renderDetail();const output=node('caseDetail').innerHTML;
+for(const expected of ['核对接受责任建议','建议理由','独立审核发现当前材料不足以支持继续抗辩',
+ '可能影响','$1,234.00','下一步','本建议不会自动执行 Accept',
+ '核对建议并确认处理决定','data-action="MERCHANT_DECISION"'])
+ assert.ok(output.includes(expected),expected);
+assert.equal(output.includes('准备并提交材料'),false);
+assert.equal(output.includes('<button class="button primary" data-tab="evidence">'),false);
+assert.equal(output.indexOf('accept-now') >= 0,false);
+ui.openDialog('MERCHANT_DECISION');
+assert.equal(ui.state.current.merchant_decision,'CONTEST');
+assert.equal(ui.state.dialog.action,'MERCHANT_DECISION');
+assert.equal(node('confirmCheckbox').checked,false);
+assert.match(node('dialogFields').innerHTML,/value="ACCEPT"/);
+assert.match(node('dialogFields').innerHTML,/value="CONTEST"/);
+assert.equal(node('dialogFields').innerHTML.includes(' selected'),false);
+""",
+        surface="merchant",
+    )
+
+
+def test_merchant_evidence_cta_remains_available_outside_accept_recommendation():
+    run_js(
+        """
+const ui=OceanV2;ui.state.role='MERCHANT';ui.state.isCasePage=true;ui.state.tab='tasks';
+ui.state.current={...sample,work_status:'EVIDENCE_COLLECTING',merchant_decision:'CONTEST',
+ tasks:[{type:'EVIDENCE',status:'OPEN',message:'按清单准备材料'}],
+ available_actions:[
+  {action:'MERCHANT_DECISION',visible:true,enabled:true,revision:2},
+  {action:'REGISTER_EVIDENCE',visible:true,enabled:true,revision:2}]};
+ui.state.plan={revision:2};ui.renderDetail();const output=node('caseDetail').innerHTML;
+assert.ok(output.includes('准备并提交材料'));
+assert.ok(output.includes('<button class="button primary" data-tab="evidence">'));
+assert.equal(output.includes('accept-recommendation'),false);
+""",
+        surface="merchant",
+    )
+
+
+def test_upload_form_uses_current_checklist_choice_not_manual_internal_fields():
+    script = files("oceanpilot.web").joinpath("v2/collaboration.js").read_text("utf-8")
+    assert 'name="material"' in script
+    assert 'name="code"' not in script
+    assert 'name="title"' not in script
+    assert "无需填写内部代码" in script
+
+
+def test_agent_markdown_table_is_rendered_as_safe_readable_lines():
+    run_js("""
+const output=OceanV2.agentAnswerText('| 项目 | 状态 |\\n| --- | --- |\\n| 签收证明 | 待补充 |');
+assert.ok(output.includes('• 项目：状态'));
+assert.ok(output.includes('• 签收证明：待补充'));
+assert.equal(output.includes('| --- |'),false);
+""")
+
+
 def test_merchant_closed_result_uses_public_financial_summary():
     run_js(
         """
@@ -658,6 +774,21 @@ ui.renderGovernance();const output=node('governanceView').innerHTML;
 assert.ok(output.includes('data-knowledge="pending"'));
 assert.equal(output.includes('data-knowledge="approved"'),false);
 assert.equal(output.includes('data-knowledge="rejected"'),false);
+""")
+
+
+def test_governance_renders_loaded_source_inventory_and_runtime_paths():
+    run_js("""
+const ui=OceanV2;ui.state.governance={integrations:{},permissions:{},knowledge:[],metrics:{},
+ data_sources:{boundary:'知识与运行案件分开',case_library:{status:'LOADED',
+ validation_status:'PASSED',load_errors:[],conflict_count:15,data_gap_count:10,files:[
+ {role:'REFERENCE_LIBRARY',path:'/data/03_case_library.json',schema_version:'1.1',sha256:'abc',record_count:62},
+ {role:'SANDBOX_TEMPLATES',path:'/data/06_seed_cases.json',schema_version:'1.1',sha256:'def',record_count:28}]},
+ runtime_stores:[{role:'DISPUTE_CASES',path:'/work/dispute.db',storage:'SQLITE',schema:'OCEANPILOT_V2_1',status:'AVAILABLE',size_bytes:42}]}};
+ui.renderGovernance();const output=node('governanceView').innerHTML;
+assert.match(output,/数据取源与加载状态/);assert.ok(output.includes('03_case_library.json'));
+assert.ok(output.includes('06_seed_cases.json'));assert.ok(output.includes('dispute.db'));
+assert.match(output,/加载错误：0/);assert.match(output,/来源冲突 15 项/);
 """)
 
 

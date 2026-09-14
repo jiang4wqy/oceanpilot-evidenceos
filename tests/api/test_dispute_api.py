@@ -176,7 +176,20 @@ def test_case_survives_restart_and_governance_does_not_grant_business_permission
         )
         governance = second.get("/api/v2/governance", headers=headers(second, "ADMIN"))
         assert governance.status_code == 200, governance.text
-        assert "CLOSE" not in governance.json()["permissions"]["ADMIN"]
+        governance_data = governance.json()
+        assert "CLOSE" not in governance_data["permissions"]["ADMIN"]
+        sources = governance_data["data_sources"]
+        assert sources["case_library"]["status"] == "LOADED"
+        assert sources["case_library"]["validation_status"] == "PASSED"
+        assert sources["case_library"]["load_errors"] == []
+        assert {item["record_count"] for item in sources["case_library"]["files"]} == {28, 62}
+        assert all(item["sha256"] for item in sources["case_library"]["files"])
+        assert {item["role"] for item in sources["runtime_stores"]} == {
+            "CORE_CASES",
+            "DISPUTE_CASES",
+            "RULE_CATALOG",
+        }
+        assert all(item["status"] == "AVAILABLE" for item in sources["runtime_stores"])
         assert Path(settings.db_path).exists()
 
 

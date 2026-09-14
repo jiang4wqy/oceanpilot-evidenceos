@@ -2,6 +2,7 @@ import copy
 import hashlib
 import json
 import re
+import sqlite3
 from datetime import UTC, datetime
 
 import pytest
@@ -60,6 +61,13 @@ class CaseServiceDouble:
         if case is None or case["merchant_id"] != identity["merchant_id"]:
             raise FeishuV2Error("CASE_NOT_ACCESSIBLE", 403)
         return copy.deepcopy(case)
+
+    def list_cases(self, identity):
+        return [
+            copy.deepcopy(case)
+            for case in self.cases.values()
+            if case["merchant_id"] == identity["merchant_id"]
+        ]
 
     def execute(self, command, identity):
         key = command["command_id"]
@@ -158,8 +166,10 @@ def card_payload(value, event_id="card-event-1"):
     }
 
 
-def message_payload(text="@OceanPilot case-1 还缺什么？", event_id="message-event-1"):
-    return {
+def message_payload(
+    text="@OceanPilot case-1 还缺什么？", event_id="message-event-1", chat_type=None
+):
+    payload = {
         "schema": "2.0",
         "header": {
             "event_type": "im.message.receive_v1",
@@ -176,6 +186,9 @@ def message_payload(text="@OceanPilot case-1 还缺什么？", event_id="message
             },
         },
     }
+    if chat_type is not None:
+        payload["event"]["message"]["chat_type"] = chat_type
+    return payload
 
 
 def test_verified_decision_uses_server_binding_and_one_auditable_command(stack):
@@ -252,6 +265,99 @@ def test_forged_binding_cannot_change_a_case(stack, mutation):
     assert adapter.service.commands == []
 
 
+def test_verified_unknown_binding_is_discoverable_without_persisting_raw_ids(stack):
+    client, adapter = stack
+    payload = message_payload()
+    payload["event"]["sender"]["sender_id"]["open_id"] = "ou-new-merchant"
+    payload["event"]["message"]["chat_id"] = "oc-new-private-chat"
+
+    response = post(client, EVENTS_PATH, payload)
+
+    assert response.status_code == 403
+    candidates = adapter.store.binding_candidates()
+    assert candidates == [
+        {
+            "actor_ref": binding_key("actor", "tenant-1", "ou-new-merchant"),
+            "chat_ref": binding_key("chat", "tenant-1", "oc-new-private-chat"),
+            "first_seen_at": NOW,
+            "last_seen_at": NOW,
+            "seen_count": 1,
+        }
+    ]
+    raw = adapter.store.path.read_bytes()
+    assert b"ou-new-merchant" not in raw
+    assert b"oc-new-private-chat" not in raw
+    assert b"tenant-1" not in raw
+    assert adapter.service.commands == []
+
+
+def test_binding_discovery_counts_repeated_verified_callbacks(stack):
+    client, adapter = stack
+    payload = message_payload()
+    payload["event"]["sender"]["sender_id"]["open_id"] = "ou-new-merchant"
+    payload["event"]["message"]["chat_id"] = "oc-new-private-chat"
+
+    assert post(client, EVENTS_PATH, payload).status_code == 403
+    payload["header"]["event_id"] = "message-event-2"
+    assert post(client, EVENTS_PATH, payload).status_code == 403
+
+    assert adapter.store.binding_candidates()[0]["seen_count"] == 2
+
+
+def test_binding_discovery_can_encrypt_delivery_address_without_plaintext(tmp_path):
+    adapter = FeishuV2Adapter(
+        CaseServiceDouble(),
+        TrustedBindings.from_json(json.dumps(config())),
+        FeishuV2Store(tmp_path / "encrypted-candidate.db"),
+        base_url="http://localhost:8000",
+        plan=lambda c: c,
+        binding_vault_key=ENCRYPT_KEY,
+        now=lambda: NOW,
+    )
+    tenant, actor, chat = "tenant-new", "ou-new", "oc-new"
+    payload = message_payload()
+    payload["header"]["tenant_key"] = tenant
+    payload["event"]["sender"]["sender_id"]["open_id"] = actor
+    payload["event"]["message"]["chat_id"] = chat
+    with pytest.raises(FeishuV2Error, match="UNTRUSTED_BINDING"):
+        adapter.handle(payload, mode="message")
+    actor_ref = binding_key("actor", tenant, actor)
+    chat_ref = binding_key("chat", tenant, chat)
+
+    address = adapter.store.binding_delivery_address(actor_ref, chat_ref, vault_key=ENCRYPT_KEY)
+
+    assert address == {"tenant_key": tenant, "open_id": actor, "chat_id": chat}
+    raw = adapter.store.path.read_bytes()
+    for value in (tenant, actor, chat, ENCRYPT_KEY):
+        assert value.encode() not in raw
+    assert adapter.store.binding_candidates()[0]["seen_count"] == 1
+    with pytest.raises(FeishuV2Error, match="BINDING_CANDIDATE_UNAVAILABLE"):
+        adapter.store.binding_delivery_address(actor_ref, chat_ref, vault_key="wrong-key")
+
+
+def test_binding_candidate_store_migrates_existing_database(tmp_path):
+    path = tmp_path / "legacy-candidate.db"
+    with sqlite3.connect(path) as connection:
+        connection.execute(
+            """CREATE TABLE dispute_feishu_binding_candidates (
+                actor_ref TEXT NOT NULL, chat_ref TEXT NOT NULL,
+                first_seen_at INTEGER NOT NULL, last_seen_at INTEGER NOT NULL,
+                seen_count INTEGER NOT NULL,
+                PRIMARY KEY (actor_ref, chat_ref)
+            )"""
+        )
+
+    store = FeishuV2Store(path)
+    with sqlite3.connect(path) as connection:
+        columns = {
+            row[1]
+            for row in connection.execute("PRAGMA table_info(dispute_feishu_binding_candidates)")
+        }
+
+    assert "delivery_ciphertext" in columns
+    store.observe_binding_candidate("tenant-new", "ou-new", "oc-new", NOW, vault_key=ENCRYPT_KEY)
+
+
 @pytest.mark.parametrize("confirmed", [False, None, "true", 1])
 def test_merchant_decision_requires_explicit_confirmation(stack, confirmed):
     client, adapter = stack
@@ -287,6 +393,169 @@ def test_summary_is_case_scoped_normalized_and_does_not_create_case(stack):
     assert response.json()["case_plan"]["next_action"] == "OP_REVIEW"
     assert post(client, EVENTS_PATH, message_payload()).json() == response.json()
     assert len(adapter.service.commands) == 1
+
+
+@pytest.mark.parametrize(
+    ("text", "decision"),
+    [("确认接受责任", "ACCEPT"), ("确认提出抗辩", "CONTEST")],
+)
+def test_explicit_text_decision_is_a_confirmed_auditable_command(stack, text, decision):
+    client, adapter = stack
+    response = post(client, EVENTS_PATH, message_payload(f"@OceanPilot case-1 {text}"))
+
+    assert response.status_code == 200
+    command, identity = adapter.service.commands[0]
+    assert identity == IDENTITY
+    assert command["action"] == "MERCHANT_DECISION"
+    assert command["confirmed"] is True
+    assert command["data"]["decision"] == decision
+    assert command["data"]["channel"] == "FEISHU"
+
+
+def test_text_submission_requires_exact_confirmation_phrase(stack):
+    client, adapter = stack
+    response = post(client, EVENTS_PATH, message_payload("@OceanPilot case-1 提交证据"))
+    assert response.status_code == 200
+    assert adapter.service.commands[0][0]["action"] == "COMMENT"
+
+    payload = message_payload("@OceanPilot case-1 确认提交证据", event_id="message-event-2")
+    response = post(client, EVENTS_PATH, payload)
+    assert response.status_code == 200
+    command = adapter.service.commands[1][0]
+    assert command["action"] == "SUBMIT_EVIDENCE"
+    assert command["confirmed"] is True
+
+
+def test_p2p_message_can_select_case_without_bot_mention(stack):
+    client, adapter = stack
+    response = post(
+        client,
+        EVENTS_PATH,
+        message_payload("案件 case-1 还缺什么？", chat_type="p2p"),
+    )
+    assert response.status_code == 200
+    assert adapter.service.commands[0][0]["action"] == "COMMENT"
+
+
+def test_group_message_without_bot_mention_remains_ignored(stack):
+    client, adapter = stack
+    response = post(
+        client,
+        EVENTS_PATH,
+        message_payload("案件 case-1 还缺什么？", chat_type="group"),
+    )
+    assert response.status_code == 200
+    assert response.json()["outcome"] == "IGNORED"
+    assert adapter.service.commands == []
+
+
+@pytest.mark.parametrize(
+    ("text", "chat_type", "query"),
+    [
+        ("@OceanPilot 帮助", "group", "HELP"),
+        ("帮助", "p2p", "HELP"),
+        ("案件列表", "p2p", "CASE_LIST"),
+    ],
+)
+def test_help_and_case_list_are_read_only_scoped_queries(stack, text, chat_type, query):
+    client, adapter = stack
+    response = post(client, EVENTS_PATH, message_payload(text, chat_type=chat_type))
+
+    assert response.status_code == 200
+    assert response.json()["query"] == query
+    assert response.json()["outcome"] == "QUERY_RECORDED"
+    assert adapter.service.commands == []
+    assert len(adapter.service.cases) == 2
+
+
+def test_case_list_card_contains_only_accessible_cases_and_public_links(stack):
+    _, adapter = stack
+    card = adapter.render_case_list_card(IDENTITY)
+    serialized = json.dumps(card, ensure_ascii=False)
+    assert "case-1" in serialized
+    assert "case-2" not in serialized
+    assert "http://localhost:8000/v2/merchant/cases/case-1" in serialized
+
+
+def test_case_list_card_restricts_cross_merchant_operator_results_to_bound_chat(stack):
+    _, adapter = stack
+    operator = {"role": "OPERATOR", "actor_id": "operator", "merchant_id": "merchant-1"}
+    card = adapter.render_case_list_card(operator, list(adapter.service.cases.values()))
+    serialized = json.dumps(card, ensure_ascii=False)
+    assert "case-1" in serialized
+    assert "case-2" not in serialized
+
+
+def test_read_only_query_survives_unavailable_outbound_delivery(stack):
+    client, adapter = stack
+
+    class UnavailableOutbox:
+        @staticmethod
+        def static_callback(**kwargs):
+            raise FeishuV2Error("FEISHU_TEST_TARGET_NOT_AUTHORIZED", 403)
+
+    adapter.outbox = UnavailableOutbox()
+    response = post(client, EVENTS_PATH, message_payload("@OceanPilot 帮助"))
+    assert response.status_code == 200
+    assert response.json()["outbound_delivery"] == "NOT_QUEUED"
+    assert adapter.service.commands == []
+
+
+@pytest.mark.parametrize(
+    ("role", "instruction", "action", "confirmed"),
+    [
+        ("OPERATOR", "检查时限", "MONITOR_SLA", False),
+        ("OPERATOR", "构建材料包", "BUILD_PACKAGE", False),
+        ("OPERATOR", "确认发布商户任务", "PUBLISH_TASK", True),
+        ("RISK_OFFICER", "确认审核通过：材料完整", "REVIEW", True),
+        ("RISK_OFFICER", "确认退回补件：缺少签收记录", "REVIEW", True),
+        (
+            "SUPERVISOR",
+            "确认已完成PII检查并批准材料包：内容及隐私检查通过",
+            "APPROVE_PACKAGE",
+            True,
+        ),
+    ],
+)
+def test_role_specific_text_commands_keep_server_identity(
+    stack, role, instruction, action, confirmed
+):
+    client, adapter = stack
+    actor_ref = binding_key("actor", "tenant-1", "ou-merchant")
+    adapter.bindings.actors[actor_ref] = {
+        "role": role,
+        "actor_id": f"{role.lower()}-user",
+        "merchant_id": "merchant-1",
+    }
+
+    response = post(
+        client,
+        EVENTS_PATH,
+        message_payload(f"@OceanPilot case-1 {instruction}"),
+    )
+
+    assert response.status_code == 200
+    command, identity = adapter.service.commands[0]
+    assert identity["role"] == role
+    assert command["action"] == action
+    assert command["confirmed"] is confirmed
+    if instruction.startswith("确认审核通过"):
+        assert command["data"]["decision"] == "PASS"
+    if instruction.startswith("确认退回补件"):
+        assert command["data"]["decision"] == "REVISION"
+    if action == "APPROVE_PACKAGE":
+        assert command["data"]["pii_checked"] is True
+
+
+def test_role_specific_command_cannot_be_used_by_a_merchant(stack):
+    client, adapter = stack
+    response = post(
+        client,
+        EVENTS_PATH,
+        message_payload("@OceanPilot case-1 确认审核通过：尝试越权"),
+    )
+    assert response.status_code == 200
+    assert adapter.service.commands[0][0]["action"] == "COMMENT"
 
 
 def test_summary_rejects_another_merchants_case(stack):
@@ -492,6 +761,7 @@ def real_service(tmp_path):
                 "reason": "Synthetic callback integration test",
                 "external_deadline": "2026-10-01T00:00:00+00:00",
                 "required_evidence": ["synthetic_order_record"],
+                "critical_evidence": ["synthetic_order_record"],
                 "allowed_actions": ["ACCEPT", "CONTEST"],
             },
         },
@@ -537,6 +807,50 @@ def test_signed_callback_executes_real_case_engine_with_atomic_collaboration_aud
     assert response.json()["case_plan"]["missing_critical"] == ["synthetic_order_record"]
     assert post(client, CARD_PATH, payload).json() == response.json()
     assert adapter.service.get_case("case-1", IDENTITY) == case
+
+
+def test_explicit_text_decision_executes_real_case_engine(stack, tmp_path):
+    client, adapter = stack
+    adapter.service = real_service(tmp_path)
+    adapter.plan = case_plan
+
+    response = post(
+        client,
+        EVENTS_PATH,
+        message_payload("@OceanPilot case-1 确认提出抗辩"),
+    )
+
+    assert response.status_code == 200, response.text
+    case = adapter.service.get_case("case-1", IDENTITY)
+    assert case["merchant_decision"] == "CONTEST"
+    assert case["work_status"] == "EVIDENCE_COLLECTING"
+    assert case["audit"][-1]["action"] == "MERCHANT_DECISION"
+    assert case["audit"][-1]["confirmed"] is True
+
+
+def test_text_evidence_submission_still_obeys_real_missing_evidence_gate(stack, tmp_path):
+    client, adapter = stack
+    adapter.service = real_service(tmp_path)
+    adapter.plan = case_plan
+    assert (
+        post(
+            client,
+            EVENTS_PATH,
+            message_payload("@OceanPilot case-1 确认提出抗辩"),
+        ).status_code
+        == 200
+    )
+    before = adapter.service.get_case("case-1", IDENTITY)
+
+    response = post(
+        client,
+        EVENTS_PATH,
+        message_payload("@OceanPilot case-1 确认提交证据", event_id="message-event-2"),
+    )
+
+    assert response.status_code == 409
+    assert response.json()["code"] == "MISSING_EVIDENCE"
+    assert adapter.service.get_case("case-1", IDENTITY) == before
 
 
 def test_real_engine_rejects_stale_card_after_audited_summary(stack, tmp_path):

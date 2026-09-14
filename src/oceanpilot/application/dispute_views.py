@@ -150,6 +150,7 @@ def merchant_case_view(case: dict, *, participants: list[dict] | None = None) ->
                 "revision",
                 "active",
                 "created_at",
+                "registered_at",
                 "updated_at",
                 "stage_number",
                 "applicable_stage_numbers",

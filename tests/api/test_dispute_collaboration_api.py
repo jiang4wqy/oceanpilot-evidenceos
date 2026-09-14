@@ -222,6 +222,125 @@ def test_file_http_returns_merchant_projection_and_original_authenticated_bytes(
     assert client.get(endpoint).status_code == 401
 
 
+@pytest.mark.parametrize(
+    ("variant", "expected_status", "finding"),
+    [
+        ("sufficient", "SUPPORTED", None),
+        ("missing_field", "INSUFFICIENT", "delivered_at"),
+        ("wrong_transaction", "INSUFFICIENT", "交易编号"),
+    ],
+)
+def test_case_sample_download_uses_real_upload_and_content_check(
+    api, variant, expected_status, finding
+):
+    client, _, headers, case = api
+    for action, data, actor in [
+        ("PUBLISH_TASK", {}, "operator"),
+        ("MERCHANT_DECISION", {"decision": "CONTEST", "reason": "使用合成材料演练。"}, "merchant"),
+    ]:
+        response = client.post(
+            "/api/v2/commands",
+            headers=headers[actor],
+            json={
+                "command_id": str(uuid4()),
+                "case_id": case["id"],
+                "expected_revision": case["revision"],
+                "action": action,
+                "confirmed": True,
+                "data": data,
+            },
+        )
+        assert response.status_code == 200, response.text
+        case = response.json()["case"]
+
+    code = "fulfillment.proof_of_delivery"
+    endpoint = prefix(case) + f"/samples/{code}?variant={variant}"
+    sample = client.get(endpoint, headers=headers["merchant"])
+    assert sample.status_code == 200, sample.text
+    assert sample.headers["x-oceanpilot-evidence-code"] == code
+    assert "attachment" in sample.headers["content-disposition"]
+    assert "测试材料 / 合成数据" in sample.text
+    assert client.get(endpoint, headers=headers["outsider"]).status_code == 404
+
+    upload = client.post(
+        prefix(case) + "/files",
+        headers=headers["merchant"],
+        json={
+            "command_id": str(uuid4()),
+            "expected_revision": case["revision"],
+            "code": code,
+            "title": "合成签收证明",
+            "filename": f"stage3-{variant}.json",
+            "mime_type": "application/json",
+            "content_base64": base64.b64encode(sample.content).decode(),
+        },
+    )
+    assert upload.status_code == 200, upload.text
+    check = upload.json()["file"]["content_check"]
+    assert check["status"] == expected_status
+    if finding:
+        assert finding in str(check["findings"])
+    if variant == "sufficient":
+        case = upload.json()["case"]
+        plan = client.get(f"/api/v2/cases/{case['id']}/plan", headers=headers["merchant"]).json()
+        for item in plan["checklist"]:
+            if item["present"]:
+                continue
+            extra = client.get(
+                prefix(case) + f"/samples/{item['code']}?variant=sufficient",
+                headers=headers["merchant"],
+            )
+            assert extra.status_code == 200, extra.text
+            added = client.post(
+                prefix(case) + "/files",
+                headers=headers["merchant"],
+                json={
+                    "command_id": str(uuid4()),
+                    "expected_revision": case["revision"],
+                    "code": item["code"],
+                    "title": item["label"],
+                    "filename": f"stage3-{item['code'].replace('.', '-')}.json",
+                    "mime_type": "application/json",
+                    "content_base64": base64.b64encode(extra.content).decode(),
+                },
+            )
+            assert added.status_code == 200, added.text
+            case = added.json()["case"]
+        submitted = client.post(
+            "/api/v2/commands",
+            headers=headers["merchant"],
+            json={
+                "command_id": str(uuid4()),
+                "case_id": case["id"],
+                "expected_revision": case["revision"],
+                "action": "SUBMIT_EVIDENCE",
+                "confirmed": True,
+                "data": {},
+            },
+        )
+        assert submitted.status_code == 200, submitted.text
+        merchant_case = submitted.json()["case"]
+        assert merchant_case["work_status"] == "OP_REVIEW"
+        assert merchant_case["current_task"]["action"] == "REVIEW"
+        assert merchant_case["current_task"]["owner"]["role"] == "RISK_OFFICER"
+        assert merchant_case["primary_action"] is None
+
+
+def test_merchant_plan_explains_material_fields_source_examples_and_status(api):
+    client, _, headers, case = api
+    plan = client.get(f"/api/v2/cases/{case['id']}/plan", headers=headers["merchant"])
+    assert plan.status_code == 200, plan.text
+    item = next(
+        row for row in plan.json()["checklist"] if row["code"] == "fulfillment.proof_of_delivery"
+    )
+    assert item["description"]
+    assert item["why"]
+    assert item["examples"]
+    assert item["expected_fields"] == ["delivered_at", "recipient_confirmation"]
+    assert item["expected_source"] == "OCR_THEN_REVIEW"
+    assert item["upload_status"] == "MISSING"
+
+
 def test_disabled_account_loses_read_and_file_scope_immediately(api):
     client, app, headers, case = api
     app.state.v21_auth.set_disabled("merchant", True)
