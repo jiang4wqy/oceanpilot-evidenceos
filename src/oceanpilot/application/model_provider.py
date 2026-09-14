@@ -45,9 +45,17 @@ class _Frozen(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
 
 
+class ModelImage(_Frozen):
+    """Application-created bounded JPEG/PNG rendition, never a remote URL."""
+
+    mime_type: StrictStr
+    data_base64: StrictStr = Field(min_length=1, max_length=6_000_000)
+
+
 class ModelMessage(_Frozen):
     role: ModelRole
     content: StrictStr
+    images: tuple[ModelImage, ...] = Field(default=(), max_length=10)
 
 
 class ToolSpec(_Frozen):

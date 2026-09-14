@@ -22,6 +22,7 @@ class RuleData(ReasonData):
     merchant_deadline: StrictStr | None = Field(default=None, max_length=60)
     internal_deadline: StrictStr | None = Field(default=None, max_length=60)
     required_evidence: list[StrictStr] = Field(min_length=0, max_length=30)
+    critical_evidence: list[StrictStr] | None = Field(default=None, max_length=30)
 
 
 class ResolveResponseData(ReasonData):
@@ -41,6 +42,10 @@ class EvidenceContentReviewData(ReasonData):
     decision: Literal["SUPPORTED", "INSUFFICIENT"]
     applicable_facts: list[StrictStr] = Field(min_length=1, max_length=20)
     locators: list[StrictStr] = Field(min_length=1, max_length=20)
+    original_checked: StrictBool = False
+    transaction_id: StrictStr | None = Field(default=None, max_length=100)
+    currency: StrictStr | None = Field(default=None, max_length=3)
+    amount_minor: StrictInt | None = Field(default=None, ge=1)
 
 
 class OutcomeData(StrictDTO):

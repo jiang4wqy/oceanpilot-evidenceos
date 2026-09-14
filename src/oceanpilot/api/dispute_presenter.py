@@ -103,6 +103,10 @@ def present_case(case: dict, identity: dict, service) -> dict:
         result["close_gate"]["blockers"].append("尚有未解决的人工接手事项。")
     else:
         result["close_gate"]["handoffs_resolved"] = True
+    result["synthetic_samples_available"] = (
+        case.get("channel") == "MOCK"
+        and case.get("rule_snapshot", {}).get("production_eligible") is False
+    )
     actions = available_actions(case, identity, service)
     result["available_actions"] = actions
     plan = case_plan(case, now=service.clock())
@@ -114,7 +118,34 @@ def present_case(case: dict, identity: dict, service) -> dict:
         "action": wanted,
         "reason": next_action.get("reason"),
         "owner": owner_for(case, next_action.get("owner"), identity, service.access_policy),
+        "deadline": plan["sla"]["deadline"],
+        "deadline_kind": plan["sla"]["deadline_kind"],
+        "deadline_status": plan["deadlines"].get("status", "NEEDS_CONFIRMATION"),
     }
+    result["deadline_summary"] = [
+        {
+            "kind": kind,
+            "label": label,
+            "at": plan["deadlines"].get(kind),
+            "status": (
+                "CONFIRMED"
+                if plan["deadlines"].get("status") == "CONFIRMED" and plan["deadlines"].get(kind)
+                else "NEEDS_CONFIRMATION"
+            ),
+            "explanation": (
+                "历史记录；案件已结束，不再催办。"
+                if case["work_status"] == "CLOSED"
+                else "当前责任人的任务期限。"
+                if kind == plan["sla"]["deadline_kind"]
+                else "本阶段记录的目标；不是当前待办的催办期限。"
+            ),
+        }
+        for kind, label in (
+            ("merchant", "商户回应目标"),
+            ("internal", "OP 内部处理目标"),
+            ("external", "外部响应截止"),
+        )
+    ]
     if identity["role"] == "MERCHANT" and case.get("work_status") == "CLOSED":
         result["primary_action"] = None
         result["current_task"] = {

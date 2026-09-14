@@ -1,0 +1,128 @@
+{
+  "case_id": "OPV2-f56c6e88g41058abb",
+  "revision": 7,
+  "work_status": "EVIDENCE_COLLECTING",
+  "business_outcome": "UNKNOWN",
+  "files": [
+    {
+      "id": "obj-b61b875fg37c34291ga0acb195g7d9e63f0",
+      "filename": "fulfillment.proof_of_delivery-synthetic.png",
+      "size": 45619,
+      "sha256": "33d32c7309ca77c578a14623c43a001e780e557dea2805394caef78fc6219fa8",
+      "content_check": {
+        "status": "NEEDS_MANUAL",
+        "findings": [
+          "AI 已识别，结果可能有误；请对照原件逐项核验。"
+        ],
+        "locators": [
+          "line:6",
+          "line:12",
+          "line:14"
+        ],
+        "facts": {
+          "transaction_id": "B-VISA131-59b899d5-f03",
+          "currency": "USD",
+          "amount_minor": 12500,
+          "delivered_at": "2026-09-04T10:30:00Z",
+          "recipient_confirmation": "Synthetic recipient confirmation"
+        },
+        "method": "DOCUMENT_EXTRACTION_V1",
+        "boundary": "AI/正文识别仅供核对；请独立人工检查原件、交易关联和事实，不代表真实性、授权或审核通过。",
+        "recognition": {
+          "status": "SUCCEEDED",
+          "method": "DOCUMENT_EXTRACTION_V1",
+          "notice": "AI 已识别，结果可能有误；请对照原件逐项核验。",
+          "model": "deepseek-flash"
+        },
+        "document": {
+          "format": "png",
+          "page_count": 1,
+          "partial": false,
+          "original_locator": "page:1"
+        }
+      },
+      "extracted_text": "Image 1:\nSYNTHETIC TEST DOCUMENT - NOT REAL BUSINESS EVIDENCE\n\nevidence_code: fulfillment.proof_of_delivery\n\ntransaction_id: B-VISA131-59b899d5-f03\n\ncurrency: USD\n\namount_minor: 12500\n\ndelivered_at: 2026-09-04T10:30:00Z\n\nrecipient_confirmation: Synthetic recipient confirmation",
+      "download_hash_matches": true
+    },
+    {
+      "id": "obj-1e144525g3d3c4dc6g859f7d4cg3fb34e7e",
+      "filename": "fulfillment.tracking-synthetic.pdf",
+      "size": 62275,
+      "sha256": "d946d68f608af6f8a027616c3d7bee32cb28281a14d37b498c0a03cc9f002b91",
+      "content_check": {
+        "status": "NEEDS_MANUAL",
+        "findings": [
+          "AI 已识别，结果可能有误；请对照原件逐项核验。"
+        ],
+        "locators": [
+          "line:6",
+          "line:12",
+          "line:14"
+        ],
+        "facts": {
+          "transaction_id": "B-VISA131-59b899d5-f03",
+          "currency": "USD",
+          "amount_minor": 12500,
+          "tracking_number": "SYNTHETIC-TRACKING-001",
+          "shipped_at": "2026-09-02T08:00:00Z"
+        },
+        "method": "DOCUMENT_EXTRACTION_V1",
+        "boundary": "AI/正文识别仅供核对；请独立人工检查原件、交易关联和事实，不代表真实性、授权或审核通过。",
+        "recognition": {
+          "status": "SUCCEEDED",
+          "method": "DOCUMENT_EXTRACTION_V1",
+          "notice": "AI 已识别，结果可能有误；请对照原件逐项核验。",
+          "model": "deepseek-flash"
+        },
+        "document": {
+          "format": "pdf",
+          "page_count": 1,
+          "partial": false,
+          "original_locator": "page:1"
+        }
+      },
+      "extracted_text": "[page:1]\nSYNTHETIC TEST DOCUMENT - NOT REAL BUSINESS EVIDENCE\n\nevidence_code: fulfillment.tracking\n\ntransaction_id: B-VISA131-59b899d5-f03\n\ncurrency: USD\n\namount_minor: 12500\n\ntracking_number: SYNTHETIC-TRACKING-001\n\nshipped_at: 2026-09-02T08:00:00Z",
+      "download_hash_matches": true
+    },
+    {
+      "id": "obj-372c7c20g17524018g82209560gccb86ac5",
+      "filename": "transaction.receipt-synthetic.docx",
+      "size": 969,
+      "sha256": "42fdda3c13c3d3588eb258fb2a58d66b67ba5178a56bb5b6c5f61b90c6a34488",
+      "content_check": {
+        "status": "NEEDS_MANUAL",
+        "findings": [
+          "AI 已识别，结果可能有误；请对照原件逐项核验。"
+        ],
+        "locators": [
+          "line:4",
+          "line:7",
+          "line:8"
+        ],
+        "facts": {
+          "transaction_id": "B-VISA131-59b899d5-f03",
+          "currency": "USD",
+          "amount_minor": 12500,
+          "ordered_at": "2026-09-01T08:00:00Z",
+          "item_description": "Synthetic test order item"
+        },
+        "method": "DOCUMENT_EXTRACTION_V1",
+        "boundary": "AI/正文识别仅供核对；请独立人工检查原件、交易关联和事实，不代表真实性、授权或审核通过。",
+        "recognition": {
+          "status": "SUCCEEDED",
+          "method": "DOCUMENT_EXTRACTION_V1",
+          "notice": "AI 已识别，结果可能有误；请对照原件逐项核验。",
+          "model": "deepseek-flash"
+        },
+        "document": {
+          "format": "docx",
+          "page_count": null,
+          "partial": false,
+          "original_locator": "document:1"
+        }
+      },
+      "extracted_text": "[word/document.xml]\nSYNTHETIC TEST DOCUMENT - NOT REAL BUSINESS EVIDENCE\nevidence_code: transaction.receipt\ntransaction_id: B-VISA131-59b899d5-f03\ncurrency: USD\namount_minor: 12500\nordered_at: 2026-09-01T08:00:00Z\nitem_description: Synthetic test order item",
+      "download_hash_matches": true
+    }
+  ]
+}

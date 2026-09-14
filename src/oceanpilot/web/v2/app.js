@@ -381,12 +381,17 @@
     const primary = c.primary_action;
     return typeof primary === "object" && primary ? primary : actionContract(primary, c);
   }
+  function renderDeadlineSummary(c) {
+    const rows = list(c.deadline_summary);
+    if (!rows.length) return c.work_status === "CLOSED" ? '<p class="section-note">案件已结束，没有当前回应任务。</p>' : '<p class="section-note">期限尚未确认，请联系当前负责人。</p>';
+    return `<details class="customer-task-deadline"><summary>${c.work_status === "CLOSED" ? "历史期限（已结束，不再催办）" : "本阶段期限与适用说明"}</summary>${rows.map(row=>`<p><strong>${esc(row.label)}</strong> · ${row.status === "CONFIRMED" ? esc(date(row.at)) : "尚未确认"} · ${esc(row.explanation)}</p>`).join("")}<p>本演练为合成期限；逾期不代表接受责任或正式失权。</p></details>`;
+  }
   function renderPrimaryTask(c) {
     const primary = primaryContract(c);
     const actionable = list(c.available_actions).filter((a) => a.visible && a.action !== primary?.action && a.action !== "COMMENT");
     const title = primary?.title || primary?.label || (primary?.action ? label(primary.action) : c.current_task?.action ? c.current_task.title || label(c.current_task.action) : c.work_status === "CLOSED" ? "案件处理已结束" : "等待当前负责人处理");
     const owner = primary?.owner ? ownerName(primary.owner) : caseOwner(c);
-    const deadline = c.current_task?.deadline || (surface === "merchant" ? c.deadlines?.merchant : c.deadlines?.internal || c.deadlines?.external);
+    const deadline = c.current_task?.deadline_status === "CONFIRMED" ? c.current_task.deadline : null;
     return `<section class="current-task" aria-label="当前任务"><div class="current-task-kicker">${primary?.enabled ? "你的下一步" : "当前进展"}<span>负责人 · ${esc(owner)}</span></div><h3>${esc(title)}</h3><p>${esc(primary?.reason || primary?.blocked_reason || c.current_task?.reason || c.current_task?.message || (surface === "merchant" ? merchantSituation(c).description : "案件信息和协作消息会自动同步。"))}</p><div class="current-task-footer">${c.work_status === "CLOSED" ? "<span>本案处理已结束</span>" : `<span>当前回应期限 <strong>${esc(date(deadline))}</strong></span>`}${primary?.action ? actionButton(primary.action, primary.label || label(primary.action), { main: true }) : '<a class="button secondary" href="#agentPanel">查看本案共享沟通</a>'}</div>${actionable.length ? `<details class="secondary-actions"><summary>其他操作与条件</summary><div class="action-bar">${actionable.map((a) => actionButton(a.action, a.label || label(a.action), { small: true })).join("")}</div></details>` : ""}</section>`;
   }
   function permitted(action) {
@@ -609,7 +614,7 @@
     const r = completeness(c);
     const feedback = latestCaseFeedback(c);
     const decisionActions = '<a class="button secondary" href="#agentPanel">在本案提问或联系负责人</a>';
-    return `<div class="customer-context-grid"><section><h3>为什么发生争议？</h3><p>${esc(merchantReason(c))}</p><small>${esc(c.scheme)} · 原因码 ${esc(c.reason_code)} · 具体材料要求以已确认规则为准</small></section><section><h3>现在由谁处理？</h3><p class="customer-owner">${esc(caseOwner(c))}</p><small>OceanPilot 在本案中帮助你理解要求、整理材料和准备回应。</small></section></div><dl class="customer-facts"><div><dt>你的回应期限</dt><dd>${esc(date(p?.deadlines?.merchant || c.deadlines?.merchant))}</dd></div><div><dt>你的处理决定</dt><dd>${esc(label(c.merchant_decision))}</dd></div><div><dt>已登记材料</dt><dd>${r.total ? `${r.present} / ${r.total} 项` : "等待确认材料要求"}</dd></div><div><dt>交易编号</dt><dd>${esc(c.transaction_id || "尚未提供")}</dd></div></dl>${feedback ? `<div class="customer-latest"><div class="section-heading"><h3>OceanPayment 最新消息</h3><span>${esc(date(feedback.at || feedback.created_at))}</span></div><p>${esc(feedback.message || feedback.reason)}</p><button class="button secondary small" data-tab="collaboration">查看往来与回复 →</button></div>` : ""}`;
+    return `<div class="customer-context-grid"><section><h3>为什么发生争议？</h3><p>${esc(merchantReason(c))}</p><small>${esc(c.scheme)} · 原因码 ${esc(c.reason_code)} · 具体材料要求以已确认规则为准</small></section><section><h3>现在由谁处理？</h3><p class="customer-owner">${esc(caseOwner(c))}</p><small>OceanPilot 在本案中帮助你理解要求、整理材料和准备回应。</small></section></div><dl class="customer-facts"><div><dt>你的处理决定</dt><dd>${esc(label(c.merchant_decision))}</dd></div><div><dt>已登记材料</dt><dd>${r.total ? `${r.present} / ${r.total} 项` : "等待确认材料要求"}</dd></div><div><dt>交易编号</dt><dd>${esc(c.transaction_id || "尚未提供")}</dd></div></dl>${renderDeadlineSummary(c)}${feedback ? `<div class="customer-latest"><div class="section-heading"><h3>OceanPayment 最新消息</h3><span>${esc(date(feedback.at || feedback.created_at))}</span></div><p>${esc(feedback.message || feedback.reason)}</p><button class="button secondary small" data-tab="collaboration">查看往来与回复 →</button></div>` : ""}`;
   }
   function renderMerchantTaskPage(c, p) {
     const tasks = list(c.tasks)
@@ -625,7 +630,7 @@
     const situation = merchantSituation(c);
     const decisionVisible = actionContract("MERCHANT_DECISION", c)?.visible === true;
     const evidenceIsCurrent = ["EVIDENCE_COLLECTING", "MERCHANT_REVISION_REQUIRED"].includes(c.work_status);
-    return `${section("我的待办", situation.description)}${recommendation}${review && c.work_status === "MERCHANT_REVISION_REQUIRED" ? `<div class="callout"><strong>OceanPayment 的补证要求</strong>${esc(review.reason || review.message || "请按任务清单补充材料。")}</div>` : ""}<div class="customer-task-list">${tasks.map((t) => `<div class="task-row"><span class="check-mark ${t.status === "COMPLETED" ? "done" : ""}">${t.status === "COMPLETED" ? "✓" : "○"}</span><div class="row-content"><div class="row-title">${esc(label(t.type))}</div><div class="row-subtitle">${esc(t.message || (t.type === "DECISION" ? "确认你是否继续抗辩。" : t.type === "ACCEPT_DECISION" ? "核对处理团队的建议后，明确选择接受责任或继续抗辩。" : "按本案清单准备相关材料。"))}</div></div>${badge(t.status)}</div>`).join("") || empty("当前没有需要你完成的任务。收到新要求后会自动更新。")}</div><div class="customer-task-deadline">你的回应期限 <strong>${esc(date(p?.deadlines?.merchant || c.deadlines?.merchant))}</strong></div><div class="action-bar">${decisionVisible ? actionButton("MERCHANT_DECISION", c.work_status === "ACCEPT_RECOMMENDATION" ? "核对建议并确认处理决定" : c.merchant_decision === "NONE" ? "确认我的处理决定" : "查看或调整处理决定", { primary: c.merchant_decision === "NONE" || c.work_status === "ACCEPT_RECOMMENDATION" }) : ""}${evidenceIsCurrent && merchantCanRespond(c) && c.merchant_decision === "CONTEST" ? '<button class="button primary" data-tab="evidence">准备并提交材料 →</button>' : ""}${actionButton("COMMENT", "向 OceanPayment 补充说明")}</div><div class="customer-process-note">你负责决定与事实材料；OceanPayment 负责审核和向上游提交。OceanPilot 会根据本案变化更新建议。</div>`;
+    return `${section("我的待办", situation.description)}${recommendation}${review && c.work_status === "MERCHANT_REVISION_REQUIRED" ? `<div class="callout"><strong>OceanPayment 的补证要求</strong>${esc(review.reason || review.message || "请按任务清单补充材料。")}</div>` : ""}<div class="customer-task-list">${tasks.map((t) => `<div class="task-row"><span class="check-mark ${t.status === "COMPLETED" ? "done" : ""}">${t.status === "COMPLETED" ? "✓" : "○"}</span><div class="row-content"><div class="row-title">${esc(label(t.type))}</div><div class="row-subtitle">${esc(t.message || (t.type === "DECISION" ? "确认你是否继续抗辩。" : t.type === "ACCEPT_DECISION" ? "核对处理团队的建议后，明确选择接受责任或继续抗辩。" : "按本案清单准备相关材料。"))}</div></div>${badge(t.status)}</div>`).join("") || empty("当前没有需要你完成的任务。收到新要求后会自动更新。")}</div>${renderDeadlineSummary(c)}<div class="action-bar">${decisionVisible ? actionButton("MERCHANT_DECISION", c.work_status === "ACCEPT_RECOMMENDATION" ? "核对建议并确认处理决定" : c.merchant_decision === "NONE" ? "确认我的处理决定" : "查看或调整处理决定", { primary: c.merchant_decision === "NONE" || c.work_status === "ACCEPT_RECOMMENDATION" }) : ""}${evidenceIsCurrent && merchantCanRespond(c) && c.merchant_decision === "CONTEST" ? '<button class="button primary" data-tab="evidence">准备并提交材料 →</button>' : ""}${actionButton("COMMENT", "向 OceanPayment 补充说明")}</div><div class="customer-process-note">你负责决定与事实材料；OceanPayment 负责审核和向上游提交。OceanPilot 会根据本案变化更新建议。</div>`;
   }
   function materialSourceLabel(value) {
     return {
@@ -657,7 +662,7 @@
     return ["OPEN", "待补充"];
   }
   function materialSampleLinks(c, item) {
-    if (!["MERCHANT_UPLOAD", "OCR_THEN_REVIEW"].includes(item.expected_source)) return "";
+    if (!(c.synthetic_samples_available || c.channel === "MOCK") || !list(item.expected_fields).length || !["MERCHANT_UPLOAD", "OCR_THEN_REVIEW"].includes(item.expected_source)) return "";
     const root = `/api/v2/cases/${encodeURIComponent(c.id)}/collaboration/samples/${encodeURIComponent(item.code)}`;
     return `<div class="material-samples"><span>合成示例：</span><a href="${root}?variant=sufficient" download>足够版</a><a href="${root}?variant=missing_field" download>缺字段版</a><a href="${root}?variant=wrong_transaction" download>错交易版</a></div>`;
   }
@@ -673,7 +678,7 @@
       : canEdit
         ? `<div class="customer-submit"><div><strong>${missing.length ? `还需解决 ${missing.length} 项必要材料` : checklist.length ? "清单材料内容已满足自动检查，可提交团队审核" : "材料要求尚未确认"}</strong><p>提交后由 OceanPayment 审核；此操作不会向上游正式提交抗辩。</p></div>${submit}</div>`
         : `<div class="callout">${c.merchant_decision !== "CONTEST" ? "请先在我的待办中确认处理决定。" : "材料已交由 OceanPayment 处理。若收到补证要求，你可以继续补充。"}</div>`;
-    return `${section("准备抗辩材料", "每项材料说明用途、应包含的信息和当前核查状态。示例文件必须下载后重新上传，仍会走保存、哈希、解析、检查和审计链路。", canEdit ? actionButton("REGISTER_EVIDENCE", "＋ 上传清单材料", { small: true }) : "")}<p class="evidence-mode-note">你只需从当前清单选择材料名称，不需要填写内部代码。已上传不等于内容充分、真实有效或审核通过。</p>${checklist.map((item) => { const status=materialStatus(item), canUpload=canEdit && ["MERCHANT_UPLOAD","OCR_THEN_REVIEW"].includes(item.expected_source); return `<div class="evidence-row material-card"><span class="check-mark ${item.present ? "done" : ""}">${item.present ? "✓" : "○"}</span><div class="row-content"><div class="row-title">${esc(item.label || "案件材料")} ${item.critical ? '<span class="badge amber">关键材料</span>' : ""}</div><div class="row-subtitle"><strong>为什么需要：</strong>${esc(item.why || "用于核对本案交易事实。")}</div><div class="row-subtitle"><strong>应包含：</strong>${esc(list(item.expected_fields).map(materialFieldLabel).join("、") || item.description || "由处理团队人工确认")}</div><div class="row-subtitle"><strong>获取方式：</strong>${esc(materialSourceLabel(item.expected_source))}</div>${list(item.examples).length ? `<div class="row-subtitle"><strong>常见示例：</strong>${esc(list(item.examples).join("、"))}</div>` : ""}${materialSampleLinks(c,item)}</div><div class="row-actions">${badge(status[0], status[1])}${canUpload ? actionButton("REGISTER_EVIDENCE", item.present ? "上传修订版" : "选择文件", { small: true, data: { code: item.code } }) : ""}</div></div>`; }).join("") || empty("OceanPayment 尚未确认本案材料要求，请等待处理团队反馈。")}${submitState}${section("你已上传的文件", `${evidence.filter((e) => e.active !== false).length} 项有效文件；撤回会保留审计记录`)}${evidence.map((e) => { const status=materialStatus({present:false,upload_status:e.content_check?.status || e.content_status}); return `<div class="evidence-row"><span class="row-icon">▧</span><div class="row-content"><div class="row-title">${esc(e.title || "案件材料")} ${e.active === false ? badge("INVALIDATED", "已撤回") : badge(status[0],status[1])}</div><div class="row-subtitle">${esc(e.filename || "已通过本案门户保存")} · ${esc(date(e.registered_at || e.created_at))}</div>${list(e.content_check?.findings).length ? `<div class="row-subtitle"><strong>核查反馈：</strong>${esc(list(e.content_check.findings).join("；"))}</div>` : ""}</div>${canEdit && e.active !== false ? actionButton("WITHDRAW_EVIDENCE", "撤回", { small: true, data: { evidence_id: e.id } }) : ""}</div>`; }).join("") || empty("还没有上传文件。")}`;
+    return `${section("准备抗辩材料", "每项材料说明用途、应包含的信息和当前核查状态。示例文件必须下载后重新上传，仍会走保存、哈希、解析、检查和审计链路。", canEdit ? actionButton("REGISTER_EVIDENCE", "＋ 上传清单材料", { small: true }) : "")}<p class="evidence-mode-note">你只需从当前清单选择材料名称，不需要填写内部代码。已上传不等于内容充分、真实有效或审核通过。</p>${checklist.map((item) => { const status=materialStatus(item), canUpload=canEdit && ["MERCHANT_UPLOAD","OCR_THEN_REVIEW"].includes(item.expected_source); return `<div class="evidence-row material-card"><span class="check-mark ${item.present ? "done" : ""}">${item.present ? "✓" : "○"}</span><div class="row-content"><div class="row-title">${esc(item.label || "案件材料")} ${item.critical ? '<span class="badge amber">关键材料</span>' : ""}</div><div class="row-subtitle"><strong>为什么需要：</strong>${esc(item.why || "用于核对本案交易事实。")}</div><div class="row-subtitle"><strong>应包含：</strong>${esc(list(item.expected_fields).map(materialFieldLabel).join("、") || item.description || "由处理团队人工确认")}</div><div class="row-subtitle"><strong>获取方式：</strong>${esc(materialSourceLabel(item.expected_source))}</div>${list(item.examples).length ? `<div class="row-subtitle"><strong>常见示例：</strong>${esc(list(item.examples).join("、"))}</div>` : ""}${materialSampleLinks(c,item)}</div><div class="row-actions">${badge(status[0], status[1])}${canUpload ? actionButton("REGISTER_EVIDENCE", item.present ? "上传修订版" : "选择文件", { small: true, data: { code: item.code } }) : ""}</div></div>`; }).join("") || empty("OceanPayment 尚未确认本案材料要求，请等待处理团队反馈。")}${submitState}${section("你已上传的文件", `${evidence.filter((e) => e.active !== false).length} 项有效文件；撤回会保留审计记录`)}${evidence.map((e) => { const status=materialStatus({present:false,upload_status:e.content_check?.status || e.content_status}); return `<div class="evidence-row"><span class="row-icon">▧</span><div class="row-content"><div class="row-title">${esc(e.title || "案件材料")} ${e.active === false ? badge("INVALIDATED", "已撤回") : badge(status[0],status[1])}</div><div class="row-subtitle">${esc(e.filename || "已通过本案门户保存")} · ${esc(date(e.registered_at || e.created_at))} · 上传者：${esc(list(c.participants).find(person=>person.user_id===e.uploaded_by)?.display_name || "原上传人（当前名录未提供）")}</div>${list(e.content_check?.findings).length ? `<div class="row-subtitle"><strong>核查反馈：</strong>${esc(list(e.content_check.findings).join("；"))}</div>` : ""}</div>${canEdit && e.active !== false ? actionButton("WITHDRAW_EVIDENCE", "撤回", { small: true, data: { evidence_id: e.id } }) : ""}</div>`; }).join("") || empty("还没有上传文件。")}`;
   }
   function renderMerchantFeedbackPage(c) {
     const messages = list(c.collaboration).slice().reverse();
@@ -820,7 +825,7 @@
   function renderEvidence(c, p) {
     const checklist = list(p?.checklist);
     const evidence = list(c.evidence);
-    return `${section("规则要求的证据", "上传实际文件并核查其中的交易事实；历史引用仅供查看", actionButton("REGISTER_EVIDENCE", "＋ 上传材料", { small: true }))}${checklist.map((item) => `<div class="evidence-row"><span class="check-mark ${item.present ? "done" : ""}">${item.present ? "✓" : "○"}</span><div class="row-content"><div class="row-title">${esc(item.label || item.code)} ${item.critical ? '<span class="badge amber">关键证据</span>' : ""}</div><div class="row-subtitle">${esc(item.why || item.code)}</div></div><div class="row-actions">${item.present ? badge("COMPLETED", "已登记") : badge("PENDING", "缺失")}${!item.present ? actionButton("REGISTER_EVIDENCE", "补充", { small: true, data: { code: item.code, title: item.label || item.code } }) : ""}</div></div>`).join("") || empty("规则清单尚未确定。请先确认规则来源。")}<div class="action-bar">${actionButton("SUBMIT_EVIDENCE", "提交证据供 OP 审核", { primary: true })}</div>${section("证据登记记录", `${evidence.filter((e) => e.active !== false).length} 项有效 · 撤回保留历史并使旧证据包失效`)}${evidence.map((e) => `<div class="evidence-row"><span class="row-icon">▧</span><div class="row-content"><div class="row-title">${esc(e.title || e.code)} ${e.active === false ? badge("INVALIDATED", "已撤回") : ""}</div><div class="row-subtitle">${esc(e.reference)}<br>${esc(label(e.source_channel || "PORTAL"))} · ${date(e.registered_at)} · ${esc(e.registered_by || "")}${e.notes ? `<br>${esc(e.notes)}` : ""}</div></div>${e.active !== false ? actionButton("WITHDRAW_EVIDENCE", "撤回", { small: true, data: { evidence_id: e.id } }) : ""}</div>`).join("") || empty("尚无证据登记记录。")}`;
+    return `${section("规则要求的证据", "上传实际文件并核查其中的交易事实；历史引用仅供查看", actionButton("REGISTER_EVIDENCE", "＋ 上传材料", { small: true }))}${checklist.map((item) => `<div class="evidence-row"><span class="check-mark ${item.present ? "done" : ""}">${item.present ? "✓" : "○"}</span><div class="row-content"><div class="row-title">${esc(item.label || item.code)} ${item.critical ? '<span class="badge amber">关键证据</span>' : ""}</div><div class="row-subtitle">${esc(item.why || item.code)}</div></div><div class="row-actions">${item.present ? badge("COMPLETED", "已登记") : badge("PENDING", item.upload_status === "NEEDS_MANUAL" ? "已上传，待人工核验" : item.upload_status === "INSUFFICIENT" ? "已上传，内容不足" : "缺失")}${!item.present ? actionButton("REGISTER_EVIDENCE", "补充", { small: true, data: { code: item.code, title: item.label || item.code } }) : ""}</div></div>`).join("") || empty("规则清单尚未确定。请先确认规则来源。")}<div class="action-bar">${actionButton("SUBMIT_EVIDENCE", "提交证据供 OP 审核", { primary: true })}</div>${section("证据登记记录", `${evidence.filter((e) => e.active !== false).length} 项有效 · 撤回保留历史并使旧证据包失效`)}${evidence.map((e) => `<div class="evidence-row"><span class="row-icon">▧</span><div class="row-content"><div class="row-title">${esc(e.title || e.code)} ${e.active === false ? badge("INVALIDATED", "已撤回") : ""}</div><div class="row-subtitle">${esc(e.reference)}<br>${esc(label(e.source_channel || "PORTAL"))} · ${date(e.registered_at)} · ${esc(e.registered_by || "")}${e.notes ? `<br>${esc(e.notes)}` : ""}</div></div>${e.active !== false ? actionButton("WITHDRAW_EVIDENCE", "撤回", { small: true, data: { evidence_id: e.id } }) : ""}</div>`).join("") || empty("尚无证据登记记录。")}`;
   }
   function renderAgent(c, p) {
     if (!p) return empty("案件计划暂时不可用，请刷新重试。");
@@ -1160,7 +1165,7 @@
       run && (activity.stale || run.case_revision !== c?.revision),
     );
     const runtime = activity?.runtime || {};
-    const conversations = list(activity?.conversations);
+    const conversations = list(activity?.legacy_read_only || Array.isArray(activity?.legacy_conversations) ? activity.legacy_conversations : activity?.conversations);
     const proposals = proposalsFor(activity, c);
     const prepared = run?.prepared || {};
     const preparedLabels = {
@@ -1444,7 +1449,7 @@
       }
       if (!(key in data)) continue;
       if (input.type === "checkbox") {
-        input.checked = key === "pii_checked" ? false : data[key] === true;
+        input.checked = ["pii_checked", "original_checked"].includes(key) ? false : data[key] === true;
         continue;
       }
       if (
@@ -1717,7 +1722,7 @@
     const requiredFields = list(contract?.required_fields);
     const definitions = contract?.fields || contract?.field_schema?.properties || {};
     const rule = (Array.isArray(definitions) ? definitions.find((item) => item.name === name) : definitions[name]) || requiredFields.find((item) => typeof item === "object" && item.name === name) || {};
-    const optional = contract && Array.isArray(contract.required_fields) ? !requiredFields.some((item) => (typeof item === "string" ? item : item.name) === name) : Boolean(options.optional);
+    const optional = options.required === true ? false : contract && Array.isArray(contract.required_fields) ? !requiredFields.some((item) => (typeof item === "string" ? item : item.name) === name) : Boolean(options.optional);
     const choiceValues = contract?.choices?.[name] || rule.enum || rule.options || options.choices;
     if (choiceValues) type = "select";
     const required = optional ? "" : " required";
@@ -1729,10 +1734,10 @@
     const minimum = rule.minimum ?? (rule.exclusiveMinimum !== undefined ? rule.exclusiveMinimum + 1 : undefined) ?? rule.min ?? options.min;
     const maximum = rule.maximum ?? rule.max;
     let input;
-    if (type === "checkbox") input = `<input name="${esc(name)}" type="checkbox"${value ? " checked" : ""}>`;
+    if (type === "checkbox") input = `<input name="${esc(name)}" type="checkbox"${options.required === true ? " required" : ""}${value ? " checked" : ""}>`;
     else if (type === "select") input = `<select ${common}>${!value ? '<option value="">请选择</option>' : ""}${list(choiceValues).map((choice) => {
       const [key, display] = Array.isArray(choice) ? choice : typeof choice === "object" ? [choice.value, choice.label || label(choice.value)] : [choice, label(choice)];
-      return `<option value="${esc(key)}"${String(value) === String(key) ? " selected" : ""}>${esc(display)}</option>`;
+      return `<option value="${esc(key)}"${String(value) === String(key) ? " selected" : ""}>${esc(options.choiceLabels?.[key] || display)}</option>`;
     }).join("")}</select>`;
     else if (type === "textarea") input = `<textarea ${common} maxlength="${Number(maxlength)}">${esc(value)}</textarea>`;
     else input = `<input ${common} type="${esc(type)}" value="${esc(value)}"${type === "number" ? ' step="1"' : ` maxlength="${Number(maxlength)}"`}${minimum !== undefined ? ` min="${esc(minimum)}"` : ""}${maximum !== undefined ? ` max="${esc(maximum)}"` : ""}>`;
@@ -1776,8 +1781,29 @@
       .at(-1);
     const rule = c.rule_snapshot || {};
     const deadline = S.plan?.deadlines || c.deadlines || {};
-    const reason = (value = "") =>
-      field("reason", "决策依据 / 说明", data.reason || value, "textarea");
+    const guidance = {
+      MERCHANT_DECISION: "请说明核对过的交易事实及选择原因。Accept 表示接受本案责任，不会自动退款或结案；Contest 表示继续准备抗辩材料。未响应不代表同意，代记决定须提供真实授权依据。",
+      CONFIRM_RULE: "请说明适用渠道、阶段、来源版本、必需与关键证据的区别，以及期限依据；未确认的信息不能推定有效。",
+      REVIEW: "请指出本版材料支持的事实及缺口。通过表示可准备证据包；退回需列明补证要求；建议接受仍须商户明确决定。",
+      REVIEW_EVIDENCE_CONTENT: "请依据本文件原文及行号说明哪些事实已核实、哪些仍缺失；结构化检查不证明真实性。",
+      WITHDRAW_EVIDENCE: "请说明撤回哪份材料及原因。历史会保留，依赖当前材料的旧审核和证据包将失效。",
+      APPROVE_PACKAGE: "请说明对当前证据包、来源及敏感信息的人工核对结果。此次确认会冻结本版文件，不代表上游已受理。",
+      FINAL_REVIEW: "请说明当前文书的问题、修改要求或暂缓原因；通过必须基于当前版本和独立复核。",
+      RESOLVE_RESPONSE: "请说明已核实的剩余权利、来源和后续责任人。逾期或沉默本身不构成接受或正式失权。",
+      VERIFY_OUTCOME: "请说明事件来源、所属阶段及核实依据；不能把未知结果推定为终局。",
+      RECORD_OUTCOME: "请说明上游事件实际表达的结果、终局或分流依据。技术投递成功不等于赢案。",
+      QUERY_SUBMISSION: "请说明核实渠道及实际获得的受理信息；无法确认时保持 UNKNOWN，不得猜测后重提。",
+      PROCESS_ACCEPT: "请说明已经核对的商户授权及渠道处理依据；该动作不会凭空生成退款或最终结果。",
+      RECONCILE: "请说明实际资金流水、金额币种及差异的核对依据；未知或未解决差异不能视为已核对。",
+      CLOSE: "请说明终局、资金核对、商户通知和未完成事项均已核实的依据；不能以演示结束替代结案条件。",
+      REOPEN: "请说明触发重开的新事件、与原结论的关系及授权依据，保留历史结论。",
+      RESOLVE_TASK: "请说明该任务为何取消、豁免或被替代，以及后续负责人；不能借此绕过必需人审。",
+      ASSIGN_CASE: "请说明交接原因、当前待办与接手人的职责；只能指定本案获授权人员。",
+      REUSE_EVIDENCE: "请说明所选历史材料为什么适用于当前阶段；复用仍需重新检查当前规则和授权。",
+    };
+    const reason = () => field("reason", "决策依据 / 说明", "", "textarea", {
+      hint: guidance[action] || `请说明${label(action)}所依据的事实、来源和后续处理；本次确认将记录在审计中。`,
+    });
     const event = () =>
       field("event_id", "上游事件 ID", uuid(), "text", {
         hint: "同一上游事件应复用相同 ID，以保证去重。",
@@ -1836,6 +1862,7 @@
             "text",
             { optional: true },
           ) +
+          field("critical_evidence", "其中关键证据代码（逗号分隔）", list(rule.critical_evidence).join(", "), "text", {optional:true, hint:"仅填写上述必需项中有明确依据的关键子集；留空表示没有已确认的关键分级，不影响必需项阻断。"}) +
           reason()
         );
       case "PUBLISH_TASK":
@@ -1877,8 +1904,16 @@
             },
           )
         );
-      case "REVIEW_EVIDENCE_CONTENT":
-        return field("evidence_id", "本案材料 ID", data.evidence_id || "") + field("decision", "核验判断", "", "select", { choices: [["SUPPORTED", "内容支持所述事实"], ["INSUFFICIENT", "内容仍不足"]] }) + reason() + field("applicable_facts", "所依据的正文原句", "", "textarea", { hint: "每行一条原文摘录。需能在所选正文行中逐字找到，不可填推测。" }) + field("locators", "原文行号", "", "textarea", { hint: "每行一个定位，如 line:1。请先在本案文件与材料中展开正文。" });
+      case "REVIEW_EVIDENCE_CONTENT": {
+        const ids = list(actionContract(action, c)?.choices?.evidence_id);
+        const selectedId = data.evidence_id || (ids.length === 1 ? ids[0] : "");
+        const evidence = list(c.evidence).find(e=>e.id === selectedId);
+        const document = evidence?.content_check?.document || evidence?.content_check?.automatic_check?.document;
+        return field("evidence_id", "待核验的材料", selectedId, "select", {choices:list(c.evidence).filter(e=>ids.includes(e.id) || e.id === selectedId).map(e=>[e.id,e.title || e.code || e.id]),choiceLabels:Object.fromEntries(list(c.evidence).map(e=>[e.id,e.title || e.code || e.id]))}) + field("decision", "核验判断", "", "select", { choices: [["SUPPORTED", "内容支持所述事实"], ["INSUFFICIENT", "内容仍不足"]] }) + reason() +
+          (document ? field("original_checked", "我已独立打开原文件并核对交易关联、完整内容及所述事实", false, "checkbox", {required:true}) + field("transaction_id", "在原件中核实的交易编号", "", "text", {required:true}) + field("currency", "在原件中核实的币种", "", "text", {required:true}) + field("amount_minor", "在原件中核实的交易金额（最小货币单位）", "", "number", {required:true}) : "") +
+          field("applicable_facts", document ? "原件中核实的事实与原文摘录" : "所依据的正文原句", "", "textarea", { hint: document ? "每行一条；请对照原件确认必需事实，不能直接采信 AI 识别。" : "每行一条原文摘录。需能在所选正文行中逐字找到，不可填推测。" }) +
+          field("locators", document ? "原件位置" : "原文行号", "", "textarea", { hint: document ? "PDF/图片填写 page:1 等实际页码；Word 或未解析原件填写 document:1，并在理由中说明具体位置。" : "每行一个定位，如 line:1。请先在本案文件与材料中展开正文。" });
+      }
       case "WITHDRAW_EVIDENCE":
         return (
           field("evidence_id", "证据 ID", data.evidence_id || "", "select", {
@@ -1888,7 +1923,7 @@
           }) + reason()
         );
       case "SUBMIT_EVIDENCE":
-        return '<p class="section-note">将当前有效证据提交给 OP 审核。关键证据未齐全时，案件引擎会阻止提交。</p>';
+        return '<p class="section-note">将当前有效证据提交给 OP 审核。任何必需材料缺失或内容问题未解决时，案件引擎会阻止提交；普通必需项不等于关键材料。</p>';
       case "REVIEW":
         return (
           field("decision", "审核结论", data.decision || "", "select", {
@@ -2173,6 +2208,7 @@
           .filter(Boolean);
       else values.required_evidence = [];
     }
+    if (typeof values.critical_evidence === "string") values.critical_evidence = values.critical_evidence.split(/[,，\n]/).map(value=>value.trim()).filter(Boolean);
     for (const key of ["applicable_facts", "locators"]) if (typeof values[key] === "string") values[key] = values[key].split(/\n/).map(value=>value.trim()).filter(Boolean);
     if (typeof values.evidence_ids === "string") values.evidence_ids = values.evidence_ids.split(/[,，\n]/).map((value) => value.trim()).filter(Boolean);
     for (const key of Object.keys(values))
@@ -2481,6 +2517,13 @@
     });
     $("assignedFilter")?.addEventListener("change", (event) => {
       S.assignedTo = event.target.value; S.offset = 0; refresh(true);
+    });
+    $("actionForm").addEventListener("change", (event) => {
+      if (S.dialog?.action === "REVIEW_EVIDENCE_CONTENT" && event.target.name === "evidence_id") {
+        const evidence_id = event.target.value;
+        $("dialogFields").innerHTML = commandFields("REVIEW_EVIDENCE_CONTENT", {evidence_id});
+        $("confirmCheckbox").checked = false;
+      }
     });
     $("actionForm").addEventListener("submit", submitDialog);
     $("closeDialog").addEventListener("click", closeDialog);

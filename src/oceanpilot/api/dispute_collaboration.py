@@ -15,6 +15,7 @@ from oceanpilot.application.dispute_collaboration import (
     DisputeCollaborationService,
 )
 from oceanpilot.application.dispute_views import case_view
+from oceanpilot.application.evidence_documents import MAX_BASE64_CHARS
 
 router = APIRouter(
     tags=["V2.1 Case Collaboration"],
@@ -66,8 +67,21 @@ class FileDTO(StrictDTO):
     code: StrictStr = Field(min_length=1, max_length=100)
     title: StrictStr = Field(min_length=1, max_length=180)
     filename: StrictStr = Field(min_length=1, max_length=180)
-    mime_type: Literal["text/plain", "application/json", "text/csv"]
-    content_base64: StrictStr = Field(min_length=1, max_length=2800000)
+    mime_type: Literal[
+        "text/plain",
+        "application/json",
+        "text/csv",
+        "application/pdf",
+        "application/msword",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "image/png",
+        "image/jpeg",
+        "image/webp",
+        "image/gif",
+        "image/bmp",
+        "image/tiff",
+    ]
+    content_base64: StrictStr = Field(min_length=1, max_length=MAX_BASE64_CHARS)
     evidence_id: StrictStr | None = Field(default=None, max_length=100)
 
 
@@ -154,7 +168,7 @@ def download(case_id: str, object_id: str, request: Request, identity: Identity)
         obj["content"],
         media_type=obj["mime_type"],
         headers={
-            "Content-Disposition": "inline; filename*=UTF-8''" + quote(obj["filename"]),
+            "Content-Disposition": "attachment; filename*=UTF-8''" + quote(obj["filename"]),
             "X-Content-Type-Options": "nosniff",
             "Content-Security-Policy": "sandbox",
             "Cache-Control": "private, no-store",

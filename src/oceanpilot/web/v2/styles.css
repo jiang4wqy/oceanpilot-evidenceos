@@ -3913,7 +3913,7 @@ body { background: var(--canvas); color: var(--ink); }
 .material-samples { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 9px; font-size: 12px; color: #59727b; }
 .material-samples a { color: #176d69; text-decoration: underline; text-underline-offset: 2px; }
 .thread-upload select { width: 100%; margin-top: 7px; }
-.merchant-journey { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; margin: 18px 22px 0; }
+.merchant-journey { display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 6px; margin: 18px 22px 0; }
 .merchant-journey-step { display: flex; align-items: center; gap: 7px; min-width: 0; color: #7a9097; font-size: 12px; }
 .merchant-journey-step::after { content: ""; height: 1px; flex: 1; background: #d8e3e5; }
 .merchant-journey-step:last-child::after { display: none; }
@@ -3984,7 +3984,14 @@ body { background: var(--canvas); color: var(--ink); }
 #agentToolsPanel .pilot-body { max-height: 420px; overflow-y: auto; }
 .case-page .workspace-grid { grid-template-columns: minmax(0,1fr) 400px; }
 @media (min-width: 1201px) { .case-page #agentPanel { position: sticky; top: 16px; } }
-@media (max-width: 1200px) { .case-page .workspace-grid { grid-template-columns: minmax(0,1fr); } .thread-messages { max-height: 430px; } }
+@media (max-width: 1200px) {
+  .case-page .workspace-grid { grid-template-columns: minmax(0,1fr); }
+  .case-page .agent-panel, .case-page .merchant-layout .agent-panel {
+    grid-column: 1; grid-row: 2; position: static;
+    height: auto; min-height: 0; max-height: none;
+  }
+  .thread-messages { max-height: 430px; }
+}
 @media (max-width: 600px) {
   .account-name { max-width: 115px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .identity { gap: 6px; }

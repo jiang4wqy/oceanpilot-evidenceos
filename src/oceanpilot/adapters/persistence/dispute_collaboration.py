@@ -47,6 +47,22 @@ class SQLiteDisputeCollaborationStore:
         db.row_factory = sqlite3.Row
         return db
 
+    def replay(self, command_id, fingerprint):
+        """Read a durable receipt before expensive recognition on a lost-response retry."""
+        with closing(self.connect()) as db:
+            previous = db.execute(
+                "SELECT fingerprint,result FROM v21_collaboration_commands WHERE command_id=?",
+                (command_id,),
+            ).fetchone()
+        if previous:
+            require(
+                previous["fingerprint"] == fingerprint,
+                "IDEMPOTENCY_CONFLICT",
+                "Command identity or payload changed",
+            )
+            return json.loads(previous["result"]) | {"replayed": True}
+        return None
+
     def execute(self, command_id, fingerprint, mutate):
         with closing(self.connect()) as db, db:
             db.execute("BEGIN IMMEDIATE")

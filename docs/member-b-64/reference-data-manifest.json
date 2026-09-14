@@ -1,0 +1,108 @@
+{
+  "provider": "REPOSITORY_CASE_LIBRARY",
+  "dataset_id": "chargeback-case-library",
+  "schema_version": "1.1",
+  "generated_at": "2026-09-08T03:36:19Z",
+  "case_count": 62,
+  "reference_case_count": 62,
+  "rule_group_count": 35,
+  "sandbox_template_count": 28,
+  "template_count": 28,
+  "source_count": 3,
+  "evidence_levels": {
+    "SOURCE_EXPLICIT": 34,
+    "RULE_DERIVED": 13,
+    "SYNTHETIC_DEMO": 15
+  },
+  "verification_statuses": {
+    "VERIFIED_EXTRACTED": 16,
+    "CONFLICTING_SOURCES": 16,
+    "NEEDS_CONFIRMATION": 30
+  },
+  "conflict_count": 15,
+  "data_gap_count": 10,
+  "files": [
+    {
+      "name": "03_case_library.json",
+      "sha256": "bef3c63f67052d83829a0aa27158d53dc69fa34e7c977bd97cf7c37ab247be9d"
+    },
+    {
+      "name": "06_seed_cases.json",
+      "sha256": "4564e454feeab61e92cde28e750546b5fe1f34dae4b619c575c44f2111123521"
+    }
+  ],
+  "sources": [
+    {
+      "source_id": "SRC-01",
+      "file_name": "merchants-dispute-management-guidelines.pdf",
+      "sha256": "5505594a9ae3a062c84a85294adcf5c621ac80d292f5ab7e0c24bd2b26a16cd4",
+      "file_type": "PDF (version 1.6, zip deflate encoded)",
+      "pages_or_lines": "67 页 / 提取文本 2819 行",
+      "document_title": "Dispute Management Guidelines for Visa Merchants June 2024",
+      "publisher_or_author": "Visa（PDF 元数据 /Author: Visa；InDesign 排版）",
+      "publish_or_version": "标题标注 June 2024；元数据创建 2023-06-03、修改 2024-08-01",
+      "scheme": "Visa",
+      "region": "全球（正文含欧洲、美国等地区差异条款）",
+      "possible_outdated": "是——正文含 2024-04-13 / 2024-10-19 生效的规则变更；VAMP（2025 起）已取代本指南第 10.5 节所述 VFMP（依据 SRC-03 第 18 节）",
+      "read_complete": "是（PAGE 1-67 全部读取）",
+      "unreadable_parts": "P18 披露示例图片不在文本层；P9 生命周期图为图形；P54-58 Compelling Evidence 表格为跨页多栏排版，逐格对应建议对照 PDF 原版",
+      "ocr_used": "否（文字层完整，无低文本页）",
+      "toc_appendix_tables": "含目录、Compelling Evidence 表、Glossary（P60-66）"
+    },
+    {
+      "source_id": "SRC-02",
+      "file_name": "chargeback-guide.pdf",
+      "sha256": "77f7db1b7edaf18204a706d6322a0b07d2638323087e9b42ea7926298dbeb5c3",
+      "file_type": "PDF (version 1.5)",
+      "pages_or_lines": "1582 页 / 提取文本 67659 行",
+      "document_title": "Chargeback Guide Merchant Edition",
+      "publisher_or_author": "Mastercard（Antenna House / AH XSL Formatter 生成）",
+      "publish_or_version": "19 May 2026（页脚标注）",
+      "scheme": "Mastercard",
+      "region": "全球 + 区域专章（中国大陆、南非、美国境内、欧洲、尼日利亚、哥斯达黎加、哈萨克斯坦、坦桑尼亚、波兰等）",
+      "possible_outdated": "风险中等——正文含多个未来生效日（如 TLID 2026-06-02）；预仲裁章节已并入 Ch2/Ch3（Ch5 整章删除）",
+      "read_complete": "是（11 个连续分块覆盖行 1-67659，即 PAGE 1-1582）",
+      "unreadable_parts": "P35 生命周期总览图为图形不在文本层；Appendix A CVM 限额数值在外部 Excel（CVM_Limit_Amounts.xls），正文未载；原文个别句子缺数字/拼写瑕疵已逐处记录（见 10_conflicts_and_data_gaps.md）",
+      "ocr_used": "否（文字层完整，无低文本页）",
+      "toc_appendix_tables": "含 30 页目录、Appendix A-E、多张时限/责任表"
+    },
+    {
+      "source_id": "SRC-03",
+      "file_name": "卡组织争议处理规则与案例映射.md",
+      "sha256": "a5f0730175ae33060faafe3d78fe93ee4cd50f7f5d3631a54cc4e14c19408d86",
+      "file_type": "Markdown（UTF-8）",
+      "pages_or_lines": "703 行",
+      "document_title": "卡组织争议处理规则与争议案例资料汇总（修订版）",
+      "publisher_or_author": "未注明（团队内部二次整理稿）",
+      "publish_or_version": "无版本号/日期；文中含「截至 2026 年 8 月」的 VAMP 描述",
+      "scheme": "Visa / Mastercard / American Express（含 Discover、JCB、UnionPay 简述）",
+      "region": "多地区（文中标注地区差异）",
+      "possible_outdated": "是——属二手整理资料，需与卡组织正式 Standards 及收单机构收到的有效版本核对",
+      "read_complete": "是（1-703 行全部读取）",
+      "unreadable_parts": "无；但文中第 28/29 节 ODPM 映射表引用外部文件 ODPM商户申诉字段.xlsx，该文件不在工作区，无法核对",
+      "ocr_used": "否",
+      "toc_appendix_tables": "29 个章节 + 2 张 ODPM 映射表"
+    }
+  ],
+  "source_manifest": {
+    "dataset_id": "chargeback-case-library",
+    "schema_version": "1.0",
+    "source_repository": "https://github.com/jiang4wqy/oceanpilot-evidenceos",
+    "source_commit": "250e7d904fce451e6fe72b2192cba393b717c636",
+    "source_directory": "docs/chargeback-case-library",
+    "files": [
+      {
+        "name": "03_case_library.json",
+        "sha256": "bef3c63f67052d83829a0aa27158d53dc69fa34e7c977bd97cf7c37ab247be9d"
+      },
+      {
+        "name": "06_seed_cases.json",
+        "sha256": "4564e454feeab61e92cde28e750546b5fe1f34dae4b619c575c44f2111123521"
+      }
+    ],
+    "boundary": "Byte-identical extracted reference data; no active dispute or production rule import."
+  },
+  "scope": "REFERENCE_KNOWLEDGE",
+  "production_eligible": false,
+  "boundary": "指南示例、规则还原与合成场景仅供参考；不是实际商户案件或自动生效规则。"
+}

@@ -12,6 +12,8 @@ dependencies = [
   "cryptography==50.0.1",
   "fastapi==0.139.2",
   "pydantic==2.13.4",
+  "Pillow==12.3.0",
+  "pypdfium2==5.13.0",
   "python-dotenv==1.2.2",
   "uvicorn==0.51.0",
 ]

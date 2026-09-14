@@ -14,6 +14,7 @@ from typing import Protocol, runtime_checkable
 from oceanpilot.application.model_provider import (
     ModelMessage,
     ModelProvider,
+    ModelProviderError,
     ModelResult,
     TaskSpec,
     ToolSpec,
@@ -38,6 +39,10 @@ class RedactingModelProvider:
         system: str | None = None,
         tools: Sequence[ToolSpec] = (),
     ) -> ModelResult:
+        # A text redactor cannot remove PII inside pixels. Fail closed instead
+        # of silently stripping the images or forwarding them unredacted.
+        if any(message.images for message in messages):
+            raise ModelProviderError()
         redacted = [
             ModelMessage(role=m.role, content=self._redactor.redact(m.content)) for m in messages
         ]

@@ -54,7 +54,28 @@ class ClaudeProvider:
         request: dict[str, object] = {
             "model": self._model_for(task),
             "max_tokens": task.max_output_tokens,
-            "messages": [{"role": m.role.value, "content": m.content} for m in messages],
+            "messages": [
+                {
+                    "role": m.role.value,
+                    "content": (
+                        [
+                            {
+                                "type": "image",
+                                "source": {
+                                    "type": "base64",
+                                    "media_type": image.mime_type,
+                                    "data": image.data_base64,
+                                },
+                            }
+                            for image in m.images
+                        ]
+                        + [{"type": "text", "text": m.content}]
+                        if m.images
+                        else m.content
+                    ),
+                }
+                for m in messages
+            ],
             "extra_body": {
                 "thinking": {"type": "adaptive"},
                 "output_config": {"effort": task.effort.value},
