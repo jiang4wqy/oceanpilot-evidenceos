@@ -1,6 +1,10 @@
 """Trusted session endpoints and the isolated demonstration director's account tools."""
 
+import json
+import os
 from importlib.resources import files
+from pathlib import Path
+from typing import Literal
 from urllib.parse import urlencode, urlsplit
 
 from fastapi import APIRouter, Request, Response
@@ -112,6 +116,29 @@ def login(payload: LoginData, request: Request, response: Response) -> dict:
     return _session_payload(auth, token, user)
 
 
+class DemoLoginData(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    surface: Literal["merchant", "operations"]
+
+
+def _demo_available(request: Request) -> bool:
+    return bool(os.environ.get("OCEANPILOT_DEMO_ACCOUNTS")) and (
+        request.url.hostname in {"127.0.0.1", "localhost", "::1"}
+        and request.client is not None
+        and request.client.host in {"127.0.0.1", "::1", "testclient"}
+    )
+
+
+@router.post("/api/v2/session/demo-login", include_in_schema=False)
+def demo_login(payload: DemoLoginData, request: Request, response: Response) -> dict:
+    _same_origin(request)
+    require(_demo_available(request), "NOT_FOUND", "快捷登录未启用。", 404)
+    username = {"merchant": "merchant-a", "operations": "operator-a"}[payload.surface]
+    accounts = json.loads(Path(os.environ["OCEANPILOT_DEMO_ACCOUNTS"]).read_text())["accounts"]
+    account = next(item for item in accounts if item["user"]["username"] == username)
+    return login(LoginData(username=username, password=account["password"]), request, response)
+
+
 @router.get("/api/v2/session")
 def session(request: Request, response: Response) -> dict:
     identity = session_identity(request)
@@ -190,9 +217,12 @@ def page_access(request: Request, roles: set[str]):
 
 
 @router.get("/v2/login", response_class=HTMLResponse, include_in_schema=False)
-def login_page() -> HTMLResponse:
+def login_page(request: Request) -> HTMLResponse:
     return HTMLResponse(
-        files("oceanpilot.web").joinpath("v2/login.html").read_text("utf-8"),
+        files("oceanpilot.web")
+        .joinpath("v2/login.html")
+        .read_text("utf-8")
+        .replace("__DEMO_HIDDEN__", "" if _demo_available(request) else "hidden"),
         headers={"Cache-Control": "no-store"},
     )
 

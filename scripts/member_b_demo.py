@@ -127,6 +127,7 @@ def start(directory, *, model_config=None, model_name="deepseek-v4-flash"):
         "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
         "PYTHONPATH": str(ROOT / "src"),
         "PYTHONUNBUFFERED": "1",
+        "OCEANPILOT_DEMO_ACCOUNTS": str(directory / "private-accounts.json"),
         "OCEANPILOT_DB_PATH": str(directory / "core.db"),
         "OCEANPILOT_CHARGEBACK_DB_PATH": str(directory / "chargeback.db"),
         "OCEANPILOT_RULES_DB_PATH": str(directory / "rules.db"),
