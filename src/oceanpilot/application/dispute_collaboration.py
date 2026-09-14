@@ -14,6 +14,13 @@ from pathlib import PurePath
 from threading import Event, Thread
 from uuid import uuid4
 
+from oceanpilot.application.evidence_documents import (
+    DOCUMENT_TYPES,
+    MAX_BASE64_CHARS,
+    STRUCTURED_TYPES,
+    read_document,
+    validate_file,
+)
 from oceanpilot.domain.dispute import DisputeError, fingerprint, require, text_field, timestamp
 from oceanpilot.domain.dispute_rules import case_plan
 from oceanpilot.domain.evidence_catalog import EVIDENCE_CONTENT_FIELDS
@@ -21,7 +28,7 @@ from oceanpilot.domain.evidence_catalog import EVIDENCE_CONTENT_FIELDS
 SCOPES = {"SHARED", "OP_INTERNAL"}
 _INTERNAL_ROLES = {"OPERATOR", "RISK_OFFICER", "SUPERVISOR", "AGENT"}
 _SYSTEM = {"role": "AGENT", "actor_id": "oceanpilot-workflow-agent"}
-_FILE_TYPES = {".txt": "text/plain", ".json": "application/json", ".csv": "text/csv"}
+_FILE_TYPES = STRUCTURED_TYPES
 _FACTS = EVIDENCE_CONTENT_FIELDS
 
 
@@ -419,12 +426,7 @@ class DisputeCollaborationService:
             "Use UTF-8 .txt, .json or .csv synthetic documents",
             415,
         )
-        require(
-            0 < len(content) <= 2 * 1024 * 1024,
-            "INVALID_FILE_SIZE",
-            "File must contain 1 byte to 2 MiB",
-            422,
-        )
+        validate_file(filename, mime_type, content)
         try:
             text = content.decode("utf-8-sig")
         except UnicodeError as exc:
@@ -622,7 +624,7 @@ class DisputeCollaborationService:
         code = text_field({"code": code}, "code", limit=100)
         title = text_field({"title": title}, "title", limit=180)
         require(
-            isinstance(content_base64, str) and len(content_base64) <= 2800000,
+            isinstance(content_base64, str) and len(content_base64) <= MAX_BASE64_CHARS,
             "INVALID_FILE_SIZE",
             "File exceeds upload limit",
             422,
@@ -631,36 +633,8 @@ class DisputeCollaborationService:
             content = base64.b64decode(content_base64, validate=True)
         except (ValueError, binascii.Error) as exc:
             raise DisputeError("INVALID_FILE", "Invalid file encoding", 422) from exc
-        text, values = self._parse_file(filename, mime_type, content)
-        self.disputes._screen_values({"filename": filename, "title": title, "values": values})
-        # Unparsed free text must also pass payment/credential screening.
-        self.disputes._screen_values({"file_text": text})
-        assessment = self._assess(case, code, text, values)
+        validate_file(filename, mime_type, content)
         digest = sha256(content).hexdigest()
-        active_objects = {e.get("object_id") for e in case["evidence"] if e.get("active")}
-        duplicates = [
-            o
-            for o in self.store.objects(case_id)
-            if o["sha256"] == digest and o["id"] in active_objects
-        ]
-        token = uuid4().hex
-        object_id = "obj-" + "g".join(token[i : i + 8] for i in range(0, 32, 8))
-        obj = {
-            "id": object_id,
-            "object_id": object_id,
-            "case_id": case_id,
-            "scope": "SHARED",
-            "filename": filename,
-            "mime_type": mime_type,
-            "size": len(content),
-            "sha256": digest,
-            "uploaded_by": identity["actor_id"],
-            "created_at": self._now(),
-            "code": code,
-            "content_check": assessment,
-            "extracted_text": text[:40000],
-            "source_type": "SYNTHETIC_DEMO",
-        }
         payload = {
             "case_id": case_id,
             "sha256": digest,
@@ -671,6 +645,71 @@ class DisputeCollaborationService:
             "evidence_id": evidence_id,
             "mime_type": mime_type,
         }
+        receipt = self.store.replay("file-store-" + command_id, fingerprint([identity, payload]))
+        document_file = PurePath(filename).suffix.lower() in DOCUMENT_TYPES
+        if receipt:
+            obj = receipt["object"]
+        else:
+            document = None
+            if document_file:
+                extracted = read_document(
+                    filename,
+                    content,
+                    code,
+                    model=getattr(self.agent, "model", None),
+                    synthetic=case.get("channel") == "MOCK"
+                    and case.get("rule_snapshot", {}).get("production_eligible") is False,
+                )
+                text, values = extracted["text"], extracted["facts"]
+                document = extracted["document"]
+                assessment = self._assess(case, code, text, values)
+                assessment.update(
+                    status="NEEDS_MANUAL",
+                    method="DOCUMENT_EXTRACTION_V1",
+                    recognition=extracted["recognition"],
+                    document=document,
+                    boundary="AI/正文识别仅供核对；请独立人工检查原件、交易关联和事实，不代表真实性、授权或审核通过。",
+                )
+                assessment["findings"] = [
+                    extracted["recognition"]["notice"],
+                    *assessment["findings"],
+                ]
+            else:
+                text, values = self._parse_file(filename, mime_type, content)
+                assessment = self._assess(case, code, text, values)
+            self.disputes._screen_values({"filename": filename, "title": title, "values": values})
+            self.disputes._screen_values({"file_text": text})
+            token = uuid4().hex
+            object_id = "obj-" + "g".join(token[i : i + 8] for i in range(0, 32, 8))
+            obj = {
+                "id": object_id,
+                "object_id": object_id,
+                "case_id": case_id,
+                "scope": "SHARED",
+                "filename": filename,
+                "mime_type": mime_type,
+                "size": len(content),
+                "sha256": digest,
+                "uploaded_by": identity["actor_id"],
+                "created_at": self._now(),
+                "code": code,
+                "content_check": assessment,
+                "extracted_text": text[:40000],
+                "source_type": "UPLOADED_DOCUMENT" if document else "SYNTHETIC_DEMO",
+            }
+        # An explicit replacement of the same original is a recognition retry.
+        # It still creates a new evidence revision and invalidates prior approvals.
+        active_objects = {
+            e.get("object_id")
+            for e in case["evidence"]
+            if e.get("active") and not (document_file and evidence_id and e["id"] == evidence_id)
+        }
+        duplicates = [
+            o
+            for o in self.store.objects(case_id)
+            if o["sha256"] == digest and o["id"] in active_objects
+        ]
+        object_id = obj["id"]
 
         def save(db):
             db.execute(
@@ -696,7 +735,7 @@ class DisputeCollaborationService:
                     "title": title,
                     "reference": "object:" + stored["id"],
                     "source_channel": "PORTAL",
-                    "notes": "实际合成文件已保存；内容检查不替代人工审核。",
+                    "notes": "原文件已保存；识别与内容检查不替代人工审核。",
                     **({"evidence_id": evidence_id} if evidence_id else {}),
                 },
             },

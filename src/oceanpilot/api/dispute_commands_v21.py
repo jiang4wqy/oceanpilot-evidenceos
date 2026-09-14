@@ -42,6 +42,10 @@ class EvidenceContentReviewData(ReasonData):
     decision: Literal["SUPPORTED", "INSUFFICIENT"]
     applicable_facts: list[StrictStr] = Field(min_length=1, max_length=20)
     locators: list[StrictStr] = Field(min_length=1, max_length=20)
+    original_checked: StrictBool = False
+    transaction_id: StrictStr | None = Field(default=None, max_length=100)
+    currency: StrictStr | None = Field(default=None, max_length=3)
+    amount_minor: StrictInt | None = Field(default=None, ge=1)
 
 
 class OutcomeData(StrictDTO):

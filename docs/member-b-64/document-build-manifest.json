@@ -1,0 +1,30 @@
+{
+  "instance_id": "78cae79a-979a-4438-a024-1614cadc141a",
+  "port": 8015,
+  "source_sha256": "4a8e4ebc5dde555c6df8554381917a11138d144f3c6393236bb15b9788dc50fd",
+  "base_head": "ca36a6eef3c0a98744231892216214fd95f431a1",
+  "python": "3.12.13 (main, May 10 2026, 19:20:41) [Clang 22.1.3 ]",
+  "packages": {
+    "fastapi": "0.139.2",
+    "pydantic": "2.13.4",
+    "uvicorn": "0.51.0",
+    "httpx": "0.28.1",
+    "pytest": "9.1.1",
+    "ruff": "0.15.22",
+    "Pillow": "12.3.0",
+    "pypdfium2": "5.13.0"
+  },
+  "requested_model": "deepseek-v4-flash",
+  "observed_model": "deepseek-flash",
+  "case_id": "OPV2-f56c6e88g41058abb",
+  "case_revision": 7,
+  "business_outcome": "UNKNOWN",
+  "finality": "NOT_FINAL",
+  "old_case_preserved": "OPV2-2904b2d6g07450493",
+  "snapshot": "snapshot-documents-verified",
+  "snapshot_hashes": {
+    "core.db": "67d1ae5897513c81e56553be457f72f2b5a5242286900401e2d89ddcf78bd3af",
+    "chargeback.db": "31e74f5c0e63193edf745d056b5b90e84283de9a4c2c5bbab8a879dcec5034a1",
+    "rules.db": "511636ca07c4b1c98214b6e2c3568016557753add5b6202c65960bf8a1766658"
+  }
+}

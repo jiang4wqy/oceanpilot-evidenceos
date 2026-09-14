@@ -1,3 +1,5 @@
+> 图片/PDF/Word 与可选实时模型启动：见 [DOCUMENT-UPLOAD.md](DOCUMENT-UPLOAD.md)。默认启动仍离线。
+
 # Member B：独立合成演示候选版
 
 2026-09-14。用于 #64 / #66 的本地验收候选，尚未获 C 独立三次验收，未标记全 Stage 4/5 完成，也未提交、推送或发布。

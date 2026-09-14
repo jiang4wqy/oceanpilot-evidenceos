@@ -176,3 +176,31 @@ assert.ok(html.includes('没有当前回应任务'));
 """,
         surface="merchant",
     )
+
+
+def test_document_review_has_blank_original_attestation_and_case_association():
+    run_js(
+        r"""
+const ui=OceanV2;ui.state.role='RISK_OFFICER';
+ui.state.current={...sample,available_actions:[{action:'REVIEW_EVIDENCE_CONTENT',visible:true,enabled:true}],evidence:[{id:'doc1',content_check:{document:{format:'pdf'}}}]};
+ui.openDialog('REVIEW_EVIDENCE_CONTENT',{evidence_id:'doc1',original_checked:true,transaction_id:'NOT-AN-AUTHORIZATION'});
+const html=node('dialogFields').innerHTML;
+assert.ok(html.includes('原件位置'));
+assert.match(html,/<input name="original_checked" type="checkbox" required>/);
+assert.equal(html.includes('NOT-AN-AUTHORIZATION'),false);
+assert.equal(node('confirmCheckbox').checked,false);
+""",
+        surface="operations",
+    )
+
+
+def test_operations_does_not_label_uploaded_unreviewed_document_as_missing():
+    run_js(
+        r"""
+const ui=OceanV2;ui.state.isCasePage=true;ui.state.tab='evidence';
+ui.state.current={...sample,evidence:[{id:'doc1',code:'proof',active:true}]};
+ui.state.plan={checklist:[{code:'proof',present:false,upload_status:'NEEDS_MANUAL'}]};
+ui.renderDetail();
+assert.ok(node('caseDetail').innerHTML.includes('已上传，待人工核验'));
+"""
+    )

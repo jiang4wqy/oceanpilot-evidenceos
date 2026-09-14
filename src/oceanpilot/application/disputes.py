@@ -1215,6 +1215,7 @@ class DisputeService:
                 content_check=deepcopy(object_metadata["content_check"]),
                 content_status=object_metadata["content_check"]["status"],
                 uploaded_by=object_metadata.get("uploaded_by"),
+                source_type=object_metadata.get("source_type", "SYNTHETIC_DEMO"),
             )
         if previous:
             item["history"] = previous.get("history", []) + [
@@ -1272,7 +1273,19 @@ class DisputeService:
             "Known content-check failures require corrected evidence, not an override",
             409,
         )
+        document = obj["content_check"].get("document")
         source_facts = obj["content_check"].get("facts", {})
+        if document:
+            require(
+                data.get("original_checked") is True,
+                "ORIGINAL_REVIEW_REQUIRED",
+                "Independently inspect the original file before confirming document facts",
+                422,
+            )
+            source_facts = {
+                key: data.get(key) for key in ("transaction_id", "currency", "amount_minor")
+            }
+
         source_amount = str(source_facts.get("amount_minor", ""))
         require(
             source_facts.get("transaction_id") == case["transaction_id"]
@@ -1310,26 +1323,44 @@ class DisputeService:
             "Provide bounded source excerpts and line locators",
             422,
         )
-        lines = obj.get("extracted_text", "").splitlines()
-        selected = []
-        for locator in locators:
-            index = locator.removeprefix("line:")
+        if document:
+            # A visual document may have no transcription. The independent human
+            # records original-page citations, not an invented machine transcript.
+            for locator in locators:
+                page = locator.removeprefix("page:")
+                valid_page = (
+                    locator.startswith("page:")
+                    and page.isascii()
+                    and page.isdecimal()
+                    and 1 <= int(page) <= (document.get("page_count") or 0)
+                )
+                require(
+                    valid_page or (not document.get("page_count") and locator == "document:1"),
+                    "INVALID_CONTENT_LOCATOR",
+                    "Cite a page in the original, or document:1 for Word/unparsed originals",
+                    422,
+                )
+        else:
+            lines = obj.get("extracted_text", "").splitlines()
+            selected = []
+            for locator in locators:
+                index = locator.removeprefix("line:")
+                require(
+                    locator.startswith("line:")
+                    and index.isascii()
+                    and index.isdecimal()
+                    and 1 <= int(index) <= len(lines),
+                    "INVALID_CONTENT_LOCATOR",
+                    "Select an actual line of the stored document",
+                    422,
+                )
+                selected.append(lines[int(index) - 1])
             require(
-                locator.startswith("line:")
-                and index.isascii()
-                and index.isdecimal()
-                and 1 <= int(index) <= len(lines),
-                "INVALID_CONTENT_LOCATOR",
-                "Select an actual line of the stored document",
+                all(any(fact.strip() in line for line in selected) for fact in facts),
+                "CONTENT_EXCERPT_MISMATCH",
+                "Each cited fact must occur in the selected document lines",
                 422,
             )
-            selected.append(lines[int(index) - 1])
-        require(
-            all(any(fact.strip() in line for line in selected) for fact in facts),
-            "CONTENT_EXCERPT_MISMATCH",
-            "Each cited fact must occur in the selected document lines",
-            422,
-        )
         self._invalidate(case, "Independent manual content assessment changed", now)
         review = {
             "decision": decision,
@@ -1342,6 +1373,7 @@ class DisputeService:
             "sha256": item["sha256"],
             "evidence_revision": item["revision"],
             "stage_number": case["stage_number"],
+            **({"original_checked": True, "association": source_facts} if document else {}),
         }
         item.setdefault("content_reviews", []).append(review)
         item["content_check"] = {

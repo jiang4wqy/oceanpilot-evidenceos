@@ -47,7 +47,16 @@ def code_identity():
         "executable": sys.executable,
         "packages": {
             name: importlib.metadata.version(name)
-            for name in ("fastapi", "pydantic", "uvicorn", "httpx", "pytest", "ruff")
+            for name in (
+                "fastapi",
+                "pydantic",
+                "uvicorn",
+                "httpx",
+                "pytest",
+                "ruff",
+                "Pillow",
+                "pypdfium2",
+            )
         },
     }
 
@@ -105,7 +114,7 @@ def new_instance(directory, port):
     print(f"Created dedicated instance: {directory}\nCredentials remain in private-accounts.json")
 
 
-def start(directory):
+def start(directory, *, model_config=None, model_name="deepseek-v4-flash"):
     data = manifest(directory)
     free_port(data["port"])
     current = code_identity()
@@ -125,7 +134,35 @@ def start(directory):
         "OCEANPILOT_CHARGEBACK_LIVE_MODEL": "0",
         "OCEANPILOT_V2_UPSTREAM_MODE": "mock",
     }
-    print(f"Starting {data['id']} at {env['OCEANPILOT_V2_BASE_URL']} — synthetic/offline/Mock")
+    mode = "offline"
+    if model_config is not None:
+        from dotenv import dotenv_values
+
+        config = dotenv_values(model_config, interpolate=False)
+        if not config.get("DEEPSEEK_API_KEY"):
+            raise ValueError("Selected model config has no DEEPSEEK_API_KEY")
+        # Read only model credentials; never import Feishu, tunnel or shared DB settings.
+        env.update(
+            {
+                "OCEANPILOT_CHARGEBACK_LIVE_MODEL": "1",
+                "OCEANPILOT_MODEL_PROVIDER": "deepseek",
+                "DEEPSEEK_API_KEY": config["DEEPSEEK_API_KEY"],
+                "DEEPSEEK_API_BASE": config.get("DEEPSEEK_API_BASE") or "https://api.deepseek.com",
+                "DEEPSEEK_MODEL": model_name,
+            }
+        )
+        mode = model_name
+    write_json(
+        directory / ("run-" + str(uuid4()) + ".json"),
+        {
+            "instance_id": data["id"],
+            "started_at": datetime.now(UTC).isoformat(),
+            "code_sha256": current["sha256"],
+            "model": mode,
+            "upstream": "mock",
+        },
+    )
+    print(f"Starting {data['id']} at {env['OCEANPILOT_V2_BASE_URL']} — synthetic/{mode}/Mock")
     os.chdir(ROOT)
     os.execve(
         sys.executable,
@@ -184,6 +221,12 @@ def main():
     parser.add_argument("--instance", type=Path, required=True)
     parser.add_argument("--destination", type=Path)
     parser.add_argument("--port", type=int, default=8014)
+    parser.add_argument(
+        "--model-config",
+        type=Path,
+        help="Explicit private env file: read DeepSeek keys only; defaults offline",
+    )
+    parser.add_argument("--model", default="deepseek-v4-flash")
     args = parser.parse_args()
     directory = args.instance.resolve()
     if args.action == "new":
@@ -191,7 +234,7 @@ def main():
     elif args.action == "start":
         if manifest(directory).get("snapshot"):
             raise ValueError("Restore snapshot into a new instance before starting")
-        start(directory)
+        start(directory, model_config=args.model_config, model_name=args.model)
     elif args.action == "pin":
         data = manifest(directory)
         free_port(data["port"])

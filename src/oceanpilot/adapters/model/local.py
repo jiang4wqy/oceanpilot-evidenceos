@@ -197,13 +197,21 @@ class LocalModelProvider:
     def _encode_messages(
         messages: Sequence[ModelMessage],
         system: str | None,
-    ) -> list[dict[str, str]]:
-        encoded: list[dict[str, str]] = []
+    ) -> list[dict[str, object]]:
+        encoded: list[dict[str, object]] = []
         if system is not None:
             encoded.append({"role": "system", "content": system})
-        encoded.extend(
-            {"role": message.role.value, "content": message.content} for message in messages
-        )
+        for message in messages:
+            content = message.content
+            if message.images:
+                content = [
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": f"data:{image.mime_type};base64,{image.data_base64}"},
+                    }
+                    for image in message.images
+                ] + [{"type": "text", "text": message.content}]
+            encoded.append({"role": message.role.value, "content": content})
         return encoded
 
     @staticmethod

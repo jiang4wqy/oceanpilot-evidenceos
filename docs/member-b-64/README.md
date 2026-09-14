@@ -1,3 +1,5 @@
+**后续更新：** [图片/PDF/Word 与 20 MiB 上传说明](DOCUMENT-UPLOAD.md)；下方初版验证记录对应 ca36a6e。
+
 # Member B / issue #64 交接入口
 
 本分支包含基于 `f1fc063c9adcb52c47ca77298de9d5cc8bd2432c` 验收的 B 改动，供 A/C 审阅和独立复验。草稿 PR 的目标是 `oceanpilot-v2`，不是 `master`。上传不等于合并、远程部署、正式冻结或完成 Stage 4/5。

@@ -825,7 +825,7 @@
   function renderEvidence(c, p) {
     const checklist = list(p?.checklist);
     const evidence = list(c.evidence);
-    return `${section("规则要求的证据", "上传实际文件并核查其中的交易事实；历史引用仅供查看", actionButton("REGISTER_EVIDENCE", "＋ 上传材料", { small: true }))}${checklist.map((item) => `<div class="evidence-row"><span class="check-mark ${item.present ? "done" : ""}">${item.present ? "✓" : "○"}</span><div class="row-content"><div class="row-title">${esc(item.label || item.code)} ${item.critical ? '<span class="badge amber">关键证据</span>' : ""}</div><div class="row-subtitle">${esc(item.why || item.code)}</div></div><div class="row-actions">${item.present ? badge("COMPLETED", "已登记") : badge("PENDING", "缺失")}${!item.present ? actionButton("REGISTER_EVIDENCE", "补充", { small: true, data: { code: item.code, title: item.label || item.code } }) : ""}</div></div>`).join("") || empty("规则清单尚未确定。请先确认规则来源。")}<div class="action-bar">${actionButton("SUBMIT_EVIDENCE", "提交证据供 OP 审核", { primary: true })}</div>${section("证据登记记录", `${evidence.filter((e) => e.active !== false).length} 项有效 · 撤回保留历史并使旧证据包失效`)}${evidence.map((e) => `<div class="evidence-row"><span class="row-icon">▧</span><div class="row-content"><div class="row-title">${esc(e.title || e.code)} ${e.active === false ? badge("INVALIDATED", "已撤回") : ""}</div><div class="row-subtitle">${esc(e.reference)}<br>${esc(label(e.source_channel || "PORTAL"))} · ${date(e.registered_at)} · ${esc(e.registered_by || "")}${e.notes ? `<br>${esc(e.notes)}` : ""}</div></div>${e.active !== false ? actionButton("WITHDRAW_EVIDENCE", "撤回", { small: true, data: { evidence_id: e.id } }) : ""}</div>`).join("") || empty("尚无证据登记记录。")}`;
+    return `${section("规则要求的证据", "上传实际文件并核查其中的交易事实；历史引用仅供查看", actionButton("REGISTER_EVIDENCE", "＋ 上传材料", { small: true }))}${checklist.map((item) => `<div class="evidence-row"><span class="check-mark ${item.present ? "done" : ""}">${item.present ? "✓" : "○"}</span><div class="row-content"><div class="row-title">${esc(item.label || item.code)} ${item.critical ? '<span class="badge amber">关键证据</span>' : ""}</div><div class="row-subtitle">${esc(item.why || item.code)}</div></div><div class="row-actions">${item.present ? badge("COMPLETED", "已登记") : badge("PENDING", item.upload_status === "NEEDS_MANUAL" ? "已上传，待人工核验" : item.upload_status === "INSUFFICIENT" ? "已上传，内容不足" : "缺失")}${!item.present ? actionButton("REGISTER_EVIDENCE", "补充", { small: true, data: { code: item.code, title: item.label || item.code } }) : ""}</div></div>`).join("") || empty("规则清单尚未确定。请先确认规则来源。")}<div class="action-bar">${actionButton("SUBMIT_EVIDENCE", "提交证据供 OP 审核", { primary: true })}</div>${section("证据登记记录", `${evidence.filter((e) => e.active !== false).length} 项有效 · 撤回保留历史并使旧证据包失效`)}${evidence.map((e) => `<div class="evidence-row"><span class="row-icon">▧</span><div class="row-content"><div class="row-title">${esc(e.title || e.code)} ${e.active === false ? badge("INVALIDATED", "已撤回") : ""}</div><div class="row-subtitle">${esc(e.reference)}<br>${esc(label(e.source_channel || "PORTAL"))} · ${date(e.registered_at)} · ${esc(e.registered_by || "")}${e.notes ? `<br>${esc(e.notes)}` : ""}</div></div>${e.active !== false ? actionButton("WITHDRAW_EVIDENCE", "撤回", { small: true, data: { evidence_id: e.id } }) : ""}</div>`).join("") || empty("尚无证据登记记录。")}`;
   }
   function renderAgent(c, p) {
     if (!p) return empty("案件计划暂时不可用，请刷新重试。");
@@ -1449,7 +1449,7 @@
       }
       if (!(key in data)) continue;
       if (input.type === "checkbox") {
-        input.checked = key === "pii_checked" ? false : data[key] === true;
+        input.checked = ["pii_checked", "original_checked"].includes(key) ? false : data[key] === true;
         continue;
       }
       if (
@@ -1722,7 +1722,7 @@
     const requiredFields = list(contract?.required_fields);
     const definitions = contract?.fields || contract?.field_schema?.properties || {};
     const rule = (Array.isArray(definitions) ? definitions.find((item) => item.name === name) : definitions[name]) || requiredFields.find((item) => typeof item === "object" && item.name === name) || {};
-    const optional = contract && Array.isArray(contract.required_fields) ? !requiredFields.some((item) => (typeof item === "string" ? item : item.name) === name) : Boolean(options.optional);
+    const optional = options.required === true ? false : contract && Array.isArray(contract.required_fields) ? !requiredFields.some((item) => (typeof item === "string" ? item : item.name) === name) : Boolean(options.optional);
     const choiceValues = contract?.choices?.[name] || rule.enum || rule.options || options.choices;
     if (choiceValues) type = "select";
     const required = optional ? "" : " required";
@@ -1734,10 +1734,10 @@
     const minimum = rule.minimum ?? (rule.exclusiveMinimum !== undefined ? rule.exclusiveMinimum + 1 : undefined) ?? rule.min ?? options.min;
     const maximum = rule.maximum ?? rule.max;
     let input;
-    if (type === "checkbox") input = `<input name="${esc(name)}" type="checkbox"${value ? " checked" : ""}>`;
+    if (type === "checkbox") input = `<input name="${esc(name)}" type="checkbox"${options.required === true ? " required" : ""}${value ? " checked" : ""}>`;
     else if (type === "select") input = `<select ${common}>${!value ? '<option value="">请选择</option>' : ""}${list(choiceValues).map((choice) => {
       const [key, display] = Array.isArray(choice) ? choice : typeof choice === "object" ? [choice.value, choice.label || label(choice.value)] : [choice, label(choice)];
-      return `<option value="${esc(key)}"${String(value) === String(key) ? " selected" : ""}>${esc(display)}</option>`;
+      return `<option value="${esc(key)}"${String(value) === String(key) ? " selected" : ""}>${esc(options.choiceLabels?.[key] || display)}</option>`;
     }).join("")}</select>`;
     else if (type === "textarea") input = `<textarea ${common} maxlength="${Number(maxlength)}">${esc(value)}</textarea>`;
     else input = `<input ${common} type="${esc(type)}" value="${esc(value)}"${type === "number" ? ' step="1"' : ` maxlength="${Number(maxlength)}"`}${minimum !== undefined ? ` min="${esc(minimum)}"` : ""}${maximum !== undefined ? ` max="${esc(maximum)}"` : ""}>`;
@@ -1904,8 +1904,16 @@
             },
           )
         );
-      case "REVIEW_EVIDENCE_CONTENT":
-        return field("evidence_id", "本案材料 ID", data.evidence_id || "") + field("decision", "核验判断", "", "select", { choices: [["SUPPORTED", "内容支持所述事实"], ["INSUFFICIENT", "内容仍不足"]] }) + reason() + field("applicable_facts", "所依据的正文原句", "", "textarea", { hint: "每行一条原文摘录。需能在所选正文行中逐字找到，不可填推测。" }) + field("locators", "原文行号", "", "textarea", { hint: "每行一个定位，如 line:1。请先在本案文件与材料中展开正文。" });
+      case "REVIEW_EVIDENCE_CONTENT": {
+        const ids = list(actionContract(action, c)?.choices?.evidence_id);
+        const selectedId = data.evidence_id || (ids.length === 1 ? ids[0] : "");
+        const evidence = list(c.evidence).find(e=>e.id === selectedId);
+        const document = evidence?.content_check?.document || evidence?.content_check?.automatic_check?.document;
+        return field("evidence_id", "待核验的材料", selectedId, "select", {choices:list(c.evidence).filter(e=>ids.includes(e.id) || e.id === selectedId).map(e=>[e.id,e.title || e.code || e.id]),choiceLabels:Object.fromEntries(list(c.evidence).map(e=>[e.id,e.title || e.code || e.id]))}) + field("decision", "核验判断", "", "select", { choices: [["SUPPORTED", "内容支持所述事实"], ["INSUFFICIENT", "内容仍不足"]] }) + reason() +
+          (document ? field("original_checked", "我已独立打开原文件并核对交易关联、完整内容及所述事实", false, "checkbox", {required:true}) + field("transaction_id", "在原件中核实的交易编号", "", "text", {required:true}) + field("currency", "在原件中核实的币种", "", "text", {required:true}) + field("amount_minor", "在原件中核实的交易金额（最小货币单位）", "", "number", {required:true}) : "") +
+          field("applicable_facts", document ? "原件中核实的事实与原文摘录" : "所依据的正文原句", "", "textarea", { hint: document ? "每行一条；请对照原件确认必需事实，不能直接采信 AI 识别。" : "每行一条原文摘录。需能在所选正文行中逐字找到，不可填推测。" }) +
+          field("locators", document ? "原件位置" : "原文行号", "", "textarea", { hint: document ? "PDF/图片填写 page:1 等实际页码；Word 或未解析原件填写 document:1，并在理由中说明具体位置。" : "每行一个定位，如 line:1。请先在本案文件与材料中展开正文。" });
+      }
       case "WITHDRAW_EVIDENCE":
         return (
           field("evidence_id", "证据 ID", data.evidence_id || "", "select", {
@@ -2509,6 +2517,13 @@
     });
     $("assignedFilter")?.addEventListener("change", (event) => {
       S.assignedTo = event.target.value; S.offset = 0; refresh(true);
+    });
+    $("actionForm").addEventListener("change", (event) => {
+      if (S.dialog?.action === "REVIEW_EVIDENCE_CONTENT" && event.target.name === "evidence_id") {
+        const evidence_id = event.target.value;
+        $("dialogFields").innerHTML = commandFields("REVIEW_EVIDENCE_CONTENT", {evidence_id});
+        $("confirmCheckbox").checked = false;
+      }
     });
     $("actionForm").addEventListener("submit", submitDialog);
     $("closeDialog").addEventListener("click", closeDialog);

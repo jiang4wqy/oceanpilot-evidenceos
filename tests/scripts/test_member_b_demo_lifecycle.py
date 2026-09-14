@@ -86,3 +86,31 @@ def test_start_checks_identity_and_excludes_shared_environment(tmp_path, monkeyp
     assert Path(env["OCEANPILOT_CHARGEBACK_DB_PATH"]) == tmp_path / "chargeback.db"
     assert env["OCEANPILOT_CHARGEBACK_LIVE_MODEL"] == "0"
     assert env["OCEANPILOT_V2_UPSTREAM_MODE"] == "mock"
+
+
+def test_explicit_live_model_config_copies_only_model_keys(tmp_path, monkeypatch):
+    code = {"sha256": "approved", "python": "test", "packages": {}}
+    demo.write_json(
+        tmp_path / "instance.json",
+        {
+            "kind": demo.MARKER,
+            "id": "test-live-instance",
+            "port": unused_port(),
+            "code": code,
+        },
+    )
+    config = tmp_path / "private.env"
+    config.write_text(
+        "DEEPSEEK_API_KEY=test-only\nDEEPSEEK_API_BASE=https://example.invalid\nFEISHU_APP_SECRET=excluded\nOCEANPILOT_CHARGEBACK_DB_PATH=/shared/excluded.db\n"
+    )
+    monkeypatch.setattr(demo, "code_identity", lambda: code)
+    monkeypatch.setattr(demo.os, "chdir", lambda path: None)
+    calls = []
+    monkeypatch.setattr(demo.os, "execve", lambda exe, args, env: calls.append(env))
+    demo.start(tmp_path, model_config=config, model_name="deepseek-v4-flash")
+    env = calls[0]
+    assert env["DEEPSEEK_MODEL"] == "deepseek-v4-flash"
+    assert env["OCEANPILOT_CHARGEBACK_LIVE_MODEL"] == "1"
+    assert "FEISHU_APP_SECRET" not in env
+    assert env["OCEANPILOT_CHARGEBACK_DB_PATH"] == str(tmp_path / "chargeback.db")
+    assert "test-only" not in next(tmp_path.glob("run-*.json")).read_text()
