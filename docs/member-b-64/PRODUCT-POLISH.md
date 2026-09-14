@@ -10,4 +10,4 @@
 
 自动检查范围：tests/web、tests/api、test_dispute_agent、test_dispute_agent_knowledge、B 演示生命周期；另有历史回复展示回归。未重跑整个仓库测试，先前 2269 通过的结果属于上一版。
 
-本轮结果：相关测试 486 通过、1 跳过（未设置测试用 DEEPSEEK_API_KEY 的联网 agent 测试），另 1 条历史回复展示测试通过，共 487 通过。2 条现有依赖警告；改动文件 Ruff 和 git diff --check 通过。8015 已重新 pin 并启动，数据未重置。本轮变更随 member-b/issue-64-demo-readiness 分支提交，纳入 PR #67；未合并。
+本轮结果：相关测试 486 通过、1 跳过（未设置测试用 DEEPSEEK_API_KEY 的联网 agent 测试），另 1 条历史回复展示测试通过，共 487 通过。2 条现有依赖警告；改动文件 Ruff 和 git diff --check 通过。8015 已重新 pin 并启动，数据未重置。本轮变更随 member-b/issue-64-demo-readiness 分支提交，作为 PR #67 合并后的后续优化单独评审；本轮未合并。
