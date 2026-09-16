@@ -96,7 +96,7 @@ def available_actions(case: dict, identity: dict, service) -> list[dict]:
 
 def present_case(case: dict, identity: dict, service) -> dict:
     result = case_view(case, identity, service.access_policy)
-    if identity["role"] in {"SUPERVISOR", "ADMIN"} and service.access_policy:
+    if identity["role"] == "SUPERVISOR" and service.access_policy:
         result["assignment_candidates"] = service.access_policy.assignment_candidates(case)
     collaboration = getattr(service, "collaboration", None)
     if collaboration is not None and collaboration.open_handoffs(case["id"]):

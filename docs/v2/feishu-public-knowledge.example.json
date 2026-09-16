@@ -48,9 +48,20 @@
     {
       "id": "oceanpilot-bot-boundary",
       "title": "OceanPilot 群机器人能力边界",
-      "text": "群机器人面向全群回答通用知识，并列出实际检索到的来源。群里只讲通用知识，需办理业务时请打开网站并登录。机器人没有业务查询和执行能力，群消息不能替代网页上的人工确认。没有足够依据时会说明无法回答；检索摘录与模型生成的回答会明确区分。",
+      "text": "群机器人面向全群回答通用知识，并列出实际检索到的来源。群里只讲通用知识，不提供业务查询或执行。个人案件功能需在网站登录并完成私聊绑定，重要选择仍须明确确认；材料上传和审核在网站办理。没有足够依据时会说明无法回答；结构化结果与模型辅助内容会明确区分。",
       "source": "OceanPilot knowledge bot: docs/v2/feishu-public-knowledge.md",
-      "version": "draft-v1",
+      "version": "draft-v2",
+      "source_type": "PRODUCT_GUIDE",
+      "visibility": "PUBLIC_GROUP",
+      "approved": false,
+      "approval_reference": "REQUIRES_PUBLICATION_APPROVAL"
+    },
+    {
+      "id": "oceanpilot-synthetic-refusal-flow",
+      "title": "合成未收到货物争议演示流程",
+      "text": "演示从一条模拟的未收到货物争议通知开始，经标准化接入建立记录。工作人员确认规则与期限并发布待办后，已绑定的商户可在私聊选择接受或发起抗辩，再做第二次确认。抗辩材料要求来自规则快照，上传、补件和审核仍在网站进行。接受后进入接受处理，不继续催交抗辩材料。演示是合成数据与 Mock 上游，发起抗辩不代表银行已撤销拒付，也不保证胜诉。",
+      "source": "OceanPilot approved implementation plan; docs/v2/feishu-private-cases.md",
+      "version": "draft-v2",
       "source_type": "PRODUCT_GUIDE",
       "visibility": "PUBLIC_GROUP",
       "approved": false,

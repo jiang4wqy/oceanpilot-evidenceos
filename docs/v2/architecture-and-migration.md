@@ -1,6 +1,6 @@
 # OceanPilot V2 · 实现与迁移
 
-V2 以 OceanPayment 为正式争议的案件运营主体。商户（MERCHANT）决策和举证，风控专员（OPERATOR）负责运营、规则确认和材料初审，风控经理（SUPERVISOR）负责全局进度、分配、终审和核对结案，IT 管理员（ADMIN）拥有全部后台功能。Agent 读取快照、引用规则、解释缺口并提出绑定版本的下一步。
+V2 以 OceanPayment 为正式争议的案件运营主体。商户（MERCHANT）决策和举证，风控专员（OPERATOR）依既定规则经办、核查材料、跟进补件并上报风险；风控经理（SUPERVISOR）负责案件规则与期限确认、全局进度、分配、独立终审和核对结案。IT 管理员（ADMIN）仅管理账号、系统配置诊断与合成交易登记，不读取运行案件、不拥有业务命令。Agent 读取获授权快照、引用规则、解释缺口并提出绑定版本的下一步。
 
 ## 四角色迁移（2026-09-14）
 
@@ -8,11 +8,15 @@ V2 以 OceanPayment 为正式争议的案件运营主体。商户（MERCHANT）�
 
 启动案件库时，仅迁移参与者当前角色及 OPEN/IN_PROGRESS 任务的旧 RISK_OFFICER 责任字段。每个变更案件增加一次 revision 与 ROLE_MIGRATION 审计，旧审核、已完成任务、消息及命令回执保持原样，历史角色展示为“历史风控专员”。重复启动无重复迁移；旧版本操作和提案须刷新后重新确认。
 
-SUPERVISOR/ADMIN 可读取全部案件，不受专员商户范围和案件参与者限制；OPERATOR/MERCHANT 继续执行原对象授权。经理可把案件分配给已获该商户授权的专员或管理人员，分配时加入案件参与者。队列和自动更新使用同一访问范围。
+SUPERVISOR 可读取全部案件，不受专员商户范围和案件参与者限制；OPERATOR/MERCHANT 继续执行原对象授权。CONFIRM_RULE、ASSIGN_CASE 和 APPROVE_KNOWLEDGE 仅 SUPERVISOR 可执行。经理可把案件分配给已获该商户授权的专员或风控经理，分配时加入案件参与者。ADMIN 即使保留旧商户授权或参与者记录，也不能读取案件；列表和更新为空，指定案件返回 404，业务命令返回 403。网站、SQL 队列、自动更新及飞书入口执行相同边界。
 
-独立复核按真实 actor_id 判断，经理和 IT 管理员没有豁免：本案经办、材料审核与包作者不能终审，重新分配案件不清除原经办记录；账务登记人不能核对自己的资金事件。管理员仍可退回材料、修订文书或转交其他经理/管理员处理。
+独立复核按真实 actor_id 判断，经理没有豁免：本案经办、材料审核与包作者不能终审，重新分配案件不清除原经办记录；账务登记人不能核对自己的资金事件。可交由另一位独立经理复核，不能改用 IT 管理员绕过。商户接受／抗辩仍需本人决定或已有明确授权，经理终审不代表可编造银行终局。
 
-GET /api/v2/cases 为 SUPERVISOR/ADMIN 增加 assignee_progress：按负责人提供 user_id、display_name、role、total、pending（未完成任务数）、urgent（现有 URGENT 队列条件）、review（初审或包终审中）和 closed。统计覆盖全部案件，不受分页、搜索或负责人筛选影响；零案件的启用专员也列出。
+GET /api/v2/cases 仅为 SUPERVISOR 增加 assignee_progress：按负责人提供 user_id、display_name、role、total、pending（未完成任务数）、urgent（现有 URGENT 队列条件）、review（初审或包终审中）和 closed。统计覆盖全部案件，不受分页、搜索或负责人筛选影响；零案件的启用专员也列出。IT 治理页只展示技术配置与账号入口，不把无业务权限伪装成“零案件”的业务指标。
+
+2026-09-15 的责任收紧还会在启动案件库时，将旧 OPEN/IN_PROGRESS 的 RULE_CONFIRMATION 待办调整为 SUPERVISOR、清空旧专员指派并进入经理待办；每案增加 revision 与 MANAGER_AUTHORITY_MIGRATION 审计，记录原责任人。已完成任务、旧审核和回执不改写，重复启动无重复迁移；旧卡片和提案需刷新。账号不自动升职；历史经办人若是 IT 管理员，应由经理显式重新分配，保留历史审计。本轮未重启既有运行实例。
+
+此处“规则确认”是对本案来源、证据要求、可选动作与期限快照的确认，不是新增的企业全局规则编写／发布／审批系统。
 
 管理入口改为 /v2/admin 和 /api/v2/admin/accounts、/api/v2/admin/accounts/{user_id}/status、/api/v2/admin/transactions。旧 /v2/director 返回 308，旧管理 API 返回 410。账号创建与启停在 v21_account_audit 中记录真实管理员，不保存密码。
 
@@ -67,7 +71,7 @@ Agent 由案件事件观察、持久化工具运行与提案、可选真实模�
 
 `OCEANPILOT_CHARGEBACK_LIVE_MODEL=1` 与本机 DeepSeek 配置使 V2 复用现有模型适配器。界面分别显示确定性工具记录、真实模型回答与降级回答，保留实际 model、source、trigger 和引用。新表 `v2_dispute_agent_runs` / `v2_dispute_agent_conversations` 与 V1 并存；Agent 观察失败不会撤销或重复已提交的业务命令。材料就绪度仍仅说明合成清单登记情况，未进行真实正文 OCR、真实性或胜诉率判断。详见 [Agent 协作](agent-workflow.md)。
 
-知识候选只在结案后生成，先去除案件/商户标识及常见 PII，再由 Admin 审核。只有批准候选可参与相似模式检索，不能自动发布规则。
+知识候选只在结案后生成，先去除案件/商户标识及常见 PII，再由风控经理审核。只有批准候选可参与相似模式检索，不能自动发布规则或直接成为大群公开知识。
 
 ## 企业后续确认边界
 

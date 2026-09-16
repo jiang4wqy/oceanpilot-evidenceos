@@ -90,8 +90,8 @@ def test_http_rule_confirmation_accepts_explicit_critical_subset_and_replays(api
     from tests.v21_support import normalized_intake, session_headers
 
     client, _, _, case = api
-    risk = session_headers(client, "OPERATOR", "merchant-a")
-    # The four-role model assigns rule confirmation to the scoped Operator.
+    risk = session_headers(client, "SUPERVISOR", "merchant-a")
+    # Per-case rules and deadlines require the risk manager, not a first-line officer.
     response = normalized_intake(
         client,
         {

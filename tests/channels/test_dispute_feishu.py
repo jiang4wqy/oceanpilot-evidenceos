@@ -730,7 +730,7 @@ def real_service(tmp_path):
         clock=lambda: datetime.fromtimestamp(NOW, UTC),
     )
     operator = {"role": "OPERATOR", "actor_id": "op-demo", "merchant_id": "merchant-1"}
-    risk = {**operator, "role": "OPERATOR", "actor_id": "risk-demo"}
+    risk = {**operator, "role": "SUPERVISOR", "actor_id": "risk-demo"}
     case = service.execute(
         {
             "command_id": "seed-intake",

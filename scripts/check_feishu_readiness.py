@@ -76,10 +76,32 @@ def main() -> int:
     ]
     for name, ready in checks:
         print(f"{name}={_yes(ready)}")
-    print("bot_scope=PUBLIC_KNOWLEDGE_ONLY")
+    private_cases = os.getenv("OCEANPILOT_FEISHU_PRIVATE_CASES") == "enabled"
+    print(
+        "configured_bot_scope="
+        + (
+            "PUBLIC_KNOWLEDGE_AND_PAIRED_PRIVATE_CASES"
+            if private_cases
+            else "PUBLIC_KNOWLEDGE_ONLY"
+        )
+    )
+    print("running_process_configuration_verified=NOT_CHECKED")
     print(f"authorized_group_count={len(groups)}")
     print(f"approved_public_document_count={len(knowledge.documents) if knowledge else 0}")
     print("legacy_case_bindings_used=NO")
+    private_routes = private_cases and bool(app_id and token and encrypt_key)
+    print(f"private_routes_configured={_yes(private_routes)}")
+    print(
+        "private_outbound_configured="
+        + _yes(
+            private_routes
+            and api_credentials
+            and api_token_ok
+            and os.getenv("OCEANPILOT_FEISHU_PRIVATE_OUTBOUND") == "authorized-test"
+        )
+    )
+    print("private_pairing_and_access_verified=NOT_CHECKED")
+    print("fixed_host_hour_and_restart_acceptance=NOT_CHECKED")
     print("live_delivery_verified=NOT_CHECKED")
     print("credentials_printed=NO")
     return 0

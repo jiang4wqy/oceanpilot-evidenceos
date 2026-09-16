@@ -146,6 +146,8 @@ assert.equal(node('assignedFilter').value,'officer-a');
 assert(requests.some(url=>url.includes('assigned_to=officer-a')));
 ui.state.role='OPERATOR';await ui.refresh(true);
 assert.equal(node('teamProgress').hidden,true);
+ui.state.role='ADMIN';await ui.refresh(true);
+assert.equal(node('teamProgress').hidden,true);
 """)
 
 
@@ -160,6 +162,24 @@ assert.match(output,/&lt;img/);assert.match(output,/&lt;script&gt;/);
 assert.equal(output.includes('<img src=x'),false);
 assert.equal(output.includes('<script>bad'),false);
 """)
+
+
+def test_it_governance_omits_business_controls_and_statistics():
+    run_js(
+        """
+const ui=OceanV2;ui.state.role='ADMIN';
+global.fetch=async url=>ok(String(url).includes('/governance')?
+ {integrations:{upstream:'MOCK'},data_sources:{},knowledge:[{summary:'hidden-business-record'}],
+ metrics:{cases:123},permissions:{ADMIN:[]}}:{cases:[],total:0,queue_counts:{ALL:0}});
+await ui.refresh();
+const output=node('governanceView').innerHTML;
+assert.match(output,/IT 系统管理/);assert.match(output,/账号与合成数据管理/);
+assert(!output.includes('hidden-business-record'));
+assert(!output.includes('运行指标'));assert(!output.includes('知识候选与人工审核'));
+assert.equal(node('intakeButton').hidden,true);assert.equal(node('metrics').hidden,true);
+""",
+        surface="governance",
+    )
 
 
 def test_operations_overview_shows_source_candidates_as_unconfirmed_advice():

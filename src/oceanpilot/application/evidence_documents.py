@@ -104,6 +104,31 @@ def _read_pdf(content):
     return "\n".join(texts), images, count, count > MAX_PAGES
 
 
+def preview_page(filename, mime_type, content, page_number):
+    """Read-only raster rendition of saved bytes, never an AI reconstruction."""
+    validate_file(filename, mime_type, content)
+    require(1 <= page_number <= MAX_PAGES, "INVALID_PAGE", "Choose a page from 1 to 10", 422)
+    if mime_type == "application/pdf":
+        import pypdfium2 as pdfium
+
+        with _PDF_LOCK, pdfium.PdfDocument(content) as document:
+            require(page_number <= len(document), "PAGE_NOT_FOUND", "Page not found", 404)
+            with closing(document[page_number - 1]) as page:
+                width, height = page.get_size()
+                with closing(page.render(scale=min(2, 1800 / max(width, height)))) as bitmap:
+                    output = io.BytesIO()
+                    bitmap.to_pil().convert("RGB").save(output, format="JPEG", quality=95)
+                    return output.getvalue()
+    require(
+        mime_type.startswith("image/") and page_number == 1,
+        "PREVIEW_UNAVAILABLE",
+        "Download this original for independent inspection",
+        415,
+    )
+    rendition, _ = _image(content)
+    return base64.b64decode(rendition.data_base64)
+
+
 def _read_docx(content):
     texts, images = [], []
     with zipfile.ZipFile(io.BytesIO(content)) as document:
@@ -146,6 +171,8 @@ def read_document(filename, content, code, *, model=None, synthetic=False):
     """
     suffix = PurePath(filename).suffix.lower()
     text, images, pages, partial = "", [], None, False
+    facts = {}
+    fields = ["transaction_id", "currency", "amount_minor", *EVIDENCE_CONTENT_FIELDS.get(code, ())]
     recognition = {
         "status": "NOT_CONFIGURED",
         "method": "DOCUMENT_EXTRACTION_V1",
@@ -169,13 +196,21 @@ def read_document(filename, content, code, *, model=None, synthetic=False):
             pages = 1
         partial = partial or len(text) > MAX_TEXT
         text = text[:MAX_TEXT]
-        if model is not None and (text or images):
-            fields = [
-                "transaction_id",
-                "currency",
-                "amount_minor",
-                *EVIDENCE_CONTENT_FIELDS.get(code, ()),
-            ]
+        # Explicit, allowlisted key:value text needs no generative model. Preserve
+        # ambiguous duplicates as missing instead of silently choosing a value.
+        for line in text.splitlines():
+            match = re.match(r"^\s*([a-z][a-z0-9_]{1,60})\s*[:=]\s*(.+?)\s*$", line)
+            if match and match[1] in fields:
+                key, value = match.groups()
+                facts[key] = value if key not in facts else None
+        if facts:
+            recognition.update(
+                status="PARTIAL" if partial else "LOCAL_EXTRACTED",
+                method="EXPLICIT_TEXT_FIELDS_V1",
+                notice="确定性正文提取（未调用语言模型）；缺失或重复字段不作推断，仍需独立人工核验。"
+                + ("仅处理部分正文，必须检查完整原件。" if partial else ""),
+            )
+        elif model is not None and (text or images):
             prompt = (
                 "Extract visible document text verbatim and these fact fields: "
                 + json.dumps(fields)
@@ -229,15 +264,8 @@ def read_document(filename, content, code, *, model=None, synthetic=False):
                 + ("仅处理前 10 页/图或部分正文，剩余内容需人工核验。" if partial else ""),
             )
             text = transcript
-        else:
-            # Key:value lines in text PDFs/DOCX can be read without fabricating facts.
-            facts = {}
-            for line in text.splitlines():
-                match = re.match(r"^\s*([a-z][a-z0-9_]{1,60})\s*[:=]\s*(.+?)\s*$", line)
-                if match:
-                    facts[match[1]] = match[2]
-            if partial:
-                recognition["notice"] += " 仅处理前 10 页/图或部分正文。"
+        elif partial:
+            recognition["notice"] += " 仅处理前 10 页/图或部分正文。"
     except Exception:
         # No vendor errors, document content or credentials go to logs/user errors.
         facts = {}

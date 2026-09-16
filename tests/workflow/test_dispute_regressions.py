@@ -242,16 +242,16 @@ def test_unknown_rule_requires_risk_confirmation_of_actions_as_well_as_deadlines
         "required_evidence": ["order"],
     }
     with pytest.raises(DisputeError):
-        run(service, case, "CONFIRM_RULE", rule, RISK)
+        run(service, case, "CONFIRM_RULE", rule, SUPERVISOR)
     rule["allowed_actions"] = ["ACCEPT"]
     with pytest.raises(DisputeError) as error:
         run(service, case, "CONFIRM_RULE", rule, MERCHANT)
     assert error.value.status == 403
-    confirmed = run(service, case, "CONFIRM_RULE", rule, RISK)
+    confirmed = run(service, case, "CONFIRM_RULE", rule, SUPERVISOR)
     assert confirmed["rule_snapshot"]["allowed_actions"] == ["ACCEPT"]
     assert confirmed["rule_snapshot"]["source_id"] == rule["source_id"]
     assert confirmed["deadlines"]["status"] == "CONFIRMED"
-    assert confirmed["audit"][-1]["actor_id"] == RISK["actor_id"]
+    assert confirmed["audit"][-1]["actor_id"] == SUPERVISOR["actor_id"]
 
 
 def test_late_ledger_event_requires_fresh_reconciliation_and_notification(service):

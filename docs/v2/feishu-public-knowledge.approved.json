@@ -1,0 +1,71 @@
+{
+  "schema_version": 1,
+  "documents": [
+    {
+      "id": "oceanpilot-product-purpose",
+      "title": "OceanPilot 是什么、做什么、解决什么问题",
+      "text": "OceanPilot 是帮助商户与工作人员协作处理支付争议的系统。它把分散的材料准备、处理进度、审核反馈和下一步待办集中到登录后的网站，让双方围绕同一争议记录协作。群机器人回答公开产品知识，网站办理获授权的业务。当前演示使用合成数据，上游连接为 Mock，不代表已经接入真实银行，也不代表真实银行或卡组织的处理结果。",
+      "source": "OceanPilot 公开产品说明：产品定位与当前演示边界",
+      "version": "public-v1",
+      "source_type": "PRODUCT_GUIDE",
+      "visibility": "PUBLIC_GROUP",
+      "approved": true,
+      "approval_reference": "owner-public-knowledge-import-request-20260915"
+    },
+    {
+      "id": "oceanpilot-website-login",
+      "title": "怎样登录 OceanPilot 网站、账号与角色工作台",
+      "text": "点击机器人卡片里的“登录 OceanPilot”按钮，使用分配给自己的账号进入网站。商户进入商户工作台，负责获授权业务的接受或抗辩选择、材料准备和补交。运营端是工作人员工作台的产品称呼，不是一个独立权限角色；风控专员和风控经理在运营端按各自角色及案件授权工作。风控专员负责一线处理、按规则执行和上报风险；风控经理负责规则确认、任务分配、监督和授权范围内的风险决策。群成员身份不会自动授予网站权限。无法进入时联系账号管理人员核对授权，不要借用他人账号。",
+      "source": "OceanPilot 公开产品说明：网站登录、角色与授权边界",
+      "version": "public-v2",
+      "source_type": "PRODUCT_GUIDE",
+      "visibility": "PUBLIC_GROUP",
+      "approved": true,
+      "approval_reference": "owner-public-knowledge-iteration-request-20260915"
+    },
+    {
+      "id": "oceanpilot-material-guide",
+      "title": "在哪里上传材料、如何补件、材料清单从哪里看",
+      "text": "材料上传在 OceanPilot 网站进行：登录自己的账号，打开获授权的案件页面，查看页面给出的材料清单，再通过页面的上传入口提交。补件时先查看审核反馈，再补充或更正相应材料。材料要求以案件当前规则快照和人工核实结果为准，机器人不会凭空生成统一必交清单。不要在群里发送订单凭证或个人资料；群机器人不接收业务附件，也不替代网站中的人工确认。",
+      "source": "OceanPilot 公开使用指南：网站材料上传与补件",
+      "version": "public-v1",
+      "source_type": "PRODUCT_GUIDE",
+      "visibility": "PUBLIC_GROUP",
+      "approved": true,
+      "approval_reference": "owner-public-knowledge-import-request-20260915"
+    },
+    {
+      "id": "oceanpilot-correction-feedback",
+      "title": "退回补件是什么意思、在哪里查看审核反馈",
+      "text": "退回补件表示材料审核提出了补充或更正要求。请登录网站，在获授权的案件页面查看审核说明、材料状态和下一步要求，按要求补交后继续处理。退回补件不等于商户已经接受争议责任，也不等于上游已经给出最终结果。请勿仅凭群内通用说明判断某笔业务的处理结论；重要业务选择应由有权限的人在网站明确确认。",
+      "source": "OceanPilot 公开使用指南：退回补件与审核反馈",
+      "version": "public-v1",
+      "source_type": "PRODUCT_GUIDE",
+      "visibility": "PUBLIC_GROUP",
+      "approved": true,
+      "approval_reference": "owner-public-knowledge-import-request-20260915"
+    },
+    {
+      "id": "oceanpilot-bot-boundary",
+      "title": "群机器人知识问答与私聊案件助手的能力边界",
+      "text": "群机器人面向获授权群的全部成员回答公开产品知识，并列出检索来源。群里不查询个人业务、不读取案件附件、不执行商户决定或审核操作。当前本地演示已开启私聊案件助手：用户须先登录自己的 OceanPilot 网站账号，在飞书绑定页生成一次性配对码，私聊机器人发送配对码，再返回网站确认。绑定后可私聊询问案件概况、当前进度、缺什么材料、为什么退回和下一步做什么，并接收获授权案件提醒。接受拒付或发起抗辩需要在私聊二次确认；材料上传、审核和上游提交继续在网站办理。绑定不增加原有案件权限，也不会把案件内容开放给群成员。私聊案件结果按实际规则和状态结构化展示，不冒充模型推理。当前依然是本机合成案例／Mock 上游演示，不代表真实银行已接通或固定服务器验收完成。",
+      "source": "OceanPilot 公开产品说明：群聊边界与当前启用状态",
+      "version": "public-v2",
+      "source_type": "PRODUCT_GUIDE",
+      "visibility": "PUBLIC_GROUP",
+      "approved": true,
+      "approval_reference": "owner-private-assistant-implementation-and-demo-binding-approval-20260915"
+    },
+    {
+      "id": "oceanpilot-synthetic-refusal-flow",
+      "title": "合成未收到货物拒付争议演示流程、接受与发起抗辩",
+      "text": "合成演示的业务流程是：模拟银行发出未收到货物争议通知，经 OceanPayment 上游接入边界标准化后，由 OceanPilot 建立记录；工作人员核实规则和期限；已绑定的商户收到飞书私聊提醒，在网站或飞书私聊选择接受或发起抗辩。飞书操作必须先查看确认卡，第二次点击确认后才改变案件状态。接受后进入接受处理，不继续催交抗辩材料；发起抗辩后按照案件规则快照准备材料，在网站上传、补件并交由工作人员审核，私聊可查询最新进展。私聊功能在本地演示环境已开启；完整独立验收和固定服务器部署仍待完成。全程为合成数据与 Mock 上游，发起抗辩不等于银行已撤销拒付，也不保证胜诉。",
+      "source": "OceanPilot 合成演示说明：目标流程与当前运行边界",
+      "version": "public-v2",
+      "source_type": "PRODUCT_GUIDE",
+      "visibility": "PUBLIC_GROUP",
+      "approved": true,
+      "approval_reference": "owner-private-assistant-implementation-and-demo-binding-approval-20260915"
+    }
+  ]
+}

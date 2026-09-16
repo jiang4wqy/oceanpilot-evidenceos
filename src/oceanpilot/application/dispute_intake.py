@@ -55,7 +55,7 @@ class DisputeIntakeService:
     def _operator(self, identity, merchant_id=None):
         identity = self.disputes._identity(identity)
         require(
-            identity["role"] in {"OPERATOR", "SUPERVISOR", "ADMIN"},
+            identity["role"] in {"OPERATOR", "SUPERVISOR"},
             "FORBIDDEN",
             "Normalized source intake requires an authorized Operator",
             403,

@@ -184,7 +184,7 @@ def test_scope_applies_to_list_detail_plan_commands_and_updates(client, accounts
     denied = command(sessions["operator-b"], case_a, "PUBLISH_TASK")
     assert denied.status_code == 404
     assert client.app.state.disputes.store.get_case(case_a["id"])["revision"] == case_a["revision"]
-    assert sessions["director"].get("/api/v2/cases").json()["total"] == 2
+    assert sessions["director"].get("/api/v2/cases").json()["total"] == 0
 
 
 def test_participant_removal_revokes_read_write_and_queue(client, accounts):

@@ -61,6 +61,68 @@ class SQLiteDisputeStore:
                 );
             """)
             self._migrate_roles(connection)
+            self._migrate_manager_tasks(connection)
+
+    @staticmethod
+    def _migrate_manager_tasks(connection):
+        """Reassign only pending rule authority; preserve history and command receipts."""
+        from datetime import UTC, datetime
+
+        connection.execute("BEGIN IMMEDIATE")
+        for row in connection.execute(
+            "SELECT case_id,snapshot FROM v2_dispute_cases "
+            "WHERE instr(snapshot, 'RULE_CONFIRMATION') > 0"
+        ).fetchall():
+            case = json.loads(row["snapshot"])
+            changed = []
+            for task in case.get("tasks", []):
+                if (
+                    task.get("type") != "RULE_CONFIRMATION"
+                    or task.get("status") not in {"OPEN", "IN_PROGRESS"}
+                    or task.get("owner") == "SUPERVISOR"
+                ):
+                    continue
+                changed.append(
+                    {
+                        "task_id": task["id"],
+                        "owner": task.get("owner"),
+                        "assignee": task.get("assignee"),
+                        "assignee_id": task.get("assignee_id"),
+                    }
+                )
+                task["owner"] = "SUPERVISOR"
+                if "assignee_role" in task:
+                    task["assignee_role"] = "SUPERVISOR"
+                # Do not promote the former officer or trust a historical participant role.
+                # Unassigned manager work is visible to the manager queue.
+                task["assignee"] = None
+                if "assignee_id" in task:
+                    task["assignee_id"] = None
+            if not changed:
+                continue
+            revision = case["revision"] + 1
+            event = {
+                "id": uuid4().hex,
+                "command_id": f"manager-authority:{case['id']}:{revision}",
+                "action": "MANAGER_AUTHORITY_MIGRATION",
+                "revision": revision,
+                "actor_id": "oceanpilot-role-migration",
+                "role": "SYSTEM",
+                "at": datetime.now(UTC).isoformat(),
+                "reason": "Pending rule confirmation now requires a risk manager",
+                "previous_tasks": changed,
+            }
+            case["revision"] = revision
+            case.setdefault("audit", []).append(event)
+            connection.execute(
+                "UPDATE v2_dispute_cases SET revision=?,snapshot=? WHERE case_id=?",
+                (revision, json.dumps(case, ensure_ascii=False), row["case_id"]),
+            )
+            connection.execute(
+                "INSERT INTO v2_dispute_audit VALUES (?,?,?,?)",
+                (row["case_id"], revision, event["command_id"], json.dumps(event)),
+            )
+        connection.commit()
 
     @staticmethod
     def _migrate_roles(connection):

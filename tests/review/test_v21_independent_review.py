@@ -183,7 +183,7 @@ def contest(api, *, code=None):
                 "merchant_deadline": (NOW + timedelta(days=8)).isoformat(),
                 "reason": "Risk reviewed the synthetic material requirement",
             },
-            actor="risk",
+            actor="supervisor",
         )
     case = advance(api, case, "PUBLISH_TASK")
     return advance(

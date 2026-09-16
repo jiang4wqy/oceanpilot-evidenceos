@@ -37,7 +37,7 @@ class SQLiteDisputeUpdateReader:
                 if self.access_policy and not self.access_policy._system(identity):
                     user = self.access_policy._user(identity)
                     grants = user["merchant_ids"] if user else []
-                    if user and user["role"] in {"SUPERVISOR", "ADMIN"}:
+                    if user and user["role"] == "SUPERVISOR":
                         pass
                     elif not grants:
                         clauses.append("0=1")
@@ -51,6 +51,9 @@ class SQLiteDisputeUpdateReader:
                             "WHERE json_extract(p.value,'$.user_id')=?))"
                         )
                         parameters.append(identity["actor_id"])
+                if identity["role"] == "ADMIN":
+                    # Legacy grants, participants and cursors cannot restore business access.
+                    clauses.append("0=1")
                 if identity["role"] == "MERCHANT":
                     clauses.append("c.merchant_id=?")
                     parameters.append(identity["merchant_id"])

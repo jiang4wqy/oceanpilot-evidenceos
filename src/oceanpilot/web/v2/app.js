@@ -125,6 +125,8 @@
     MONITOR_SLA: "执行 SLA 检查",
     KNOWLEDGE_CANDIDATE: "提取脱敏知识候选",
     APPROVE_KNOWLEDGE: "审核知识候选",
+    ROLE_MIGRATION: "历史角色升级",
+    MANAGER_AUTHORITY_MIGRATION: "规则确认待办转交风控经理",
     ASSIGN_CASE: "分配案件负责人", RESOLVE_RESPONSE: "核实响应与恢复处理", FINAL_REVIEW: "执行最终审核", VERIFY_OUTCOME: "核实上游结果", REOPEN_CASE: "授权重开案件", REUSE_EVIDENCE: "确认材料适用于当前阶段", PROCESS_ACCEPT: "处理接受责任回执", QUERY_SUBMISSION: "核实上游提交状态", RESOLVE_TASK: "处置未解决任务",
     RESPONSE_REVIEW_REQUIRED: "响应待人工核实", ACCEPT_PROCESSING: "接受责任处理中", ACCEPT_RECOMMENDATION: "待确认接受建议", DOCUMENT_REVISION_REQUIRED: "待修订文书", ON_HOLD: "已暂缓并转交", OUTCOME_VERIFICATION: "结果待核实", UPSTREAM_ACTION_REQUIRED: "待处理上游要求", SUBMISSION_UNCERTAIN: "提交结果待核实",
     CANCELLED: "已取消", WAIVED: "已豁免", SUPERSEDED: "已被替代", HOLD: "暂缓并升级", RETURN_MATERIALS: "退回材料", RETURN_DOCUMENT: "退回文书", RECOMMEND_ACCEPT: "建议接受责任", RESTORE_DECISION: "恢复商户决定", RESTORE_EVIDENCE: "恢复材料任务", CONFIRM_LOSS: "确认权利已失效", FOLLOW_UP: "继续核实跟进", WAIT: "同阶段继续等待", VERIFY: "需要核实", ACTION: "需要进一步行动", FINAL: "已确认终局", NO_ACTION_REQUIRED: "有依据无需渠道处理", NOT_ACCEPTED: "尚未受理", CLAIM: "已接手", RESOLVED: "已解决",
@@ -662,7 +664,7 @@
   }
   function renderMetrics() {
     const node = $("metrics");
-    node.hidden = Boolean(S.isCasePage);
+    node.hidden = Boolean(S.isCasePage) || S.role === "ADMIN";
     if (node.hidden) return;
     const count = (queue) => S.queueCounts?.[queue] ?? (S.queue === queue ? S.total : "—");
     const values = surface === "merchant"
@@ -879,6 +881,12 @@
       return;
     }
     const p = S.plan, merchant = surface === "merchant";
+    document.body?.classList?.toggle("stage-mode", Boolean(globalThis.OceanV2Stage?.enabled()));
+    if (globalThis.OceanV2Stage?.enabled()) {
+      document.body.classList.add("stage-mode");
+      globalThis.OceanV2Stage.render(target, {c,plan:p,surface,esc,label,money,caseOwner,actionButton,renderAudit});
+      return;
+    }
     const renderers = merchant
       ? { overview: () => renderMerchantOverviewPage(c, p), tasks: () => renderMerchantTaskPage(c, p), evidence: () => renderMerchantEvidencePage(c, p), collaboration: () => renderMerchantFeedbackPage(c), outcome: () => renderMerchantOutcomePage(c) }
       : { overview: () => renderOverview(c, p), tasks: () => renderTasks(c), evidence: () => renderEvidence(c, p), agent: () => renderAgent(c, p), collaboration: () => renderCollaboration(c), review: () => renderReview(c), outcome: () => renderOutcome(c), audit: () => renderAudit(c) };
@@ -908,6 +916,10 @@
     const sourceFiles = list(sourceDiagnostics.files);
     const runtimeStores = list(g.data_sources?.runtime_stores);
     const dataSourceCard = `<div class="governance-card wide"><h2>数据取源与加载状态</h2><p class="section-note">${esc(g.data_sources?.boundary || "案例知识、演练模板与运行案件分开加载。")}</p><div class="table-scroll"><table class="rule-table"><thead><tr><th>用途</th><th>路径</th><th>Schema / 哈希</th><th>状态</th></tr></thead><tbody>${sourceFiles.map((item) => `<tr><td>${esc(item.role)}<br><span class="row-subtitle">${esc(item.record_count)} 条</span></td><td class="mono">${esc(item.path)}</td><td>${esc(item.schema_version)}<br><span class="mono">${esc(item.sha256)}</span></td><td>${badge(sourceDiagnostics.status || "LOADED")}<br>${badge(sourceDiagnostics.validation_status || "PASSED")}</td></tr>`).join("")}${runtimeStores.map((item) => `<tr><td>${esc(item.role)}</td><td class="mono">${esc(item.path)}</td><td>${esc(item.storage)} · ${esc(item.schema)}<br><span class="row-subtitle">${esc(item.size_bytes ?? "—")} bytes</span></td><td>${badge(item.status)}</td></tr>`).join("")}</tbody></table></div><p class="section-note">加载错误：${list(sourceDiagnostics.load_errors).length ? esc(list(sourceDiagnostics.load_errors).join("；")) : "0"}；来源冲突 ${esc(sourceDiagnostics.conflict_count ?? "—")} 项，数据缺口 ${esc(sourceDiagnostics.data_gap_count ?? "—")} 项。</p></div>`;
+    if (S.role === "ADMIN") {
+      $("governanceView").innerHTML = `<div class="governance-grid"><div class="governance-card"><h2>IT 系统管理</h2><p>管理账号、系统配置与合成演示数据；不读取运行案件，不参与规则确认、分配或业务审批。</p><a class="button secondary" href="/v2/admin">账号与合成数据管理</a></div><div class="governance-card"><h2>集成与运行边界</h2>${integrations.map(([key, value]) => `<div class="integration-row"><span>${esc(integrationNames[key] || key)}</span>${badge(typeof value === "object" ? value.status || value.mode : value)}</div>`).join("")}</div>${dataSourceCard}</div>`;
+      return;
+    }
     $("governanceView").innerHTML =
       `<div class="governance-grid"><div class="governance-card"><h2>集成与运行边界</h2>${integrations
         .map(([key, value]) => {
@@ -1476,6 +1488,7 @@
     });
   }
   function syncStatus(message, failed = false) {
+    globalThis.OceanV2Stage?.sync(message, failed);
     const node = $("syncStatus");
     if (!node) return;
     node.textContent = message;
@@ -1640,7 +1653,7 @@
   function renderTeamProgress(progress) {
     const host = $("teamProgress");
     if (!host) return;
-    host.hidden = !["SUPERVISOR", "ADMIN"].includes(S.role) || !Array.isArray(progress) || S.isCasePage || surface !== "operations";
+    host.hidden = S.role !== "SUPERVISOR" || !Array.isArray(progress) || S.isCasePage || surface !== "operations";
     if (host.hidden) return;
     host.innerHTML = `<h2>团队进度</h2><p class="section-note">全部案件汇总 · 待办为未完成任务数 · 不受当前分页和筛选影响</p><div class="table-scroll"><table class="rule-table"><thead><tr><th>负责人</th><th>案件总数</th><th>待办</th><th>临期 / 风险</th><th>审核中</th><th>已关闭</th></tr></thead><tbody>${progress.map(p => `<tr><td>${esc(p.display_name)}${p.role ? ` · ${esc(label(p.role))}` : ""}</td>${[p.total,p.pending,p.urgent,p.review,p.closed].map(n => `<td>${esc(n)}</td>`).join("")}</tr>`).join("") || '<tr><td colspan="6">暂无团队案件</td></tr>'}</tbody></table></div>`;
     const filter = $("assignedFilter");
@@ -1954,7 +1967,7 @@
           '<div class="callout">此次操作只提交至 Mock 上游，并生成可审计模拟回执。</div>'
         );
       case "ASSIGN_CASE":
-        return field("user_id", "获授权的案件负责人", "", "select", { choices: list(c.assignment_candidates || c.participants).filter(p => ["OPERATOR", "SUPERVISOR", "ADMIN"].includes(p.role)).map(p => [p.user_id, p.display_name || p.user_id]) }) + reason();
+        return field("user_id", "获授权的案件负责人", "", "select", { choices: list(c.assignment_candidates || c.participants).filter(p => ["OPERATOR", "SUPERVISOR"].includes(p.role)).map(p => [p.user_id, p.display_name || p.user_id]) }) + reason();
       case "RESOLVE_RESPONSE":
         return field("resolution", "核实后的处理方式", "", "select", { choices: ["RESTORE_DECISION", "RESTORE_EVIDENCE", "CONFIRM_LOSS", "FOLLOW_UP"] }) + reason() + field("authorization_reference", "授权与核实依据", "") + field("external_deadline", "经确认的有效外部截止时间", "", "datetime-local", { optional: true });
       case "FINAL_REVIEW":
@@ -2519,14 +2532,14 @@
       S.role = session.user.role;
       S.merchantId = session.user.merchant_id || list(session.user.merchant_ids)[0] || "";
       const permittedSurface = S.role === "MERCHANT" ? "merchant" : session.surface || "operations";
-      if (surface !== permittedSurface && !(["ADMIN", "SUPERVISOR"].includes(S.role) && ["operations", "governance"].includes(surface)))
+      if (surface !== permittedSurface && !(S.role === "SUPERVISOR" && ["operations", "governance"].includes(surface)))
         throw Object.assign(new Error("此账号不能访问这个工作空间，请返回自己的案件列表。"), { status: 403 });
       $("accountName").textContent = session.user.display_name || session.user.id;
       $("workspaceHome").href = `/v2/${permittedSurface}`;
       $("brandHome").href = `/v2/${permittedSurface}`;
       $("workspaceName").textContent = S.role === "MERCHANT" ? "我的案件" : S.role === "ADMIN" ? "平台治理" : "我的工作队列";
       S.assignedTo = S.role === "OPERATOR" ? "me" : "";
-      if ($("operationsLink")) $("operationsLink").hidden = !["ADMIN", "SUPERVISOR"].includes(S.role);
+      if ($("operationsLink")) $("operationsLink").hidden = S.role !== "SUPERVISOR";
       if ($("governanceLink")) $("governanceLink").hidden = !["ADMIN", "SUPERVISOR"].includes(S.role);
       if ($("adminLink")) $("adminLink").hidden = S.role !== "ADMIN";
     } catch (error) {
@@ -2648,7 +2661,7 @@
       globalThis.OceanV2Library.mount({ api, openTemplate: undefined });
     }
     bindEvents();
-    if (surface === "operations" && ["OPERATOR", "SUPERVISOR", "ADMIN"].includes(S.role) && globalThis.OceanV21Intake) {
+    if (surface === "operations" && ["OPERATOR", "SUPERVISOR"].includes(S.role) && globalThis.OceanV21Intake) {
       let host = null;
       if (!S.isCasePage && !S.isLibraryPage) { host = document.createElement("section"); host.id = "intakeEvents"; $("workspaceGrid").before(host); }
       globalThis.OceanV21Intake.mount({ host, api, onCaseOpen: (id) => location.assign(caseHref(id)) });

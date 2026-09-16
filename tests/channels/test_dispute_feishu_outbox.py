@@ -374,6 +374,7 @@ def api(tmp_path):
         for name, role, merchant in [
             ("operator", "OPERATOR", "merchant-a"),
             ("risk", "OPERATOR", "merchant-a"),
+            ("manager", "SUPERVISOR", "merchant-a"),
             ("merchant", "MERCHANT", "merchant-a"),
             ("outsider", "MERCHANT", "merchant-b"),
         ]:
@@ -602,7 +603,7 @@ def test_signed_decision_keeps_atomic_business_audit_and_updates_delivered_card(
     for action, role, data in [
         (
             "CONFIRM_RULE",
-            "risk",
+            "manager",
             {
                 "source_id": "SYNTHETIC_DEMO",
                 "source_locator": "synthetic:feishu-test",

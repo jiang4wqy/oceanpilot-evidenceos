@@ -21,6 +21,7 @@ from oceanpilot.adapters.channels.feishu.v2 import (
 from oceanpilot.adapters.feishu.security import FeishuRequestVerifier, FeishuVerificationError
 from oceanpilot.api.cases import COMMON_PROBLEMS, PROBLEM_RESPONSE
 from oceanpilot.api.disputes import Identity
+from oceanpilot.api.feishu_binding import router as binding_router
 
 router = APIRouter(
     prefix="/api/v2/integrations/feishu",
@@ -28,6 +29,7 @@ router = APIRouter(
     responses={404: PROBLEM_RESPONSE, 409: PROBLEM_RESPONSE, **COMMON_PROBLEMS},
 )
 MAX_BODY_BYTES = 64 * 1024
+router.include_router(binding_router)
 
 
 def initialize_dispute_feishu(
@@ -37,7 +39,10 @@ def initialize_dispute_feishu(
     *,
     environ: Mapping[str, str] | None = None,
 ) -> bool:
-    """Production composition: knowledge-only; old case bindings never authorize this bot."""
+    """Public knowledge plus opt-in, freshly account-linked private cases.
+
+    Legacy case bindings never authorize this composition.
+    """
     from oceanpilot.adapters.channels.feishu.knowledge_bot import KnowledgeBot, load_public_groups
     from oceanpilot.adapters.channels.feishu.public_knowledge import PublicKnowledge
     from oceanpilot.adapters.feishu.client import FeishuOutboundClient
@@ -46,6 +51,7 @@ def initialize_dispute_feishu(
     app.state.dispute_feishu = None
     app.state.dispute_feishu_verifier = None
     app.state.dispute_feishu_outbox = None
+    app.state.feishu_private = None
     required = ("FEISHU_APP_ID", "FEISHU_ENCRYPT_KEY", "FEISHU_VERIFICATION_TOKEN")
     if not all(env.get(key) for key in required):
         return False
@@ -77,6 +83,33 @@ def initialize_dispute_feishu(
             client=client,
             approval_revision=lambda: PublicKnowledge.from_path(path).revision,
         )
+        if env.get("OCEANPILOT_FEISHU_PRIVATE_CASES") == "enabled":
+            from oceanpilot.adapters.channels.feishu.private_cases import PrivateCaseBot
+            from oceanpilot.adapters.channels.feishu.routing import FeishuMessageRouter
+
+            private_client = None
+            if env.get("OCEANPILOT_FEISHU_PRIVATE_OUTBOUND") == "authorized-test" and env.get(
+                "FEISHU_APP_SECRET"
+            ):
+                private_client = FeishuOutboundClient(
+                    app_id=env["FEISHU_APP_ID"], app_secret=env["FEISHU_APP_SECRET"]
+                )
+            private = PrivateCaseBot(
+                Path(db_path).with_name("feishu-private-cases.db"),
+                directory=app.state.v21_auth,
+                disputes=app.state.disputes,
+                app_id=env["FEISHU_APP_ID"],
+                secret=env["FEISHU_ENCRYPT_KEY"],
+                base_url=base_url,
+                client=private_client,
+                model=(
+                    getattr(app.state, "v2_model_provider", None)
+                    if env.get("OCEANPILOT_FEISHU_PRIVATE_MODEL") == "enabled"
+                    else None
+                ),
+            )
+            app.state.feishu_private = private
+            bot = FeishuMessageRouter(bot, private)
         verifier = FeishuRequestVerifier(
             encrypt_key=env["FEISHU_ENCRYPT_KEY"],
             verification_token=env["FEISHU_VERIFICATION_TOKEN"],
@@ -183,7 +216,10 @@ async def _handle(request: Request, mode: str) -> JSONResponse:
         chunks.append(chunk)
     try:
         payload = verifier.verify(
-            dict(request.headers), b"".join(chunks), allow_url_verification=True
+            dict(request.headers),
+            b"".join(chunks),
+            allow_url_verification=True,
+            allow_card_timestamp=mode == "card",
         )
     except FeishuVerificationError:
         return _error(401, "VERIFICATION_FAILED")
@@ -196,6 +232,15 @@ async def _handle(request: Request, mode: str) -> JSONResponse:
         response = await run_in_threadpool(adapter.handle, payload, mode=mode)
         return JSONResponse(response)
     except FeishuV2Error as exc:
+        if mode == "card" and getattr(request.app.state, "feishu_private", None) is not None:
+            return JSONResponse(
+                {
+                    "toast": {
+                        "type": "error",
+                        "content": "操作未执行：卡片已失效或当前无权限。请私聊查询最新案件后重试。",
+                    }
+                }
+            )
         return _error(exc.status, exc.code)
     except sqlite3.Error:
         return _error(503, "FEISHU_V2_STORAGE_UNAVAILABLE")
@@ -203,6 +248,15 @@ async def _handle(request: Request, mode: str) -> JSONResponse:
         from oceanpilot.domain.dispute import DisputeError
 
         if isinstance(exc, DisputeError):
+            if mode == "card" and getattr(request.app.state, "feishu_private", None) is not None:
+                return JSONResponse(
+                    {
+                        "toast": {
+                            "type": "error",
+                            "content": "操作未执行：案件状态或权限已变化。请打开网站核对。",
+                        }
+                    }
+                )
             return _error(exc.status, exc.code)
         # Callback bodies, token values and exception details never enter responses.
         return _error(500, "FEISHU_V2_INTERNAL_ERROR")
@@ -235,8 +289,11 @@ class OutboxSendDTO(BaseModel):
 
 async def _outbox_call(request, method, *args, **kwargs):
     from oceanpilot.adapters.channels.feishu.knowledge_bot import KnowledgeBot
+    from oceanpilot.adapters.channels.feishu.routing import FeishuMessageRouter
 
-    if isinstance(getattr(request.app.state, "dispute_feishu", None), KnowledgeBot):
+    if isinstance(
+        getattr(request.app.state, "dispute_feishu", None), (KnowledgeBot, FeishuMessageRouter)
+    ):
         return _error(403, "FEISHU_BUSINESS_ACTIONS_DISABLED")
     outbox = getattr(request.app.state, "dispute_feishu_outbox", None)
     if outbox is None:

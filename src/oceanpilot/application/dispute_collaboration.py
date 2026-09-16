@@ -26,7 +26,7 @@ from oceanpilot.domain.dispute_rules import case_plan
 from oceanpilot.domain.evidence_catalog import EVIDENCE_CONTENT_FIELDS
 
 SCOPES = {"SHARED", "OP_INTERNAL"}
-_INTERNAL_ROLES = {"OPERATOR", "SUPERVISOR", "ADMIN", "AGENT"}
+_INTERNAL_ROLES = {"OPERATOR", "SUPERVISOR", "AGENT"}
 _SYSTEM = {"role": "AGENT", "actor_id": "oceanpilot-workflow-agent"}
 _FILE_TYPES = STRUCTURED_TYPES
 _FACTS = EVIDENCE_CONTENT_FIELDS
@@ -382,7 +382,7 @@ class DisputeCollaborationService:
             require(current["status"] != "RESOLVED", "HANDOFF_RESOLVED", "Handoff is resolved")
             require(
                 current.get("assignee_id") in {None, identity["actor_id"]}
-                or identity["role"] in {"SUPERVISOR", "ADMIN"},
+                or identity["role"] == "SUPERVISOR",
                 "ASSIGNEE_FORBIDDEN",
                 "Only the assignee or supervisor may handle this handoff",
                 403,
@@ -515,7 +515,12 @@ class DisputeCollaborationService:
             findings.append("材料争议交易金额缺失或与本案不一致。")
         for field in required:
             if not values.get(field):
-                findings.append(f"未提供支持当前证据要求的事实：{field}。")
+                name = {
+                    "delivered_at": "送达时间",
+                    "recipient": "签收人",
+                    "tracking_number": "物流单号",
+                }.get(field, field)
+                findings.append(f"缺少{name}；未提供支持当前证据要求的事实：{field}。")
         if str(values.get("status", "")).lower() in {"not_delivered", "cancelled", "disputed"}:
             findings.append("材料记录了未送达、已取消或存在争议，须人工解释矛盾。")
         locators = [
@@ -612,7 +617,7 @@ class DisputeCollaborationService:
     ):
         case, identity = self._access(case_id, identity)
         require(
-            identity["role"] in {"MERCHANT", "OPERATOR", "SUPERVISOR", "ADMIN"},
+            identity["role"] in {"MERCHANT", "OPERATOR", "SUPERVISOR"},
             "FORBIDDEN",
             "Cannot upload evidence",
             403,
@@ -667,6 +672,7 @@ class DisputeCollaborationService:
                 document = extracted["document"]
                 assessment = self._assess(case, code, text, values)
                 assessment.update(
+                    extraction_check_status=assessment["status"],
                     status="NEEDS_MANUAL",
                     method="DOCUMENT_EXTRACTION_V1",
                     recognition=extracted["recognition"],
@@ -757,13 +763,23 @@ class DisputeCollaborationService:
         return obj
 
     def download_file(self, case_id, object_id, identity):
-        case, _ = self._access(case_id, identity)
+        case, identity = self._access(case_id, identity)
         obj = self.get_evidence_object(case_id, object_id)
         require(
             any(
-                e.get("object_id") == object_id
-                or any(h.get("object_id") == object_id for h in e.get("history", []))
+                (
+                    e.get("object_id") == object_id
+                    or any(
+                        h.get("object_id") == object_id
+                        and (
+                            identity["role"] != "MERCHANT"
+                            or h.get("visibility", "SHARED") == "SHARED"
+                        )
+                        for h in e.get("history", [])
+                    )
+                )
                 for e in case["evidence"]
+                if identity["role"] != "MERCHANT" or e.get("visibility", "SHARED") == "SHARED"
             ),
             "NOT_FOUND",
             "Evidence object is not registered on this case",

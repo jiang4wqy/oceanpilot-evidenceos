@@ -15,7 +15,8 @@ from oceanpilot.application.dispute_collaboration import (
     DisputeCollaborationService,
 )
 from oceanpilot.application.dispute_views import case_view
-from oceanpilot.application.evidence_documents import MAX_BASE64_CHARS
+from oceanpilot.application.evidence_documents import MAX_BASE64_CHARS, preview_page
+from oceanpilot.domain.dispute import DisputeError
 
 router = APIRouter(
     tags=["V2.1 Case Collaboration"],
@@ -172,6 +173,29 @@ def download(case_id: str, object_id: str, request: Request, identity: Identity)
             "X-Content-Type-Options": "nosniff",
             "Content-Security-Policy": "sandbox",
             "Cache-Control": "private, no-store",
+        },
+    )
+
+
+@router.get(_PREFIX + "/files/{object_id}/pages/{page_number}")
+def file_page(case_id: str, object_id: str, page_number: int, request: Request, identity: Identity):
+    obj = request.app.state.dispute_collaboration.download_file(case_id, object_id, identity)
+    try:
+        content = preview_page(obj["filename"], obj["mime_type"], obj["content"], page_number)
+    except DisputeError:
+        raise
+    except Exception:
+        raise DisputeError(
+            "PREVIEW_UNAVAILABLE", "Preview unavailable; download the original", 422
+        ) from None
+    return Response(
+        content,
+        media_type="image/jpeg",
+        headers={
+            "Cache-Control": "private, no-store",
+            "X-Content-Type-Options": "nosniff",
+            "Content-Security-Policy": "default-src 'none'; sandbox",
+            "X-OceanPilot-Preview": "rendered-from-saved-original",
         },
     )
 

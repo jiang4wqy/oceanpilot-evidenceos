@@ -115,7 +115,7 @@ def test_event_forms_publish_the_actual_dto_limits_and_optional_source_fields(st
     assert sessions["merchant-a"].get("/api/v2/intake/events").status_code == 403
 
 
-def test_officer_cannot_provision_transactions_and_admin_can_receive_events(stack):
+def test_officer_cannot_provision_transactions_and_admin_cannot_receive_events(stack):
     _, sessions = stack
     event = envelope()
     assert (
@@ -124,7 +124,7 @@ def test_officer_cannot_provision_transactions_and_admin_can_receive_events(stac
         .status_code
         == 403
     )
-    assert receive(sessions["director"], event).status_code == 200
+    assert receive(sessions["director"], event).status_code == 403
     assert receive(sessions["merchant-a"], event).status_code == 403
 
 
@@ -336,7 +336,7 @@ def test_legacy_command_and_full_demo_routes_cannot_bypass_registry_or_human_rol
     for client, expected in [
         (sessions["operator-a"], 410),
         (sessions["merchant-a"], 403),
-        (sessions["director"], 410),
+        (sessions["director"], 403),
     ]:
         old = client.post("/api/v2/commands", json=payload)
         assert old.status_code == expected, old.text

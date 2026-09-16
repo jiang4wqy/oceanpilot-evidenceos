@@ -199,13 +199,13 @@ def action_gate(case, action, identity, now=None):
         current = timestamp(now) if isinstance(now, str) else now or datetime.now(UTC)
         merchant_deadline = case.get("deadlines", {}).get("merchant")
         if (
-            role in {"OPERATOR", "SUPERVISOR", "ADMIN"}
+            role in {"OPERATOR", "SUPERVISOR"}
             and case.get("merchant_decision") == "NONE"
             and merchant_deadline
             and current > timestamp(merchant_deadline)
         ):
             choices += ["NO_RESPONSE"]
-        if role in {"OPERATOR", "SUPERVISOR", "ADMIN"} and "ACCEPT" in choices:
+        if role in {"OPERATOR", "SUPERVISOR"} and "ACCEPT" in choices:
             choices += ["AUTHORIZED_WAIVER"]
         result["choices"] = choices
         if not choices:

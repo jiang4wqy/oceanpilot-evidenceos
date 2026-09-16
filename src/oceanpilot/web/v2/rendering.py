@@ -23,7 +23,9 @@ def render_v2_page(role: str = "operations") -> str:
             "__V2_STYLES__",
             resources.joinpath("v2/styles.css").read_text("utf-8")
             + "\n"
-            + resources.joinpath("v2/library.css").read_text("utf-8"),
+            + resources.joinpath("v2/library.css").read_text("utf-8")
+            + "\n"
+            + resources.joinpath("v2/stage.css").read_text("utf-8"),
         )
         .replace(
             "__V2_SCRIPT__",
@@ -32,6 +34,8 @@ def render_v2_page(role: str = "operations") -> str:
             + resources.joinpath("v2/collaboration.js").read_text("utf-8")
             + "\n"
             + resources.joinpath("v2/intake.js").read_text("utf-8")
+            + "\n"
+            + resources.joinpath("v2/stage.js").read_text("utf-8")
             + "\n"
             + resources.joinpath("v2/app.js").read_text("utf-8"),
         )

@@ -126,7 +126,7 @@
       state.uploadPending = payload;
       await state.api(path(state, "/files"), {method:"POST",body:JSON.stringify(payload),timeoutMs:60000});
       state.uploadPending = null;
-      if (same(state)) { form.reset(); notice(state, "材料已保存。读取状态与人工判断会明确显示。"); await state.onCaseChanged?.(); await refresh(state); }
+      if (same(state)) { form.reset(); notice(state, "材料已保存。读取状态与人工判断会明确显示。"); await state.onCaseChanged?.(); await refresh(state); document.getElementById("stageFilesDialog")?.close(); }
     } catch (error) {
       if (!error.uncertain && !error.preservePending) state.uploadPending = null;
       notice(state, error.uncertain ? "文件保存结果待确认。保留原文件并再次点击，将使用原操作 ID 核对。" : error.message, true);
@@ -216,7 +216,14 @@
     if (!globalThis.OCEAN_V2_NO_BOOT) state.timer=setInterval(()=>{if(document.visibilityState!=="hidden")refresh(state);},4000);
   }
   globalThis.OceanV21Collaboration={mount,refresh,openFiles(data={}) {
-    if(!active)return;const details=active.host.querySelector(".thread-files");details.open=true;details.scrollIntoView({block:"center",behavior:"smooth"});
+    if(!active)return;
+    if(globalThis.OceanV2Stage?.enabled()) {
+      let dialog=document.getElementById("stageFilesDialog");
+      if(!dialog){dialog=document.createElement("dialog");dialog.id="stageFilesDialog";dialog.innerHTML='<form method="dialog"><button class="button secondary">返回案件</button></form>';document.body.append(dialog);dialog.append(active.host);}
+      if(!dialog.open)dialog.showModal();
+    }
+    const details=active.host.querySelector(".thread-files");details.open=true;
+    if(!globalThis.OceanV2Stage?.enabled())details.scrollIntoView({block:"center",behavior:"smooth"});
     const form=details.querySelector(".thread-upload");if(form){if(data.code){
       const matches=[...form.elements.material.options].filter(o=>o.dataset.code===data.code && o.dataset.evidenceId);
       form.elements.material.value=data.evidence_id ? `replace:${data.evidence_id}` : matches.length===1 ? matches[0].value : matches.length ? "" : data.code;

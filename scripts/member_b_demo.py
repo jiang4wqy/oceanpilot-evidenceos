@@ -32,6 +32,7 @@ def code_identity():
         ROOT / "pyproject.toml",
         Path(__file__),
         ROOT / "scripts/member_b_rehearsal.py",
+        ROOT / "scripts/stage_materials.py",
     ]
     hashes = {
         str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest()
@@ -57,6 +58,11 @@ def code_identity():
                 "Pillow",
                 "pypdfium2",
             )
+        },
+        "demo_packages": {
+            name: importlib.metadata.version(name)
+            for name in ("reportlab",)
+            if importlib.util.find_spec(name)
         },
     }
 
