@@ -1,0 +1,12 @@
+{
+  "id": "aac71163-fbb5-45d1-bb7f-67c94a7c64e7",
+  "directory": "/Users/luxinyu/Desktop/\u98de\u4e66 ai \u5927\u8d5b/work/oceanpilot-intake-69-70/work/simulation-demo",
+  "port": 8016,
+  "code_sha256": "e67f22daffd5b37e2b8dc048ff6b8006eb7dcde093bcdcd1c7276900efca05eb",
+  "code_matches": true,
+  "databases": {
+    "core.db": true,
+    "chargeback.db": true,
+    "rules.db": true
+  }
+}

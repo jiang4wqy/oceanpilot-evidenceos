@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/jiang4wqy/oceanpilot-evidenceos/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/jiang4wqy/oceanpilot-evidenceos/ci.yml?branch=oceanpilot-v2&style=for-the-badge&logo=githubactions&logoColor=white&label=CI&color=0B8F73"></a>
+  <a href="https://github.com/jiang4wqy/oceanpilot-evidenceos/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/jiang4wqy/oceanpilot-evidenceos/ci.yml?branch=master&style=for-the-badge&logo=githubactions&logoColor=white&label=CI&color=0B8F73"></a>
   <img alt="Python 3.12" src="https://img.shields.io/badge/Python-3.12-0B8F73?style=for-the-badge&logo=python&logoColor=white">
   <img alt="FastAPI" src="https://img.shields.io/badge/FastAPI-0.139-0B8F73?style=for-the-badge&logo=fastapi&logoColor=white">
   <img alt="Version 2.1" src="https://img.shields.io/badge/OceanPilot-V2.1-062F2B?style=for-the-badge">
@@ -30,7 +30,7 @@
 > OceanPilot V2.1 是用于比赛演示与工程验收的本地原型。交易、账务及上游提交均为 **Synthetic / Mock / Disabled**；规则指南是可追溯参考，不会自动成为生产规则。当前验证状态与限制见 [V2.1 验证记录](docs/v2/v21-validation.md)。
 
 > [!NOTE]
-> V2.1 当前在 `oceanpilot-v2` 分支集成与验收；默认 `master` 仍保留稳定的 V1 比赛 Demo，后续是否合并单独决定。
+> `master` 为当前 V2.1 项目主线，包含飞书群知识问答、私聊案件助手及合成演练；V1 历史演示入口仍保留。真实飞书修复与验收边界见 [商户助手实测记录](docs/v2/feishu-merchant-live-test-2026-09-16.md)。
 
 <a id="overview"></a>
 ## 为什么是 OceanPilot？
@@ -178,7 +178,7 @@ OCEANPILOT_CHARGEBACK_LIVE_MODEL=1
 | `/v2/merchant` | 商户自己的案件列表与待办 |
 | `/v2/merchant/cases/{id}` | 商户案件页、补证决定与共享沟通 |
 | `/v2/operations/cases/{id}` | 运营案件页、审核提交、共享沟通与隔离的内部讨论 |
-| `/v2/operations/library` | 62 条指南参考、28 个模板；26 个适用于当前双卡演练建案 |
+| `/v2/operations/library` | 62 条指南参考均可创建独立合成演练；风控经理确认匹配的 Mock 规则后才可直接发布待办，专员建案后须转交经理确认 |
 | `/v2/governance` | 规则来源、角色权限、集成状态与人工审核知识 |
 | `/v2/admin` | IT 管理员：账号、合成交易与系统管理 |
 | `/docs` | V2 严格命令 HTTP 合同与兼容的 V1 API |

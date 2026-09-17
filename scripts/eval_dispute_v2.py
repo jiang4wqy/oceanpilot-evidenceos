@@ -62,7 +62,7 @@ def evaluate() -> dict:
             ("MERCHANT", "REVIEW"),
             ("MERCHANT", "SUBMIT"),
             ("AGENT", "SUBMIT"),
-            ("ADMIN", "CLOSE"),
+            ("AGENT", "CLOSE"),
         ):
             try:
                 issue(

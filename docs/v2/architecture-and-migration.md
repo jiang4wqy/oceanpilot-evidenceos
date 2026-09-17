@@ -22,7 +22,7 @@ GET /api/v2/cases 仅为 SUPERVISOR 增加 assignee_progress：按负责人提�
 
 升级前按部署方式备份争议 SQLite（运行中使用 SQLite backup API，或停服后完整备份数据库及 WAL）。回退时先停服，恢复旧代码与同一次备份，再启动；不要只回退代码而保留已迁移账号。迁移本身不重置账号和密码。
 
-分支策略：从稳定 master `250e7d9` 建立 `oceanpilot-v2`，所有 V2 工作在该分支集成。按用户 2026-09-08 补充要求，不创建 PR，也不合并 master；master 保留原稳定 Demo。
+分支策略：V2 最初从稳定 master `250e7d9` 建立 `oceanpilot-v2` 集成；2026-09-14 起通过独立整合分支和 PR 将已验收的 V2 变更回合到仓库默认分支 `master`，不直接推送默认分支。
 
 实现依据：用户提供的 2026-09-08 `OCEANPILOT_V2_ARCHITECTURE.md`、`OceanPilot_V2_推进说明文档.docx` 和关联推进方案。以下是代码中的实际边界，不代表企业生产接入已经完成。
 
@@ -86,7 +86,7 @@ Agent 由案件事件观察、持久化工具运行与提案、可选真实模�
 
 当前默认参考数据来自仓库 `docs/chargeback-case-library/03_case_library.json` 和 `06_seed_cases.json`：62 条参考、28 条模板。最高编号 074 不等于实际条数。完整源数据与 SHA 清单打包进 wheel，adapter 返回独立副本并校验资源哈希。来源性质、原核验状态、冲突与页码保留；运行态参考不自动成为生产规则。
 
-运营目录 `/v2/operations/library` 展示实际资料；26 条 Visa/Mastercard 模板可通过 `INTAKE.case_template_id` 创建明确确认的演练交易。Amex 与产品安全模板仅保留预览。来源快照与用户填写的演练交易字段分别保存。模板建案及后续阶段不继承 Golden Demo 的六条 Mock 规则和默认时限，需风控确认当前适用的权利、证据与明确期限。
+运营目录 `/v2/operations/library` 展示实际资料；全部 62 条参考均可在明确确认后创建独立的合成演练交易。只有匹配现有 Mock 规则的入口会自动确认规则并发布商户待办；原文参考、Amex、专项场景及其他未覆盖规则先建案，再由运营人工确认规则。来源快照与用户填写的演练交易字段分别保存，建案及后续阶段不继承参考案例的证据、决定、结果或未确认期限。
 
 Agent 按当前卡组织、原因码检索指南参考，把 `REFERENCE_KNOWLEDGE` 与 `CASE_RULE_SNAPSHOT` 引用分开。新工具运行和每次对话保存真实检索记录；历史运行保持不变。现有六条 Mock fixture 继续服务 A–D Golden Demo，不代表参考库仅有六条。
 

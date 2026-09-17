@@ -37,6 +37,8 @@ def render_v2_page(role: str = "operations") -> str:
             + "\n"
             + resources.joinpath("v2/stage.js").read_text("utf-8")
             + "\n"
+            + resources.joinpath("v2/simulation.js").read_text("utf-8")
+            + "\n"
             + resources.joinpath("v2/app.js").read_text("utf-8"),
         )
         .replace("__V2_CONFIG__", json.dumps({"surface": surface}))

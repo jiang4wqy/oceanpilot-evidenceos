@@ -39,6 +39,7 @@ def stack(tmp_path_factory):
     for name, role, merchant in [
         ("director", "ADMIN", None),
         ("operator-a", "OPERATOR", "merchant-a"),
+        ("manager-a", "SUPERVISOR", "merchant-a"),
         ("operator-b", "OPERATOR", "merchant-b"),
         ("merchant-a", "MERCHANT", "merchant-a"),
     ]:
