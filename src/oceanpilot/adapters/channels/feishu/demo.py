@@ -75,13 +75,20 @@ class FeishuDemoBatches:
                     "cases": [],
                     "synthetic": True,
                     "upstream": "MOCK",
+                    # Generated identifiers must not accidentally resemble a PAN.
+                    # Persist the format so old batches retain their replay keys.
+                    "identifier_format": "letters-v1",
                 }
                 self.bot.put(db, "demo", batch_id, administrator, "PREPARING", batch)
         # A failure leaves a resumable PREPARING record. No automatic merchant
         # decision, evidence approval, package approval or upstream submission.
         for number, (merchant, actor) in enumerate(zip(merchants, operators, strict=True)):
+            reference = f"{batch_id}-{number}"
+            if batch.get("identifier_format") == "letters-v1":
+                reference = UUID(batch_id).hex.translate(str.maketrans("0123456789", "ghijklmnop"))
+                reference += "-" + chr(ord("a") + number)
             facts = {
-                "transaction_id": f"feishu-{batch_id}-{number}",
+                "transaction_id": f"feishu-{reference}",
                 "merchant_id": merchant,
                 "scheme": "VISA",
                 "channel": "MOCK",
@@ -97,7 +104,7 @@ class FeishuDemoBatches:
             received = self.intake.receive(
                 facts
                 | {
-                    "source_event_id": f"feishu-{batch_id}-{number}",
+                    "source_event_id": f"feishu-{reference}",
                     "event_type": "FORMAL_DISPUTE",
                     "reason_code": "13.1",
                     "received_at": batch["created_at"],
@@ -125,7 +132,7 @@ class FeishuDemoBatches:
                 raise FeishuV2Error("DEMO_BATCH_RETIRED", 409)
             # The only demonstration preparation is the existing operator publish gate.
             # It validates the rule and deadline; an unverified source fails closed.
-            command_id = f"feishu-publish-{batch_id}-{number}"
+            command_id = f"feishu-publish-{reference}"
             if not self.bot.disputes.store.get_command_fingerprint(command_id):
                 self.bot.disputes.execute(
                     {

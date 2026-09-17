@@ -63,6 +63,7 @@ def _search_question(question):
     for pattern, replacement in (
         (r"(?:你|机器人)?能(?:帮我)?解决(?:什么|哪些)?问题(?:么|吗)?", "解决什么问题"),
         (r"能帮我做什么", "解决什么问题"),
+        (r"哪些(?:事情|操作).*?(?:网站|私聊)", "群机器人能力边界"),
         (r"(?:怎么用|使用教程)", "网站登录 工作台"),
         (r"(?:补交|补充)(?:文件|资料|材料)", "补件"),
         (r"(?:怎么传|怎么交|在哪交|在哪传|传文件|交文件)", "上传材料"),
@@ -153,17 +154,24 @@ class PublicKnowledge:
         return cls(data["documents"], model=model)
 
     def search(self, question):
-        terms = _terms(_search_question(public_text(question))) - _SEARCH_STOP_TERMS
+        normalized = _search_question(public_text(question))
+        # Keep the original safety check over the entire question. Splitting
+        # merely stops an introduction or a second question diluting relevance;
+        # it never changes source eligibility or lowers the evidence threshold.
+        parts = [normalized, *re.split(r"[，,。！？!?；;\n]+", normalized)]
+        term_sets = [_terms(part) - _SEARCH_STOP_TERMS for part in dict.fromkeys(parts)]
         scored = []
         for doc in self.documents:
-            overlap = terms & _terms(doc["title"] + " " + doc["text"])
-            title_overlap = terms & _terms(doc["title"])
-            # A dedicated topic title beats an incidental phrase in another FAQ.
-            score = len(overlap) + 2 * len(title_overlap)
-            # A short, specific title match (e.g. 登录) is useful. A product name
-            # alone or a tiny overlap in an unrelated question is not evidence.
-            if (len(overlap) >= 2 or title_overlap) and len(overlap) / max(len(terms), 1) >= 0.35:
-                scored.append((score, doc))
+            scores = []
+            for terms in term_sets:
+                overlap = terms & _terms(doc["title"] + " " + doc["text"])
+                title_overlap = terms & _terms(doc["title"])
+                if (len(overlap) >= 2 or title_overlap) and len(overlap) / max(
+                    len(terms), 1
+                ) >= 0.35:
+                    scores.append(len(overlap) + 2 * len(title_overlap))
+            if scores:
+                scored.append((max(scores), doc))
         ranked = sorted(scored, key=lambda item: -item[0])
         return [doc for score, doc in ranked[:3] if score >= ranked[0][0] * 0.6]
 
@@ -175,7 +183,8 @@ class PublicKnowledge:
         except (ValueError, TypeError):
             return {
                 "text": "群内仅回答通用知识。具体案件、订单、材料和业务操作请登录网站处理。"
-                "请勿在群中发送个人信息。",
+                "如已开通并完成网站绑定，可改用机器人私聊查询本人获授权案件；"
+                "材料上传、审核与上游提交仍在网站办理。请勿在群中发送个人信息。",
                 "mode": "WEBSITE_HANDOFF",
                 "sources": [],
             }
@@ -201,7 +210,8 @@ class PublicKnowledge:
                 "text": "我是面向全群的 OceanPilot 知识助手。"
                 "可以询问通用概念、材料准备和网站使用方法。"
                 "我不查询具体案件、不接收业务附件、不执行接受责任或审核操作。"
-                "商户与工作人员请使用各自网站账号办理业务。\n\n"
+                "以上是群内边界；如已开通并完成网站绑定，可改用机器人私聊查询本人获授权案件。"
+                "商户与工作人员请使用各自网站账号办理上传、审核等业务。\n\n"
                 "可以这样问：\n"
                 "• OceanPilot 是做什么的？\n"
                 "• 在哪里上传材料？\n"
@@ -247,6 +257,8 @@ class PublicKnowledge:
                         "Do not repeat personal or case-specific input. "
                         "Use the question's language. Answer the question directly in a short "
                         "paragraph or at most 3 steps; do not dump unrelated reference text. "
+                        "For a multi-part question, explicitly identify unsupported parts; "
+                        "do not imply that retrieved guidance answers an unsupported topic. "
                         "Preserve explicit limitations, disabled features and synthetic/Mock "
                         "labels. Never imply you performed an action or accessed a private case."
                     ),

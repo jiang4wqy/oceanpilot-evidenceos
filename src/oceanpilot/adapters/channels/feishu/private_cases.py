@@ -18,11 +18,18 @@ from uuid import uuid4
 from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
-from oceanpilot.adapters.channels.feishu.case_explanations import focused_card, query_intent
+from oceanpilot.adapters.channels.feishu.case_explanations import (
+    focused_card,
+    merchant_answer,
+    merchant_deadline,
+    merchant_next_step,
+    query_intent,
+)
 from oceanpilot.adapters.channels.feishu.v2 import FeishuV2Error, binding_key
 from oceanpilot.adapters.feishu.client import FeishuReceiveIdType
 from oceanpilot.adapters.redaction import RegexRedactor
 from oceanpilot.application.dispute_views import merchant_case_view
+from oceanpilot.domain.dispute import DisputeError
 from oceanpilot.domain.dispute_rules import case_plan
 from oceanpilot.domain.errors import SensitiveDataRejected
 from oceanpilot.domain.security import assert_no_sensitive_data
@@ -289,7 +296,16 @@ class PrivateCaseBot:
         }
 
     def token_button(
-        self, db, link, case, kind, label, decision=None, *, action="MERCHANT_DECISION"
+        self,
+        db,
+        link,
+        case,
+        kind,
+        label,
+        decision=None,
+        *,
+        action="MERCHANT_DECISION",
+        intent="summary",
     ):
         ref = secrets.token_urlsafe(24)
         data = {
@@ -299,6 +315,7 @@ class PrivateCaseBot:
             "kind": kind,
             "decision": decision,
             "action": action,
+            "intent": intent,
             "expires": self.now() + (300 if kind == "CONFIRM" else 1800),
             "command_id": str(uuid4()),
         }
@@ -317,7 +334,7 @@ class PrivateCaseBot:
                 raise FeishuV2Error("DEMO_BATCH_RETIRED", 409)
         return self.disputes.get_case(case_id, identity)
 
-    def summary(self, db, link, case):
+    def summary(self, db, link, case, *, intent="summary"):
         identity = self.identity(link["account"])
         # Projection first: internal notes, strategy, staff-only evidence never enter text.
         view = merchant_case_view(case)
@@ -340,6 +357,9 @@ class PrivateCaseBot:
             f"\n案件：{case['id']} · 版本 {case['revision']}"
             f"\n当前状态：{case['work_status']}\n商户决定：{case['merchant_decision']}"
         )
+        answer = merchant_answer(view, plan, intent, self.now())
+        if answer:
+            text += "\n答复：" + answer
         # Review feedback is the next-action basis, not a footnote after a long
         # checklist. Keep the latest shared feedback visible on the first screen.
         for feedback in reversed(view.get("public_feedback", [])):
@@ -347,25 +367,28 @@ class PrivateCaseBot:
                 str(feedback.get("reason", "未提供理由"))
             )
         returned = case["work_status"] == "MERCHANT_REVISION_REQUIRED"
-        next_step = (
-            "先按审核反馈补充或更正材料，再提交人工复核。"
-            if returned
-            else plan["next_action"]["reason"]
-        )
+        next_step = merchant_next_step(view)
         text += "\n下一步：" + next_step
         text += (
             f"\n争议原因：{case['scheme']} {case['reason_code']}"
-            f"\n商户期限：{view.get('deadlines', {}).get('merchant', '待核实')}"
+            f"\n商户期限：{merchant_deadline(view, self.now())}"
         )
         text += f"\n来源：{rule.get('source_id', '待核实')} / {rule.get('rule_version', '待核实')}"
         text += "\n说明：结构化规则结果（未调用语言模型，不冒充 AI 推理）。"
-        if case["merchant_decision"] == "CONTEST":
+        if case["merchant_decision"] == "CONTEST" and intent not in {"progress", "deadline"}:
             missing = [item["label"] for item in plan.get("checklist", []) if not item["present"]]
+            unchecked = any(
+                item["upload_status"] != "SUPPORTED" for item in plan.get("checklist", [])
+            )
             text += (
-                f"\n当前仍需完善 {len(missing)} 项：" + "、".join(missing)
+                "\n当前缺少可核实的材料清单，请联系工作人员确认；不能认定材料齐全。"
+                if not plan.get("checklist")
+                else f"\n当前仍需完善 {len(missing)} 项：" + "、".join(missing)
                 if missing
                 else "\n清单中已有材料记录，但审核要求补正；已有记录不等于本次审核通过。"
                 if returned
+                else "\n材料尚未全部通过内容检查，请查看各项状态；已上传待核验不等于需要重复上传。"
+                if unchecked
                 else "\n当前规则清单全部就绪；仍以提交门禁为准。"
             )
             text += "\n抗辩材料清单（实际规则快照）："
@@ -383,7 +406,7 @@ class PrivateCaseBot:
             text += "\n登记不等于内容合格；上传、核查和审核仍在网站完成。"
         elif case["merchant_decision"] == "ACCEPT":
             text += "\n已选择接受，请等待 OceanPayment 按业务流程处理；不再要求提交抗辩材料。"
-        else:
+        elif case["merchant_decision"] != "CONTEST":
             text += "\n请在允许的范围内选择接受拒付或发起抗辩；抗辩不代表拒付已撤销。"
         gate = self.disputes.action_gate(case, "MERCHANT_DECISION", identity)
         actions = []
@@ -432,19 +455,54 @@ class PrivateCaseBot:
 
     def query(self, db, link, text):
         identity = self.identity(link["account"])
+        intent = query_intent(text)
         ids = re.findall(r"OPV2-[A-Za-z0-9_-]+", text)
         if len(ids) > 1:
             return self.card("请一次选择一个案件。"), None, None
         if ids:
-            case = self.visible_case(ids[0], identity)
-            return self.summary(db, link, case), case["id"], case["revision"]
+            try:
+                case = self.visible_case(ids[0], identity)
+            except (DisputeError, FeishuV2Error) as exc:
+                if not (
+                    isinstance(exc, DisputeError)
+                    and exc.code == "NOT_FOUND"
+                    and exc.status == 404
+                    or isinstance(exc, FeishuV2Error)
+                    and exc.code == "DEMO_BATCH_RETIRED"
+                ):
+                    raise
+                # Do not distinguish missing, another merchant, or retired cases.
+                # The normal verified-message enqueue/event receipt makes this
+                # reply durable and idempotent; errors on card mutations still fail.
+                return (
+                    self.card(
+                        "无法访问该案件。请发送“我的案件”从当前获授权列表中选择，"
+                        "或登录网站核对；本次未执行任何业务操作。"
+                    ),
+                    None,
+                    None,
+                )
+            if intent != "staff_action":
+                return self.summary(db, link, case, intent=intent), case["id"], case["revision"]
+        if intent == "staff_action":
+            return (
+                self.card(
+                    "我不能替代工作人员审核通过材料或提交银行／上游。"
+                    "请在网站查看审核反馈，由有权限的工作人员办理审核与提交；"
+                    "商户接受或抗辩仍需使用获授权卡片二次确认。本次未执行任何业务操作。"
+                ),
+                None,
+                None,
+            )
         cases = self.disputes.list_cases(identity)
         cases = [c for c in cases if not self.record(db, "retired", c["id"])[0]]
         if len(cases) == 1:
             c = cases[0]
-            return self.summary(db, link, c), c["id"], c["revision"]
+            return self.summary(db, link, c, intent=intent), c["id"], c["revision"]
         actions = [
-            self.token_button(db, link, c, "SELECT", f"{c['id']} · {c['work_status']}")
+            self.token_button(
+                db, link, c, "SELECT", f"{c['id']} · {c['work_status']}", intent=intent
+            )
             for c in cases[:10]
         ]
         return (
@@ -610,7 +668,11 @@ class PrivateCaseBot:
         if data["kind"] == "SELECT":
             if case["revision"] != data["revision"]:
                 raise FeishuV2Error("REVISION_CONFLICT", 409)
-            return self.summary(db, link, case), case["id"], case["revision"]
+            return (
+                self.summary(db, link, case, intent=data.get("intent", "summary")),
+                case["id"],
+                case["revision"],
+            )
         if identity["role"] != "MERCHANT":
             raise FeishuV2Error("MERCHANT_AUTHORIZATION_REQUIRED", 403)
         action = data.get("action", "MERCHANT_DECISION")

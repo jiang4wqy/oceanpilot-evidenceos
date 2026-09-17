@@ -311,8 +311,9 @@ def test_confirmation_fail_closed(env, attack):
 def test_another_merchant_cannot_read_forged_case_id(env):
     case = intake(env, "a")
     bind(env, "b")
-    with pytest.raises(DisputeError):
-        env.bot.handle(message(case["id"], "b"), mode="events")
+    assert env.bot.handle(message(case["id"], "b"), mode="events")["outcome"] == "QUEUED"
+    env.bot.drain()
+    assert "无法访问该案件" in body(env.bot.client.sent[-1])
     assert all(case["id"] not in body(item) for item in env.bot.client.sent)
 
 
@@ -325,8 +326,10 @@ def test_bound_it_admin_cannot_read_runtime_cases(env):
     env.bot.handle(message(actor="it"), mode="events")
     env.bot.drain()
     assert case["id"] not in body(env.bot.client.sent[-1])
-    with pytest.raises(DisputeError):
-        env.bot.handle(message(case["id"], "it"), mode="events")
+    env.bot.handle(message(case["id"], "it"), mode="events")
+    env.bot.drain()
+    assert "无法访问该案件" in body(env.bot.client.sent[-1])
+    assert case["id"] not in body(env.bot.client.sent[-1])
 
 
 def test_role_change_to_it_revokes_pending_private_confirmation(env):
@@ -452,7 +455,8 @@ def test_pending_intake_has_no_decision_buttons(env):
     assert not any(b.get("value") for e in receipt.card["elements"] for b in e.get("actions", []))
 
 
-def test_demo_batch_reset_preserves_cases_and_invalidates_cards(env):
+@pytest.mark.parametrize("legacy", [False, True])
+def test_demo_batch_reset_preserves_cases_and_invalidates_cards(env, legacy):
     from oceanpilot.adapters.channels.feishu.demo import FeishuDemoBatches
 
     bind(env)
@@ -469,7 +473,26 @@ def test_demo_batch_reset_preserves_cases_and_invalidates_cards(env):
         merchants=["synthetic-a", "synthetic-b"],
         confirmed=True,
     )
-    batch_id = str(uuid4())
+    # This UUID embedded in the old generated transaction ID contains a
+    # Luhn-valid digit span. New batches must work without weakening the scanner.
+    batch_id = "fb996995-7748-4770-8c87-c022589916bf"
+    if legacy:
+        batch_id = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+        with env.bot.db() as db:
+            env.bot.put(
+                db,
+                "demo",
+                batch_id,
+                admin["actor_id"],
+                "PREPARING",
+                {
+                    "spec": {key: value for key, value in spec.items() if key != "confirmed"},
+                    "created_at": "2026-09-16T00:00:00+00:00",
+                    "cases": [],
+                    "synthetic": True,
+                    "upstream": "MOCK",
+                },
+            )
     first = batches.begin(batch_id, **spec)
     assert batches.begin(batch_id, **spec) == first
     assert len(env.disputes.list_cases(env.accounts["a"])) == 1

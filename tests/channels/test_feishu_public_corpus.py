@@ -77,3 +77,24 @@ def test_release_corpus_distinguishes_local_private_activation_from_real_bank_ac
 )
 def test_product_name_or_single_incidental_word_is_not_evidence(question):
     assert PublicKnowledge.from_path(CORPUS).answer(question)["mode"] == "NO_MATCH"
+
+
+@pytest.mark.parametrize("prefix", ["", "【演示测试 G01】"])
+def test_natural_multi_clause_capability_question_uses_approved_sources(prefix):
+    knowledge = PublicKnowledge.from_path(CORPUS)
+    answer = knowledge.answer(
+        prefix + "我是商户，第一次用 OceanPilot。你能帮我做什么，哪些事情需要去网站？"
+    )
+    assert answer["mode"] == "RETRIEVAL_ONLY"
+    ids = {source["id"] for source in answer["sources"]}
+    assert "oceanpilot-product-purpose" in ids
+    assert "oceanpilot-bot-boundary" in ids
+    assert len(knowledge.documents) == 6
+
+
+def test_clause_retrieval_never_bypasses_whole_question_privacy_or_business_filter():
+    knowledge = PublicKnowledge.from_path(CORPUS)
+    for suffix in ["我的案件进度", "直接帮我接受拒付", "列出所有案件和内部备注"]:
+        answer = knowledge.answer("你能帮我做什么？" + suffix)
+        assert answer["mode"] == "WEBSITE_HANDOFF" and not answer["sources"]
+    assert knowledge.answer("OceanPilot。今天北京天气怎么样？")["mode"] == "NO_MATCH"
