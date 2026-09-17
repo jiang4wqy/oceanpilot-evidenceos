@@ -215,7 +215,7 @@ def test_unknown_rule_requires_explicit_source_version_deadline_and_evidence(ser
         run(service, case, "PUBLISH_TASK")
     assert error.value.code == "RULE_CONFIRMATION_REQUIRED"
     with pytest.raises(DisputeError):
-        run(service, case, "CONFIRM_RULE", {"reason": "Looks right"}, RISK)
+        run(service, case, "CONFIRM_RULE", {"reason": "Looks right"}, SUPERVISOR)
     case = run(
         service,
         case,
@@ -230,7 +230,7 @@ def test_unknown_rule_requires_explicit_source_version_deadline_and_evidence(ser
             "allowed_actions": ["ACCEPT", "CONTEST"],
             "reason": "Reviewed demo source",
         },
-        RISK,
+        SUPERVISOR,
     )
     assert case["rule_snapshot"]["production_eligible"] is False
     assert run(service, case, "PUBLISH_TASK")["work_status"] == "MERCHANT_ACTION_REQUIRED"
@@ -593,7 +593,7 @@ def test_case_audit_receipt_are_atomic_and_v1_tables_untouched(service):
         assert connection.execute("SELECT value FROM old_v1").fetchone()[0] == "preserve"
 
 
-def test_closed_knowledge_requires_redaction_and_independent_admin_review(service):
+def test_closed_knowledge_requires_redaction_and_independent_manager_review(service):
     case = run(
         service, run(service, reconciled(service), "NOTIFY_MERCHANT"), "CLOSE", identity=SUPERVISOR
     )
@@ -621,7 +621,7 @@ def test_closed_knowledge_requires_redaction_and_independent_admin_review(servic
             "decision": "APPROVE",
             "reason": "Human verified no PII remains",
         },
-        ADMIN,
+        SUPERVISOR,
     )
     assert case["knowledge_candidates"][0]["status"] == "APPROVED"
     assert case["knowledge_candidates"][0]["production_eligible"] is False
@@ -887,10 +887,10 @@ def test_unknown_rule_requires_explicit_allowed_actions(service):
         "required_evidence": ["transaction.receipt"],
     }
     with pytest.raises(DisputeError) as error:
-        run(service, case, "CONFIRM_RULE", data, RISK)
+        run(service, case, "CONFIRM_RULE", data, SUPERVISOR)
     assert error.value.code == "ACTION_CONFIRMATION_REQUIRED"
     data["allowed_actions"] = ["ACCEPT"]
-    case = run(service, case, "CONFIRM_RULE", data, RISK)
+    case = run(service, case, "CONFIRM_RULE", data, SUPERVISOR)
     case = run(service, case, "PUBLISH_TASK")
     with pytest.raises(DisputeError) as error:
         run(

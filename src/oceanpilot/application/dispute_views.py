@@ -10,6 +10,7 @@ PUBLIC_CASE_FIELDS = [
     "merchant_id",
     "transaction_id",
     "scheme",
+    "channel",
     "reason_code",
     "amount_minor",
     "currency",
@@ -112,6 +113,7 @@ def merchant_case_view(case: dict, *, participants: list[dict] | None = None) ->
             "source_locator",
             "rule_version",
             "conflict_status",
+            "production_eligible",
         ),
     )
     result["tasks"] = [
@@ -167,6 +169,13 @@ def merchant_case_view(case: dict, *, participants: list[dict] | None = None) ->
                 "size",
             ),
         )
+        | {
+            "history": [
+                select(old, ("revision", "object_id", "sha256", "registered_at", "source_type"))
+                for old in item.get("history", [])
+                if old.get("visibility", "SHARED") == "SHARED"
+            ]
+        }
         for item in case.get("evidence", [])
         if item.get("visibility", "SHARED") == "SHARED"
     ]

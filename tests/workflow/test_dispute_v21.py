@@ -60,7 +60,7 @@ def test_confirm_rule_preserves_candidate_critical_subset_without_escalating_ord
         case,
         "CONFIRM_RULE",
         rule_data(required_evidence=list(reversed(candidate["required_evidence"])) + critical),
-        RISK,
+        SUPERVISOR,
     )
     assert case["rule_snapshot"]["required_evidence"] == sorted(set(candidate["required_evidence"]))
     assert case["rule_snapshot"]["critical_evidence"] == critical
@@ -93,7 +93,7 @@ def test_confirm_rule_accepts_only_an_explicit_sorted_critical_subset(service):
         required_evidence=["ordinary", "critical", "ordinary"],
         critical_evidence=["critical", "critical"],
     )
-    case = run(service, case, "CONFIRM_RULE", data, RISK)
+    case = run(service, case, "CONFIRM_RULE", data, SUPERVISOR)
     assert case["rule_snapshot"]["required_evidence"] == ["critical", "ordinary"]
     assert case["rule_snapshot"]["critical_evidence"] == ["critical"]
 
@@ -107,7 +107,7 @@ def test_confirm_rule_accepts_only_an_explicit_sorted_critical_subset(service):
                 required_evidence=["ordinary"],
                 critical_evidence=["not-required"],
             ),
-            RISK,
+            SUPERVISOR,
         )
     assert error.value.code == "INVALID_EVIDENCE_RULE"
     assert service.get_case(case["id"], OP)["revision"] == before["revision"]
@@ -123,8 +123,8 @@ def test_confirm_rule_critical_grading_survives_replay_and_service_restart(tmp_p
         critical_evidence=["critical"],
     )
     request = command(case, "CONFIRM_RULE", data, command_id=command_id)
-    first = service.execute(request, RISK)
-    replay = service.execute(request, RISK)
+    first = service.execute(request, SUPERVISOR)
+    replay = service.execute(request, SUPERVISOR)
     restarted = DisputeService(SQLiteDisputeStore(database), clock=lambda: NOW)
     saved = restarted.get_case(case["id"], OP)
 
@@ -359,7 +359,7 @@ def test_w09_rule_change_revokes_contest_for_all_risky_commands(service):
         case,
         "CONFIRM_RULE",
         rule_data(allowed_actions=["ACCEPT"], required_evidence=[]),
-        RISK,
+        SUPERVISOR,
     )
     assert case["eligibility_status"] == "REQUIRES_RECONFIRMATION"
     for action, identity in [
@@ -479,7 +479,7 @@ def test_w14_accept_only_rule_does_not_require_contest_materials(service):
         intake(service, channel="CUSTOM"),
         "CONFIRM_RULE",
         rule_data(allowed_actions=["ACCEPT"], required_evidence=[]),
-        RISK,
+        SUPERVISOR,
     )
     assert case["rule_snapshot"]["required_evidence"] == []
     assert run(service, case, "PUBLISH_TASK")["work_status"] == "MERCHANT_ACTION_REQUIRED"
@@ -751,7 +751,7 @@ def test_w07_multiple_pending_events_do_not_restore_preterminal_state_after_conf
 
 def test_w09_rule_change_invalidates_frozen_package_even_when_contest_remains_allowed(service):
     case = frozen(service)
-    case = run(service, case, "CONFIRM_RULE", rule_data(), RISK)
+    case = run(service, case, "CONFIRM_RULE", rule_data(), SUPERVISOR)
     assert case["packages"][-1]["status"] == "INVALIDATED" and not any(
         r["valid"] for r in case["reviews"]
     )
@@ -1102,7 +1102,7 @@ def test_ui_gate_and_execution_reject_the_same_stale_rule_authority(service):
         case,
         "CONFIRM_RULE",
         rule_data(allowed_actions=["ACCEPT"], required_evidence=[]),
-        RISK,
+        SUPERVISOR,
     )
     for action, identity in [
         ("REGISTER_EVIDENCE", MERCHANT),

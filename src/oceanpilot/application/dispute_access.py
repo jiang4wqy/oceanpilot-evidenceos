@@ -25,7 +25,7 @@ class DisputeAccessPolicy:
         if self._system(identity):
             return True
         user = self._user(identity)
-        if user is None:
+        if user is None or user["role"] == "ADMIN":
             return False
         if user["role"] in MANAGEMENT_ROLES:
             return True
@@ -59,6 +59,7 @@ class DisputeAccessPolicy:
             {"user_id": user["id"], "role": user["role"], "display_name": user["display_name"]}
             for user in self.directory.list_users()
             if not user["disabled"]
+            and user["role"] != "ADMIN"
             and (user["role"] in MANAGEMENT_ROLES or case["merchant_id"] in user["merchant_ids"])
             and (identifiers is None or user["id"] in identifiers)
         ]

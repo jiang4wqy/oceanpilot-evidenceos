@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>飞书绑定 · OceanPilot</title>
+<style>body{margin:0;background:#edf5f5;color:#183c42;font:16px/1.7 system-ui}main{max-width:640px;margin:5vh auto;padding:32px;background:white;border-radius:18px}button,a{font:inherit}button{background:#147f78;color:white;border:0;padding:10px 18px;border-radius:8px;cursor:pointer;margin:8px 8px 8px 0}button:disabled{opacity:.5}input{font:inherit;padding:10px;max-width:100%;box-sizing:border-box}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#edf5f5;padding:16px}#error{color:#9a2d24}a{color:#147f78}[hidden]{display:none}</style>
+<main><a href="/v2">← 返回工作空间</a><h1>绑定你的飞书私聊</h1>
+<p>同一个机器人：大群只回答公开知识；私聊绑定后只查看本人获授权的案件。材料上传与审核仍在网站。</p>
+<p id="status" role="status">正在核验网站会话…</p><p id="error" role="alert"></p>
+<p id="account"></p><form id="login" hidden><h2>先登录 OceanPilot</h2><label>账号<br><input name="username" autocomplete="username" required maxlength="80"></label><br><label>密码<br><input name="password" type="password" autocomplete="current-password" required maxlength="128"></label><br><button type="submit">登录并继续绑定</button></form>
+<button id="create" hidden>生成一次性配对码</button><button id="unlink" hidden>解除绑定</button>
+<section id="pair" hidden><h2>1. 在机器人私聊中发送</h2><pre id="code"></pre><p>10 分钟有效，仅使用一次。不要发到群里，也不要分享给他人。刷新页面后需重新生成。</p>
+<h2>2. 核对私聊中的验证短语</h2><p id="claim">等待你在私聊发送配对码…</p>
+<label>填写机器人私聊返回的 8 位验证短语<br><input id="phrase" autocomplete="off" maxlength="8" aria-label="验证短语"></label><br><button id="confirm" disabled>确认绑定到当前网站账号</button></section>
+<p>接受拒付／发起抗辩须在私聊再次确认。解绑会使旧卡片和待发案件通知失效。合成案例／Mock 上游，不代表银行已撤销拒付。</p></main>
+<script>
+const root='/api/v2/integrations/feishu/binding', $=id=>document.getElementById(id);
+let csrf='',pairId='',timer;
+async function api(path='',method='GET',body){const r=await fetch(root+path,{method,credentials:'same-origin',headers:{'Content-Type':'application/json','X-CSRF-Token':csrf},body:body?JSON.stringify(body):undefined});const data=await r.json();if(!r.ok)throw Error(data.code||data.title||'请求失败');return data;}
+function error(e){$('error').textContent=e.message;}
+async function refresh(){const s=await api();$('status').textContent=s.bound?'当前账号已绑定。现在可私聊机器人询问“我的案件”。':'当前账号尚未绑定。';$('create').hidden=s.bound;$('unlink').hidden=!s.bound;}
+async function poll(){try{const s=await api('/pairs/'+pairId);$('claim').textContent=s.state==='CLAIMED'?'已收到私聊验证。请核对并填写你在私聊看到的短语。':'配对状态：'+s.state;$('confirm').disabled=s.state!=='CLAIMED';if(['EXPIRED','REVOKED','CONFIRMED'].includes(s.state))clearInterval(timer);}catch(e){clearInterval(timer);error(e);}}
+$('create').onclick=async()=>{try{$('error').textContent='';const s=await api('/pairs','POST');pairId=s.pair_id;$('code').textContent=s.instruction;$('phrase').value='';$('pair').hidden=false;clearInterval(timer);await poll();timer=setInterval(poll,3000);}catch(e){error(e);}};
+$('confirm').onclick=async()=>{try{await api('/pairs/'+pairId+'/confirm','POST',{phrase:$('phrase').value.trim()});clearInterval(timer);$('pair').hidden=true;$('code').textContent='';await refresh();}catch(e){error(e);}};
+$('unlink').onclick=async()=>{if(!window.confirm('解除绑定并作废旧卡片及待发通知？'))return;try{await api('','DELETE');await refresh();}catch(e){error(e);}};
+function session(s){csrf=s.csrf_token;$('login').hidden=true;$('account').textContent='当前网站账号：'+s.user.username+' · '+s.user.role;}
+$('login').onsubmit=async event=>{event.preventDefault();try{const form=event.target;const r=await fetch('/api/v2/session/login',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:form.username.value,password:form.password.value})});const s=await r.json();if(!r.ok)throw Error('登录失败，请核对账号和密码。');form.password.value='';$('error').textContent='';session(s);await refresh();}catch(e){error(e);}};
+(async()=>{try{const r=await fetch('/api/v2/session',{credentials:'same-origin'});if(r.status===401){$('login').hidden=false;$('status').textContent='绑定需要先登录你本人的网站账号。';return;}if(!r.ok)throw Error('会话核验失败。');session(await r.json());await refresh();}catch(e){error(e);}})();
+</script></html>

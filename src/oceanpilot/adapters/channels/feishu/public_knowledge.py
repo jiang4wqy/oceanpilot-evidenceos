@@ -26,6 +26,73 @@ _PRIVATE = re.compile(
     re.I,
 )
 
+# Query intent is distinct from source eligibility: a public upload guide can be
+# safe to publish while a request to upload on someone's behalf must be handed off.
+_BUSINESS_REQUEST = re.compile(
+    r"(?:帮我|替我|给我|请(?:你)?|立即|直接|马上|现在)(?:\s*)(?:查|看|列出|导出|接受|驳回|"
+    r"发起抗辩|上传|提交|审核|退回)|"
+    r"(?:所有|全部|其他商户的)(?:案件|订单|交易)|"
+    r"^(?:接受拒付|接受责任|发起抗辩|驳回拒付|提交抗辩|审核通过|退回材料)[!！。\s]*$"
+)
+
+_SEARCH_STOP_TERMS = {
+    "oceanpilot",
+    "什么",
+    "怎么",
+    "如何",
+    "哪里",
+    "在哪",
+    "可以",
+    "是否",
+    "有什",
+    "有啥",
+    "这个",
+    "那个",
+    "的是",
+    "了吗",
+    "的吗",
+    "么的",
+    "请问",
+    "多少",
+}
+
+
+def _search_question(question):
+    """Small, inspectable wording normalization, never new knowledge or authorization."""
+    text = question.lower()
+    for pattern, replacement in (
+        (r"(?:你|机器人)?能(?:帮我)?解决(?:什么|哪些)?问题(?:么|吗)?", "解决什么问题"),
+        (r"能帮我做什么", "解决什么问题"),
+        (r"哪些(?:事情|操作).*?(?:网站|私聊)", "群机器人能力边界"),
+        (r"(?:怎么用|使用教程)", "网站登录 工作台"),
+        (r"(?:补交|补充)(?:文件|资料|材料)", "补件"),
+        (r"(?:怎么传|怎么交|在哪交|在哪传|传文件|交文件)", "上传材料"),
+        (r"(?:被退回|打回)", "退回补件"),
+        (r"(?:登录不上|登不进去|进不去)", "登录授权"),
+        (r"(?:登入|登陆)", "登录"),
+        (r"资料", "材料"),
+        (r"(?:演示怎么走|demo)", "合成演示流程"),
+        (r"私聊", "私聊案件助手"),
+        (r"(?:保证赢得|保证赢)", "保证胜诉"),
+        (r"群里.*(?:查|看).*(?:订单|案件|进度)", "群机器人能力边界"),
+    ):
+        text = re.sub(pattern, replacement, text)
+    if re.search(r"(?:商户|运营|经理|专员).*区别", text):
+        text += " 角色 工作台"
+    # Break common question/connective words into boundaries instead of counting
+    # artificial bigrams such as 受和 / 和抗 as evidence about 接受 / 抗辩.
+    return re.sub(r"有什么区别|有啥区别|怎么办|已经|如何|是否|了吗|吗|么|和", " ", text)
+
+
+def _no_match():
+    return {
+        "text": "当前公开知识中没有找到足够依据，我不能据此给出结论。\n"
+        "你可以询问产品用途、网站登录、上传补件或合成演示流程，"
+        "例如“在哪里上传材料？”；个人业务请登录网站联系工作人员核实。",
+        "mode": "NO_MATCH",
+        "sources": [],
+    }
+
 
 def public_text(value):
     """Conservative rejection, not proof of de-identification or publication consent."""
@@ -87,27 +154,41 @@ class PublicKnowledge:
         return cls(data["documents"], model=model)
 
     def search(self, question):
-        terms = _terms(public_text(question))
+        normalized = _search_question(public_text(question))
+        # Keep the original safety check over the entire question. Splitting
+        # merely stops an introduction or a second question diluting relevance;
+        # it never changes source eligibility or lowers the evidence threshold.
+        parts = [normalized, *re.split(r"[，,。！？!?；;\n]+", normalized)]
+        term_sets = [_terms(part) - _SEARCH_STOP_TERMS for part in dict.fromkeys(parts)]
         scored = []
         for doc in self.documents:
-            overlap = terms & _terms(doc["title"] + " " + doc["text"])
-            # A dedicated topic title beats an incidental phrase in another FAQ.
-            score = len(overlap) + 2 * len(terms & _terms(doc["title"]))
-            if len(overlap) >= 2:
-                scored.append((score, doc))
-        return [doc for _, doc in sorted(scored, key=lambda item: -item[0])[:3]]
+            scores = []
+            for terms in term_sets:
+                overlap = terms & _terms(doc["title"] + " " + doc["text"])
+                title_overlap = terms & _terms(doc["title"])
+                if (len(overlap) >= 2 or title_overlap) and len(overlap) / max(
+                    len(terms), 1
+                ) >= 0.35:
+                    scores.append(len(overlap) + 2 * len(title_overlap))
+            if scores:
+                scored.append((max(scores), doc))
+        ranked = sorted(scored, key=lambda item: -item[0])
+        return [doc for score, doc in ranked[:3] if score >= ranked[0][0] * 0.6]
 
     def answer(self, question):
         try:
             public_text(question)
+            if _BUSINESS_REQUEST.search(question):
+                raise ValueError("business request belongs on the website")
         except (ValueError, TypeError):
             return {
                 "text": "群内仅回答通用知识。具体案件、订单、材料和业务操作请登录网站处理。"
-                "请勿在群中发送个人信息。",
+                "如已开通并完成网站绑定，可改用机器人私聊查询本人获授权案件；"
+                "材料上传、审核与上游提交仍在网站办理。请勿在群中发送个人信息。",
                 "mode": "WEBSITE_HANDOFF",
                 "sources": [],
             }
-        if question.strip().lower().rstrip("!！。.") in {
+        if question.strip().lower().rstrip("!！。.?？") in {
             "帮助",
             "/help",
             "help",
@@ -115,22 +196,33 @@ class PublicKnowledge:
             "您好",
             "hello",
             "hi",
+            "你会什么",
+            "那你会什么",
+            "你能做什么",
+            "你能干什么",
+            "你可以做什么",
+            "有什么功能",
+            "功能介绍",
+            "你是谁",
+            "oceanpilot",
         }:
             return {
                 "text": "我是面向全群的 OceanPilot 知识助手。"
                 "可以询问通用概念、材料准备和网站使用方法。"
                 "我不查询具体案件、不接收业务附件、不执行接受责任或审核操作。"
-                "商户与工作人员请使用各自网站账号办理业务。",
+                "以上是群内边界；如已开通并完成网站绑定，可改用机器人私聊查询本人获授权案件。"
+                "商户与工作人员请使用各自网站账号办理上传、审核等业务。\n\n"
+                "可以这样问：\n"
+                "• OceanPilot 是做什么的？\n"
+                "• 在哪里上传材料？\n"
+                "• 退回补件是什么意思？\n"
+                "• 合成争议演示流程是什么？",
                 "mode": "HELP",
                 "sources": [],
             }
         docs = self.search(question)
         if not docs:
-            return {
-                "text": "当前获准向全群公开的知识中没有找到足够依据。请在网站内联系工作人员核实。",
-                "mode": "NO_MATCH",
-                "sources": [],
-            }
+            return _no_match()
         # Source extracts are the honest fallback; no fabricated model attribution.
         result = {
             "text": "\n\n".join(f"[{d['id']}] {d['text'][:700]}" for d in docs),
@@ -163,14 +255,23 @@ class PublicKnowledge:
                         "actions. Return JSON {answer: string, source_ids: [string]}. Cite only "
                         "provided IDs. If evidence is insufficient return empty source_ids. "
                         "Do not repeat personal or case-specific input. "
-                        "Use the question's language."
+                        "Use the question's language. Answer the question directly in a short "
+                        "paragraph or at most 3 steps; do not dump unrelated reference text. "
+                        "For a multi-part question, explicitly identify unsupported parts; "
+                        "do not imply that retrieved guidance answers an unsupported topic. "
+                        "Preserve explicit limitations, disabled features and synthetic/Mock "
+                        "labels. Never imply you performed an action or accessed a private case."
                     ),
                     tools=(),
                 )
             parsed = json.loads(response.text)
             cited = parsed["source_ids"]
-            if response.tool_calls or not isinstance(cited, list) or not cited:
+            if response.tool_calls or not isinstance(cited, list):
                 raise ValueError("ungrounded response")
+            if not cited:
+                # A valid abstention is not a transport failure. Do not present
+                # coincidental search hits as if they answered an unsupported ask.
+                return _no_match()
             if not all(isinstance(item, str) and item in {d["id"] for d in docs} for item in cited):
                 raise ValueError("unknown citation")
             result["text"] = public_text(parsed["answer"])[:2500]
@@ -194,9 +295,12 @@ def knowledge_card(answer, base_url):
         "RETRIEVAL_FALLBACK": "知识检索摘录（模型不可用或回答未通过检查）",
         "MODEL_WITH_RETRIEVAL": "AI 回答（基于公开知识检索）",
     }
-    sources = "\n".join(
-        f"[{d['id']}] {d['title']} · {d['version']} · {d['source']}" for d in answer["sources"]
-    )
+    text = answer["text"]
+    source_lines = []
+    for index, doc in enumerate(answer["sources"], 1):
+        text = text.replace(f"[{doc['id']}]", f"[{index}]")
+        source_lines.append(f"[{index}] {doc['title']} · {doc['version']}\n{doc['source']}")
+    sources = "\n\n".join(source_lines)
     return {
         "config": {"wide_screen_mode": True},
         "header": {
@@ -205,7 +309,7 @@ def knowledge_card(answer, base_url):
         },
         "elements": [
             {"tag": "div", "text": {"tag": "plain_text", "content": labels[answer["mode"]]}},
-            {"tag": "div", "text": {"tag": "plain_text", "content": answer["text"]}},
+            {"tag": "div", "text": {"tag": "plain_text", "content": text}},
             {"tag": "div", "text": {"tag": "plain_text", "content": sources or "无知识来源引用"}},
             {
                 "tag": "action",

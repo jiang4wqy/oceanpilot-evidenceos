@@ -2,6 +2,18 @@
 
 本文描述当前 OceanPilot V2 飞书接入的真实运行方式。它不改变业务边界：交易、上游提交与资金仍是合成或 Mock；飞书仅承载已授权的协作、查询、提醒和人工确认。
 
+## 当前接入方式（2026-09-15）
+
+当前默认是公开群知识助手；新增私聊案件助手为显式启用功能，采用网站会话与私聊一次性配对。请以 [私聊实施与验收说明](feishu-private-cases.md) 和 [公开知识说明](feishu-public-knowledge.md) 为准。历史 `OCEANPILOT_V2_FEISHU_BINDINGS_JSON` / `OCEANPILOT_V21_FEISHU_TEST_TARGETS_JSON` 不授权新的私聊助手，不能用下面保留的旧版人工绑定步骤替代新配对。
+
+私聊需配置 `OCEANPILOT_FEISHU_PRIVATE_CASES=enabled`；真实私聊发送另需 `OCEANPILOT_FEISHU_PRIVATE_OUTBOUND=authorized-test` 和飞书凭据。群聊仍使用独立的群授权与已批准公开知识。绑定、确认、解除绑定均由网站已登录会话完成，案件查询与动作每次重新核验权限。上传、人工核验、证据包审批及上游提交继续使用网站流程。
+
+2026-09-15 已在本机 8002 服务显式启用私聊，负责人批准的演示商户 A 绑定、真实飞书二次确认抗辩和接受、退回后的私聊查询、群聊隔离及自动通知已核验；服务重启后绑定、案件状态与私聊收发仍正常。材料上传与退回由真实登录态网站 HTTP 接口完成，不是独立浏览器录屏验收。第二个真实飞书身份、完整隐私失败矩阵和 C 独立验收仍未完成。
+
+固定服务器与域名仍未提供，当前 Mac Quick Tunnel 不是固定环境。`check_feishu_readiness.py` 仅检查其加载的环境配置及网络条件，不证明运行进程已加载同样的配置，也不证明身份绑定、真实消息回执或一小时稳定性；需使用上述验收说明中的逐项实际证据。
+
+执行固定部署前，负责人需明确授权的服务器、固定域名及管理权限获取方式；真实上游另需授权的 OceanPayment／银行接口文档、沙箱地址、认证与事件／回执契约。密钥通过私有渠道或密钥管理器提供，不写入 issue 或公开资料。不能把可见的其他主机当作部署许可，也不能按猜测实现接口后宣称真实接通。
+
 ## 一次部署，后续只换镜像
 
 1. 准备一台可运行 Docker Compose 的 Linux 服务器，并把固定 HTTPS 域名（例如 `https://oceanpilot.example.com`）反向代理到容器 `8000` 端口。
@@ -17,7 +29,7 @@
 
 Quick Tunnel 只适合临时联调。`trycloudflare.com` 地址会变化且没有可用性承诺，不应作为正式回调地址。
 
-## 安全完成用户和会话绑定
+## 历史参考：旧版人工用户和会话绑定（当前组合不使用）
 
 服务只接受部署人员明确绑定的飞书用户与会话。未知用户发送的已签名事件会返回 `UNTRUSTED_BINDING`，并写入 actor/chat 的域分离 SHA-256 哈希。为了在绑定后能生成出站目标，tenant、open_id、chat_id 的组合只以 AES-GCM 密文落盘，密钥由服务器的 Encrypt Key 域分离派生；明文和 Encrypt Key 均不写入数据库或候选列表。
 
@@ -40,7 +52,7 @@ python scripts/list_feishu_binding_candidates.py \
 
 把输出的 `OCEANPILOT_V2_FEISHU_BINDINGS_JSON` 和 `OCEANPILOT_V21_FEISHU_TEST_TARGETS_JSON` 写入服务器密钥配置并重启容器。`--target` 只能在配有正确 `FEISHU_ENCRYPT_KEY` 的服务器上解密投递地址。该流程不会信任消息正文里的角色或商户字段。
 
-## 开启真实卡片发送
+## 历史参考：旧版真实卡片发送（当前组合不使用）
 
 真实发送默认关闭。只有同时满足以下条件才会创建飞书出站客户端：
 

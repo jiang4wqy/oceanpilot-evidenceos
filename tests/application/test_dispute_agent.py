@@ -424,7 +424,7 @@ def test_http_long_custom_rule_publishes_saved_proposal_without_losing_checklist
         assert all(len(code) == 40 for code in evidence_codes)
         response = client.post(
             "/api/v2/commands",
-            headers=headers("OPERATOR"),
+            headers=headers("SUPERVISOR"),
             json={
                 "command_id": str(uuid4()),
                 "case_id": case["id"],

@@ -64,6 +64,9 @@ class DisputeQueueReader:
             )
             if user["role"] in MANAGEMENT_ROLES:
                 scope = "1"
+        # Legacy grants/participants cannot give an IT account business visibility.
+        if identity["role"] == "ADMIN":
+            scope = "0"
         if query.strip():
             # Literal substring search, not caller-controlled SQL LIKE wildcards.
             params["query"] = query.strip().casefold()

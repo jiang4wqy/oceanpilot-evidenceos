@@ -30,7 +30,14 @@ class DisputeSimulation:
         rule = match_rule(
             data["scheme"], "MOCK", data["reason_code"], "FORMAL_DISPUTE", data["received_at"]
         )
-        automatic = bool(template and scope_matches and rule["allowed_actions"])
+        # Only a Risk manager may confirm the rehearsal rule and deadline.
+        # Operator intake remains available, but its case awaits that human gate.
+        automatic = bool(
+            identity["role"] == "SUPERVISOR"
+            and template
+            and scope_matches
+            and rule["allowed_actions"]
+        )
         if automatic:
             require(
                 timestamp(rule["deadlines"]["merchant"]) > timestamp(self.intake._now()),

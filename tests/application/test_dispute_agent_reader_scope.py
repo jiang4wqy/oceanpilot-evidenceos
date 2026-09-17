@@ -20,7 +20,7 @@ from oceanpilot.domain.dispute import DisputeError
 
 NOW = datetime(2026, 9, 9, 8, tzinfo=UTC)
 OP = {"role": "OPERATOR", "actor_id": "operator"}
-RISK = {"role": "OPERATOR", "actor_id": "risk"}
+RISK = {"role": "SUPERVISOR", "actor_id": "risk"}
 MERCHANT = {"role": "MERCHANT", "actor_id": "late-merchant", "merchant_id": "merchant-a"}
 LATE_OP = {"role": "OPERATOR", "actor_id": "late-operator"}
 EXTERNAL = "2026-10-10T08:00:00+00:00"
@@ -76,7 +76,7 @@ def stack(tmp_path):
     path = tmp_path / "readers.db"
     directory = SQLiteDisputeIdentity(path)
     add_user(directory, "operator", "OPERATOR")
-    add_user(directory, "risk", "OPERATOR")
+    add_user(directory, "risk", "SUPERVISOR")
     disputes = DisputeService(
         SQLiteDisputeStore(path), clock=lambda: NOW, access_policy=DisputeAccessPolicy(directory)
     )

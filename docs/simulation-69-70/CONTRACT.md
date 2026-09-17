@@ -2,9 +2,9 @@
 
 基线：222e754；分支 member-b/synthetic-intake-69-70。由 B 统一负责业务与网页，飞书 #71 文件未改。
 
-POST /api/v2/intake/simulations/preview：正常会话与 CSRF，运营/主管/管理员且有目标商户权限。输入 case_template_id、merchant_id、scheme、reason_code、amount_minor、currency、received_at（带时区）。返回 input、reference、rule、materials（中文 label）、confirmation_token、production_eligible=false。仅 Visa 10.4、Visa 13.1、Mastercard 4853 具有现成合成规则；全库 62 条参考均可建独立演练案。只有范围匹配的可执行模板使用现成规则；其余返回 requires_rule_confirmation=true、空材料清单与待确认期限，不自动套用相同原因码的通用规则。
+POST /api/v2/intake/simulations/preview：正常会话与 CSRF，风控专员或风控经理且有目标商户权限。输入 case_template_id、merchant_id、scheme、reason_code、amount_minor、currency、received_at（带时区）。返回 input、reference、rule、materials（中文 label）、confirmation_token、production_eligible=false。仅 Visa 10.4、Visa 13.1、Mastercard 4853 具有现成合成规则；全库 62 条参考均可建独立演练案。只有风控经理在范围匹配时能确认现成规则并直接发布；专员建案及其他场景返回 requires_rule_confirmation=true、空材料清单与待确认期限，之后必须由经理确认规则。不自动套用相同原因码的通用规则。
 
-POST /api/v2/intake/simulations：输入 {input: 预览输入, confirmed: true, request_id: 唯一请求标识, confirmation_token: 预览返回值}。明确确认针对合成交易与合成规则，不是商户决定或材料审批。系统生成唯一交易/事件 ID，登记合成交易，通过现有 receive 建案，有匹配演练规则时再依次执行 CONFIRM_RULE 和 PUBLISH_TASK；否则保留待确认规则状态，由运营确认本案规则后发布任务。真实生产入口不变。
+POST /api/v2/intake/simulations：输入 {input: 预览输入, confirmed: true, request_id: 唯一请求标识, confirmation_token: 预览返回值}。明确确认针对合成交易与合成规则，不是商户决定或材料审批。系统生成唯一交易/事件 ID，登记合成交易，通过现有 receive 建案；风控经理确认匹配演练规则时依次执行 CONFIRM_RULE 和 PUBLISH_TASK。专员或无现成规则时保留待确认状态，由经理确认本案规则，再由有权限的工作人员发布任务。真实生产入口不变。
 
 请求和确认快照存入独立 v21_simulations 表。相同 actor/request_id 只对应同一输入；业务命令 ID、版本及规则负载稳定。中途中断后重放原 POST 恢复，不能换 ID 自动再建案。业务冲突会保留并报错，不能跳过校验。
 

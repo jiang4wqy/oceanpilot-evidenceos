@@ -86,6 +86,8 @@ class DisputeService:
 
     def list_cases(self, identity: dict) -> list[dict]:
         identity = self._identity(identity)
+        if identity["role"] == "ADMIN":
+            return []
         cases = self.store.list_cases(
             identity["merchant_id"] if identity["role"] == "MERCHANT" else None,
         )
@@ -99,6 +101,7 @@ class DisputeService:
 
     def get_case(self, case_id: str, identity: dict) -> dict:
         identity = self._identity(identity)
+        require(identity["role"] != "ADMIN", "NOT_FOUND", "Case not found", 404)
         require(isinstance(case_id, str), "INVALID_INPUT", "case_id must be text", 422)
         case = self.store.get_case(case_id)
         require(case is not None, "NOT_FOUND", "Case not found", 404)
@@ -668,6 +671,8 @@ class DisputeService:
         owner = (
             "MERCHANT"
             if kind in merchant_types
+            else "SUPERVISOR"
+            if kind == "RULE_CONFIRMATION"
             else "OPERATOR"
             if kind in risk_types
             else "SUPERVISOR"
@@ -1326,6 +1331,17 @@ class DisputeService:
             "INVALID_DECISION",
             "Choose content support",
             422,
+        )
+        require(
+            not (
+                decision == "SUPPORTED"
+                and obj["content_check"].get("extraction_check_status") == "INSUFFICIENT"
+                and obj["content_check"].get("recognition", {}).get("method")
+                == "EXPLICIT_TEXT_FIELDS_V1"
+            ),
+            "CONTENT_CORRECTION_REQUIRED",
+            "Explicit document fields are missing or inconsistent; upload a corrected revision",
+            409,
         )
         reason = text_field(data, "reason", limit=1000)
         facts, locators = data.get("applicable_facts"), data.get("locators")
@@ -2703,7 +2719,10 @@ class DisputeService:
             return
         if case["deadlines"].get("status") != "CONFIRMED":
             self._task(
-                case, "RULE_CONFIRMATION", "Deadline unknown; request Risk confirmation", now
+                case,
+                "RULE_CONFIRMATION",
+                "Deadline unknown; request risk manager confirmation",
+                now,
             )
             return
         deadline = timestamp(case["deadlines"]["merchant"])
@@ -2801,7 +2820,7 @@ class DisputeService:
             policy.assignment_candidates(case)
             if policy
             and hasattr(policy, "assignment_candidates")
-            and identity["role"] in {"SUPERVISOR", "ADMIN"}
+            and identity["role"] == "SUPERVISOR"
             else policy.case_participants(case)
             if policy
             else case.get("participants", [])
@@ -2814,7 +2833,7 @@ class DisputeService:
                 for p in participants
                 if isinstance(p, dict)
                 and p.get("user_id", p.get("actor_id")) == user_id
-                and p.get("role") in {"OPERATOR", "SUPERVISOR", "ADMIN"}
+                and p.get("role") in {"OPERATOR", "SUPERVISOR"}
             ),
             None,
         )

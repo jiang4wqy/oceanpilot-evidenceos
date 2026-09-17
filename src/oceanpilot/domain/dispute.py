@@ -78,13 +78,13 @@ class FinancialStatus(StrEnum):
     DISCREPANCY = "DISCREPANCY"
 
 
-# Account permissions are inherited; business invariants still apply to every actor.
+# Managers inherit execution permissions; IT administrators never inherit business authority.
 ACCOUNT_ROLES = frozenset({"MERCHANT", "OPERATOR", "SUPERVISOR", "ADMIN"})
-STAFF_ROLES = frozenset({"OPERATOR", "SUPERVISOR", "ADMIN"})
-MANAGEMENT_ROLES = frozenset({"SUPERVISOR", "ADMIN"})
+STAFF_ROLES = frozenset({"OPERATOR", "SUPERVISOR"})
+MANAGEMENT_ROLES = frozenset({"SUPERVISOR"})
 ACTION_ROLES = {
     "INTAKE": {"OPERATOR"},
-    "CONFIRM_RULE": {"OPERATOR"},
+    "CONFIRM_RULE": {"SUPERVISOR"},
     "PUBLISH_TASK": {"OPERATOR"},
     "MERCHANT_DECISION": {"MERCHANT", "OPERATOR"},
     "REGISTER_EVIDENCE": {"MERCHANT", "OPERATOR"},
@@ -105,7 +105,7 @@ ACTION_ROLES = {
     "PROCESS_ACCEPT": {"OPERATOR"},
     "QUERY_SUBMISSION": {"OPERATOR"},
     "RESOLVE_TASK": {"SUPERVISOR"},
-    "ASSIGN_CASE": {"OPERATOR", "SUPERVISOR"},
+    "ASSIGN_CASE": {"SUPERVISOR"},
     "RECORD_FINANCIAL": {"OPERATOR"},
     "RECONCILE": {"SUPERVISOR"},
     "NOTIFY_MERCHANT": {"OPERATOR"},
@@ -113,12 +113,11 @@ ACTION_ROLES = {
     "COMMENT": {"OPERATOR", "MERCHANT", "SUPERVISOR", "AGENT"},
     "MONITOR_SLA": {"OPERATOR", "AGENT", "SUPERVISOR"},
     "KNOWLEDGE_CANDIDATE": {"OPERATOR", "AGENT"},
-    "APPROVE_KNOWLEDGE": {"ADMIN"},
+    "APPROVE_KNOWLEDGE": {"SUPERVISOR"},
 }
 for _roles in ACTION_ROLES.values():
     if "OPERATOR" in _roles:
         _roles.add("SUPERVISOR")
-    _roles.add("ADMIN")
 ROLES = ACCOUNT_ROLES | {"AGENT"}
 LOW_RISK_ACTIONS = {"COMMENT", "MONITOR_SLA", "BUILD_PACKAGE", "KNOWLEDGE_CANDIDATE"}
 

@@ -19,10 +19,12 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+demo = ["reportlab==4.5.1"]
 dev = [
   "httpx==0.28.1",
   "pytest==9.1.1",
   "ruff==0.15.22",
+  "reportlab==4.5.1",
 ]
 
 [tool.setuptools.packages.find]

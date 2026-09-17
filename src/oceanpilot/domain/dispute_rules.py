@@ -131,7 +131,7 @@ def match_rule(
 
 
 _NEXT = {
-    "RECEIVED": ("CONFIRM_RULE", "OPERATOR", "确认适用规则和时限"),
+    "RECEIVED": ("CONFIRM_RULE", "SUPERVISOR", "由风控经理确认适用规则和时限"),
     "TRIAGED": ("PUBLISH_TASK", "OPERATOR", "复核案件计划并发布商户任务"),
     "MERCHANT_ACTION_REQUIRED": ("MERCHANT_DECISION", "MERCHANT", "明确接受争议或继续抗辩"),
     "EVIDENCE_COLLECTING": ("REGISTER_EVIDENCE", "MERCHANT", "按清单补充合成材料登记"),
@@ -179,7 +179,7 @@ _NEXT = {
         "OPERATOR",
         "先查询原业务请求回执，受理未明时不得重复发送",
     ),
-    "CLOSED": ("KNOWLEDGE_CANDIDATE", "OPERATOR", "提取脱敏案例模式，交由IT 管理员审核"),
+    "CLOSED": ("KNOWLEDGE_CANDIDATE", "OPERATOR", "提取脱敏案例模式，交由风控经理审核"),
 }
 
 _SLA_DEADLINE_BY_OWNER = {
@@ -349,8 +349,8 @@ def case_plan(case: dict[str, Any], *, now: datetime | None = None) -> dict[str,
     blockers = []
     rule_status = rule.get("conflict_status", "NEEDS_CONFIRMATION")
     if rule_status not in ("VERIFIED", "HUMAN_CONFIRMED"):
-        blockers.append("规则或时限待 OP 确认，不能猜测适用依据。")
-        action, owner, reason = "CONFIRM_RULE", "OPERATOR", blockers[-1]
+        blockers.append("规则或时限待风控经理确认，不能猜测适用依据。")
+        action, owner, reason = "CONFIRM_RULE", "SUPERVISOR", blockers[-1]
     elif missing_critical and case.get("merchant_decision") == "CONTEST":
         blockers.append("关键材料缺失，不能通过审核或提交。")
     if case.get("merchant_decision") == "NO_RESPONSE":

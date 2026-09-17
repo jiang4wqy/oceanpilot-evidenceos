@@ -3,7 +3,9 @@ import binascii
 import hashlib
 import hmac
 import json
+import re
 from collections.abc import Callable, Mapping
+from datetime import datetime
 from typing import Any
 
 from cryptography.hazmat.primitives import padding
@@ -61,6 +63,7 @@ class FeishuRequestVerifier:
         raw_body: bytes,
         *,
         allow_url_verification: bool = False,
+        allow_card_timestamp: bool = False,
     ) -> dict[str, Any]:
         if type(raw_body) is not bytes:
             raise TypeError("raw_body must be bytes")
@@ -75,8 +78,16 @@ class FeishuRequestVerifier:
         )
         if not unsigned_challenge:
             # Normal events authenticate the exact encrypted HTTP body before parsing/decryption.
-            self._verify_signature(headers, raw_body)
+            self._verify_signature(headers, raw_body, allow_card_timestamp=allow_card_timestamp)
         payload = self._decode_payload(raw_body)
+        if not unsigned_challenge:
+            timestamp = self._header(headers, "X-Lark-Request-Timestamp")
+            if not timestamp.isdecimal() and (
+                payload.get("schema") != "2.0"
+                or not isinstance(payload.get("header"), dict)
+                or payload["header"].get("event_type") != "card.action.trigger"
+            ):
+                raise FeishuVerificationError()
         if unsigned_challenge and payload.get("type") != "url_verification":
             raise FeishuVerificationError()
         supplied_token = self._payload_token(payload)
@@ -92,26 +103,53 @@ class FeishuRequestVerifier:
             raise FeishuVerificationError()
         return payload
 
-    def _verify_signature(self, headers: Mapping[str, str], raw_body: bytes) -> None:
+    def _verify_signature(
+        self, headers: Mapping[str, str], raw_body: bytes, *, allow_card_timestamp: bool = False
+    ) -> None:
         timestamp_text = self._header(headers, "X-Lark-Request-Timestamp")
         nonce = self._header(headers, "X-Lark-Request-Nonce")
         supplied_signature = self._header(headers, "X-Lark-Signature")
         if (
-            len(timestamp_text) > 20
+            len(timestamp_text) > 100
             or not timestamp_text.isascii()
-            or not timestamp_text.isdecimal()
             or not supplied_signature.isascii()
         ):
             raise FeishuVerificationError()
-        timestamp = int(timestamp_text)
-        current = self._now()
-        if type(current) is not int or abs(current - timestamp) > 300:
-            raise FeishuVerificationError()
-
+        # Always authenticate the verbatim header and HTTP bytes, never a
+        # normalized timestamp. Observed signed card callbacks use Go Time.String
+        # while message events use Unix seconds. No legacy SHA-1 fallback.
         prefix = f"{timestamp_text}{nonce}{self._encrypt_key}".encode()
         expected_signature = hashlib.sha256(prefix + raw_body).hexdigest()
         if not hmac.compare_digest(supplied_signature, expected_signature):
             raise FeishuVerificationError()
+        timestamp = self._timestamp(timestamp_text, allow_card_timestamp=allow_card_timestamp)
+        current = self._now()
+        if type(current) is not int or abs(current - timestamp) > 300:
+            raise FeishuVerificationError()
+
+    @staticmethod
+    def _timestamp(value: str, *, allow_card_timestamp: bool) -> int:
+        if value.isdecimal() and len(value) <= 20:
+            return int(value)
+        if allow_card_timestamp:
+            match = re.fullmatch(
+                r"(?P<wall>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})"
+                r"(?:\.\d{1,9})? (?P<offset>[+-]\d{4}) [A-Za-z]{1,10}"
+                r"(?: m=[+-]\d{1,20}(?:\.\d{1,9})?)?",
+                value,
+                flags=re.ASCII,
+            )
+            if match:
+                try:
+                    # Numeric UTC offset is authoritative. Go's process-relative
+                    # monotonic suffix cannot measure cross-machine request age.
+                    wall = datetime.strptime(
+                        match["wall"] + " " + match["offset"], "%Y-%m-%d %H:%M:%S %z"
+                    )
+                    return int(wall.timestamp())
+                except (ValueError, OverflowError, OSError):
+                    pass
+        raise FeishuVerificationError()
 
     def _decode_payload(self, raw_body: bytes) -> dict[str, Any]:
         try:

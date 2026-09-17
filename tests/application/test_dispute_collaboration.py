@@ -649,7 +649,7 @@ def test_proposal_origin_tampering_is_rejected(stack, change):
 def test_approved_closed_case_pattern_is_used_by_next_case_and_pending_is_excluded(stack):
     disputes, agent, collab, case, model, clock = stack
     supervisor = {"role": "SUPERVISOR", "actor_id": "supervisor"}
-    admin = {"role": "ADMIN", "actor_id": "knowledge-reviewer"}
+    knowledge_reviewer = {"role": "SUPERVISOR", "actor_id": "knowledge-reviewer"}
     source = command(
         disputes,
         case,
@@ -726,7 +726,7 @@ def test_approved_closed_case_pattern_is_used_by_next_case_and_pending_is_exclud
             "decision": "APPROVE",
             "reason": "已人工核对脱敏、范围和来源",
         },
-        admin,
+        knowledge_reviewer,
     )
     result = collab.post_message(
         other["id"], MERCHANT, str(uuid4()), "如何准备签收材料？", ask_agent=True

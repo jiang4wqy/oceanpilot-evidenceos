@@ -142,7 +142,7 @@ class KnowledgeBot:
             if message["chat_type"] == "group" and mention is None:
                 return {"code": 0, "outcome": "IGNORED"}
             if mention:
-                question = question[mention.end() :].strip()
+                question = question[mention.end() :].strip() or "帮助"
             try:
                 public_text(question)
             except ValueError:

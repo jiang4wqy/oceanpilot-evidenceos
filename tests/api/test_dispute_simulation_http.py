@@ -6,11 +6,14 @@ from tests.application.test_dispute_simulation import request
 
 def test_simulation_http_requires_scope_confirmation_and_valid_preview(stack):  # noqa: F811
     app, sessions = stack
-    operator = sessions["operator-a"]
+    operator = sessions["manager-a"]
     data = request()
     endpoint = "/api/v2/intake/simulations"
     assert sessions["merchant-a"].post(endpoint + "/preview", json=data).status_code == 403
     assert sessions["operator-b"].post(endpoint + "/preview", json=data).status_code == 403
+    officer_preview = sessions["operator-a"].post(endpoint + "/preview", json=data)
+    assert officer_preview.status_code == 200
+    assert officer_preview.json()["requires_rule_confirmation"] is True
     preview = operator.post(endpoint + "/preview", json=data)
     assert preview.status_code == 200, preview.text
     body = dict(

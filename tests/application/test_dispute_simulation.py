@@ -8,6 +8,8 @@ from oceanpilot.domain.dispute import DisputeError
 from tests.application.test_dispute_intake import service  # noqa: F401
 from tests.workflow.test_dispute_engine import NOW, OP
 
+MANAGER = {"role": "SUPERVISOR", "actor_id": "simulation-manager"}
+
 
 def request():
     return dict(
@@ -24,11 +26,11 @@ def request():
 def test_simulation_builds_empty_case_and_task_and_replays(service):  # noqa: F811
     simulation = DisputeSimulation(service)
     data = request()
-    preview = simulation.preview(data, OP)
+    preview = simulation.preview(data, MANAGER)
     args = dict(
         confirmed=True, confirmation_token=preview["confirmation_token"], request_id=str(uuid4())
     )
-    result = simulation.create(data, OP, **args)
+    result = simulation.create(data, MANAGER, **args)
     case = result["case"]
     assert case["work_status"] == "MERCHANT_ACTION_REQUIRED"
     assert case["merchant_decision"] == "NONE"
@@ -37,12 +39,12 @@ def test_simulation_builds_empty_case_and_task_and_replays(service):  # noqa: F8
     assert case["rule_snapshot"]["production_eligible"] is False
     assert result["notification_intent"]["active"]
     assert case["rule_snapshot"]["critical_evidence"]
-    again = simulation.create(data, OP, **args)
+    again = simulation.create(data, MANAGER, **args)
     assert again["case"]["revision"] == case["revision"]
     assert len(service.disputes.list_cases(OP)) == 1
     assert again["notification_intent"]["id"] == result["notification_intent"]["id"]
     with pytest.raises(DisputeError):
-        simulation.create(data | {"amount_minor": 1}, OP, **args)
+        simulation.create(data | {"amount_minor": 1}, MANAGER, **args)
 
 
 def test_unconfirmed_and_unsupported_simulation_do_not_create_case(service):  # noqa: F811
@@ -64,10 +66,27 @@ def test_unconfirmed_and_unsupported_simulation_do_not_create_case(service):  # 
     assert not service.disputes.list_cases(OP)
 
 
-def test_partial_command_failure_resumes_without_duplicate_tasks(service, monkeypatch):  # noqa: F811
+def test_operator_can_create_only_pending_rule_case(service):  # noqa: F811
     simulation = DisputeSimulation(service)
     data = request()
     preview = simulation.preview(data, OP)
+    assert preview["requires_rule_confirmation"] is True
+    result = simulation.create(
+        data,
+        OP,
+        confirmed=True,
+        confirmation_token=preview["confirmation_token"],
+        request_id=str(uuid4()),
+    )
+    assert result["simulation_status"] == "NEEDS_RULE_CONFIRMATION"
+    assert result["notification_intent"] is None
+    assert result["case"]["work_status"] != "MERCHANT_ACTION_REQUIRED"
+
+
+def test_partial_command_failure_resumes_without_duplicate_tasks(service, monkeypatch):  # noqa: F811
+    simulation = DisputeSimulation(service)
+    data = request()
+    preview = simulation.preview(data, MANAGER)
     args = dict(
         confirmed=True, confirmation_token=preview["confirmation_token"], request_id=str(uuid4())
     )
@@ -80,10 +99,10 @@ def test_partial_command_failure_resumes_without_duplicate_tasks(service, monkey
 
     monkeypatch.setattr(service.disputes, "execute", fail_task)
     with pytest.raises(RuntimeError):
-        simulation.create(data, OP, **args)
+        simulation.create(data, MANAGER, **args)
     assert len(service.disputes.list_cases(OP)) == 1
     monkeypatch.setattr(service.disputes, "execute", execute)
-    resumed = DisputeSimulation(service).create(data, OP, **args)
+    resumed = DisputeSimulation(service).create(data, MANAGER, **args)
     assert resumed["case"]["revision"] == 3
     assert resumed["case"]["work_status"] == "MERCHANT_ACTION_REQUIRED"
 
@@ -92,10 +111,10 @@ def test_partial_command_failure_resumes_without_duplicate_tasks(service, monkey
 def test_real_decision_branches_preserve_unknown_outcome(service, decision):  # noqa: F811
     simulation = DisputeSimulation(service)
     data = request()
-    preview = simulation.preview(data, OP)
+    preview = simulation.preview(data, MANAGER)
     result = simulation.create(
         data,
-        OP,
+        MANAGER,
         confirmed=True,
         confirmation_token=preview["confirmation_token"],
         request_id=str(uuid4()),
@@ -125,7 +144,7 @@ def test_expired_partial_request_does_not_publish(service, monkeypatch):  # noqa
 
     simulation = DisputeSimulation(service)
     data = request()
-    preview = simulation.preview(data, OP)
+    preview = simulation.preview(data, MANAGER)
     args = dict(
         confirmed=True, confirmation_token=preview["confirmation_token"], request_id=str(uuid4())
     )
@@ -138,9 +157,9 @@ def test_expired_partial_request_does_not_publish(service, monkeypatch):  # noqa
 
     monkeypatch.setattr(service.disputes, "execute", pause)
     with pytest.raises(RuntimeError):
-        simulation.create(data, OP, **args)
+        simulation.create(data, MANAGER, **args)
     monkeypatch.setattr(service.disputes, "execute", original)
     monkeypatch.setattr(service, "clock", lambda: NOW + timedelta(days=4))
     with pytest.raises(DisputeError, match="演练期限已过"):
-        simulation.create(data, OP, **args)
+        simulation.create(data, MANAGER, **args)
     assert service.disputes.list_cases(OP)[0]["work_status"] != "MERCHANT_ACTION_REQUIRED"

@@ -270,7 +270,7 @@ def get_case(case_id: str, request: Request, identity: Identity) -> dict:
 def command(payload: DisputeCommand, request: Request, identity: Identity) -> dict:
     if payload.action == "INTAKE":
         require(
-            identity["role"] in {"OPERATOR", "SUPERVISOR", "ADMIN"},
+            identity["role"] in {"OPERATOR", "SUPERVISOR"},
             "FORBIDDEN",
             "Only an authorized Operator can receive source events",
             403,
@@ -545,13 +545,16 @@ def governance(request: Request, identity: Identity) -> dict:
         "knowledge": [
             k | {"case_id": c["id"]} for c in cases for k in c.get("knowledge_candidates", [])
         ],
+        "business_access": identity["role"] == "SUPERVISOR",
         "metrics": {
             "cases": len(cases),
             "closed": sum(c["work_status"] == "CLOSED" for c in cases),
             "pending_financial": sum(
                 c["financial_status"] in ("PENDING", "DISCREPANCY") for c in cases
             ),
-        },
+        }
+        if identity["role"] == "SUPERVISOR"
+        else {},
         "data_sources": {
             "case_library": request.app.state.dispute_case_library.diagnostics(),
             "runtime_stores": [
@@ -598,7 +601,7 @@ def capabilities(identity: Identity) -> dict:
 
     return {
         "role": identity["role"],
-        "intake_events": identity["role"] in {"OPERATOR", "SUPERVISOR", "ADMIN"},
+        "intake_events": identity["role"] in {"OPERATOR", "SUPERVISOR"},
         "actions": sorted(
             a for a, roles in ACTION_ROLES.items() if identity["role"] in roles and a != "INTAKE"
         ),
@@ -622,7 +625,7 @@ def command_schemas(identity: Identity) -> dict:
 @router.post("/api/v2/demo", responses={410: PROBLEM_RESPONSE})
 def demo(payload: DemoData, request: Request, identity: Identity) -> dict:
     require(
-        identity["role"] in {"OPERATOR", "SUPERVISOR", "ADMIN"},
+        identity["role"] in {"OPERATOR", "SUPERVISOR"},
         "FORBIDDEN",
         "此入口不能替代商户、风控或风控经理执行决定。",
         403,
@@ -664,7 +667,7 @@ def operations_page(request: Request) -> HTMLResponse:
     from oceanpilot.api.dispute_identity import page_access
     from oceanpilot.web.v2.rendering import render_v2_page
 
-    denied = page_access(request, {"OPERATOR", "SUPERVISOR", "ADMIN"})
+    denied = page_access(request, {"OPERATOR", "SUPERVISOR"})
     if denied is not None:
         return denied
     return HTMLResponse(render_v2_page("OPERATOR"))

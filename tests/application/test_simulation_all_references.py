@@ -11,7 +11,9 @@ from oceanpilot.adapters.persistence.disputes import SQLiteDisputeStore
 from oceanpilot.application.dispute_intake import DisputeIntakeService
 from oceanpilot.application.dispute_simulation import DisputeSimulation
 from oceanpilot.application.disputes import DisputeService
-from tests.workflow.test_dispute_engine import NOW, OP
+from tests.workflow.test_dispute_engine import NOW
+
+MANAGER = {"role": "SUPERVISOR", "actor_id": "simulation-manager"}
 
 REFERENCES = DisputeCaseLibrary().list_references()
 
@@ -37,11 +39,11 @@ def test_every_reference_can_create_without_inheriting_facts(tmp_path, reference
         currency="USD",
         received_at=NOW.isoformat(),
     )
-    preview = simulation.preview(data, OP)
+    preview = simulation.preview(data, MANAGER)
     args = dict(
         confirmed=True, request_id=str(uuid4()), confirmation_token=preview["confirmation_token"]
     )
-    result = simulation.create(data, OP, **args)
+    result = simulation.create(data, MANAGER, **args)
     assert result["simulation_status"] in {"READY", "NEEDS_RULE_CONFIRMATION"}, result
     case = result["case"]
     assert case["merchant_decision"] == "NONE"
@@ -53,4 +55,4 @@ def test_every_reference_can_create_without_inheriting_facts(tmp_path, reference
         assert not case["rule_snapshot"]["required_evidence"]
         assert case["deadlines"]["status"] == "NEEDS_CONFIRMATION"
         assert result["notification_intent"] is None
-    assert simulation.create(data, OP, **args)["case"]["revision"] == case["revision"]
+    assert simulation.create(data, MANAGER, **args)["case"]["revision"] == case["revision"]

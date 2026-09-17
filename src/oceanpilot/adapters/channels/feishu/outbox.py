@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 from oceanpilot.adapters.channels.feishu.v2 import FeishuV2Error, binding_key
 from oceanpilot.adapters.feishu.client import FeishuReceiveIdType
 
-_OPERATORS = {"OPERATOR", "SUPERVISOR", "ADMIN"}
+_OPERATORS = {"OPERATOR", "SUPERVISOR"}
 
 
 def _json(value):
