@@ -1,12 +1,12 @@
 """SQLite persistence for case-analysis turns and confirmed review decisions."""
 
 import json
-import sqlite3
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
 
+from oceanpilot.adapters.persistence import database as sqlite3
 from oceanpilot.adapters.persistence.chargeback_unit import (
     BorrowedConnection,
 )

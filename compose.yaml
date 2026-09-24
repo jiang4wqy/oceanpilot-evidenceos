@@ -1,18 +1,39 @@
 services:
+  postgres:
+    image: postgres:17.6-alpine
+    profiles: ["postgresql"]
+    environment:
+      POSTGRES_DB: oceanpilot
+      POSTGRES_USER: oceanpilot
+      POSTGRES_PASSWORD: ${OCEANPILOT_POSTGRES_PASSWORD}
+    volumes:
+      - oceanpilot-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U oceanpilot -d oceanpilot"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+
   oceanpilot:
     image: oceanpilot:local
     build: .
     env_file:
-      - .env
+      - config.env
     environment:
-      OCEANPILOT_DB_PATH: /app/work/oceanpilot.db
-      OCEANPILOT_CHARGEBACK_DB_PATH: /app/work/oceanpilot-chargeback.db
-      OCEANPILOT_RULES_DB_PATH: /app/work/oceanpilot-rules.db
-      OCEANPILOT_FEISHU_DB_PATH: /app/work/oceanpilot-feishu.db
+      OCEANPILOT_DB_PATH: /app/data/oceanpilot.db
+      OCEANPILOT_CHARGEBACK_DB_PATH: /app/data/oceanpilot-chargeback.db
+      OCEANPILOT_RULES_DB_PATH: /app/data/oceanpilot-rules.db
+      OCEANPILOT_FEISHU_DB_PATH: /app/data/oceanpilot-feishu.db
+      OCEANPILOT_DEMO_ACCOUNTS: /app/data/demo-accounts.json
+    depends_on:
+      postgres:
+        condition: service_healthy
+        required: false
     ports:
-      - "8000:8000"
+      - "${OCEANPILOT_HOST_PORT:-8000}:8000"
     volumes:
-      - oceanpilot-data:/app/work
+      - oceanpilot-data:/app/data
     restart: unless-stopped
     healthcheck:
       test:
@@ -22,10 +43,11 @@ services:
         - >-
           import urllib.request;
           urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3).read()
-      interval: 30s
+      interval: 10s
       timeout: 5s
-      retries: 3
-      start_period: 15s
+      retries: 12
+      start_period: 30s
 
 volumes:
   oceanpilot-data:
+  oceanpilot-postgres:

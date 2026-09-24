@@ -138,7 +138,8 @@
     return list(checklist).filter(item => ["MERCHANT_UPLOAD", "OCR_THEN_REVIEW"].includes(item.expected_source) || (c?.view === "OPERATIONS" && item.expected_source === "SYSTEM_OF_RECORD"));
   }
   function uploadMarkup(c, checklist) {
-    if (!list(c.available_actions).some(a=>a.action === "REGISTER_EVIDENCE" && a.enabled)) return '<p class="section-note">当前阶段不接受直接修改材料。请按本案任务或向负责人提出修订要求。</p>';
+    const uploadGate = list(c.available_actions).find(a=>a.action === "REGISTER_EVIDENCE");
+    if (!uploadGate?.enabled) return `<p class="section-note"><strong>当前无法上传材料：</strong>${esc(uploadGate?.blocked_reason || "请按本案任务或向负责人提出修订要求。")}</p>${uploadGate?.code === "EXTERNAL_DEADLINE_EXPIRED" ? '<p class="section-note">请联系 OceanPayment 核验剩余权利并恢复补证；逾期不代表自动接受责任或正式失权。</p>' : ""}`;
     const choices = uploadChoices(checklist, c);
     if (!choices.length) return '<p class="section-note">当前清单没有需要商户上传的文件。系统记录与条件材料由 OceanPayment 核对，请勿自行填写内部代码。</p>';
     return `<form class="thread-upload"><label>这份文件对应哪项材料<select name="material" required><option value="">请选择新增材料或要替换的文件</option>${choices.map(item=>{

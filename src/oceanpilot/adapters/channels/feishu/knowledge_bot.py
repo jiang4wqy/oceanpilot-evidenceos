@@ -6,7 +6,6 @@ This adapter has no business-service reference. Old card clicks are rejected.
 import hashlib
 import json
 import secrets
-import sqlite3
 import threading
 import time
 from contextlib import contextmanager, suppress
@@ -15,6 +14,7 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 from oceanpilot.adapters.channels.feishu.public_knowledge import knowledge_card, public_text
 from oceanpilot.adapters.channels.feishu.v2 import FeishuV2Error, binding_key
+from oceanpilot.adapters.persistence import database as sqlite3
 
 
 def load_public_groups(raw):

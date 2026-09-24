@@ -19,7 +19,7 @@ import os
 
 from oceanpilot.adapters.model.claude import ClaudeProvider
 from oceanpilot.adapters.model.deepseek import build_deepseek_model_provider_from_env
-from oceanpilot.adapters.model.local import build_local_model_provider_from_env
+from oceanpilot.adapters.model.local import LocalModelProvider, build_local_model_provider_from_env
 from oceanpilot.adapters.redaction import RegexRedactor
 from oceanpilot.application.model_provider import (
     ModelProvider,
@@ -52,8 +52,27 @@ def build_chargeback_model_provider(
         external = deepseek if deepseek is not None else build_deepseek_model_provider_from_env()
         if external is None:
             return None
+    elif provider_name in {"openai_compatible", "openai-compatible"}:
+        api_key = os.getenv("OCEANPILOT_MODEL_API_KEY")
+        endpoint = os.getenv("OCEANPILOT_MODEL_BASE_URL", "").rstrip("/")
+        model = os.getenv("OCEANPILOT_MODEL_NAME", "")
+        if not api_key or not endpoint or not model:
+            return None
+        if not endpoint.endswith("/chat/completions"):
+            endpoint += "/chat/completions"
+        external = LocalModelProvider(
+            endpoint=endpoint,
+            default_model=model,
+            api_key=api_key,
+            include_metadata=False,
+            timeout=12,
+        )
+    elif provider_name == "offline":
+        return None
     else:
-        raise ValueError("OCEANPILOT_MODEL_PROVIDER must be 'claude' or 'deepseek'")
+        raise ValueError(
+            "OCEANPILOT_MODEL_PROVIDER must be offline, deepseek, claude, or openai_compatible"
+        )
     redacting = RedactingModelProvider(external, RegexRedactor())
     local = build_local_model_provider_from_env()
     return RoutingModelProvider(

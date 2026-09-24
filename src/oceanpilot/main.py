@@ -108,6 +108,7 @@ def _configure_feishu(
     app.state.feishu_client = FeishuOutboundClient(
         app_id=feishu.app_id,
         app_secret=feishu.app_secret,
+        base_url=feishu.api_base_url,
         transport=transport,
     )
     app.state.feishu_orchestrator = FeishuOrchestrator(
@@ -191,13 +192,13 @@ def create_app(
         )
         app.state.dispute_agent_events = DisputeAgentEvents(
             app.state.dispute_agent,
-            enabled=app.state.agent_runtime["mode"] == "DEEPSEEK_LIVE",
+            enabled=app.state.agent_runtime["mode"] == "EXTERNAL_MODEL_LIVE",
         )
         app.state.disputes.on_change = app.state.dispute_agent_events.changed
         initialize_dispute_feishu(
             app,
             chargeback_db_path,
-            os.getenv("OCEANPILOT_V2_BASE_URL", "http://127.0.0.1:8002"),
+            resolved.public_base_url,
         )
         if resolved.feishu is not None:
             app.state.feishu_store_factory = FeishuCallbackStoreFactory(resolved.feishu.db_path)
@@ -234,16 +235,14 @@ def create_app(
     }
     if chargeback_provider is None and _truthy(os.getenv("OCEANPILOT_CHARGEBACK_LIVE_MODEL")):
         provider_name = os.getenv("OCEANPILOT_MODEL_PROVIDER", "deepseek").strip().lower()
-        if provider_name != "deepseek":
-            raise ValueError(
-                "正式演示仅使用 DeepSeek；离线排练请关闭 OCEANPILOT_CHARGEBACK_LIVE_MODEL。"
-            )
-        chargeback_provider = build_chargeback_model_provider(provider_name="deepseek")
+        chargeback_provider = build_chargeback_model_provider(provider_name=provider_name)
         if chargeback_provider is not None:
             agent_runtime = {
-                "mode": "DEEPSEEK_LIVE",
-                "provider": "DEEPSEEK",
-                "model": os.getenv("DEEPSEEK_MODEL", "deepseek-chat"),
+                "mode": "EXTERNAL_MODEL_LIVE",
+                "provider": provider_name.upper(),
+                "model": os.getenv(
+                    "OCEANPILOT_MODEL_NAME", os.getenv("DEEPSEEK_MODEL", "external-model")
+                ),
             }
     if chargeback_provider is None:
         chargeback_provider = ScriptedModelProvider(default_text="（合成模型输出，仅用于离线演示）")

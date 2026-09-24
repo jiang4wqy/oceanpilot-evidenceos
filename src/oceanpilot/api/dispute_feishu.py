@@ -1,7 +1,6 @@
 """Signed callbacks and locally authorized test-chat delivery; default disabled."""
 
 import os
-import sqlite3
 import time
 from collections.abc import Mapping
 from pathlib import Path
@@ -19,6 +18,7 @@ from oceanpilot.adapters.channels.feishu.v2 import (
     TrustedBindings,
 )
 from oceanpilot.adapters.feishu.security import FeishuRequestVerifier, FeishuVerificationError
+from oceanpilot.adapters.persistence import database as sqlite3
 from oceanpilot.api.cases import COMMON_PROBLEMS, PROBLEM_RESPONSE
 from oceanpilot.api.disputes import Identity
 from oceanpilot.api.feishu_binding import router as binding_router

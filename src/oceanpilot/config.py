@@ -10,6 +10,7 @@ class FeishuSettings:
     verification_token: str
     encrypt_key: str
     db_path: Path
+    api_base_url: str = "https://open.feishu.cn"
 
 
 @dataclass(frozen=True, slots=True)
@@ -26,6 +27,10 @@ class Settings:
     model_timeout_seconds: float = 12.0
     model_request_budget_seconds: float = 20.0
     v21_secure_cookies: bool = False
+    database_backend: str = "sqlite"
+    database_url: str | None = None
+    public_base_url: str = "http://127.0.0.1:8002"
+    client_base_url: str = "http://127.0.0.1:8002"
 
     def resolved_chargeback_db_path(self) -> Path:
         """Durable store file for the chargeback cluster (sibling of ``db_path``)."""
@@ -41,6 +46,15 @@ class Settings:
 
     @classmethod
     def from_env(cls) -> "Settings":
+        database_backend = os.getenv("OCEANPILOT_DATABASE_BACKEND", "sqlite").strip().lower()
+        if database_backend not in {"sqlite", "postgresql"}:
+            raise ValueError("OCEANPILOT_DATABASE_BACKEND must be 'sqlite' or 'postgresql'")
+        database_url = os.getenv("OCEANPILOT_DATABASE_URL") or None
+        if database_backend == "postgresql" and not database_url:
+            raise ValueError("OCEANPILOT_DATABASE_URL is required for PostgreSQL")
+        upstream_mode = os.getenv("OCEANPILOT_V2_UPSTREAM_MODE", "mock").strip().lower()
+        if upstream_mode not in {"mock", "disabled"}:
+            raise ValueError("OCEANPILOT_V2_UPSTREAM_MODE must be 'mock' or 'disabled'")
         db_path = Path(os.getenv("OCEANPILOT_DB_PATH", "work/oceanpilot.db"))
         chargeback_env = os.getenv("OCEANPILOT_CHARGEBACK_DB_PATH")
         rules_env = os.getenv("OCEANPILOT_RULES_DB_PATH")
@@ -52,6 +66,13 @@ class Settings:
             rules_db_path=Path(rules_env) if rules_env else None,
             mock_send_enabled=os.getenv("OCEANPILOT_MOCK_SEND_ENABLED", "0") == "1",
             v21_secure_cookies=os.getenv("OCEANPILOT_V21_SECURE_COOKIES", "0") == "1",
+            database_backend=database_backend,
+            database_url=database_url,
+            public_base_url=os.getenv(
+                "OCEANPILOT_PUBLIC_BASE_URL",
+                os.getenv("OCEANPILOT_V2_BASE_URL", "http://127.0.0.1:8002"),
+            ),
+            client_base_url=os.getenv("OCEANPILOT_CLIENT_BASE_URL", "http://127.0.0.1:8002"),
         )
 
 
@@ -70,4 +91,5 @@ def _feishu_from_env(core_db_path: Path) -> FeishuSettings | None:
         verification_token=verification_token,
         encrypt_key=encrypt_key,
         db_path=db_path,
+        api_base_url=os.getenv("FEISHU_API_BASE_URL", "https://open.feishu.cn").rstrip("/"),
     )

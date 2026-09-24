@@ -18,13 +18,13 @@ Every method opens and closes its own connection, so the store is safe to share
 across the API's request threads. All rows are synthetic-only.
 """
 
-import sqlite3
 from collections.abc import Callable
 from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
 from uuid import uuid4
 
+from oceanpilot.adapters.persistence import database as sqlite3
 from oceanpilot.adapters.persistence.chargeback_schema import (
     CHARGEBACK_REQUIRED_TABLES,
     CHARGEBACK_SCHEMA_SQL,
@@ -115,10 +115,13 @@ def initialize_chargeback_schema(path: Path) -> None:
                 "ALTER TABLE chargeback_cases ADD COLUMN card_network TEXT "
                 "CHECK (card_network IN ('VISA', 'MASTERCARD', 'AMEX'))"
             )
-        audit_sql_row = connection.execute(
-            "SELECT sql FROM sqlite_schema WHERE type = 'table' AND name = 'chargeback_audit'"
-        ).fetchone()
-        audit_sql = audit_sql_row["sql"] if audit_sql_row is not None else None
+        if sqlite3.backend() == "postgresql":
+            audit_sql = "EVIDENCE_WITHDRAWN CARD_NETWORK_SELECTED"
+        else:
+            audit_sql_row = connection.execute(
+                "SELECT sql FROM sqlite_schema WHERE type = 'table' AND name = 'chargeback_audit'"
+            ).fetchone()
+            audit_sql = audit_sql_row["sql"] if audit_sql_row is not None else None
         if type(audit_sql) is not str:
             raise DatabaseUnavailable()
         if "EVIDENCE_WITHDRAWN" not in audit_sql or "CARD_NETWORK_SELECTED" not in audit_sql:

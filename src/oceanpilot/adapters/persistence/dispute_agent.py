@@ -1,11 +1,11 @@
 """Additive SQLite storage; one immutable agent observation per case revision."""
 
 import json
-import sqlite3
 from contextlib import closing
 from pathlib import Path
 from uuid import uuid4
 
+from oceanpilot.adapters.persistence import database as sqlite3
 from oceanpilot.application.dispute_agent_ports import AUDIENCES, conversation_audience
 from oceanpilot.domain.dispute import DisputeError, require
 

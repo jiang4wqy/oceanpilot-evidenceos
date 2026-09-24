@@ -9,7 +9,6 @@ import hashlib
 import json
 import re
 import secrets
-import sqlite3
 import time
 from collections.abc import Callable
 from contextlib import contextmanager
@@ -21,6 +20,7 @@ from urllib.parse import quote, urlsplit
 from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
+from oceanpilot.adapters.persistence import database as sqlite3
 from oceanpilot.domain.errors import SensitiveDataRejected
 from oceanpilot.domain.security import assert_no_sensitive_data
 

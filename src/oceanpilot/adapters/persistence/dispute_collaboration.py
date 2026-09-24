@@ -1,11 +1,11 @@
 """Append-only shared collaboration journal and private synthetic evidence objects."""
 
 import json
-import sqlite3
 from contextlib import closing
 from pathlib import Path
 from uuid import uuid4
 
+from oceanpilot.adapters.persistence import database as sqlite3
 from oceanpilot.domain.dispute import require
 
 

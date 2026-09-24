@@ -8,7 +8,6 @@ import hashlib
 import json
 import re
 import secrets
-import sqlite3
 import threading
 import time
 from contextlib import contextmanager, suppress
@@ -27,6 +26,7 @@ from oceanpilot.adapters.channels.feishu.case_explanations import (
 )
 from oceanpilot.adapters.channels.feishu.v2 import FeishuV2Error, binding_key
 from oceanpilot.adapters.feishu.client import FeishuReceiveIdType
+from oceanpilot.adapters.persistence import database as sqlite3
 from oceanpilot.adapters.redaction import RegexRedactor
 from oceanpilot.application.dispute_views import merchant_case_view
 from oceanpilot.domain.dispute import DisputeError

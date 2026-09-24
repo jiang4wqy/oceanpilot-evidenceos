@@ -1,6 +1,5 @@
 """SQLite-backed card-scheme rule catalog and package lookup adapter."""
 
-import sqlite3
 from collections.abc import Callable
 from pathlib import Path
 
@@ -15,6 +14,7 @@ from oceanpilot.adapters.knowledge.rule_seed import (
     RULE_REQUIREMENT_SEEDS,
     RULE_VERSION_SEEDS,
 )
+from oceanpilot.adapters.persistence import database as sqlite3
 from oceanpilot.adapters.persistence.sqlite import connect_sqlite, immediate_transaction
 from oceanpilot.application.errors import DatabaseUnavailable, PersistenceInvariantViolation
 from oceanpilot.application.knowledge_base import (
@@ -87,7 +87,7 @@ def _database_call[T](operation: Callable[[], T]) -> T:
 
 
 def _table_names(connection: sqlite3.Connection) -> frozenset[str]:
-    return frozenset(
+    names = frozenset(
         _require_text(row["name"])
         for row in connection.execute(
             """
@@ -97,10 +97,11 @@ def _table_names(connection: sqlite3.Connection) -> frozenset[str]:
             """
         )
     )
+    return names & RULE_REQUIRED_TABLES if sqlite3.backend() == "postgresql" else names
 
 
 def _validate_rule_database(connection: sqlite3.Connection) -> None:
-    if _table_names(connection) != RULE_REQUIRED_TABLES:
+    if not RULE_REQUIRED_TABLES.issubset(_table_names(connection)):
         raise DatabaseUnavailable()
     version_row = connection.execute("PRAGMA user_version").fetchone()
     if (

@@ -1,5 +1,4 @@
 import json
-import sqlite3
 from datetime import UTC, datetime
 from typing import Final
 from uuid import uuid4
@@ -29,6 +28,7 @@ from oceanpilot.adapters.feishu.store import (
     ReceiptConflict,
     ReceiptOutcome,
 )
+from oceanpilot.adapters.persistence import database as sqlite3
 from oceanpilot.api.feishu_schemas import (
     ACTION_SUBMIT_EVIDENCE,
     ALLOWED_CARD_ACTIONS,

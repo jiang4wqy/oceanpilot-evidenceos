@@ -1,6 +1,5 @@
 import json
 import re
-import sqlite3
 from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager
 from datetime import UTC, datetime
@@ -10,6 +9,7 @@ from uuid import UUID
 
 from pydantic import ValidationError
 
+from oceanpilot.adapters.persistence import database as sqlite3
 from oceanpilot.adapters.persistence.schema import REQUIRED_TABLES, SCHEMA_SQL
 from oceanpilot.application.errors import (
     CaseNotFound,
@@ -927,7 +927,12 @@ def initialize_schema(path: Path) -> None:
                 """
             )
         )
-        if table_names != REQUIRED_TABLES:
+        table_set_valid = (
+            REQUIRED_TABLES.issubset(table_names)
+            if sqlite3.backend() == "postgresql"
+            else table_names == REQUIRED_TABLES
+        )
+        if not table_set_valid:
             raise DatabaseUnavailable()
         if connection.execute("PRAGMA foreign_key_check").fetchone() is not None:
             raise DatabaseUnavailable()

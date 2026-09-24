@@ -5,12 +5,12 @@ row positions are compared only inside the authenticated case and audience scope
 Every response is computed in one short read transaction, released before waiting.
 """
 
-import sqlite3
 from contextlib import closing
 from hashlib import sha256
 from pathlib import Path
 from time import monotonic
 
+from oceanpilot.adapters.persistence import database as sqlite3
 from oceanpilot.domain.dispute import DisputeError, require
 
 

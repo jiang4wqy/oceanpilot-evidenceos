@@ -13,6 +13,7 @@ htmlcov/
 .env
 .env.*
 !.env.example
+config.env
 work/
 backups/
 dist/

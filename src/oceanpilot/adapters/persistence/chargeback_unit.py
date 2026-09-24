@@ -1,9 +1,9 @@
 """Borrow a Chargeback transaction without changing Foundation transactions."""
 
-import sqlite3
 from collections.abc import Iterator
 from contextlib import contextmanager
 
+from oceanpilot.adapters.persistence import database as sqlite3
 from oceanpilot.adapters.persistence.sqlite import immediate_transaction
 
 

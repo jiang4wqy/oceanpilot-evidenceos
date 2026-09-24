@@ -8,11 +8,11 @@ import hashlib
 import hmac
 import json
 import secrets
-import sqlite3
 import time
 from contextlib import closing
 from pathlib import Path
 
+from oceanpilot.adapters.persistence import database as sqlite3
 from oceanpilot.domain.dispute import ACCOUNT_ROLES, DisputeError, require
 
 SESSION_COOKIE = "oceanpilot_session"

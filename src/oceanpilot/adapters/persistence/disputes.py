@@ -5,13 +5,13 @@ the aggregate, its audit row and its idempotency receipt under BEGIN IMMEDIATE.
 """
 
 import json
-import sqlite3
 from collections.abc import Callable
 from contextlib import closing
 from copy import deepcopy
 from pathlib import Path
 from uuid import uuid4
 
+from oceanpilot.adapters.persistence import database as sqlite3
 from oceanpilot.domain.dispute import DisputeError, fingerprint, require
 
 

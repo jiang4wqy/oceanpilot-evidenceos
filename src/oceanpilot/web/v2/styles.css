@@ -3909,6 +3909,9 @@ body { background: var(--canvas); color: var(--ink); }
 .current-task-footer > span { font-size: 12px; color: #59727b; }
 .current-task-footer strong { display: block; margin-top: 4px; color: #2c4b55; font-size: 14px; }
 .material-card { align-items: flex-start; }
+.evidence-upload-block { margin: 14px 0; font-size: 12px; }
+.evidence-upload-block strong { font-size: 13px; }
+.evidence-upload-block p { margin: 4px 0 0; line-height: 1.6; }
 .material-card .row-subtitle { margin-top: 5px; line-height: 1.55; }
 .material-samples { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 9px; font-size: 12px; color: #59727b; }
 .material-samples a { color: #176d69; text-decoration: underline; text-underline-offset: 2px; }

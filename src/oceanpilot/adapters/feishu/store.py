@@ -1,11 +1,12 @@
 import hashlib
 import json
-import sqlite3
 from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
+
+from oceanpilot.adapters.persistence import database as sqlite3
 
 _SCHEMA = (
     """

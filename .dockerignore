@@ -14,3 +14,4 @@ work
 *.db-*
 .env
 .env.*
+config.env
